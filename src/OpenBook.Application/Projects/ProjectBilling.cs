@@ -115,7 +115,7 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
         {
             var itemId = await MileageItemIdAsync(ct);
             drafts.AddRange(charges.Mileage.Select(m => new SalesLineDraft(
-                itemId, $"{m.Date:MMM d, yyyy} · {m.Purpose} ({m.Miles:0.#} mi)", m.Miles, m.BillRate, Taxable: false, PriceSource: MileagePriceSource, Group: Group(m.CustomerId), OwnerCustomerId: groups is null ? null : m.CustomerId,
+                itemId, $"{m.Date:MMM d, yyyy} · {m.Purpose} ({m.Miles:0.#} mi)", m.Miles, m.RateBilled, Taxable: false, PriceSource: MileagePriceSource, Group: Group(m.CustomerId), OwnerCustomerId: groups is null ? null : m.CustomerId,
                 ServiceDate: m.Date)));
         }
 

@@ -77,7 +77,7 @@ Bill and expense lines can be charged to a project for its profitability without
 
 ## The billing run
 
-**Time → Billing run** (`/time/billing`) lists who has time, mileage and costs waiting to be billed through a date, with sub-customers billed with their client under the client. Tick clients and **Make drafts**. A draft posts nothing: open it to change what time is billed at, with a reason (0 writes it off), take lines off for a later bill, or add a message. **Save and post** makes the invoice; or tick several drafts on the run page and **Post ticked drafts**, emailing each if you like. **Discard** puts the work back.
+**Time → Billing run** (`/time/billing`) lists who has time, mileage and costs waiting to be billed through a date, with sub-customers billed with their client under the client. Tick clients and **Make drafts**. A draft posts nothing: open it to change what a line is billed at, time, mileage or a cost passed on, with a reason (0 writes it off: a trip or cost written off is no longer billable, and keeps the reason), take lines off for a later bill, or add a message. **Save and post** makes the invoice; or tick several drafts on the run page and **Post ticked drafts**, emailing each if you like. **Discard** puts the work back.
 
 **Realization** shows what billed time came to against what it was worth when worked, by client, and **Time written up or down** lists each change with its reason.
 

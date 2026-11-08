@@ -1525,6 +1525,11 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("MileageTrips");
             b.HasKey(t => t.Id);
+            b.Property(t => t.BilledAmount).HasColumnName("BilledAmountMinor").HasConversion(NullableMinorUnits);
+            b.Property(t => t.WriteDownReason).HasMaxLength(200);
+            b.Property(t => t.WrittenDownBy).HasMaxLength(100);
+            b.Ignore(t => t.Worked);
+            b.Ignore(t => t.RateBilled);
             b.HasIndex(t => t.Date);
             b.HasIndex(t => t.CustomerId);
             b.HasIndex(t => t.InvoiceId);
@@ -2469,6 +2474,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("BillableExpenses");
             b.HasKey(x => x.Id);
+            b.Property(x => x.BilledAmount).HasColumnName("BilledAmountMinor").HasConversion(NullableMinorUnits);
+            b.Property(x => x.WriteDownReason).HasMaxLength(200);
+            b.Property(x => x.WrittenDownBy).HasMaxLength(100);
+            b.Ignore(x => x.Worked);
             b.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
             b.HasIndex(x => new { x.Kind, x.DocumentId, x.LineNumber }).IsUnique();
             b.HasIndex(x => x.CustomerId);

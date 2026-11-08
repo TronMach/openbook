@@ -3823,6 +3823,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Billable")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("BilledAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("BilledAmountMinor");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -3860,6 +3864,17 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("WorkerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WriteDownReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WrittenDownBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("WrittenDownOn")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -5326,6 +5341,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("BilledAmount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("BilledAmountMinor");
+
                     b.Property<long>("Cost")
                         .HasColumnType("INTEGER")
                         .HasColumnName("CostMinor");
@@ -5364,6 +5383,17 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<long>("MarkupPercent")
                         .HasColumnType("INTEGER")
                         .HasColumnName("MarkupPercentTenThousandths");
+
+                    b.Property<string>("WriteDownReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WrittenDownBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("WrittenDownOn")
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 

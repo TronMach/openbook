@@ -38,8 +38,41 @@ public sealed class BillableExpense
     /// <summary>Percent added on top, to 4 decimals.</summary>
     public decimal MarkupPercent { get; private set; }
 
-    /// <summary>What the customer is charged: cost plus markup, to the cent.</summary>
-    public decimal Amount => decimal.Round(Cost * (1m + MarkupPercent / 100m), 2, MidpointRounding.AwayFromZero);
+    /// <summary>Cost plus markup, to the cent, before any write-down.</summary>
+    public decimal Worked => decimal.Round(Cost * (1m + MarkupPercent / 100m), 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>What the customer is charged: cost plus markup, or what a billing run wrote it to.</summary>
+    public decimal Amount => BilledAmount ?? Worked;
+
+    /// <summary>What's billed when written up or down in a billing run (zero writes it off); null bills it as worked.</summary>
+    public decimal? BilledAmount { get; private set; }
+
+    public string? WriteDownReason { get; private set; }
+    public DateOnly? WrittenDownOn { get; private set; }
+    public string? WrittenDownBy { get; private set; }
+
+    /// <summary>
+    /// Bills the cost at another amount, with a reason (a billing run's write-down). Zero writes it off: it stays a cost
+    /// of the customer's work, no longer billable, and the reason stays.
+    /// </summary>
+    public void Adjust(decimal billed, string reason, DateOnly on, string by)
+    {
+        if (InvoiceId is not null)
+            throw new DomainException("billable.invoiced", $"'{Description}' is on an invoice. Void the invoice first.");
+        if (!IsBillable)
+            throw new DomainException("billable.not_billable", $"'{Description}' is a project cost, not billable.");
+        Money.EnsureCents(billed);
+        if (billed < 0m)
+            throw new DomainException("billable.adjust_negative", "A cost can't be billed below zero.");
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("billable.adjust_reason", "Say why this cost is written up or down.");
+        BilledAmount = billed == Worked ? null : billed;
+        WriteDownReason = BilledAmount is null ? null : TextCleaning.Cut(reason.Trim(), 200);
+        WrittenDownOn = BilledAmount is null ? null : on;
+        WrittenDownBy = BilledAmount is null ? null : by;
+        if (billed == 0m)
+            IsBillable = false;
+    }
 
     /// <summary>False for a cost that only counts toward the customer's or project's profitability.</summary>
     public bool IsBillable { get; private set; }

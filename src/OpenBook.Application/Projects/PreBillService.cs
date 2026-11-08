@@ -137,6 +137,8 @@ public sealed class PreBillService(
         await store.SaveChangesAsync(ct);
     }
 
+    private static string WriteDown(decimal? billed, string? reason) => JsonSerializer.Serialize(new { BilledAmount = billed, WriteDownReason = reason });
+
     /// <summary>
     /// Writes the draft's amounts onto its time and makes the invoice, in one transaction. A line billed at nothing is
     /// written off: the time leaves the unbilled list with its reason, and there's no invoice if that's all there was.
@@ -154,9 +156,28 @@ public sealed class PreBillService(
         foreach (var line in timeLines.Where(l => entries.ContainsKey(l.SourceId) && l.Billed != l.Worked))
             await time.AdjustAsync(entries[line.SourceId], line.Billed, line.Reason ?? string.Empty, date, ct);
 
+        // Mileage and costs are written up or down the same way; nothing billed writes them off.
+        var tripLines = draft.Lines.Where(l => l.Kind == PreBillLineKind.Mileage && l.Billed != l.Worked).ToList();
+        foreach (var trip in await store.GetMileageTripsAsync([.. tripLines.Select(l => l.SourceId)], ct))
+        {
+            var line = tripLines.First(l => l.SourceId == trip.Id);
+            var tripBefore = WriteDown(trip.BilledAmount, trip.WriteDownReason);
+            trip.Adjust(line.Billed, line.Reason ?? string.Empty, date, user.Actor);
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, MileageService.EntityType, trip.Id, tripBefore, WriteDown(trip.BilledAmount, trip.WriteDownReason)));
+        }
+
+        var costLines = draft.Lines.Where(l => l.Kind == PreBillLineKind.Expense && l.Billed != l.Worked).ToList();
+        foreach (var cost in await sales.GetBillableExpensesAsync([.. costLines.Select(l => l.SourceId)], ct))
+        {
+            var line = costLines.First(l => l.SourceId == cost.Id);
+            var costBefore = WriteDown(cost.BilledAmount, cost.WriteDownReason);
+            cost.Adjust(line.Billed, line.Reason ?? string.Empty, date, user.Actor);
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, BillableExpenseService.EntityType, cost.Id, costBefore, WriteDown(cost.BilledAmount, cost.WriteDownReason)));
+        }
+
         List<Guid> timeIds = [.. timeLines.Where(l => l.Billed > 0m).Select(l => l.SourceId)];
-        List<Guid> tripIds = [.. draft.Lines.Where(l => l.Kind == PreBillLineKind.Mileage).Select(l => l.SourceId)];
-        List<Guid> costIds = [.. draft.Lines.Where(l => l.Kind == PreBillLineKind.Expense).Select(l => l.SourceId)];
+        List<Guid> tripIds = [.. draft.Lines.Where(l => l.Kind == PreBillLineKind.Mileage && l.Billed > 0m).Select(l => l.SourceId)];
+        List<Guid> costIds = [.. draft.Lines.Where(l => l.Kind == PreBillLineKind.Expense && l.Billed > 0m).Select(l => l.SourceId)];
         Invoice? invoice = null;
         if (timeIds.Count + tripIds.Count + costIds.Count > 0)
         {

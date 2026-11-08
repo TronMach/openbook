@@ -3830,6 +3830,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("Billable")
                         .HasColumnType("boolean");
 
+                    b.Property<long?>("BilledAmount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("BilledAmountMinor");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -3868,6 +3872,17 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<Guid?>("WorkerId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("WriteDownReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("WrittenDownBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("WrittenDownOn")
+                        .HasColumnType("date");
 
                     b.HasKey("Id");
 
@@ -5333,6 +5348,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<long?>("BilledAmount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("BilledAmountMinor");
+
                     b.Property<long>("Cost")
                         .HasColumnType("bigint")
                         .HasColumnName("CostMinor");
@@ -5371,6 +5390,17 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<long>("MarkupPercent")
                         .HasColumnType("bigint")
                         .HasColumnName("MarkupPercentTenThousandths");
+
+                    b.Property<string>("WriteDownReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("WrittenDownBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("WrittenDownOn")
+                        .HasColumnType("date");
 
                     b.HasKey("Id");
 

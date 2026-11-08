@@ -42,7 +42,7 @@
                                 <td class="num">@(line.Hours == 0m ? "" : Labels.Quantity(line.Hours))</td>
                                 <td class="num">@Labels.Amount(line.Worked)</td>
                                 <td class="num">
-                                    @if (line.Kind == PreBillLineKind.Time && Open)
+                                    @if (Open)
                                     {
                                         <input class="amount" name="billed:@line.LineNumber" inputmode="decimal" aria-label="To bill" value="@line.Billed.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" />
                                     }
@@ -52,7 +52,7 @@
                                     }
                                 </td>
                                 <td>
-                                    @if (line.Kind == PreBillLineKind.Time && Open)
+                                    @if (Open)
                                     {
                                         <input name="reason:@line.LineNumber" aria-label="Reason" maxlength="@PreBillLine.MaxReasonLength" value="@line.Reason" />
                                     }

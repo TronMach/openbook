@@ -77,12 +77,33 @@ public sealed class FirmBillingTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_reason_is_needed_and_only_time_can_change()
+    public async Task A_reason_is_needed_for_another_amount()
     {
         await Work(1m);
         var draft = await Draft();
         var refused = await Assert.ThrowsAsync<DomainException>(() => In<PreBillService, PreBill>(s => s.SaveAsync(draft.Id, null, [new PreBillLineChange(1, 50m, null)])));
         Assert.Equal("prebill.reason_required", refused.Code);
+    }
+
+    [Fact]
+    public async Task Mileage_can_be_written_down_or_off_in_a_billing_run()
+    {
+        await Work(1m);
+        var down = await In<MileageService, MileageTrip>(s => s.CreateAsync(new MileageDetails(Mar1, 100m, "Site visit", CustomerId: _acme.Id, Billable: true, BillRate: 0.7m)));
+        var off = await In<MileageService, MileageTrip>(s => s.CreateAsync(new MileageDetails(Mar1, 10m, "Wrong turn", CustomerId: _acme.Id, Billable: true, BillRate: 0.7m)));
+        var draft = await Draft();
+        int Line(Guid source) => draft.Lines.Single(l => l.SourceId == source).LineNumber;
+        await In<PreBillService, PreBill>(s => s.SaveAsync(draft.Id, null,
+            [new PreBillLineChange(Line(down.Id), 50m, "Agreed flat charge"), new PreBillLineChange(Line(off.Id), 0m, "Our detour")]));
+
+        var invoice = await In<PreBillService, Invoice?>(s => s.PostAsync(draft.Id, Mar31));
+        Assert.Equal(150m, invoice!.Total);
+        var trips = await In<MileageService, IReadOnlyList<MileageTrip>>(s => s.ListAsync(null, null, _acme.Id));
+        var written = trips.Single(t => t.Id == down.Id);
+        Assert.Equal((50m, "Agreed flat charge", invoice.Id), (written.BilledAmount!.Value, written.WriteDownReason!, written.InvoiceId!.Value));
+        var gone = trips.Single(t => t.Id == off.Id);
+        Assert.Equal((false, 0m, (Guid?)null), (gone.Billable, gone.BilledAmount!.Value, gone.InvoiceId));
+        Assert.Empty(await Worksheet());
     }
 
     [Fact]

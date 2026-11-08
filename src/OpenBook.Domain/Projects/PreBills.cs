@@ -135,11 +135,9 @@ public sealed class PreBillLine
             throw new DomainException("prebill.amount", "A line can't be billed below zero.");
         if (billed == Billed && reason == Reason)
             return;
-        if (Kind != PreBillLineKind.Time && billed != Worked)
-            throw new DomainException("prebill.time_only", "Only time can be billed at another amount. Take the line off instead.");
         var said = Text.Optional(reason, MaxReasonLength, "prebill.reason_too_long", "Reason");
         if (billed != Worked && said is null)
-            throw new DomainException("prebill.reason_required", "Say why this time is billed at a different amount.");
+            throw new DomainException("prebill.reason_required", "Say why this line is billed at a different amount.");
         (Billed, Reason) = (billed, billed == Worked ? null : said);
     }
 }

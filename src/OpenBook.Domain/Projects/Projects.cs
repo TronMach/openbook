@@ -397,7 +397,43 @@ public sealed class MileageTrip
     public Guid? InvoiceId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public decimal Amount => Billable ? decimal.Round(Miles * BillRate, 2, MidpointRounding.AwayFromZero) : 0m;
+    /// <summary>The miles at the rate, before any write-down.</summary>
+    public decimal Worked => decimal.Round(Miles * BillRate, 2, MidpointRounding.AwayFromZero);
+
+    public decimal Amount => Billable ? BilledAmount ?? Worked : 0m;
+
+    /// <summary>What's billed when written up or down in a billing run (zero writes it off); null bills it as worked.</summary>
+    public decimal? BilledAmount { get; private set; }
+
+    public string? WriteDownReason { get; private set; }
+    public DateOnly? WrittenDownOn { get; private set; }
+    public string? WrittenDownBy { get; private set; }
+
+    /// <summary>The rate per mile for an invoice line, so the miles at it come to <see cref="Amount"/>.</summary>
+    public decimal RateBilled => BilledAmount is { } billed && Miles > 0m ? decimal.Round(billed / Miles, 4, MidpointRounding.AwayFromZero) : BillRate;
+
+    /// <summary>
+    /// Bills the trip at another amount, with a reason (a billing run's write-down). Zero writes it off: it's no longer
+    /// billable, and the reason stays.
+    /// </summary>
+    public void Adjust(decimal billed, string reason, DateOnly on, string by)
+    {
+        if (InvoiceId is not null)
+            throw new DomainException("mileage.invoiced", "This trip is on an invoice. Void the invoice first.");
+        if (!Billable)
+            throw new DomainException("mileage.not_billable", "Only billable mileage can be written up or down.");
+        Money.EnsureCents(billed);
+        if (billed < 0m)
+            throw new DomainException("mileage.adjust_negative", "Mileage can't be billed below zero.");
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new DomainException("mileage.adjust_reason", "Say why this trip is written up or down.");
+        BilledAmount = billed == Worked ? null : billed;
+        WriteDownReason = BilledAmount is null ? null : TextCleaning.Cut(reason.Trim(), 200);
+        WrittenDownOn = BilledAmount is null ? null : on;
+        WrittenDownBy = BilledAmount is null ? null : by;
+        if (billed == 0m)
+            Billable = false;
+    }
 
     public static MileageTrip Create(MileageDetails details, DateTimeOffset createdAt)
     {
@@ -411,6 +447,7 @@ public sealed class MileageTrip
         ArgumentNullException.ThrowIfNull(details);
         if (InvoiceId is not null)
             throw new DomainException("mileage.invoiced", "This trip is on an invoice. Void the invoice first.");
+        (BilledAmount, WriteDownReason, WrittenDownOn, WrittenDownBy) = (null, null, null, null);
         if (details.Miles <= 0m || details.Miles > 10_000m || decimal.Round(details.Miles, 1) != details.Miles)
             throw new DomainException("mileage.miles_invalid", "Miles are above 0, with at most one decimal.");
         if (details.Billable && details.CustomerId is null)
