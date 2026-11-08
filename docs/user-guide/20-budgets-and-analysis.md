@@ -83,6 +83,7 @@ Once a year's books are done, **Allocate** that year: OpenBook takes the fiscal 
 - **Undeposited funds match what's waiting**: holding accounts such as Undeposited Funds hold exactly the payments, receipts, retainers and gifts waiting for **Make deposit**.
 - **Stock value matches the books**: the cost of everything in stock equals the inventory asset accounts.
 - **Customer deposits match the retainers**: what customers paid ahead and haven't had applied or refunded equals the account retainers are kept in.
+- **Received Not Billed matches the deliveries**: goods received into stock from purchase orders, less what the bills from those orders cleared, equals the Received Not Billed account.
 - **Pledges receivable match the open pledges** (nonprofits): promised, less cancelled and paid.
 - **Accumulated depreciation matches the asset register**: the depreciation posted for each asset still held. Depreciation from before OpenBook, entered as a journal entry, shows as a note.
 - **Loan balances match the books**: what's left on each loan by its payments equals the loan accounts.

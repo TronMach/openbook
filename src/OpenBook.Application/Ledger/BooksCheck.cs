@@ -100,6 +100,7 @@ public sealed class BooksCheckService(
             await UndepositedTieAsync(data, ct),
             await InventoryTieAsync(data, ct),
             CustomerDepositsTie(data),
+            await ReceivedNotBilledTieAsync(data, ct),
             await PledgesTieAsync(data, ct),
             await DepreciationTieAsync(data, ct),
             await LoansTieAsync(data, ct),
@@ -511,6 +512,19 @@ public sealed class BooksCheckService(
             "What customers paid ahead (retainers not yet applied or refunded) equals the account the retainers are kept in.",
             -d.Retainers.Where(r => r.Status == DocumentStatus.Posted).Sum(r => r.Balance), lines.Sum(l => l.Amount), others,
             "Retainers still held", Names(d, accountIds, "the customer deposits account"), credit: true);
+    }
+
+    /// <summary>Deliveries received into stock credit "Received Not Billed" at their value; bills from the order clear what they accrue.</summary>
+    private async Task<CheckResult> ReceivedNotBilledTieAsync(Data d, CancellationToken ct)
+    {
+        var account = d.Chart.FindByFullName(Purchases.PurchaseOrderService.ReceivedNotBilledName);
+        var accountIds = account is null ? new HashSet<Guid>() : [account.Id];
+        var (lines, others) = On(d, accountIds, Purchases.PurchaseOrderService.ReceiptSource, Bill.Source);
+        var received = (await purchases.ListPurchaseOrdersAsync(null, ct)).SelectMany(o => o.Receipts).Where(r => !r.IsVoided && r.JournalEntryId is not null).Sum(r => r.Value);
+        var cleared = d.Bills.Where(b => b.Status == DocumentStatus.Posted).SelectMany(b => b.SourceLines).Sum(s => s.AccruedAmount);
+        return Compare("received-not-billed", "Received Not Billed matches the deliveries",
+            "Goods received into stock from purchase orders, less what bills from those orders cleared, equals the Received Not Billed account.",
+            -(received - cleared), lines.Sum(l => l.Amount), others, "Deliveries not billed", Names(d, accountIds, "Received Not Billed"), credit: true);
     }
 
     private async Task<CheckResult> PledgesTieAsync(Data d, CancellationToken ct)

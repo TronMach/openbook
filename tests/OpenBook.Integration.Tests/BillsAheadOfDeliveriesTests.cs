@@ -81,7 +81,9 @@ public sealed class BillsAheadOfDeliveriesTests : IAsyncLifetime
     public async Task Received_not_billed_works_as_of_a_past_date()
     {
         await Receive(4m);
+        Assert.Equal(0, (await In<OpenBook.Application.Ledger.BooksCheckService, OpenBook.Application.Ledger.BooksCheckReport>(s => s.RunAsync())).Problems);
         await BillFor(4m);
+        Assert.Equal(0, (await In<OpenBook.Application.Ledger.BooksCheckService, OpenBook.Application.Ledger.BooksCheckReport>(s => s.RunAsync())).Problems);
         decimal Total(OpenBook.Application.Reporting.ReportTable t) => (decimal)t.Rows.Single(r => (string?)r.Cells[0].Value == "Total received not billed").Cells[4].Value!;
         // Received on the 3rd, billed on the 6th.
         Assert.Equal(20m, Total(await In<OpenBook.Application.Reporting.ReportCatalog, OpenBook.Application.Reporting.ReportTable>(s =>
