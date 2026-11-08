@@ -42,6 +42,38 @@ public sealed class ApiParityTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_write_with_an_old_version_is_refused_and_one_without_goes_through()
+    {
+        var api = await PageSmokeTests.SetUpAsync(_app);
+        var customer = (await Json(await api.PostAsJsonAsync("/api/customers", new { displayName = "Acme" }))).GetProperty("id").GetGuid();
+        var read = await api.GetAsync($"/api/customers/{customer}");
+        var tag = read.Headers.ETag?.Tag;
+        Assert.Matches(@"^""v\d+""$", tag);
+
+        HttpRequestMessage Put(string name, string? ifMatch)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Put, $"/api/customers/{customer}") { Content = JsonContent.Create(new { displayName = name }) };
+            if (ifMatch is not null)
+                request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+            return request;
+        }
+
+        var first = await api.SendAsync(Put("Acme Ltd", tag));
+        Assert.True(first.IsSuccessStatusCode, await first.Content.ReadAsStringAsync());
+        Assert.NotEqual(tag, first.Headers.ETag?.Tag);
+
+        var stale = await api.SendAsync(Put("Acme Limited", tag));
+        Assert.Equal(HttpStatusCode.PreconditionFailed, stale.StatusCode);
+        Assert.Equal("save.stale", (await stale.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("Acme Ltd", (await Json(await api.GetAsync($"/api/customers/{customer}"))).GetProperty("displayName").GetString());
+
+        Assert.True((await api.SendAsync(Put("Acme Limited", null))).IsSuccessStatusCode);
+        Assert.True((await api.SendAsync(Put("Acme Co", "*"))).IsSuccessStatusCode);
+        Assert.False(OpenBook.Api.ApiVersions.Matches("\"v3\", W/\"v4\"", 5));
+        Assert.True(OpenBook.Api.ApiVersions.Matches("\"v3\", W/\"v4\"", 4));
+    }
+
+    [Fact]
     public async Task Files_portal_links_and_the_package_go_through_the_api()
     {
         var api = await PageSmokeTests.SetUpAsync(_app);

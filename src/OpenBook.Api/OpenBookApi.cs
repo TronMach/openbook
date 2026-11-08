@@ -49,7 +49,7 @@ public static class OpenBookApi
     {
         // The OpenAPI description itself is public: it describes endpoints, not data.
         app.MapOpenApi("/api/openapi/{documentName}.json").AllowAnonymous();
-        var api = app.MapGroup("/api").RequireAuthorization().AddEndpointFilter(MapDomainErrors);
+        var api = app.MapGroup("/api").RequireAuthorization().AddEndpointFilter(MapDomainErrors).AddEndpointFilter(ApiVersions.FilterAsync);
         api.MapBankingApi();
         api.MapSalesApi();
         api.MapPurchasesApi();

@@ -41,6 +41,8 @@ Programs send the key as `Authorization: Bearer obk_…`. The OpenAPI descriptio
 
 To retry a write safely after a timeout, send an `Idempotency-Key` header (any unique text up to 100 characters, such as a GUID) with POST, PUT or DELETE. The first request with a key is done and its answer kept for a day; sending the same request with the same key again gets that answer back (with `Idempotency-Replayed: true`) instead of, say, a second invoice. The same key with a different request is refused (422). The command-line tool takes `--idempotency-key`.
 
+So that a program can't undo someone else's change, reading a document, customer, vendor or item returns an `ETag` header (such as `"v12"`). Send it back as `If-Match` with a change to that record: if someone changed it in between, the change is refused with 412 and code `save.stale`, and nothing is saved; read it again and make the change on what's there now. Without `If-Match` nothing is compared, as before. A change that goes through returns the new `ETag`.
+
 Lists of invoices, payments, sales receipts, bills and bill payments return everything by default. Add `?take=100` (and `&skip=100` for the next page) to get the newest a page at a time, at most 500 per page; the `X-Total-Count` header says how many there are in all.
 
 ## Webhooks

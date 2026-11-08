@@ -15,6 +15,15 @@ public interface IRecordVersions
 
 public static class RecordVersionChecks
 {
+    private static readonly System.Reflection.MethodInfo Generic = typeof(IRecordVersions).GetMethod(nameof(IRecordVersions.GetAsync))!;
+
+    /// <summary>The version of a record of <paramref name="type"/> (one with a version); null when there's no such record.</summary>
+    public static Task<int?> GetAsync(this IRecordVersions versions, Type type, Guid id, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(versions);
+        return (Task<int?>)Generic.MakeGenericMethod(type).Invoke(versions, [id, ct])!;
+    }
+
     public const string StaleCode = "save.stale";
 
     /// <summary>
