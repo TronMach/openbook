@@ -278,7 +278,8 @@
         {
             ClassId = chosen.GetValueOrDefault(r.Item.Id)?.ClassId ?? r.Suggestion?.ClassId,
             LocationId = chosen.GetValueOrDefault(r.Item.Id)?.LocationId ?? r.Suggestion?.LocationId,
-            Splits = chosen.GetValueOrDefault(r.Item.Id)?.Splits,
+            Splits = chosen.GetValueOrDefault(r.Item.Id)?.Splits
+                ?? (r.Suggestion?.Splits is { } ruleSplits ? [.. ruleSplits.Select(s => new SplitRow { AccountId = s.AccountId, Amount = s.Amount, ClassId = s.ClassId })] : null),
             CategoryId = chosen.GetValueOrDefault(r.Item.Id)?.CategoryId ?? r.Suggestion?.CategoryAccountId,
             VendorId = chosen.GetValueOrDefault(r.Item.Id)?.VendorId ?? r.Suggestion?.VendorId,
             Payee = chosen.GetValueOrDefault(r.Item.Id)?.Payee ?? r.Suggestion?.Payee,

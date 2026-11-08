@@ -781,6 +781,16 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<Account>().WithMany().HasForeignKey(r => r.AccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(r => r.CategoryAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Vendor>().WithMany().HasForeignKey(r => r.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(r => r.Splits, x =>
+            {
+                x.ToTable("BankRuleSplits");
+                x.WithOwner().HasForeignKey("BankRuleId");
+                x.HasKey("BankRuleId", nameof(BankRuleSplit.Position));
+                x.Property(s => s.Position).ValueGeneratedNever();
+                x.Property(s => s.Percent).HasColumnName("PercentTenThousandths").HasConversion(TenThousandths);
+                x.HasOne<Account>().WithMany().HasForeignKey(s => s.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(r => r.Splits).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<Reconciliation>(b =>

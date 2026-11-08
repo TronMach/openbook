@@ -95,6 +95,29 @@ public static class BankingEndpoints
             }
         }).RequireAuthorization();
 
+        // A rule's split: sacct:i, spct:i, sclass:i; rows without an account are skipped.
+        app.MapPost("/banking/rules/{id:guid}/splits", async (Guid id, IFormCollection form, BankRuleService rules, CancellationToken ct) =>
+        {
+            try
+            {
+                var splits = new List<(Guid, decimal, Guid?)>();
+                for (var i = 0; form.ContainsKey($"sacct:{i}"); i++)
+                {
+                    if (Id(form[$"sacct:{i}"]) is not { } account)
+                        continue;
+                    var percent = FormNumbers.Number(form[$"spct:{i}"]) ?? throw new DomainException("rule.split_percent", $"Row {i + 1}: enter its percentage.");
+                    splits.Add((account, percent, Id(form[$"sclass:{i}"])));
+                }
+
+                await rules.SetSplitsAsync(id, splits, ct);
+                return Results.Redirect($"/banking/rules/{id}#splits");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/banking/rules/{id}?splitError={Uri.EscapeDataString(ex.Message)}#splits");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/banking/paid-personally", async (IFormCollection _, BankingService banking, CancellationToken ct) =>
         {
             var account = await banking.OwnMoneyAccountAsync(ct);

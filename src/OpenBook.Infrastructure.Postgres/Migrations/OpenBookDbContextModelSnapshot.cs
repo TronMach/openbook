@@ -7446,6 +7446,42 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .WithMany()
                         .HasForeignKey("VendorId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Banking.BankRuleSplit", "Splits", b1 =>
+                        {
+                            b1.Property<Guid>("BankRuleId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Position")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Percent")
+                                .HasColumnType("bigint")
+                                .HasColumnName("PercentTenThousandths");
+
+                            b1.HasKey("BankRuleId", "Position");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("BankRuleSplits", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("BankRuleId");
+                        });
+
+                    b.Navigation("Splits");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Banking.BankTransaction", b =>

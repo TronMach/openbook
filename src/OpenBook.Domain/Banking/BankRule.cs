@@ -53,6 +53,42 @@ public sealed class BankRule
 
     public bool IsActive { get; private set; }
 
+    public const int MaxSplits = 10;
+
+    private readonly List<BankRuleSplit> _splits = [];
+
+    /// <summary>
+    /// How the line's amount is split, by percent (adding up to 100); empty for the one category
+    /// (<see cref="CategoryAccountId"/>), which stays the rule's category either way.
+    /// </summary>
+    public IReadOnlyList<BankRuleSplit> Splits => [.. _splits.OrderBy(s => s.Position)];
+
+    /// <summary>Accounts are checked by the service first. Empty clears the splits.</summary>
+    public void SetSplits(IReadOnlyList<(Guid AccountId, decimal Percent, Guid? ClassId)> splits)
+    {
+        ArgumentNullException.ThrowIfNull(splits);
+        if (splits.Count > MaxSplits)
+            throw new DomainException("rule.too_many_splits", $"A rule splits a line at most {MaxSplits} ways.");
+        if (splits.Count == 1)
+            throw new DomainException("rule.one_split", "A split needs two lines or more; for one category, leave the splits empty.");
+        if (splits.Any(s => s.Percent <= 0m || decimal.Round(s.Percent, 4) != s.Percent))
+            throw new DomainException("rule.split_percent", "Each split is a percentage above zero, to four decimals.");
+        if (splits.Count > 0 && splits.Sum(s => s.Percent) != 100m)
+            throw new DomainException("rule.split_total", $"The splits add up to {splits.Sum(s => s.Percent):0.####}%, not 100%.");
+        _splits.Clear();
+        _splits.AddRange(splits.Select((s, i) => new BankRuleSplit(i + 1, s.AccountId, s.Percent, s.ClassId)));
+    }
+
+    /// <summary>The splits for a line of <paramref name="amount"/> (positive), cents spread so they add up; null without splits.</summary>
+    public IReadOnlyList<BankSplit>? SplitsFor(decimal amount)
+    {
+        if (_splits.Count == 0)
+            return null;
+        var ordered = Splits;
+        var amounts = Common.Shares.ByWeight(amount, [.. ordered.Select(s => s.Percent)]);
+        return [.. ordered.Select((s, i) => new BankSplit(s.AccountId, amounts[i], null, s.ClassId)).Where(s => s.Amount != 0m)];
+    }
+
     public static BankRule Create(BankRuleDetails details)
     {
         var rule = new BankRule { Id = Guid.CreateVersion7(), IsActive = true };
@@ -111,6 +147,27 @@ public sealed class BankRule
     public void Deactivate() => IsActive = false;
 
     public void Reactivate() => IsActive = true;
+}
+
+/// <summary>One part of a rule's split: an account, its percentage of the line and an optional class.</summary>
+public sealed class BankRuleSplit
+{
+    private BankRuleSplit()
+    {
+    }
+
+    internal BankRuleSplit(int position, Guid accountId, decimal percent, Guid? classId)
+    {
+        Position = position;
+        AccountId = accountId;
+        Percent = percent;
+        ClassId = classId == Guid.Empty ? null : classId;
+    }
+
+    public int Position { get; private set; }
+    public Guid AccountId { get; private set; }
+    public decimal Percent { get; private set; }
+    public Guid? ClassId { get; private set; }
 }
 
 public sealed record BankRuleDetails(

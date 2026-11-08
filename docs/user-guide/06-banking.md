@@ -69,6 +69,8 @@ Most lines repeat: the same utility company every month, the same software subsc
 - **Order**: lower numbers are tried first; the first matching rule wins.
 - **Add matching lines to the books automatically (no review)**: tick this only for rules you trust completely. Matching lines are then posted as they're imported, unless the books already have something for the same amount within a week: those wait for you to match or add them. Otherwise the rule just pre-fills the line on the review list.
 
+Once a rule is saved, its page has **Split the amount** for a line that always splits the same way, such as a phone bill that's partly personal: each row is an account (and a class, if you track them) with its percentage, adding up to 100. The rule then adds or pre-fills its lines with those splits, the cents spread so they add up to the line.
+
 ## Reconciling
 
 Reconciling checks your books against the bank's statement, line by line, so you know they agree. Do it every month when the statement arrives.

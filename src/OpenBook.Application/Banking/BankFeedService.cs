@@ -21,7 +21,9 @@ public sealed record FeedLine(DateOnly Date, decimal Amount, string? Payee, stri
 public sealed record FeedImportResult(int Queued, int AutoAdded, int Skipped, string? NotAdded = null);
 
 /// <summary>What a rule says to do with a line.</summary>
-public sealed record FeedSuggestion(Guid CategoryAccountId, string? Payee, Guid? VendorId, BankRule Rule, Guid? ClassId = null, Guid? LocationId = null);
+/// <param name="Splits">The rule's split of this line's amount, when it splits.</param>
+public sealed record FeedSuggestion(Guid CategoryAccountId, string? Payee, Guid? VendorId, BankRule Rule, Guid? ClassId = null, Guid? LocationId = null,
+    IReadOnlyList<BankSplit>? Splits = null);
 
 /// <summary>A transaction already in the books that looks like the line: same amount, within a week.</summary>
 public sealed record FeedMatch(Guid JournalEntryId, long EntryNumber, DateOnly Date, decimal Amount, string Description, string Source, Guid? SourceId);
@@ -149,7 +151,7 @@ public sealed class BankFeedService(
                 // One line a rule can't post (a closed period, a category switched off since) waits for review and stops nothing else.
                 try
                 {
-                    var transaction = await banking.StageAsync(Command(item, new AddFeedItemCommand(rule.CategoryAccountId, rule.Payee, rule.VendorId, ClassId: rule.ClassId, LocationId: rule.LocationId)), batchId, ct);
+                    var transaction = await banking.StageAsync(Command(item, new AddFeedItemCommand(rule.CategoryAccountId, rule.Payee, rule.VendorId, ClassId: rule.ClassId, LocationId: rule.LocationId, Splits: rule.SplitsFor(Math.Abs(item.Amount)))), batchId, ct);
                     item.MarkAdded(transaction.Id, rule.Id, clock.UtcNow, user.Actor);
                     autoAdded++;
                 }
@@ -182,7 +184,7 @@ public sealed class BankFeedService(
         return items.Select(item =>
         {
             var rule = item.Status == BankFeedStatus.Pending ? rules.FirstOrDefault(r => r.Fits(item)) : null;
-            var suggestion = rule is null ? null : new FeedSuggestion(rule.CategoryAccountId, rule.Payee, rule.VendorId, rule, rule.ClassId, rule.LocationId);
+            var suggestion = rule is null ? null : new FeedSuggestion(rule.CategoryAccountId, rule.Payee, rule.VendorId, rule, rule.ClassId, rule.LocationId, rule.SplitsFor(Math.Abs(item.Amount)));
             var matches = item.Status == BankFeedStatus.Pending
                 ? candidates.Where(c => c.Amount == item.Amount && Math.Abs(c.Date.DayNumber - item.Date.DayNumber) <= MatchWindowDays)
                     .OrderBy(c => Math.Abs(c.Date.DayNumber - item.Date.DayNumber)).Take(5).ToList()

@@ -56,6 +56,30 @@ public sealed class BankRuleService(IBankingStore bank, IPurchasesStore purchase
     }
 
     /// <summary>The category must be one a bank transaction can post to; the account a bank or card.</summary>
+    /// <summary>Sets how the rule splits a line, by percent (empty: the one category).</summary>
+    public async Task<BankRule> SetSplitsAsync(Guid id, IReadOnlyList<(Guid AccountId, decimal Percent, Guid? ClassId)> splits, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(splits);
+        var rule = await bank.GetRuleAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var chart = await accounts.GetChartAsync(ct);
+        foreach (var split in splits)
+        {
+            var account = chart.Get(split.AccountId);
+            if (!account.IsActive)
+                throw new DomainException("rule.category_inactive", $"'{account.Name}' is inactive.");
+            if (account.Type is AccountType.AccountsReceivable or AccountType.AccountsPayable)
+                throw new DomainException("rule.category_type", "Rules can't categorize to receivables or payables; record invoices and bills instead.");
+            if (account.Id == rule.AccountId)
+                throw new DomainException("rule.category_self", "A rule can't categorize an account's lines to that same account.");
+        }
+
+        var before = Snapshot(rule);
+        rule.SetSplits(splits);
+        bank.Add(Audit(AuditAction.Updated, rule, before));
+        await bank.SaveChangesAsync(ct);
+        return rule;
+    }
+
     private async Task CheckAsync(BankRuleDetails details, CancellationToken ct)
     {
         var chart = await accounts.GetChartAsync(ct);
@@ -77,6 +101,7 @@ public sealed class BankRuleService(IBankingStore bank, IPurchasesStore purchase
 
     private static string Snapshot(BankRule r) => JsonSerializer.Serialize(new
     {
+        Splits = r.Splits.Select(s => new { s.AccountId, s.Percent, s.ClassId }).ToList(),
         r.Name,
         r.Priority,
         r.AccountId,

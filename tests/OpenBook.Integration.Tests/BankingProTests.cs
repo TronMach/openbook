@@ -310,6 +310,21 @@ public sealed class BankingProTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_rule_splits_the_line_it_adds_by_percent()
+    {
+        var rule = await PowerRule();
+        Assert.Equal("rule.split_total", (await Assert.ThrowsAsync<DomainException>(() => In<BankRuleService, BankRule>(s =>
+            s.SetSplitsAsync(rule.Id, [(_office.Id, 60m, null), (_rent.Id, 30m, null)])))).Code);
+        await In<BankRuleService, BankRule>(s => s.SetSplitsAsync(rule.Id, [(_office.Id, 60m, null), (_rent.Id, 40m, null)]));
+
+        Assert.Equal(new FeedImportResult(0, 1, 0), await Line(new DateOnly(2026, 10, 3), -125m, "P9"));
+        var added = Assert.Single(await Review(_checking.Id, BankFeedStatus.Added));
+        var transaction = (await In<BankingService, BankTransaction?>(s => s.GetAsync(added.Item.BankTransactionId!.Value)))!;
+        var entry = (await In<PostingEngine, JournalEntry?>(e => e.GetAsync(transaction.JournalEntryId)))!;
+        Assert.Equal((75m, 50m), (entry.Lines.Where(l => l.AccountId == _office.Id).Sum(l => l.Amount), entry.Lines.Where(l => l.AccountId == _rent.Id).Sum(l => l.Amount)));
+    }
+
+    [Fact]
     public async Task Rules_suggest_or_add_automatically()
     {
         var landlord = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Landlord LLC")));
