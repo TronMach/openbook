@@ -66,6 +66,26 @@ For a full stock count, **Inventory → Count sheet** prints the **Physical inve
 
 Then **Inventory → Count stock**: choose the warehouse (when there's more than one), the **count date** and the **adjustment account**, and enter what was counted for each item; leave an item blank to skip it. **Record the count** makes one inventory adjustment for the differences between the counts and the books on that date: stock found comes in at the item's purchase cost, stock missing goes out at its cost. If everything matched, nothing is posted. Items with lot or serial numbers are counted on an ordinary adjustment, lot by lot.
 
+## Items spreadsheet
+
+To change many items at once, or keep a list outside OpenBook, use **Inventory → Items spreadsheet** (`/inventory/items/import`).
+
+**Download items.csv** gives one row per product or service, inactive ones too. Each row has:
+
+- **Item ID** and **Item** (the name), then **Type**, **Active**, **Description**, **Category** and **Barcode**.
+- Pricing: **Price**, **Purchase cost**, **Quantity breaks** (written like `10: 5%; 50: 8.00`, meaning 5% off from 10 units and 8.00 each from 50), and a **Price level:** column for each per-item price level.
+- **Taxable**, the accounts (full name or number), **Cost method**, **Tracking**, **Preferred vendor** and the reorder settings.
+- **On hand** in the warehouse you choose.
+- A column for each item custom field.
+
+Change it in a spreadsheet, add rows for new items (leave their Item ID blank, and give an **Income account**), save it as CSV and choose the file under **Bring it back**. The page lists every row as new, changed (with each change), unchanged or an error before anything is saved. **Make … change(s)** saves them all, or nothing if any row has an error.
+
+- Rows match items by Item ID, so a changed name renames the item. Without an ID they match by name.
+- A column you delete changes nothing.
+- A blank cell keeps the type, active, price, purchase cost, taxable, accounts, cost method and tracking, and clears everything else (description, category, barcode, vendor, reorder settings, quantity breaks, level prices, custom fields).
+- A changed **On hand** becomes one inventory adjustment dated **Stock changes dated**, against **Inventory Shrinkage** or, for starting stock, **Opening Balance Equity**, like a count. A blank On hand leaves stock alone. Items with lot or serial numbers are adjusted lot by lot instead.
+- Price rules aren't in the file: they cover many items and live under **Pricing**.
+
 ## Selling
 
 Inventory items go on invoices and sales receipts like any item. When you save, OpenBook takes the stock out and posts its cost. Credit memos for returned goods put stock back, at what it last sold for at cost.

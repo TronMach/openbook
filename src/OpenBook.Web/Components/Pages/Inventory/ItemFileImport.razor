@@ -1,0 +1,210 @@
+@page "/inventory/items/import"
+@rendermode InteractiveServer
+@using OpenBook.Application.Inventory
+@using OpenBook.Domain.Inventory
+@inject Operations Ops
+
+<PageTitle>Items spreadsheet · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Items spreadsheet</h1>
+        <ActionLink Class="button secondary" Href="/inventory">Inventory</ActionLink>
+        <ActionLink Class="button secondary" Href="/items">Products and services</ActionLink>
+    </div>
+
+    <div class="card">
+        <h2>1. Download your items</h2>
+        <p>
+            One row per product or service, inactive ones too: details, accounts, <strong>Price</strong>, <strong>Purchase cost</strong>,
+            <strong>Quantity breaks</strong> (written like <code>10: 5%; 50: 8.00</code>), a <strong>Price level:</strong> column for each per-item price level,
+            <strong>On hand</strong> and a column for each item custom field. Open it in a spreadsheet, change what you need, add rows for new items, and save it as CSV.
+        </p>
+        @if (_warehouses.Count > 1)
+        {
+            <div class="row">
+                <div class="field">
+                    <label for="warehouse">On hand in</label>
+                    <select id="warehouse" @bind="_warehouseId" disabled="@_busy">
+                        @foreach (var w in _warehouses)
+                        {
+                            <option value="@w.Id">@w.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        }
+        <div class="actions">
+            <a class="button" href="@DownloadUrl" download>Download items.csv</a>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>2. Bring it back</h2>
+        <p>
+            Rows are matched by <strong>Item ID</strong>, else by name; a row with neither is a new item (leave the ID blank). Columns you delete change nothing.
+            A blank cell keeps the type, active, price, cost, taxable, accounts, cost method and tracking, and clears the rest (description, category, barcode,
+            vendor, reorder settings, quantity breaks, level prices and custom fields). A blank <strong>On hand</strong> leaves stock alone; a changed one becomes a
+            single stock adjustment, like a count (increases at the purchase cost). Price rules aren't in the file. You see every change first, and nothing changes
+            unless every row is good.
+        </p>
+        <div class="row">
+            <div class="field">
+                <label for="date">Stock changes dated</label>
+                <input id="date" type="date" @bind="_date" disabled="@_busy" />
+            </div>
+            <div class="field">
+                <label for="account">Count stock changes in</label>
+                <select id="account" @bind="_account" disabled="@_busy">
+                    <option value="shrinkage">Inventory Shrinkage (corrections)</option>
+                    <option value="opening">Opening Balance Equity (starting stock)</option>
+                </select>
+            </div>
+        </div>
+        <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_imported is not null)
+    {
+        <div class="alert notice" role="status">
+            Added @_imported.NewCount item(s) and changed @_imported.ChangedCount.@(_imported.StockChanges > 0 ? $" Stock changed for {_imported.StockChanges} item(s) on one adjustment." : "")
+        </div>
+    }
+
+    @if (_preview is not null && _imported is null)
+    {
+        <div class="import-summary">
+            <span><span class="badge ok">@_preview.NewCount</span> new</span>
+            <span><span class="badge ok">@_preview.ChangedCount</span> changed</span>
+            <span><span class="badge">@_preview.UnchangedCount</span> unchanged</span>
+            <span><span class="badge @(_preview.ErrorCount > 0 ? "warn" : null)">@_preview.ErrorCount</span> with errors</span>
+        </div>
+        @if (_preview.Problem is not null)
+        {
+            <div class="alert error" role="alert">@_preview.Problem</div>
+        }
+        <label class="check">
+            <input type="checkbox" @bind="_showUnchanged" />
+            <span>Show unchanged rows</span>
+        </label>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="num">Line</th><th>Status</th><th>Item</th><th>Changes</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _preview.Rows.Where(r => _showUnchanged || r.Status != ItemFileRowStatus.Unchanged))
+                    {
+                        <tr class="@(row.Status == ItemFileRowStatus.Unchanged ? "inactive" : null)">
+                            <td class="num">@row.Line</td>
+                            <td><span class="badge @(row.Status switch { ItemFileRowStatus.New or ItemFileRowStatus.Changed => "ok", ItemFileRowStatus.Error => "warn", _ => null })">@StatusText(row.Status)</span></td>
+                            <td>@row.Item</td>
+                            <td>
+                                @if (row.Message is not null)
+                                {
+                                    <span class="out-of-balance">@row.Message</span>
+                                }
+                                else if (row.Changes.Count > 0)
+                                {
+                                    <ul style="margin: 0; padding-left: 1.1rem">
+                                        @foreach (var change in row.Changes)
+                                        {
+                                            <li>@change</li>
+                                        }
+                                    </ul>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+        <div class="actions">
+            <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _busy)">Make @(_preview.NewCount + _preview.ChangedCount) change(s)</button>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Warehouse> _warehouses = [];
+    private Guid? _warehouseId;
+    private DateOnly _date = CompanyTime.Today;
+    private string _account = "shrinkage";
+    private string? _csv;
+    private ItemFilePlan? _preview;
+    private ItemFilePlan? _imported;
+    private string? _error;
+    private bool _busy;
+    private bool _showUnchanged;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _warehouses = await Ops.RunAsync<WarehouseService, IReadOnlyList<Warehouse>>(s => s.ListAsync());
+        _warehouseId = _warehouses.FirstOrDefault(w => w.IsDefault)?.Id;
+    }
+
+    private string DownloadUrl => "/inventory/items.csv" + (_warehouses.FirstOrDefault(w => w.Id == _warehouseId) is { IsDefault: false } w ? $"?warehouseId={w.Id}" : "");
+
+    private ItemFileOptions Options => new(_date, _warehouses.FirstOrDefault(w => w.Id == _warehouseId) is { IsDefault: false } w ? w.Id : null,
+        _account == "opening" ? Guid.Empty : null);
+
+    private static string StatusText(ItemFileRowStatus status) => status switch
+    {
+        ItemFileRowStatus.New => "New",
+        ItemFileRowStatus.Changed => "Changed",
+        ItemFileRowStatus.Error => "Error",
+        _ => "Unchanged",
+    };
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _imported = null;
+        _preview = null;
+        _error = null;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(ItemFiles.MaxBytes);
+            _csv = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
+            var options = Options;
+            _preview = await Ops.RunAsync<ItemFileService, ItemFilePlan>(s => s.PreviewAsync(_csv, options), _closingPassword);
+        }
+        catch (Exception ex) when (ex is DomainException or IOException)
+        {
+            _error = ex is DomainException ? ex.Message : "That file is larger than 5 MB.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_busy || _csv is null)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var options = Options;
+            _imported = await Ops.RunAsync<ItemFileService, ItemFilePlan>(s => s.ImportAsync(_csv, options), _closingPassword);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

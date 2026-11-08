@@ -68,6 +68,19 @@ internal static class InventoryApi
             await s.CountAsync(c, ct) is { } adjustment
                 ? Results.Created($"/api/inventory/adjustments/{adjustment.Id}", InventoryAdjustmentResponse.From(adjustment))
                 : Results.NoContent());
+        // Every item as one CSV (details, pricing, stock on hand in a warehouse, custom fields), and the same file back:
+        // the body is the CSV; dryRun=true previews; changed quantities become one adjustment dated `date`.
+        inventory.MapGet("/items/file", async (Guid? warehouseId, ItemFileService s, CancellationToken ct) =>
+            Results.File(ItemFiles.Bytes(await s.ExportAsync(warehouseId, ct)), "text/csv", "items.csv"));
+        inventory.MapPost("/items/file", async (HttpRequest request, bool? dryRun, DateOnly? date, Guid? warehouseId, Guid? adjustmentAccountId, ItemFileService s, CancellationToken ct) =>
+        {
+            if (request.ContentLength > ItemFiles.MaxBytes)
+                throw new DomainException("import.too_large", "Files can be at most 5 MB. Split it into smaller files.");
+            var csv = await OpenBook.Application.Import.TextFiles.ReadAsync(request.Body, ct);
+            var options = new ItemFileOptions(date ?? CompanyTime.Today, warehouseId, adjustmentAccountId);
+            return dryRun == true ? await s.PreviewAsync(csv, options, ct) : await s.ImportAsync(csv, options, ct);
+        }).Accepts<string>("text/csv");
+
         inventory.MapPost("/adjustments/{id:guid}/void", async (Guid id, VoidInventoryAdjustmentRequest r, InventoryAdjustmentService s, CancellationToken ct) =>
             InventoryAdjustmentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 

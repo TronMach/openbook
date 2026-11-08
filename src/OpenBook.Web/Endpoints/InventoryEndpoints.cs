@@ -76,6 +76,10 @@ public static class InventoryEndpoints
             }
         }).RequireAuthorization();
 
+        // Every item as one CSV to change in a spreadsheet and bring back on /inventory/items/import.
+        app.MapGet("/inventory/items.csv", async (Guid? warehouseId, ItemFileService s, CancellationToken ct) =>
+            Results.File(ItemFiles.Bytes(await s.ExportAsync(warehouseId, ct)), "text/csv", "items.csv")).RequireAuthorization();
+
         // Fields: count:{itemId} (blank = not counted), date, warehouseId, accountId, reference.
         app.MapPost("/inventory/count", async (IFormCollection form, InventoryAdjustmentService adjustments, ClosedPeriodOverride closing, CancellationToken ct) =>
         {

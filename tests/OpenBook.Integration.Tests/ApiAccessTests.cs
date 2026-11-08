@@ -525,6 +525,10 @@ public sealed class AccessRulesTests
     [InlineData("/pay/done", "GET", UserRole.ViewOnly)]
     [InlineData("/api/reports/trial-balance-worksheet/table", "GET", UserRole.Accountant)]
     [InlineData("/api/reports/adjusting-entries/export", "GET", UserRole.Accountant)]
+    [InlineData("/inventory/items.csv", "GET", UserRole.ViewOnly)]
+    [InlineData("/inventory/items/import", "GET", UserRole.Standard)]
+    [InlineData("/api/inventory/items/file", "GET", UserRole.ViewOnly)]
+    [InlineData("/api/inventory/items/file", "POST", UserRole.Standard)]
     public void Access_rules_map_paths_to_roles(string path, string method, UserRole needed) =>
         Assert.Equal(needed, AccessRules.Required(new PathString(path), method));
 
