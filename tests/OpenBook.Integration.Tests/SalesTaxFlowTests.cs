@@ -365,6 +365,21 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_rate_change_from_a_date_applies_to_documents_dated_from_then()
+    {
+        await Tax(s => s.SetRateChangeAsync(_state.Id, new DateOnly(2026, 4, 1), 7m));
+        // Entered after the change, but dated before it: the old rate.
+        var march = await Invoice(_acme, Mar1, null, Widgets(1));
+        var april = await Invoice(_acme, new DateOnly(2026, 4, 2), null, Widgets(1));
+        decimal StateTax(Invoice i) => i.Lines.Where(l => l.Kind == SalesLineKind.Tax && l.TaxRateId == _state.Id).Sum(l => l.Amount);
+        Assert.Equal((6.25m, 7m), (StateTax(march), StateTax(april)));
+
+        var rate = await Tax(s => s.SetRateChangeAsync(_state.Id, new DateOnly(2026, 4, 1), null));
+        Assert.Empty(rate.Changes);
+        Assert.Equal("tax.rate_change_missing", await Refused(() => Tax(s => s.SetRateChangeAsync(_state.Id, new DateOnly(2026, 4, 1), null))));
+    }
+
+    [Fact]
     public async Task A_return_is_due_after_its_period_until_paid()
     {
         await Tax(s => s.UpdateAgencyAsync(_stateDor.Id, new TaxAgencyDetails("State Department of Revenue", FilingFrequency.Monthly, "ST-1", DueDays: 15)));

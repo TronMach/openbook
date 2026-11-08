@@ -61,7 +61,7 @@
             }
             else
             {
-                <p class="hint">A new percentage applies to documents from now on; existing ones keep the tax they were charged.</p>
+                <p class="hint">@(_rate.Changes.Count > 0 ? "This is the rate before the first dated change below. " : "")A new percentage applies to documents from now on; existing ones keep the tax they were charged. For a change from a set date, use Rate changes below.</p>
             }
             <div class="actions">
                 <button type="submit">Save rate</button>
@@ -70,6 +70,45 @@
 
         @if (_rate is not null)
         {
+            <div class="card" id="changes" style="margin-top: 1.5rem">
+                <h2>Rate changes</h2>
+                <p class="muted">When the rate changes on a date, add it here: documents dated from then charge the new rate, and earlier ones (even entered later) the old one. Today it's @_rate.PercentOn(CompanyTime.Today).ToString("0.####", System.Globalization.CultureInfo.CurrentCulture)%.</p>
+                @if (ChangeError is not null)
+                {
+                    <div class="alert error" role="alert">@ChangeError</div>
+                }
+                @if (_rate.Changes.Count > 0)
+                {
+                    <table class="data">
+                        <thead><tr><th>From</th><th class="num">Rate</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _rate.Changes)
+                            {
+                                <tr>
+                                    <td>@Labels.Date(c.EffectiveFrom)</td>
+                                    <td class="num">@c.Percent.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture)%</td>
+                                    <td>
+                                        <PostForm Action="@($"/sales-tax/rates/{_rate.Id}/changes")" data-enhance="false" class="inline">
+                                            <AntiforgeryToken />
+                                            <input type="hidden" name="effectiveFrom" value="@c.EffectiveFrom.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                                            <input type="hidden" name="remove" value="true" />
+                                            <button type="submit" class="secondary">Remove</button>
+                                        </PostForm>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <PostForm Action="@($"/sales-tax/rates/{_rate.Id}/changes")" data-enhance="false" class="inline-actions">
+                    <AntiforgeryToken />
+                    <label for="change-from">From</label>
+                    <input id="change-from" name="effectiveFrom" type="date" required />
+                    <label for="change-percent">Rate (%)</label>
+                    <input id="change-percent" name="percent" class="short" inputmode="decimal" required />
+                    <button type="submit" class="secondary">Add the change</button>
+                </PostForm>
+            </div>
             <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">@(_rate.IsActive ? "Make inactive" : "Make active")</button>
@@ -85,6 +124,9 @@
 
     [Parameter]
     public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "changeError")]
+    private string? ChangeError { get; set; }
 
     [SupplyParameterFromQuery(Name = "agency")]
     private Guid? PresetAgency { get; set; }

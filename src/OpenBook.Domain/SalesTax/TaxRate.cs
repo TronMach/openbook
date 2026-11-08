@@ -6,11 +6,54 @@ namespace OpenBook.Domain.SalesTax;
 /// One tax charged by one agency, such as a state rate or a city rate. Changing the percentage affects new
 /// documents only: each tax line keeps the percentage it was charged at.
 /// </summary>
+/// <summary>A rate's percentage from a date on (a state raising its rate on January 1, say).</summary>
+public sealed class TaxRateChange
+{
+    private TaxRateChange()
+    {
+    }
+
+    internal TaxRateChange(DateOnly effectiveFrom, decimal percent)
+    {
+        EffectiveFrom = effectiveFrom;
+        Percent = percent;
+    }
+
+    public DateOnly EffectiveFrom { get; private set; }
+    public decimal Percent { get; private set; }
+}
+
 public sealed class TaxRate
 {
     public const int Precision = 4;
+    public const int MaxChanges = 50;
+
+    private readonly List<TaxRateChange> _changes = [];
 
     private TaxRate() => Name = string.Empty;
+
+    /// <summary>Dated changes, earliest first. <see cref="Percent"/> is the rate before the first of them.</summary>
+    public IReadOnlyList<TaxRateChange> Changes => [.. _changes.OrderBy(c => c.EffectiveFrom)];
+
+    /// <summary>The percentage charged on a document dated <paramref name="date"/>: the latest change by then, else <see cref="Percent"/>.</summary>
+    public decimal PercentOn(DateOnly date) =>
+        _changes.Where(c => c.EffectiveFrom <= date).OrderByDescending(c => c.EffectiveFrom).Select(c => (decimal?)c.Percent).FirstOrDefault() ?? Percent;
+
+    /// <summary>Adds (or replaces) the percentage from a date on.</summary>
+    public void SetChange(DateOnly effectiveFrom, decimal percent)
+    {
+        var valid = ValidPercent(percent);
+        _changes.RemoveAll(c => c.EffectiveFrom == effectiveFrom);
+        if (_changes.Count >= MaxChanges)
+            throw new DomainException("tax.rate_too_many_changes", $"A rate keeps at most {MaxChanges} dated changes.");
+        _changes.Add(new TaxRateChange(effectiveFrom, valid));
+    }
+
+    public void RemoveChange(DateOnly effectiveFrom)
+    {
+        if (_changes.RemoveAll(c => c.EffectiveFrom == effectiveFrom) == 0)
+            throw new DomainException("tax.rate_change_missing", "There's no change on that date.");
+    }
 
     public Guid Id { get; private set; }
 

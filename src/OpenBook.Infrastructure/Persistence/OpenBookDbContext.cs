@@ -717,6 +717,14 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(r => r.Name).IsUnique();
             b.Property(r => r.Percent).HasColumnName("PercentTenThousandths").HasConversion(TenThousandths);
             b.HasOne<TaxAgency>().WithMany().HasForeignKey(r => r.AgencyId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(r => r.Changes, c =>
+            {
+                c.ToTable("TaxRateChanges");
+                c.WithOwner().HasForeignKey("TaxRateId");
+                c.HasKey("TaxRateId", nameof(TaxRateChange.EffectiveFrom));
+                c.Property(x => x.Percent).HasColumnName("PercentTenThousandths").HasConversion(TenThousandths);
+            });
+            b.Navigation(r => r.Changes).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<TaxCode>(b =>

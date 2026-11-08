@@ -48,7 +48,7 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         if (codeId is not { } id || id == Guid.Empty)
             return new BuiltSalesLines(lines, null, null);
 
-        var components = await SalesTaxService.ComponentsAsync(taxes, id, ct);
+        var components = await SalesTaxService.ComponentsAsync(taxes, id, ct, date);
         var exemption = customer is { BillWithParent: true } ? CustomerTree.ExemptionOn(customer, date, await store.ListCustomersAsync(ct)) : customer?.ExemptionOn(date);
         return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, exemption is not null)], id, exemption);
     }

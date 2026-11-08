@@ -39,6 +39,24 @@ public static class NexusEndpoints
             }
         }).RequireAuthorization();
 
+        // A rate's percentage from a date on: effectiveFrom, percent; remove=true takes the change on that date away.
+        app.MapPost("/sales-tax/rates/{id:guid}/changes", async (Guid id, IFormCollection form, SalesTaxService taxes, CancellationToken ct) =>
+        {
+            try
+            {
+                var from = DateOnly.TryParseExact(form["effectiveFrom"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)
+                    ? d : throw new DomainException("tax.rate_change_date", "Choose the date the new rate starts.");
+                var percent = form["remove"] == "true" ? (decimal?)null
+                    : FormNumbers.Number(form["percent"]) ?? throw new DomainException("tax.rate_change_percent", "Enter the rate from that date.");
+                await taxes.SetRateChangeAsync(id, from, percent, ct);
+                return Results.Redirect($"/sales-tax/rates/{id}#changes");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/sales-tax/rates/{id}?changeError={Uri.EscapeDataString(ex.Message)}#changes");
+            }
+        }).RequireAuthorization();
+
         return app;
     }
 }

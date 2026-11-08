@@ -11369,6 +11369,28 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasForeignKey("AgencyId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.SalesTax.TaxRateChange", "Changes", b1 =>
+                        {
+                            b1.Property<Guid>("TaxRateId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateOnly>("EffectiveFrom")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Percent")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("PercentTenThousandths");
+
+                            b1.HasKey("TaxRateId", "EffectiveFrom");
+
+                            b1.ToTable("TaxRateChanges", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("TaxRateId");
+                        });
+
+                    b.Navigation("Changes");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Segments.EntryTag", b =>

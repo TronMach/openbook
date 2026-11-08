@@ -238,14 +238,14 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         return code;
     }
 
-    /// <summary>The active codes that can be charged now, by name, for pick lists and tax previews.</summary>
-    public async Task<IReadOnlyList<TaxCodeChoice>> ListChoicesAsync(CancellationToken ct = default)
+    /// <summary>The active codes that can be charged, by name, for pick lists and tax previews, at their rates on a date (null: today).</summary>
+    public async Task<IReadOnlyList<TaxCodeChoice>> ListChoicesAsync(DateOnly? on = null, CancellationToken ct = default)
     {
         var rates = (await store.ListRatesAsync(ct)).ToDictionary(r => r.Id);
         var agencies = (await store.ListAgenciesAsync(ct)).ToDictionary(a => a.Id);
         return (await ListCodesAsync(ct))
             .Where(c => c.IsActive && c.RateIds.All(id => rates.GetValueOrDefault(id) is { IsActive: true } r && agencies.GetValueOrDefault(r.AgencyId) is { IsActive: true }))
-            .Select(c => new TaxCodeChoice(c, c.RateIds.Select(id => Component(rates[id], agencies[rates[id].AgencyId])).ToList()))
+            .Select(c => new TaxCodeChoice(c, c.RateIds.Select(id => Component(rates[id], agencies[rates[id].AgencyId], on ?? CompanyTime.Today)).ToList()))
             .ToList();
     }
 
@@ -256,23 +256,23 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
     public async Task<IReadOnlyList<TaxCodeChoice>> ListChoicesForDocumentAsync(Guid? taxCodeId, IReadOnlyList<Domain.Sales.SalesLine> lines, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        var choices = await ListChoicesAsync(ct);
+        var choices = await ListChoicesAsync(ct: ct);
         var charged = TaxCalculator.Charged(lines);
         if (taxCodeId is not { } id || charged.Count == 0 || await store.GetCodeAsync(id, ct) is not { } code)
             return choices;
         return [.. choices.Where(c => c.Code.Id != id), new TaxCodeChoice(code, charged)];
     }
 
-    /// <summary>What a code charges now; refuses inactive codes, rates and agencies.</summary>
-    internal static async Task<IReadOnlyList<TaxComponent>> ComponentsAsync(ISalesTaxStore store, Guid codeId, CancellationToken ct)
+    /// <summary>What a code charges on a date (null: today); refuses inactive codes, rates and agencies.</summary>
+    internal static async Task<IReadOnlyList<TaxComponent>> ComponentsAsync(ISalesTaxStore store, Guid codeId, CancellationToken ct, DateOnly? on = null)
     {
         var code = await store.GetCodeAsync(codeId, ct) ?? throw new EntityNotFoundException(CodeEntity, codeId);
         if (!code.IsActive)
             throw new DomainException("tax.code_inactive", $"Tax code '{code.Name}' is inactive.");
-        return await ComponentsAsync(store, code, ct);
+        return await ComponentsAsync(store, code, ct, on);
     }
 
-    private static async Task<IReadOnlyList<TaxComponent>> ComponentsAsync(ISalesTaxStore store, TaxCode code, CancellationToken ct)
+    private static async Task<IReadOnlyList<TaxComponent>> ComponentsAsync(ISalesTaxStore store, TaxCode code, CancellationToken ct, DateOnly? on = null)
     {
         var components = new List<TaxComponent>();
         foreach (var rateId in code.RateIds)
@@ -283,13 +283,27 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
             var agency = await store.GetAgencyAsync(rate.AgencyId, ct) ?? throw new EntityNotFoundException(AgencyEntity, rate.AgencyId);
             if (!agency.IsActive)
                 throw new DomainException("tax.agency_inactive", $"{agency.Name} is inactive.");
-            components.Add(Component(rate, agency));
+            components.Add(Component(rate, agency, on ?? CompanyTime.Today));
         }
 
         return components;
     }
 
-    private static TaxComponent Component(TaxRate rate, TaxAgency agency) => new(rate.Id, rate.Name, rate.Percent, agency.LiabilityAccountId);
+    private static TaxComponent Component(TaxRate rate, TaxAgency agency, DateOnly on) => new(rate.Id, rate.Name, rate.PercentOn(on), agency.LiabilityAccountId);
+
+    /// <summary>Sets a rate's percentage from a date on (null percent removes the change on that date), audited on the rate.</summary>
+    public async Task<TaxRate> SetRateChangeAsync(Guid id, DateOnly effectiveFrom, decimal? percent, CancellationToken ct = default)
+    {
+        var rate = await store.GetRateAsync(id, ct) ?? throw new EntityNotFoundException(RateEntity, id);
+        var before = Snapshot(rate);
+        if (percent is { } p)
+            rate.SetChange(effectiveFrom, p);
+        else
+            rate.RemoveChange(effectiveFrom);
+        store.Add(Audit(AuditAction.Updated, RateEntity, id, before, Snapshot(rate)));
+        await store.SaveChangesAsync(ct);
+        return rate;
+    }
 
     private async Task<Account> LiabilityAccountAsync(string agencyName, IReadOnlyList<TaxAgency> agencies, CancellationToken ct)
     {
@@ -354,7 +368,11 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         a.IsActive,
     });
 
-    private static string Snapshot(TaxRate r) => JsonSerializer.Serialize(new { r.Name, r.AgencyId, r.Percent, r.IsActive });
+    private static string Snapshot(TaxRate r) => JsonSerializer.Serialize(new
+    {
+        r.Name, r.AgencyId, r.Percent, r.IsActive,
+        Changes = r.Changes.Select(c => $"{c.EffectiveFrom:yyyy-MM-dd}: {c.Percent.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}%").ToList(),
+    });
 
     private static string Snapshot(TaxCode c) => JsonSerializer.Serialize(new { c.Name, c.Description, c.RateIds, c.IsActive });
 }

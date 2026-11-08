@@ -77,6 +77,10 @@ internal static class SalesTaxApi
         });
         tax.MapPut("/rates/{id:guid}", async (Guid id, TaxRateDetails r, SalesTaxService s, CancellationToken ct) =>
             TaxRateResponse.From(await s.UpdateRateAsync(id, r, ct)));
+        tax.MapPut("/rates/{id:guid}/changes/{from}", async (Guid id, DateOnly from, RateChangeRequest r, SalesTaxService s, CancellationToken ct) =>
+            (await s.SetRateChangeAsync(id, from, r.Percent, ct)).Changes.Select(c => new { c.EffectiveFrom, c.Percent }));
+        tax.MapDelete("/rates/{id:guid}/changes/{from}", async (Guid id, DateOnly from, SalesTaxService s, CancellationToken ct) =>
+            (await s.SetRateChangeAsync(id, from, null, ct)).Changes.Select(c => new { c.EffectiveFrom, c.Percent }));
         tax.MapPut("/rates/{id:guid}/active", async (Guid id, SetActiveRequest r, SalesTaxService s, CancellationToken ct) =>
             TaxRateResponse.From(await s.SetRateActiveAsync(id, r.Active, ct)));
 
@@ -146,3 +150,5 @@ internal static class SalesTaxApi
             }));
     }
 }
+
+public sealed record RateChangeRequest(decimal Percent);

@@ -13,7 +13,7 @@ OpenBook works out sales tax on invoices, sales receipts, estimates and credit m
 ## Setting up
 
 1. **Add an agency**: its **name**, how often **you file** (monthly, quarterly, twice a year or annually; this sets the period OpenBook suggests you report) your **permit or account number** with it, and how many days after a period ends its return is due (**Returns due**, 20 unless you change it).
-2. **Add its rates**: **name**, **rate (%)** (up to four decimals) and **paid to** (the agency). Leave **Also make a tax code that charges just this rate** ticked unless you'll only use it combined with others.
+2. **Add its rates**: **name**, **rate (%)** (up to four decimals) and **paid to** (the agency). When a rate changes on a set date (a state raising its rate on January 1), open the rate and add it under **Rate changes**: **From** the date and the new **Rate (%)**. Documents dated from then charge the new rate and earlier ones the old, even when entered later, so a back-dated invoice or credit memo gets the rate of its date. The tax shown while you fill in a form uses today's rate; the saved document uses its date's. Leave **Also make a tax code that charges just this rate** ticked unless you'll only use it combined with others.
 3. If you charge several rates together, **add a tax code**, give it a name, and tick its rates. They print in the order they're listed there.
 4. On each **customer**, choose their **tax code**. New invoices, receipts and estimates for them start with it.
 5. On each **product or service**, tick **Taxable** if sales tax applies to it.
