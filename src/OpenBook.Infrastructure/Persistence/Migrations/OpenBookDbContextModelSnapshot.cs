@@ -4492,6 +4492,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("TotalMinor");
 
+                    b.Property<string>("VendorAddress")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("VendorId")
                         .HasColumnType("TEXT");
 

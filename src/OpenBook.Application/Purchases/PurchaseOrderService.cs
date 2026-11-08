@@ -511,7 +511,10 @@ public sealed class PurchaseOrderService(
             Bill.EnsureCategoryAccount(chart.Get(accountId));
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
         var named = lines.Select(l => l.ItemId is { } i && l.Description is null ? l with { Description = items[i].Name } : l).ToList();
+        var vendorChanged = order.VendorId != vendor.Id;
         order.Update(vendor.Id, command.Date, command.ExpectedDate, named, command.Memo, warehouseId, command.LocationId);
+        if (vendorChanged || order.VendorAddress is null)
+            order.KeepVendorAddress(vendor.Address);
     }
 
     private AuditRecord Audit(AuditAction action, PurchaseOrder o, string? before) =>

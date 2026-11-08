@@ -2302,6 +2302,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             b.ToTable("PurchaseOrders");
             b.HasKey(o => o.Id);
+            b.Property(o => o.VendorAddress).HasMaxLength(2000);
             b.Property(o => o.Number).HasMaxLength(20);
             b.HasIndex(o => o.Number).IsUnique();
             b.HasIndex(o => new { o.VendorId, o.Date });

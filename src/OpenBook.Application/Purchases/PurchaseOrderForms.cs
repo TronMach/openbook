@@ -35,7 +35,7 @@ public sealed class PurchaseOrderForms(
                 Cells: FormService.Cells(l.ItemId is { } item ? items.GetValueOrDefault(item) : null, null, null, null))
             : new FormLine(l.Description, null, null, l.Amount, LineNumber: l.LineNumber)).ToList();
         var party = new FormParty(vendor.CompanyName is { } name && name != vendor.DisplayName ? $"{vendor.DisplayName}\n{name}" : vendor.DisplayName,
-            vendor.Address, vendor.Email, vendor.Phone);
+            order.VendorAddress ?? vendor.Address, vendor.Email, vendor.Phone);
         var form = new SalesForm(order.Status == PurchaseOrderStatus.Cancelled ? "Purchase order (cancelled)" : "Purchase order", order.Number, FormService.CompanyParty(company), party, facts, lines,
             [new FormTotal("Total", order.Total, Emphasis: true)], order.Memo, company.HomeCurrency.Code, FormService.Unstyled, PartyLabel: "VENDOR");
         form = await designs.ApplyAsync(form, await designs.ChosenAsync(FormDocuments.PurchaseOrder, null, designId, ct), FormDocuments.PurchaseOrder, ct);

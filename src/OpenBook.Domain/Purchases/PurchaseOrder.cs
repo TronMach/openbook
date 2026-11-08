@@ -125,6 +125,12 @@ public sealed class PurchaseOrder
     /// <summary>Message to the vendor (shipping instructions and the like).</summary>
     public string? Memo { get; private set; }
 
+    /// <summary>The vendor's address as it was when the order was made (or its vendor last changed), so a reprint shows what was sent; null on older orders.</summary>
+    public string? VendorAddress { get; private set; }
+
+    public void KeepVendorAddress(string? address) =>
+        VendorAddress = address is null ? null : OpenBook.Domain.Common.TextCleaning.Cut(address, 2000);
+
     public Guid? WarehouseId { get; private set; }
     public Guid? LocationId { get; private set; }
     public decimal Total { get; private set; }

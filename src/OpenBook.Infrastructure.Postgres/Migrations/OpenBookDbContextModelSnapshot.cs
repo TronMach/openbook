@@ -4499,6 +4499,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("TotalMinor");
 
+                    b.Property<string>("VendorAddress")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<Guid>("VendorId")
                         .HasColumnType("uuid");
 

@@ -143,6 +143,22 @@ public sealed class BillChangeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_purchase_order_keeps_the_vendors_address_it_was_sent_to()
+    {
+        var supplier = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Paper Co", Address: "1 Old Road")));
+        var other = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Ink Co", Address: "9 Ink Lane")));
+        var lines = new[] { new PurchaseOrderLineDraft(null, _supplies.Id, "Paper", 1m, 40m) };
+        var order = await In<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(new SavePurchaseOrderCommand(supplier.Id, Mar1, lines)));
+        Assert.Equal("1 Old Road", order.VendorAddress);
+
+        await In<VendorService, Vendor>(s => s.UpdateAsync(supplier.Id, new VendorDetails("Paper Co", Address: "2 New Street")));
+        order = await In<PurchaseOrderService, PurchaseOrder>(s => s.UpdateAsync(order.Id, new SavePurchaseOrderCommand(supplier.Id, Mar5, lines)));
+        Assert.Equal("1 Old Road", order.VendorAddress);
+        order = await In<PurchaseOrderService, PurchaseOrder>(s => s.UpdateAsync(order.Id, new SavePurchaseOrderCommand(other.Id, Mar5, lines)));
+        Assert.Equal("9 Ink Lane", order.VendorAddress);
+    }
+
+    [Fact]
     public async Task Bills_from_a_purchase_order_change_through_the_order()
     {
         var order = await In<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(new SavePurchaseOrderCommand(_landlord.Id, Mar1,
