@@ -27,7 +27,7 @@
         }
         <dl class="facts">
             <dt>Borrowed</dt><dd>@Labels.Amount(_loan.Principal) in @_chart.FullName(_loan.LiabilityAccountId)</dd>
-            <dt>Rate</dt><dd>@Labels.Percent(_loan.AnnualRatePercent) a year</dd>
+            <dt>Rate</dt><dd>@Labels.Percent(_loan.RateOn(CompanyTime.Today)) a year@(_loan.RateChanges.Count > 0 ? $" (variable; {Labels.Percent(_loan.AnnualRatePercent)} at the start)" : "")</dd>
             <dt>Payment</dt><dd>@Labels.Amount(_loan.PaymentAmount) a month, @_loan.Payments payments from @Labels.Date(_loan.FirstPaymentDate)</dd>
             <dt>Interest to</dt><dd>@_chart.FullName(_loan.InterestAccountId)</dd>
             <dt>Balance</dt><dd>@Labels.Amount(_loan.Balance)</dd>
@@ -41,7 +41,7 @@
                     <AntiforgeryToken />
                     <div class="row">
                         <div class="field"><label for="date">Date</label><input id="date" name="date" type="date" value="@(_remaining.Count > 0 ? _remaining[0].Date.ToString("yyyy-MM-dd") : CompanyTime.Today.ToString("yyyy-MM-dd"))" /></div>
-                        <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" value="@_loan.NextPayment.ToString("0.00")" /></div>
+                        <div class="field"><label for="amount">Amount</label><input id="amount" name="amount" class="amount" inputmode="decimal" value="@_loan.NextPaymentOn(CompanyTime.Today).ToString("0.00")" /></div>
                         <div class="field">
                             <label for="from">Paid from</label>
                             <select id="from" name="paymentAccountId">
@@ -163,6 +163,47 @@
                     <div class="actions"><button type="submit" class="secondary">Save</button></div>
                 </PostForm>
             </div>
+            @if (_loan.FactorFee is null)
+            {
+                <div class="card" id="rates">
+                    <h2>Rate changes</h2>
+                    <p class="hint">For a variable rate: the new yearly rate from a date, and the new monthly payment if the lender changed it. Each payment's interest uses the rate on its date, and what's left is worked out at today's.</p>
+                    @if (_loan.RateChanges.Count > 0)
+                    {
+                        <table class="data">
+                            <thead><tr><th>From</th><th class="num">Rate</th><th class="num">Payment</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var c in _loan.RateChanges)
+                                {
+                                    <tr>
+                                        <td>@Labels.Date(c.EffectiveFrom)</td>
+                                        <td class="num">@Labels.Percent(c.RatePercent)</td>
+                                        <td class="num">@(c.PaymentAmount is { } p ? Labels.Amount(p) : "unchanged")</td>
+                                        <td>
+                                            @if (_loan.LatestPayment is not { } last || c.EffectiveFrom > last.Date)
+                                            {
+                                                <PostForm Action="@($"/loans/{_loan.Id}/rates/{c.EffectiveFrom:yyyy-MM-dd}/remove")" data-enhance="false" class="inline">
+                                                    <AntiforgeryToken />
+                                                    <button type="submit" class="link" data-confirm="Remove this rate change?">Remove</button>
+                                                </PostForm>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    <PostForm Action="@($"/loans/{_loan.Id}/rates")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <div class="row">
+                            <div class="field"><label for="rate-from">From</label><input id="rate-from" name="from" type="date" required /></div>
+                            <div class="field"><label for="rate">Yearly rate %</label><input id="rate" name="rate" inputmode="decimal" required /></div>
+                            <div class="field"><label for="rate-payment">New monthly payment <span class="muted">(optional)</span></label><input id="rate-payment" name="payment" class="amount" inputmode="decimal" /></div>
+                        </div>
+                        <div class="actions"><button type="submit" class="secondary">Save rate change</button></div>
+                    </PostForm>
+                </div>
+            }
             <div class="card">
                 <h2>Void this loan</h2>
                 @if (_loan.PaymentsMade.Any(p => !p.IsVoided))

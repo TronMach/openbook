@@ -382,13 +382,38 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
 
     public Task<Loan?> GetAsync(Guid id, CancellationToken ct = default) => store.GetLoanAsync(id, ct);
 
-    /// <summary>What's left to pay from today's balance, numbered after the payments made.</summary>
-    public static IReadOnlyList<Installment> RemainingSchedule(Loan loan)
+    /// <summary>
+    /// What's left to pay from today's balance, numbered after the payments made, at the rate and payment in effect on
+    /// <paramref name="asOf"/> (today when null): a variable rate's later changes aren't foreseen.
+    /// </summary>
+    public static IReadOnlyList<Installment> RemainingSchedule(Loan loan, DateOnly? asOf = null)
     {
         ArgumentNullException.ThrowIfNull(loan);
         var made = loan.PaymentsMade.Where(p => !p.IsVoided).ToList();
+        var on = asOf ?? CompanyTime.Today;
         // Counted from the first date, so a loan due on the 31st comes back to it after a short month or a late payment.
-        return Amortization.Schedule(loan.Balance, loan.AnnualRatePercent, loan.PaymentAmount, loan.FirstPaymentDate, made.Count + 1, made.Count);
+        return Amortization.Schedule(loan.Balance, loan.RateOn(on), loan.PaymentOn(on), loan.FirstPaymentDate, made.Count + 1, made.Count);
+    }
+
+    /// <summary>Sets a variable rate from a date (with the new monthly payment, if it changed); audited on the loan.</summary>
+    public async Task<Loan> SetRateChangeAsync(Guid id, DateOnly from, decimal ratePercent, decimal? paymentAmount, CancellationToken ct = default)
+    {
+        var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var before = Snapshot(loan);
+        loan.SetRateChange(from, ratePercent, paymentAmount);
+        store.Add(Audit(AuditAction.Updated, loan, before));
+        await store.SaveChangesAsync(ct);
+        return loan;
+    }
+
+    public async Task<Loan> RemoveRateChangeAsync(Guid id, DateOnly from, CancellationToken ct = default)
+    {
+        var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var before = Snapshot(loan);
+        loan.RemoveRateChange(from);
+        store.Add(Audit(AuditAction.Updated, loan, before));
+        await store.SaveChangesAsync(ct);
+        return loan;
     }
 
     public async Task<Loan> CreateAsync(CreateLoanCommand command, CancellationToken ct = default)
@@ -461,7 +486,7 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         var from = await accounts.CheckAsync(command.PaymentAccountId, "account paid from", ct, AccountType.Bank, AccountType.CreditCard);
         if (loan.LatestPayment is { } latest && command.Date < latest.Date)
             throw new DomainException("loan.payment_order", "Payments are recorded in date order; this one is before the last.");
-        var (interest, principal) = loan.Split(command.Amount ?? loan.NextPayment);
+        var (interest, principal) = loan.Split(command.Amount ?? loan.NextPaymentOn(command.Date), command.Date);
 
         var lines = new List<JournalLineDraft>();
         if (principal > 0m)
@@ -551,5 +576,6 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         l.LenderVendorId,
         l.Balance,
         PaymentsMade = l.PaymentsMade.Select(p => new { p.Id, p.Date, p.Amount, p.Interest, p.Principal, p.IsVoided }),
+        RateChanges = l.RateChanges.Select(c => new { c.EffectiveFrom, c.RatePercent, c.PaymentAmount }),
     });
 }

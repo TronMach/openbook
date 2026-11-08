@@ -7298,9 +7298,35 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .IsRequired();
                         });
 
+                    b.OwnsMany("OpenBook.Domain.Assets.LoanRateChange", "RateChanges", b1 =>
+                        {
+                            b1.Property<Guid>("LoanId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<DateOnly>("EffectiveFrom")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long?>("PaymentAmount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("PaymentAmountMinor");
+
+                            b1.Property<long>("RatePercent")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("RatePercentTenThousandths");
+
+                            b1.HasKey("LoanId", "EffectiveFrom");
+
+                            b1.ToTable("LoanRateChanges", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("LoanId");
+                        });
+
                     b.Navigation("Draws");
 
                     b.Navigation("PaymentsMade");
+
+                    b.Navigation("RateChanges");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Attachments.AttachmentContent", b =>

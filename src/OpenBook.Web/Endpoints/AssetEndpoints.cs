@@ -112,6 +112,17 @@ public static class AssetEndpoints
             await Back($"/loans/{id}", () => loans.DescribeAsync(id, form["name"].ToString(), form["notes"].ToString(),
                 form.ContainsKey("classId") ? Id(form["classId"]) ?? Guid.Empty : null, ct))).RequireAuthorization();
 
+        app.MapPost("/loans/{id:guid}/rates", async (Guid id, IFormCollection form, LoanService loans, CancellationToken ct) =>
+            await Back($"/loans/{id}", () => loans.SetRateChangeAsync(id,
+                Date(form["from"]) ?? throw new DomainException("loan.rate_date", "Enter the date the new rate starts."),
+                Number(form["rate"]) ?? throw new DomainException("loan.rate_invalid", "Enter the new yearly rate."),
+                Number(form["payment"]), ct))).RequireAuthorization();
+
+        app.MapPost("/loans/{id:guid}/rates/{from}/remove", async (Guid id, string from, IFormCollection _, LoanService loans, CancellationToken ct) =>
+            await Back($"/loans/{id}", () => loans.RemoveRateChangeAsync(id,
+                DateOnly.TryParseExact(from, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d
+                    : throw new DomainException("loan.rate_unknown", "There's no rate change on that date."), ct))).RequireAuthorization();
+
         app.MapPost("/loans/{id:guid}/void", async (Guid id, IFormCollection form, LoanService loans, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);

@@ -147,11 +147,29 @@ public class AssetsTests
     {
         var loan = Loan.Create(new LoanDetails("Van loan", Guid.NewGuid(), Guid.NewGuid(), 10_000m, 6m, 12, new DateOnly(2026, 2, 1)), DateTimeOffset.UnixEpoch);
         Assert.Equal(860.67m, loan.PaymentAmount);
-        Assert.Equal((50m, 950m), loan.Split(1_000m));
-        Assert.Equal((30m, 0m), loan.Split(30m));
-        Assert.Equal("loan.overpaid", Assert.Throws<DomainException>(() => loan.Split(10_050.01m)).Code);
+        var on = new DateOnly(2026, 2, 1);
+        Assert.Equal((50m, 950m), loan.Split(1_000m, on));
+        Assert.Equal((30m, 0m), loan.Split(30m, on));
+        Assert.Equal("loan.overpaid", Assert.Throws<DomainException>(() => loan.Split(10_050.01m, on)).Code);
         Assert.Equal("loan.payment_too_small", Assert.Throws<DomainException>(() =>
             Loan.Create(new LoanDetails("X", Guid.NewGuid(), Guid.NewGuid(), 10_000m, 12m, 12, new DateOnly(2026, 2, 1), PaymentAmount: 100m), DateTimeOffset.UnixEpoch)).Code);
+    }
+
+    [Fact]
+    public void A_variable_rate_prices_interest_by_the_payment_date()
+    {
+        var loan = Loan.Create(new LoanDetails("Line", Guid.NewGuid(), Guid.NewGuid(), 10_000m, 6m, 12, new DateOnly(2026, 2, 1)), DateTimeOffset.UnixEpoch);
+        loan.SetRateChange(new DateOnly(2026, 3, 1), 12m, 900m);
+        Assert.Equal((50m, 950m), loan.Split(1_000m, new DateOnly(2026, 2, 1)));
+        Assert.Equal((100m, 900m), loan.Split(1_000m, new DateOnly(2026, 3, 1)));
+        Assert.Equal((860.67m, 900m), (loan.PaymentOn(new DateOnly(2026, 2, 15)), loan.PaymentOn(new DateOnly(2026, 3, 15))));
+        Assert.Equal("loan.rate_invalid", Assert.Throws<DomainException>(() => loan.SetRateChange(new DateOnly(2026, 4, 1), 101m, null)).Code);
+
+        loan.AddPayment(LoanPayment.Create(Guid.NewGuid(), new DateOnly(2026, 3, 1), 100m, 900m, Guid.NewGuid(), Guid.NewGuid()));
+        Assert.Equal("loan.rate_after_payments", Assert.Throws<DomainException>(() => loan.RemoveRateChange(new DateOnly(2026, 3, 1))).Code);
+        Assert.Equal("loan.rate_after_payments", Assert.Throws<DomainException>(() => loan.SetRateChange(new DateOnly(2026, 2, 20), 8m, null)).Code);
+        loan.SetRateChange(new DateOnly(2026, 4, 1), 9m, null);
+        Assert.Equal((9m, 900m), (loan.RateOn(new DateOnly(2026, 4, 2)), loan.PaymentOn(new DateOnly(2026, 4, 2))));
     }
 
     [Fact]

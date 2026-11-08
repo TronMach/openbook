@@ -1048,6 +1048,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 w.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.EntryId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(l => l.Draws).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(l => l.RateChanges, r =>
+            {
+                r.ToTable("LoanRateChanges");
+                r.WithOwner().HasForeignKey("LoanId");
+                r.HasKey("LoanId", nameof(OpenBook.Domain.Assets.LoanRateChange.EffectiveFrom));
+                r.Property(x => x.RatePercent).HasColumnName("RatePercentTenThousandths").HasConversion(TenThousandths);
+                r.Property(x => x.PaymentAmount).HasColumnName("PaymentAmountMinor").HasConversion(NullableMinorUnits);
+            });
+            b.Navigation(l => l.RateChanges).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.HasOne<Account>().WithMany().HasForeignKey(l => l.LiabilityAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(l => l.InterestAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(l => l.ProceedsAccountId).OnDelete(DeleteBehavior.Restrict);

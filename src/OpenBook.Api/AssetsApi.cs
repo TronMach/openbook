@@ -32,10 +32,19 @@ public sealed record LoanResponse(
     Guid Id, string Name, Guid LiabilityAccountId, Guid InterestAccountId, decimal Principal, decimal AnnualRatePercent, int Payments,
     DateOnly FirstPaymentDate, decimal PaymentAmount, decimal Balance, IReadOnlyList<LoanPaymentResponse> PaymentsMade, Guid? LenderVendorId = null, string? Notes = null, bool IsVoided = false)
 {
+    /// <summary>A variable rate's changes: the rate (and payment, when it changed) from each date.</summary>
+    public IReadOnlyList<LoanRateChangeResponse> RateChanges { get; init; } = [];
+
     public static LoanResponse From(Loan l) => new(
         l.Id, l.Name, l.LiabilityAccountId, l.InterestAccountId, l.Principal, l.AnnualRatePercent, l.Payments, l.FirstPaymentDate, l.PaymentAmount, l.Balance,
-        l.PaymentsMade.Select(p => new LoanPaymentResponse(p.Id, p.Date, p.Amount, p.Interest, p.Principal, p.PaymentAccountId, p.JournalEntryId, p.IsVoided)).ToList()) { LenderVendorId = l.LenderVendorId, Notes = l.Notes, IsVoided = l.IsVoided };
+        l.PaymentsMade.Select(p => new LoanPaymentResponse(p.Id, p.Date, p.Amount, p.Interest, p.Principal, p.PaymentAccountId, p.JournalEntryId, p.IsVoided)).ToList()) { LenderVendorId = l.LenderVendorId, Notes = l.Notes, IsVoided = l.IsVoided,
+            RateChanges = [.. l.RateChanges.Select(c => new LoanRateChangeResponse(c.EffectiveFrom, c.RatePercent, c.PaymentAmount))] };
 }
+
+public sealed record LoanRateChangeResponse(DateOnly EffectiveFrom, decimal RatePercent, decimal? PaymentAmount);
+
+/// <summary>A variable rate from a date; <c>PaymentAmount</c> when the lender changed the monthly payment too.</summary>
+public sealed record LoanRateChangeRequest(decimal RatePercent, decimal? PaymentAmount = null);
 
 public sealed record LoanPaymentResponse(Guid Id, DateOnly Date, decimal Amount, decimal Interest, decimal Principal, Guid PaymentAccountId, Guid JournalEntryId, bool IsVoided);
 
@@ -108,6 +117,10 @@ public static class AssetsApi
             return Results.Created($"/api/assets/loans/{loan.Id}", LoanResponse.From(loan));
         });
         assets.MapPut("/loans/{id:guid}", async (Guid id, LoanDetails r, LoanService s, CancellationToken ct) => LoanResponse.From(await s.UpdateAsync(id, r, ct)));
+        assets.MapPut("/loans/{id:guid}/rates/{from}", async (Guid id, DateOnly from, LoanRateChangeRequest r, LoanService s, CancellationToken ct) =>
+            LoanResponse.From(await s.SetRateChangeAsync(id, from, r.RatePercent, r.PaymentAmount, ct)));
+        assets.MapDelete("/loans/{id:guid}/rates/{from}", async (Guid id, DateOnly from, LoanService s, CancellationToken ct) =>
+            LoanResponse.From(await s.RemoveRateChangeAsync(id, from, ct)));
         assets.MapPost("/loans/{id:guid}/payments", async (Guid id, LoanPaymentCommand r, LoanService s, CancellationToken ct) =>
         {
             await s.PayAsync(id, r, ct);

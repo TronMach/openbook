@@ -55,6 +55,8 @@ OpenBook posts the depreciation due up to that date, takes the asset's cost and 
 
 On the loan's page, **Record a payment**: date, amount and **paid from**. OpenBook splits it: a month's interest on the balance owed goes to "Interest Expense", and the rest pays down the loan account. **What's left** shows the remaining schedule.
 
+**Variable rates.** Under **Rate changes** on the loan's page, enter the date a new rate starts, the new **yearly rate %** and, if the lender changed it, the **new monthly payment**. Each payment's interest uses the rate on its date; **What's left** is worked out at today's rate and payment. A change must start after the latest payment recorded (void later payments first to move one earlier).
+
 Payments must be in date order; only the latest can be voided. Once a payment is recorded, the loan's terms are fixed, though its **name, class and notes** can still be changed on its page. With a **class**, each payment's interest is posted to it.
 
 A loan entered by mistake: void its payments, latest first, then **Void this loan** on its page, saying why. That reverses the entry recording the money received, and the loan leaves the list, the Loans report and the forecast. To change the terms of a loan, void it and enter it again.

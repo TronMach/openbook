@@ -29,8 +29,75 @@ public readonly record struct Installment(int Number, DateOnly Date, decimal Pay
 /// liability (principal), Dr interest expense, Cr the account it's paid from, with interest worked out on the
 /// balance still owed, so extra payments shorten the loan.
 /// </summary>
+/// <summary>A variable rate's change: the annual rate from a date, and the monthly payment from then if the lender changed it.</summary>
+public sealed class LoanRateChange
+{
+    private LoanRateChange()
+    {
+    }
+
+    internal LoanRateChange(DateOnly effectiveFrom, decimal ratePercent, decimal? paymentAmount)
+    {
+        EffectiveFrom = effectiveFrom;
+        RatePercent = ratePercent;
+        PaymentAmount = paymentAmount;
+    }
+
+    public DateOnly EffectiveFrom { get; private set; }
+    public decimal RatePercent { get; private set; }
+    public decimal? PaymentAmount { get; private set; }
+}
+
 public sealed class Loan
 {
+    public const int MaxRateChanges = 60;
+
+    private readonly List<LoanRateChange> _rateChanges = [];
+
+    /// <summary>A variable rate's changes in date order; before the first, <see cref="AnnualRatePercent"/> applies.</summary>
+    public IReadOnlyList<LoanRateChange> RateChanges => [.. _rateChanges.OrderBy(c => c.EffectiveFrom)];
+
+    /// <summary>The annual rate on a date: the latest change by then, else the loan's own rate.</summary>
+    public decimal RateOn(DateOnly date) => _rateChanges.Where(c => c.EffectiveFrom <= date).MaxBy(c => c.EffectiveFrom)?.RatePercent ?? AnnualRatePercent;
+
+    /// <summary>The monthly payment on a date: the latest change that set one by then, else the loan's own.</summary>
+    public decimal PaymentOn(DateOnly date) =>
+        _rateChanges.Where(c => c.EffectiveFrom <= date && c.PaymentAmount is not null).MaxBy(c => c.EffectiveFrom)?.PaymentAmount ?? PaymentAmount;
+
+    /// <summary>
+    /// Sets the rate from a date (replacing a change on that date), with the new monthly payment if the lender changed
+    /// it. Payments already recorded keep the interest they were split with, so the date must be after the latest.
+    /// </summary>
+    public void SetRateChange(DateOnly from, decimal ratePercent, decimal? paymentAmount)
+    {
+        if (FactorFee is not null)
+            throw new DomainException("loan.rate_factor", "An advance repaid with a fixed fee has no interest rate to change.");
+        if (ratePercent is < 0m or > 100m || decimal.Round(ratePercent, 4) != ratePercent)
+            throw new DomainException("loan.rate_invalid", "Enter the yearly rate as a percentage from 0 to 100, to four decimals.");
+        if (paymentAmount is { } payment && (payment <= 0m || decimal.Round(payment, 2) != payment))
+            throw new DomainException("loan.payment_invalid", "Enter the new monthly payment in dollars and cents, or leave it blank.");
+        EnsureAfterPayments(from);
+        var existing = _rateChanges.FirstOrDefault(c => c.EffectiveFrom == from);
+        if (existing is null && _rateChanges.Count >= MaxRateChanges)
+            throw new DomainException("loan.too_many_rates", $"A loan keeps at most {MaxRateChanges} rate changes.");
+        if (existing is not null)
+            _rateChanges.Remove(existing);
+        _rateChanges.Add(new LoanRateChange(from, ratePercent, paymentAmount));
+    }
+
+    public void RemoveRateChange(DateOnly from)
+    {
+        var existing = _rateChanges.FirstOrDefault(c => c.EffectiveFrom == from) ?? throw new DomainException("loan.rate_unknown", "There's no rate change on that date.");
+        EnsureAfterPayments(from);
+        _rateChanges.Remove(existing);
+    }
+
+    private void EnsureAfterPayments(DateOnly from)
+    {
+        if (LatestPayment is { } latest && from <= latest.Date)
+            throw new DomainException("loan.rate_after_payments", $"Payments up to {latest.Date:yyyy-MM-dd} are recorded with the rate then. A change must start after the latest payment, or void the payments after it first.");
+    }
+
     public const string Source = "assets.loan";
     public const string PaymentSource = "assets.loan_payment";
     public const string DrawSource = "assets.loan_draw";
@@ -184,15 +251,15 @@ public sealed class Loan
         ProceedsEntryId = entryId;
     }
 
-    /// <summary>A payment's split: interest is one month on the balance now owed; the rest is principal.</summary>
-    public (decimal Interest, decimal Principal) Split(decimal amount)
+    /// <summary>A payment's split: interest is one month on the balance now owed at the rate on <paramref name="date"/>; the rest is principal.</summary>
+    public (decimal Interest, decimal Principal) Split(decimal amount, DateOnly date)
     {
         Money.EnsureCents(amount);
         if (IsPaidOff)
             throw new DomainException("loan.paid_off", $"{Name} is paid off.");
         var interest = FactorFee is { } fee
             ? FeeShare(amount, fee)
-            : decimal.Round(Balance * MonthlyRate, 2, MidpointRounding.AwayFromZero);
+            : decimal.Round(Balance * RateOn(date) / 1200m, 2, MidpointRounding.AwayFromZero);
         if (FactorFee is { } total && amount > Balance + total - FeePaid)
             throw new DomainException("loan.overpaid", $"Only {Balance + total - FeePaid:N2} is left to repay with the fee.");
         if (amount <= 0m)
@@ -212,6 +279,9 @@ public sealed class Loan
 
     /// <summary>The next scheduled payment: the regular payment, or what's left with interest.</summary>
     public decimal NextPayment => Math.Min(PaymentAmount, Balance + decimal.Round(Balance * MonthlyRate, 2, MidpointRounding.AwayFromZero));
+
+    /// <summary>The payment due on a date, at the rate and payment then: the regular payment, or what's left with interest.</summary>
+    public decimal NextPaymentOn(DateOnly date) => Math.Min(PaymentOn(date), Balance + decimal.Round(Balance * RateOn(date) / 1200m, 2, MidpointRounding.AwayFromZero));
 
     public void AddPayment(LoanPayment payment)
     {
