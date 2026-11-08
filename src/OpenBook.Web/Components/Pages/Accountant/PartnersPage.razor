@@ -1,0 +1,157 @@
+@page "/accountant/partners"
+@using OpenBook.Domain.Accounts
+@inject PartnerService PartnerService
+@inject AccountService AccountService
+
+<PageTitle>Partners · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Partners and their capital</h1>
+        <ActionLink Class="button secondary" Href="/accountant">Accountant</ActionLink>
+    </div>
+    <p class="muted">For a partnership or an LLC with members: each partner's share of profit and loss, and the equity account their capital is kept in. At the end of a year, allocating moves the year's profit out of Retained Earnings into their capital accounts by their shares.</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <h2>Partners</h2>
+        @if (_partners.Count > 0)
+        {
+            <table class="data entry">
+                <thead><tr><th>Name</th><th class="num">Share (%)</th><th>Capital account</th><th>Active</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _partners)
+                    {
+                        var formId = $"partner-{p.Id}";
+                        <tr>
+                            <td><input form="@formId" name="name" value="@p.Name" maxlength="100" aria-label="Name" /></td>
+                            <td class="num"><input form="@formId" name="share" class="short" inputmode="decimal" value="@p.SharePercent.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" aria-label="Share" /></td>
+                            <td>
+                                <select form="@formId" name="accountId" aria-label="Capital account">
+                                    @foreach (var a in _equity)
+                                    {
+                                        <option value="@a.Id" selected="@(a.Id == p.CapitalAccountId)">@_chart.FullName(a.Id)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td><input form="@formId" type="checkbox" name="active" value="true" checked="@p.IsActive" aria-label="Active" /></td>
+                            <td>
+                                <PostForm Action="@($"/accountant/partners/{p.Id}")" id="@formId" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="secondary">Save</button>
+                                </PostForm>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="hint">Active partners' shares add up to @_partners.Where(p => p.IsActive).Sum(p => p.SharePercent).ToString("0.####", System.Globalization.CultureInfo.CurrentCulture)%; allocating needs 100%.</p>
+        }
+        <PostForm Action="/accountant/partners" data-enhance="false" class="inline-actions">
+            <AntiforgeryToken />
+            <label for="new-name">Name</label>
+            <input id="new-name" name="name" maxlength="100" required />
+            <label for="new-share">Share (%)</label>
+            <input id="new-share" name="share" class="short" inputmode="decimal" required />
+            <label for="new-account">Capital account</label>
+            <select id="new-account" name="accountId">
+                <option value="">Make "(name) Capital"</option>
+                @foreach (var a in _equity)
+                {
+                    <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                }
+            </select>
+            <button type="submit" class="secondary">Add partner</button>
+        </PostForm>
+    </div>
+
+    @if (_partners.Count > 0)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Allocate a year's profit</h2>
+            <p class="muted">The fiscal year to @Labels.Date(_yearTo) shows net income of @Labels.Amount(_net) so far (accrual basis). Allocate once the year's books are done; void the allocation to redo it after a late change.</p>
+            <PostForm Action="/accountant/partners/allocate" data-enhance="false" class="inline-actions">
+                <AntiforgeryToken />
+                <label for="allocate-year">Year ending</label>
+                <input id="allocate-year" name="date" type="date" value="@_yearTo.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <button type="submit">Allocate</button>
+            </PostForm>
+            @if (_allocations.Count > 0)
+            {
+                <table class="data" style="margin-top: 1rem">
+                    <thead><tr><th>Year ending</th><th class="num">Net income</th><th>Entry</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _allocations)
+                        {
+                            <tr class="@(a.IsVoided ? "muted" : "")">
+                                <td>@Labels.Date(a.YearEnd)@(a.IsVoided ? " (voided)" : "")</td>
+                                <td class="num">@Labels.Amount(a.NetIncome)</td>
+                                <td><a href="/journal/@a.JournalEntryId">Journal entry</a></td>
+                                <td>
+                                    @if (!a.IsVoided)
+                                    {
+                                        <PostForm Action="@($"/accountant/partners/allocations/{a.Id}/void")" data-enhance="false" class="inline">
+                                            <AntiforgeryToken />
+                                            <input type="hidden" name="reason" value="Redo the allocation" />
+                                            <button type="submit" class="secondary" data-confirm="Void this allocation?">Void</button>
+                                        </PostForm>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        <h2>Capital this year</h2>
+        <table class="data">
+            <thead><tr><th>Partner</th><th>Account</th><th class="num">At the start</th><th class="num">Profit allocated</th><th class="num">Put in less taken out</th><th class="num">Now</th></tr></thead>
+            <tbody>
+                @foreach (var c in _capital)
+                {
+                    <tr>
+                        <td>@c.Partner.Name</td>
+                        <td>@c.Account</td>
+                        <td class="num">@Labels.Amount(c.Opening)</td>
+                        <td class="num">@Labels.Amount(c.Allocated)</td>
+                        <td class="num">@Labels.Amount(c.OtherChanges)</td>
+                        <td class="num">@Labels.Amount(c.Closing)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p class="hint">Draws kept in their own accounts (say "Partner Draws") aren't in these figures; keep them as subaccounts' activity or close them into capital at year end.</p>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Partner> _partners = [];
+    private IReadOnlyList<PartnerAllocation> _allocations = [];
+    private IReadOnlyList<PartnerCapital> _capital = [];
+    private List<Account> _equity = [];
+    private ChartOfAccounts _chart = new([]);
+    private DateOnly _yearTo;
+    private decimal _net;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _partners = await PartnerService.ListAsync();
+        _allocations = await PartnerService.AllocationsAsync();
+        _chart = await AccountService.GetChartAsync();
+        _equity = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.Equity).ToList();
+        if (_partners.Count > 0)
+        {
+            (_, _yearTo) = await PartnerService.FiscalYearAsync(CompanyTime.Today);
+            _net = await PartnerService.NetIncomeAsync(CompanyTime.Today);
+            _capital = await PartnerService.CapitalAsync(CompanyTime.Today);
+        }
+    }
+}

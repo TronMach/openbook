@@ -66,6 +66,12 @@ Reports go out in the background within the hour. If OpenBook was off at the tim
 - **1099 filing data**: a CSV for the **tax year** with each vendor over the threshold, their full tax ID, address, form and box, and amount, ready for a 1099 e-filing service. It contains full tax IDs, so handle it carefully.
 - **Adjusting entries**: journal entries your accountant marks as *adjusting* (the **Adjusting entry** box on the journal entry form or page). The **Trial balance worksheet** report shows unadjusted balances, the adjustments and adjusted balances side by side, and **Adjusting journal entries** lists them.
 
+## Partners and their capital
+
+For a partnership or an LLC with several members: **Accountant → Partners and their capital** (accountant role). Add each partner with their **share** of profit and loss and the equity account their capital is kept in (or let OpenBook make "(name) Capital"). The shares of active partners must add up to 100%.
+
+Once a year's books are done, **Allocate** that year: OpenBook takes the fiscal year's net income (accrual basis) out of "Retained Earnings" (a top-level equity account of that name, as in the starter charts) and credits each partner's capital account with their share, in one entry dated the year's last day; a loss is charged to them the same way. Each year is allocated once; **Void** the allocation to redo it after a late change. **Capital this year** shows each partner's capital at the start of the year, the profit allocated, what they put in less what they took out, and where it stands now. It's a worksheet for the K-1s, not the K-1s themselves: guaranteed payments, special allocations and separately stated items are your accountant's to work out.
+
 ## Checking the books
 
 **Accountant tools → Check the books** makes sure the figures OpenBook keeps beside the ledger still agree with it. It reads only and changes nothing, and it runs by itself once a day; **Check again** runs it now. Each check says **Agrees**, **Agrees, with a note** or **Problem**:

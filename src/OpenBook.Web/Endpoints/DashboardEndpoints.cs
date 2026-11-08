@@ -134,6 +134,67 @@ public static class DashboardEndpoints
             }
         }).RequireAuthorization();
 
+        static IResult PartnersBack(string? error = null, bool password = false) =>
+            Results.Redirect(error is null ? "/accountant/partners" : $"/accountant/partners?error={Uri.EscapeDataString(error)}{(password ? "&password=true" : "")}");
+        static decimal Share(string? text) => decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : 0m;
+
+        app.MapPost("/accountant/partners", async (IFormCollection form, OpenBook.Application.Accounts.PartnerService partners, CancellationToken ct) =>
+        {
+            try
+            {
+                await partners.CreateAsync(form["name"].ToString(), Share(form["share"]), Guid.TryParse(form["accountId"], out var a) ? a : null, ct);
+                return PartnersBack();
+            }
+            catch (DomainException ex)
+            {
+                return PartnersBack(ex.Message);
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/accountant/partners/{id:guid}", async (Guid id, IFormCollection form, OpenBook.Application.Accounts.PartnerService partners, CancellationToken ct) =>
+        {
+            try
+            {
+                await partners.UpdateAsync(id, form["name"].ToString(), Share(form["share"]), Guid.TryParse(form["accountId"], out var a) ? a : Guid.Empty, form["active"] == "true", ct);
+                return PartnersBack();
+            }
+            catch (DomainException ex)
+            {
+                return PartnersBack(ex.Message);
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/accountant/partners/allocate", async (IFormCollection form, OpenBook.Application.Accounts.PartnerService partners,
+            OpenBook.Application.Ledger.ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            try
+            {
+                var date = DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : CompanyTime.Today;
+                await partners.AllocateAsync(date, ct);
+                return PartnersBack();
+            }
+            catch (DomainException ex)
+            {
+                return PartnersBack(ex.Message, OpenBook.Web.Security.ClosedPeriod.NeedsPassword(ex));
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/accountant/partners/allocations/{id:guid}/void", async (Guid id, IFormCollection form, OpenBook.Application.Accounts.PartnerService partners,
+            OpenBook.Application.Ledger.ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            try
+            {
+                await partners.VoidAllocationAsync(id, form["reason"].ToString() is { Length: > 0 } r ? r : "Voided", ct);
+                return PartnersBack();
+            }
+            catch (DomainException ex)
+            {
+                return PartnersBack(ex.Message, OpenBook.Web.Security.ClosedPeriod.NeedsPassword(ex));
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/accountant/1099/email-copies", async (IFormCollection form, Filing1099Service filing, CancellationToken ct) =>
         {
             var year = Year(form);

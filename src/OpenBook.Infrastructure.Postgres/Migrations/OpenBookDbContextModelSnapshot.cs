@@ -72,6 +72,64 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("Accounts", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Accounts.Partner", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CapitalAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long>("SharePercent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ShareTenThousandths");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CapitalAccountId");
+
+                    b.ToTable("Partners", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Accounts.PartnerAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsVoided")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("NetIncome")
+                        .HasColumnType("bigint")
+                        .HasColumnName("NetIncomeMinor");
+
+                    b.Property<DateOnly>("YearEnd")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId")
+                        .IsUnique();
+
+                    b.ToTable("PartnerAllocations", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Assets.DepreciationRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7006,6 +7064,24 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .WithMany()
                         .HasForeignKey("ParentId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Accounts.Partner", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("CapitalAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Accounts.PartnerAllocation", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Assets.DepreciationRun", b =>

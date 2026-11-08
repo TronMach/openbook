@@ -339,6 +339,35 @@ public sealed class GapReportsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_years_profit_goes_to_the_partners_capital_by_their_shares()
+    {
+        await _db.CreateAccount("Retained Earnings", AccountType.Equity, "3900");
+        await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Mar31,
+            [JournalLineDraft.Dr(_checking.Id, 1_000m), JournalLineDraft.Cr(_income.Id, 1_000m)])));
+        await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Mar31,
+            [JournalLineDraft.Dr(_rent.Id, 400m), JournalLineDraft.Cr(_checking.Id, 400m)])));
+
+        var ann = await In<OpenBook.Application.Accounts.PartnerService, Partner>(s => s.CreateAsync("Ann", 60m, null));
+        await In<OpenBook.Application.Accounts.PartnerService, Partner>(s => s.CreateAsync("Bob", 30m, null));
+        Assert.Equal("partners.shares_total", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<OpenBook.Application.Accounts.PartnerService, PartnerAllocation>(s => s.AllocateAsync(Mar31)))).Code);
+        var bob = (await In<OpenBook.Application.Accounts.PartnerService, IReadOnlyList<Partner>>(s => s.ListAsync())).Single(p => p.Name == "Bob");
+        await In<OpenBook.Application.Accounts.PartnerService, Partner>(s => s.UpdateAsync(bob.Id, "Bob", 40m, bob.CapitalAccountId, true));
+
+        var allocation = await In<OpenBook.Application.Accounts.PartnerService, PartnerAllocation>(s => s.AllocateAsync(Mar31));
+        Assert.Equal((new DateOnly(2026, 12, 31), 600m), (allocation.YearEnd, allocation.NetIncome));
+        var capital = await In<OpenBook.Application.Accounts.PartnerService, IReadOnlyList<OpenBook.Application.Accounts.PartnerCapital>>(s => s.CapitalAsync(Mar31));
+        Assert.Equal([360m, 240m], capital.OrderBy(c => c.Partner.Name).Select(c => c.Allocated).ToArray());
+        Assert.Equal("partners.already_allocated", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<OpenBook.Application.Accounts.PartnerService, PartnerAllocation>(s => s.AllocateAsync(Mar31)))).Code);
+        Assert.Equal(0, (await In<BooksCheckService, BooksCheckReport>(s => s.RunAsync())).Problems);
+
+        await In<OpenBook.Application.Accounts.PartnerService, PartnerAllocation>(s => s.VoidAllocationAsync(allocation.Id, "Redo"));
+        Assert.Equal(0m, (await In<OpenBook.Application.Accounts.PartnerService, IReadOnlyList<OpenBook.Application.Accounts.PartnerCapital>>(s => s.CapitalAsync(Mar31)))
+            .Single(c => c.Partner.Id == ann.Id).Closing);
+    }
+
+    [Fact]
     public async Task Stock_is_written_down_in_value_without_losing_units()
     {
         await In<InventoryAdjustmentService, InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(Jan5, [new InventoryAdjustmentLineDraft(_widget.Id, 10m, 10m)])));

@@ -44,6 +44,7 @@ public sealed class BooksCheckService(
     ILedgerStore ledger,
     ISalesStore sales,
     IPurchasesStore purchases,
+    Accounts.IPartnerStore partners,
     IBankingStore banking,
     AccountService accounts,
     ReceivablesService receivables,
@@ -141,6 +142,8 @@ public sealed class BooksCheckService(
                 list.Add(new Document(label, entityType, id, source, entry, posted));
         }
 
+        foreach (var a in await partners.ListAllocationsAsync(ct))
+            Add($"Partner allocation for {a.YearEnd:yyyy}", "partner_allocation", a.Id, Domain.Accounts.PartnerAllocation.Source, a.JournalEntryId, !a.IsVoided);
         foreach (var v in await purchases.ListVendorDepositsAsync(null, ct))
             Add($"Vendor deposit of {v.Date:MMM d, yyyy}", "vendor_deposit", v.Id, VendorDeposit.Source, v.JournalEntryId, v.Status == DocumentStatus.Posted);
         foreach (var p in await salesTax.ListPaymentsAsync(null, ct))

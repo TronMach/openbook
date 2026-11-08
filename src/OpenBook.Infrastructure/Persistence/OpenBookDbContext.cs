@@ -130,6 +130,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<BillPayment> BillPayments => Set<BillPayment>();
     public DbSet<VendorCredit> VendorCredits => Set<VendorCredit>();
     public DbSet<VendorDeposit> VendorDeposits => Set<VendorDeposit>();
+    public DbSet<OpenBook.Domain.Accounts.Partner> Partners => Set<OpenBook.Domain.Accounts.Partner>();
+    public DbSet<OpenBook.Domain.Accounts.PartnerAllocation> PartnerAllocations => Set<OpenBook.Domain.Accounts.PartnerAllocation>();
     public DbSet<VendorRefund> VendorRefunds => Set<VendorRefund>();
     public DbSet<RecurringBill> RecurringBills => Set<RecurringBill>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
@@ -2721,6 +2723,24 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.Property(x => x.AccruedAmount).HasColumnName("AccruedAmountMinor").HasConversion(MinorUnits);
             });
             b.Navigation(x => x.SourceLines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Accounts.Partner>(b =>
+        {
+            b.ToTable("Partners");
+            b.HasKey(p => p.Id);
+            b.Property(p => p.Name).HasMaxLength(100);
+            b.Property(p => p.SharePercent).HasColumnName("ShareTenThousandths").HasConversion(TenThousandths);
+            b.HasOne<Account>().WithMany().HasForeignKey(p => p.CapitalAccountId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Accounts.PartnerAllocation>(b =>
+        {
+            b.ToTable("PartnerAllocations");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.NetIncome).HasColumnName("NetIncomeMinor").HasConversion(MinorUnits);
+            b.HasIndex(a => a.JournalEntryId).IsUnique();
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(a => a.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<VendorDeposit>(b =>
