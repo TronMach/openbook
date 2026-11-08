@@ -138,6 +138,10 @@ public sealed class PurchaseOrder
     public IReadOnlyDictionary<int, decimal> Received =>
         _receipts.Where(r => !r.IsVoided).GroupBy(r => r.LineNumber).ToDictionary(g => g.Key, g => g.Sum(r => r.Quantity));
 
+    /// <summary>What deliveries dated on or before <paramref name="date"/> brought in, per line (deliveries taken back don't count).</summary>
+    public IReadOnlyDictionary<int, decimal> ReceivedBy(DateOnly date) =>
+        _receipts.Where(r => !r.IsVoided && r.Date <= date).GroupBy(r => r.LineNumber).ToDictionary(g => g.Key, g => g.Sum(r => r.Quantity));
+
     public static PurchaseOrder Create(Guid id, string number, DateTimeOffset createdAt) => new()
     {
         Id = id,

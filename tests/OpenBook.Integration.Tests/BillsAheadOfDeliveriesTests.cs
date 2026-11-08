@@ -78,6 +78,19 @@ public sealed class BillsAheadOfDeliveriesTests : IAsyncLifetime
         (await _db.InScope(sp => sp.GetRequiredService<ReportLedger>().LinesAsync(ReportBasis.Accrual, null, End))).Where(l => l.AccountId == _widget.InventoryAssetAccountId).Sum(l => l.Amount);
 
     [Fact]
+    public async Task Received_not_billed_works_as_of_a_past_date()
+    {
+        await Receive(4m);
+        await BillFor(4m);
+        decimal Total(OpenBook.Application.Reporting.ReportTable t) => (decimal)t.Rows.Single(r => (string?)r.Cells[0].Value == "Total received not billed").Cells[4].Value!;
+        // Received on the 3rd, billed on the 6th.
+        Assert.Equal(20m, Total(await In<OpenBook.Application.Reporting.ReportCatalog, OpenBook.Application.Reporting.ReportTable>(s =>
+            s.RunAsync("received-not-billed", OpenBook.Application.Reporting.ReportParameters.Parse("asOf=2026-03-04")))));
+        Assert.Equal(0m, Total(await In<OpenBook.Application.Reporting.ReportCatalog, OpenBook.Application.Reporting.ReportTable>(s =>
+            s.RunAsync("received-not-billed", OpenBook.Application.Reporting.ReportParameters.Parse("asOf=2026-03-31")))));
+    }
+
+    [Fact]
     public async Task A_delivery_leaves_out_what_a_bill_brought_in()
     {
         await BillFor(4m);

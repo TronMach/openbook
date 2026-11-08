@@ -230,8 +230,9 @@ public sealed class ListReports(
     /// Goods received on purchase orders that the vendor hasn't billed yet, by vendor and order, at the order's unit cost,
     /// and the "Received Not Billed" account's balance beside it (it holds deliveries received into stock).
     /// </summary>
-    public async Task<ReportTable> ReceivedNotBilledAsync(CancellationToken ct = default)
+    public async Task<ReportTable> ReceivedNotBilledAsync(DateOnly? asOf = null, CancellationToken ct = default)
     {
+        var date = asOf ?? CompanyTime.Today;
         var company = await companies.GetRequiredCompanyAsync(ct);
         var vendorNames = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
         var orders = (await purchases.ListPurchaseOrdersAsync(null, ct)).ToList();
@@ -243,7 +244,7 @@ public sealed class ListReports(
             var subtotal = 0m;
             foreach (var order in group.OrderBy(o => o.Date).ThenBy(o => o.Number, StringComparer.OrdinalIgnoreCase))
             {
-                foreach (var line in (await purchaseOrders.ProgressAsync(order, ct)).Lines.Where(l => l.ReceivedNotBilled > 0m))
+                foreach (var line in (await purchaseOrders.ProgressAsync(order, ct, asOf: date)).Lines.Where(l => l.ReceivedNotBilled > 0m))
                 {
                     var value = decimal.Round(line.ReceivedNotBilled * line.Line.UnitCost, 2, MidpointRounding.AwayFromZero);
                     lines.Add(new ReportTableRow(
@@ -268,13 +269,13 @@ public sealed class ListReports(
         var chart = await accounts.GetChartAsync(ct);
         if (chart.FindByFullName(PurchaseOrderService.ReceivedNotBilledName) is { } account)
         {
-            var balance = -(await ledger.TotalsAsync(ReportBasis.Accrual, CompanyTime.Today, CompanyTime.Today, ct)).Where(l => l.AccountId == account.Id).Sum(l => l.Amount);
+            var balance = -(await ledger.TotalsAsync(ReportBasis.Accrual, date, date, ct)).Where(l => l.AccountId == account.Id).Sum(l => l.Amount);
             rows.Add(new ReportTableRow([new ReportCell($"{account.Name} account in the books", new ReportLink("account", account.Id)), null, null, null, balance]));
         }
 
         return new ReportTable(
             "Received not billed",
-            [company.Name, $"As of {CompanyTime.Today:MMM d, yyyy}"],
+            [company.Name, $"As of {date:MMM d, yyyy}"],
             [new("Vendor and order"), new("Item"), new("Quantity", ColumnFormat.Number), new("Unit cost", ColumnFormat.Money), new("Value", ColumnFormat.Money)],
             rows,
             ReportBasis.Accrual,

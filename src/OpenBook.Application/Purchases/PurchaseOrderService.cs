@@ -477,11 +477,12 @@ public sealed class PurchaseOrderService(
     }
 
     /// <param name="except">A bill being corrected: what it bills now doesn't count.</param>
-    internal async Task<PurchaseOrderProgress> ProgressAsync(PurchaseOrder order, CancellationToken ct, Guid? except = null)
+    /// <param name="asOf">Only deliveries and bills dated by then (a voided bill is reversed on its own date, so it never counts).</param>
+    internal async Task<PurchaseOrderProgress> ProgressAsync(PurchaseOrder order, CancellationToken ct, Guid? except = null, DateOnly? asOf = null)
     {
-        var made = (await store.ListBillsAsync(order.VendorId, ct)).Where(b => b.PurchaseOrderId == order.Id && b.Id != except).OrderBy(b => b.Date).ToList();
+        var made = (await store.ListBillsAsync(order.VendorId, ct)).Where(b => b.PurchaseOrderId == order.Id && b.Id != except && (asOf is null || b.Date <= asOf)).OrderBy(b => b.Date).ToList();
         var billed = made.Where(b => b.Status == DocumentStatus.Posted).SelectMany(b => b.SourceLines).ToLookup(s => s.LineNumber);
-        var received = order.Received;
+        var received = asOf is { } date ? order.ReceivedBy(date) : order.Received;
         return new PurchaseOrderProgress(made, order.Lines.OrderBy(l => l.LineNumber)
             .Select(l => new PurchaseOrderLineStatus(l, received.GetValueOrDefault(l.LineNumber), billed[l.LineNumber].Sum(s => s.Quantity), billed[l.LineNumber].Sum(s => s.Amount),
                 billed[l.LineNumber].Sum(s => s.AccruedQuantity), billed[l.LineNumber].Sum(s => s.AccruedAmount)))
