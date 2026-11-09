@@ -86,6 +86,9 @@ public interface ILedgerStore
     /// <summary>The date of the account's earliest journal line, if it has any.</summary>
     Task<DateOnly?> FirstPostingDateAsync(Guid accountId, CancellationToken ct);
     Task<JournalEntry?> GetEntryAsync(Guid id, CancellationToken ct);
+
+    /// <summary>These entries (those that exist), untracked, with lines: one query for a list of ids.</summary>
+    Task<IReadOnlyList<JournalEntry>> GetEntriesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
     Task<Guid?> FindReversalIdAsync(Guid originalEntryId, CancellationToken ct);
 
     /// <summary>Whether any of the entry's lines is ticked in a reconciliation, finished or not.</summary>
@@ -105,6 +108,9 @@ public interface ILedgerStore
     /// neither are left out.
     /// </summary>
     Task<IReadOnlyDictionary<Guid, (decimal Before, decimal Through)>> GetAccrualTotalsAsync(DateOnly splitAt, DateOnly toDate, CancellationToken ct);
+
+    /// <summary>Each account's total per day in the range (debit-positive), of the lines counting on the accrual basis: the same sums as <see cref="GetAccrualTotalsAsync"/>, a row per day and account.</summary>
+    Task<IReadOnlyList<(DateOnly Date, Guid AccountId, decimal Amount)>> GetAccrualDailyTotalsAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
 
     /// <summary>The balances (debit-positive) of just these accounts on the accrual basis through the date: the same sums as <see cref="GetAccrualTotalsAsync"/>, reading only their lines.</summary>
     Task<IReadOnlyDictionary<Guid, decimal>> GetAccrualBalancesAsync(IReadOnlyCollection<Guid> accountIds, DateOnly toDate, CancellationToken ct);

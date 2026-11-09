@@ -60,7 +60,8 @@ public sealed class KpiService(ReportLedger ledger, AccountService accounts, Rec
         // Detail only as far back as the figures look (twelve months, and this year to date a year ago); balances
         // before that come folded, so the dashboard doesn't read the whole history.
         var detailFrom = new[] { monthStart.AddMonths(-11), yearStart.AddYears(-1), asOf.AddYears(-1) }.Min();
-        var lines = await ledger.LinesSinceAsync(basis, detailFrom, asOf, ct: ct);
+        // Only totals per account and day are needed: on the accrual basis the database adds them up.
+        var lines = await ledger.DailyTotalsAsync(basis, detailFrom, asOf, ct);
         var types = chart.All.ToDictionary(a => a.Id, a => a.Type);
         AccountType? TypeOf(Guid id) => types.TryGetValue(id, out var type) ? type : null;
 

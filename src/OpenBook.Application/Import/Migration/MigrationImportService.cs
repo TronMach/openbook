@@ -133,12 +133,17 @@ public sealed class MigrationImportService(
 
         // Parents before children; each new account is saved so the next can refer to it.
         var taxLines = new Dictionary<Guid, string?>();
+        // The chart as it was, and the accounts made here by full name: a parent is one or the other, so the chart isn't read again per account.
+        var chart = await accounts.GetChartAsync(ct);
+        static string Key(string fullName) => string.Join(Account.PathSeparator, fullName.Split(Account.PathSeparator).Select(p => p.Trim()));
+        var madeHere = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in plan.Accounts.OrderBy(a => a.FullName.Count(c => c == Account.PathSeparator)))
         {
-            var chart = await accounts.GetChartAsync(ct);
             var cut = a.FullName.LastIndexOf(Account.PathSeparator);
-            var parent = cut < 0 ? null : chart.FindByFullName(a.FullName[..cut]);
-            var made = await accounts.CreateAsync(new CreateAccountCommand(a.FullName[(cut + 1)..], a.Type, a.Number, parent?.Id, a.Description), ct);
+            var parentId = cut < 0 ? null
+                : madeHere.TryGetValue(Key(a.FullName[..cut]), out var newParent) ? newParent : chart.FindByFullName(a.FullName[..cut])?.Id;
+            var made = await accounts.CreateAsync(new CreateAccountCommand(a.FullName[(cut + 1)..], a.Type, a.Number, parentId, a.Description), ct);
+            madeHere[Key(a.FullName)] = made.Id;
             if (a.TaxLine is not null)
                 taxLines[made.Id] = a.TaxLine;
         }

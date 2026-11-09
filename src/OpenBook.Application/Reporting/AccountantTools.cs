@@ -252,14 +252,10 @@ public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore le
     /// <summary>The marked entries that are posted (not voided), dated from <paramref name="from"/> through <paramref name="to"/>.</summary>
     public async Task<IReadOnlyList<JournalEntry>> ListAsync(DateOnly? from, DateOnly to, CancellationToken ct = default)
     {
-        var result = new List<JournalEntry>();
-        foreach (var id in await MarkedAsync(ct))
-        {
-            if (await ledgerStore.GetEntryAsync(id, ct) is { Status: JournalEntryStatus.Posted } entry && (from is null || entry.Date >= from) && entry.Date <= to)
-                result.Add(entry);
-        }
-
-        return result.OrderBy(e => e.Date).ThenBy(e => e.Number).ToList();
+        // The marked entries in one query rather than one each.
+        return (await ledgerStore.GetEntriesAsync([.. await MarkedAsync(ct)], ct))
+            .Where(e => e.Status == JournalEntryStatus.Posted && (from is null || e.Date >= from) && e.Date <= to)
+            .OrderBy(e => e.Date).ThenBy(e => e.Number).ToList();
     }
 
     /// <summary>Every account's balance on a date before adjustments, the adjusting entries (this fiscal year), and after.</summary>

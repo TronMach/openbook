@@ -51,6 +51,9 @@ public interface IPurchasesStore
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<Bill>> ListBillsAsync(Guid? vendorId, CancellationToken ct);
 
+    /// <summary>The bills made from a purchase order, whatever their status, untracked.</summary>
+    Task<IReadOnlyList<Bill>> ListBillsOfOrderAsync(Guid purchaseOrderId, CancellationToken ct);
+
     /// <summary>Posted bills waiting for approval or rejected, untracked.</summary>
     Task<IReadOnlyList<Bill>> ListBillsAwaitingApprovalAsync(CancellationToken ct);
 

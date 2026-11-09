@@ -27,6 +27,14 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
     public Task<JournalEntry?> GetEntryAsync(Guid id, CancellationToken ct) =>
         db.JournalEntries.Include(e => e.Lines).SingleOrDefaultAsync(e => e.Id == id, ct);
 
+    public async Task<IReadOnlyList<JournalEntry>> GetEntriesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0)
+            return [];
+        var wanted = ids.Distinct().ToList();
+        return await db.JournalEntries.AsNoTracking().Include(e => e.Lines).Where(e => wanted.Contains(e.Id)).ToListAsync(ct);
+    }
+
     public Task<Guid?> FindReversalIdAsync(Guid originalEntryId, CancellationToken ct) =>
         db.JournalEntries.Where(e => e.ReversesEntryId == originalEntryId).Select(e => (Guid?)e.Id).SingleOrDefaultAsync(ct);
 
@@ -84,6 +92,17 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
             .ToListAsync(ct))
             .Where(t => t.Before != 0m || t.Through != 0m)
             .ToDictionary(t => t.AccountId, t => (t.Before, t.Through));
+
+    public async Task<IReadOnlyList<(DateOnly Date, Guid AccountId, decimal Amount)>> GetAccrualDailyTotalsAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) =>
+        [.. (await (
+            from l in db.Set<JournalLine>()
+            join e in db.JournalEntries on EF.Property<Guid>(l, "JournalEntryId") equals e.Id
+            where e.Date >= fromDate && e.Date <= toDate && e.Basis != EntryBasis.CashOnly
+            group l.Amount by new { e.Date, l.AccountId } into g
+            select new { g.Key.Date, g.Key.AccountId, Amount = g.Sum() })
+            .ToListAsync(ct))
+            .Where(t => t.Amount != 0m)
+            .Select(t => (t.Date, t.AccountId, t.Amount))];
 
     public async Task<IReadOnlyDictionary<Guid, decimal>> GetAccrualBalancesAsync(IReadOnlyCollection<Guid> accountIds, DateOnly toDate, CancellationToken ct)
     {

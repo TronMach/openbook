@@ -125,6 +125,31 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
     }
 
     /// <summary>
+    /// One line per account and day from <paramref name="detailFrom"/> to <paramref name="to"/>, with everything before folded
+    /// into one per account the day before: the sums of <see cref="LinesSinceAsync"/> by date and account, without classes,
+    /// locations or entries, for figures by period (the dashboard). On the accrual basis the database adds them up.
+    /// </summary>
+    public async Task<IReadOnlyList<LedgerLine>> DailyTotalsAsync(ReportBasis basis, DateOnly detailFrom, DateOnly to, CancellationToken ct = default)
+    {
+        if (basis == ReportBasis.Accrual && detailFrom > DateOnly.MinValue)
+        {
+            var broughtForward = detailFrom.AddDays(-1);
+            var history = await ledger.GetAccrualTotalsAsync(detailFrom, broughtForward, ct);
+            var days = detailFrom > to ? [] : await ledger.GetAccrualDailyTotalsAsync(detailFrom, to, ct);
+            return
+            [
+                .. history.Where(t => t.Value.Before != 0m).Select(t => BroughtForward(broughtForward, t.Key, t.Value.Before, null, null)),
+                .. days.Select(d => BroughtForward(d.Date, d.AccountId, d.Amount, null, null)),
+            ];
+        }
+
+        return [.. (await LinesSinceAsync(basis, detailFrom, to, ct: ct))
+            .GroupBy(l => (l.Date, l.AccountId))
+            .Select(g => BroughtForward(g.Key.Date, g.Key.AccountId, g.Sum(l => l.Amount), null, null))
+            .Where(l => l.Amount != 0m)];
+    }
+
+    /// <summary>
     /// These accounts' balances (debit-positive) through the date, for figures that need a few accounts rather than a
     /// report: on the accrual basis the database adds up only their lines.
     /// </summary>

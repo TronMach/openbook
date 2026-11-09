@@ -78,6 +78,13 @@ public sealed class LedgerFoldingTests : IAsyncLifetime
         Assert.Equal(all.Count(l => l.Date >= splitAt), since.Count(l => l.Date >= splitAt));
         Assert.All(since.Where(l => l.Date < splitAt), l => Assert.Equal(ReportLedger.BroughtForwardSource, l.Source));
 
+        // Per day and account, as the dashboard reads them: the same sums, each day's activity as it was.
+        var daily = await In<ReportLedger, IReadOnlyList<LedgerLine>>(s => s.DailyTotalsAsync(basis, splitAt, to));
+        Assert.Equal(Sums(all), Sums(daily));
+        Assert.Equal(
+            all.Where(l => l.Date >= splitAt).GroupBy(l => (l.Date, l.AccountId)).Select(g => (g.Key, Sum: g.Sum(l => l.Amount))).Where(x => x.Sum != 0m).OrderBy(x => x.Key),
+            daily.Where(l => l.Date >= splitAt).Select(l => ((l.Date, l.AccountId), Sum: l.Amount)).OrderBy(x => x.Item1));
+
         // A few accounts' balances, as the sales tax figures read them: the same sums, for just those accounts.
         var some = all.Select(l => l.AccountId).Distinct().Order().Take(3).Append(Guid.NewGuid()).ToList();
         var balances = await In<ReportLedger, IReadOnlyDictionary<Guid, decimal>>(s => s.BalancesAsync(basis, some, to));

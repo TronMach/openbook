@@ -50,10 +50,7 @@
         _open = all.Where(e => e.Status is ScheduledEmailStatus.Scheduled or ScheduledEmailStatus.Failed).ToList();
         // The latest 100 finished ones, newest first.
         _done = all.Where(e => e.Status is ScheduledEmailStatus.Sent or ScheduledEmailStatus.Cancelled).Reverse().Take(100).ToList();
-        foreach (var id in all.Select(e => e.InvoiceId).Distinct())
-        {
-            if (await Invoices.GetAsync(id) is { } invoice)
-                _labels[id] = $"Invoice {invoice.Number}";
-        }
+        foreach (var invoice in await Invoices.FindAsync([.. all.Select(e => e.InvoiceId).Distinct()]))
+            _labels[invoice.Id] = $"Invoice {invoice.Number}";
     }
 }

@@ -480,7 +480,9 @@ public sealed class PurchaseOrderService(
     /// <param name="asOf">Only deliveries and bills dated by then (a voided bill is reversed on its own date, so it never counts).</param>
     internal async Task<PurchaseOrderProgress> ProgressAsync(PurchaseOrder order, CancellationToken ct, Guid? except = null, DateOnly? asOf = null)
     {
-        var made = (await store.ListBillsAsync(order.VendorId, ct)).Where(b => b.PurchaseOrderId == order.Id && b.Id != except && (asOf is null || b.Date <= asOf)).OrderBy(b => b.Date).ToList();
+        // The order's own bills, not every bill from the vendor.
+        var made = (await store.ListBillsOfOrderAsync(order.Id, ct)).Where(b => b.Id != except && (asOf is null || b.Date <= asOf))
+            .OrderBy(b => b.Date).ThenByDescending(b => b.CreatedAt).ToList();
         var billed = made.Where(b => b.Status == DocumentStatus.Posted).SelectMany(b => b.SourceLines).ToLookup(s => s.LineNumber);
         var received = asOf is { } date ? order.ReceivedBy(date) : order.Received;
         return new PurchaseOrderProgress(made, order.Lines.OrderBy(l => l.LineNumber)

@@ -88,6 +88,9 @@ public sealed class InvoiceService(
 
     public Task<Invoice?> GetAsync(Guid id, CancellationToken ct = default) => store.GetInvoiceAsync(id, ct);
 
+    /// <summary>These invoices (those that exist), untracked, in one query.</summary>
+    public Task<IReadOnlyList<Invoice>> FindAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default) => store.FindInvoicesAsync(ids, ct);
+
     /// <summary>The invoices with these ids, whoever's they are (a parent's payment can settle a sub-customer's).</summary>
     public Task<IReadOnlyList<Invoice>> GetManyAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default) => store.GetInvoicesAsync(ids, ct);
 

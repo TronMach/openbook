@@ -51,6 +51,9 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public async Task<IReadOnlyList<Bill>> GetBillsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         await db.Bills.Where(b => ids.Contains(b.Id)).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Bill>> ListBillsOfOrderAsync(Guid purchaseOrderId, CancellationToken ct) =>
+        await db.Bills.AsNoTracking().Where(b => b.PurchaseOrderId == purchaseOrderId).ToListAsync(ct);
+
     public async Task<IReadOnlyList<Bill>> ListBillsAwaitingApprovalAsync(CancellationToken ct) =>
         await db.Bills.AsNoTracking()
             .Where(b => b.Status == DocumentStatus.Posted && (b.Approval == BillApproval.Pending || b.Approval == BillApproval.Rejected))

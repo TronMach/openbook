@@ -46,6 +46,8 @@ location / {
 
 with `map $http_upgrade $connection_upgrade { default upgrade; '' close; }` in the `http` block. `client_max_body_size` covers attachment and import uploads.
 
+**Compression.** OpenBook sends its stylesheets and scripts already compressed (Brotli or gzip) and cached for a year under names that change with each version, but pages and API answers go out as they are: a long list is 50–60 KB of HTML. Over a slow connection the proxy can compress them too: Caddy with `encode zstd gzip` inside the site block, nginx with `gzip on; gzip_types text/html application/json;` (text shrinks to about a tenth). OpenBook leaves this to the proxy on purpose. Compressing pages over HTTPS that hold a secret (the anti-forgery token in every form) next to text someone else can put in them (a search typed into the address) is the setting the BREACH attack needs. On a network you trust that doesn't matter; facing the internet, weigh it against the time saved, or leave pages uncompressed.
+
 Once it's on HTTPS, use the public address wherever OpenBook asks for one: **Settings → Online payments → Public address of OpenBook** (customer portal links and Stripe's return pages) and the redirect address shown on **Settings → Sign-in** for single sign-on.
 
 ## Data Protection keys
