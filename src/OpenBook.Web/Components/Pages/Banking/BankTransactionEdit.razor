@@ -183,7 +183,7 @@
             (_chart, _useNumbers, _vendors, splits, _marked) = await Ops.RunAsync(async sp => (
                 await sp.GetRequiredService<AccountService>().GetChartAsync(),
                 (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
-                (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_transaction.Date)).Select(v => v.Vendor)
+                (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListRecordsAsync())
                     .Where(v => v.IsActive || v.Id == _transaction.VendorId).ToList(),
                 await sp.GetRequiredService<BankingService>().SplitsAsync(_transaction),
                 _transaction.Kind == BankTransactionKind.Spend

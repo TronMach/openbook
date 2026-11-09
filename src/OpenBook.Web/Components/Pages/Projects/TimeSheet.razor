@@ -216,7 +216,7 @@
     private Worker? _me;
     private IReadOnlyList<TimeEntry> _running = [];
     private IReadOnlyList<TimeEntry> _entries = [];
-    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyList<CustomerEntry> _customers = [];
     private IReadOnlyDictionary<Guid, string> _customerNames = new Dictionary<Guid, string>();
     private List<Item> _services = [];
     private Dictionary<Guid, string> _itemNames = [];
@@ -245,7 +245,7 @@
         _me = await WorkerService.ForCurrentUserAsync();
         _running = await TimeService.RunningAsync();
         _entries = await TimeService.ListAsync(new TimeFilter(_from, _to, WorkerId, Customer));
-        _customers = await CustomerService.ListAsync(today);
+        _customers = await CustomerService.ListRecordsAsync();
         _customerNames = await CustomerService.FullNamesAsync();
         var items = await ItemService.ListAsync(includeInactive: true);
         _itemNames = items.ToDictionary(i => i.Id, i => i.Name);

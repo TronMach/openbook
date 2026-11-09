@@ -176,7 +176,7 @@
     {
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         var chart = await Ops.RunAsync<AccountService, ChartOfAccounts>(s => s.GetChartAsync());
-        _donors = await Ops.RunAsync(async sp => (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(c => c.Customer).ToList());
+        _donors = await Ops.RunAsync(async sp => (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(c => c.Customer).ToList());
         _donorOptions = PickerOptions.Customers(_donors);
         _accounts = chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset).OrderBy(a => a.Type != AccountType.OtherCurrentAsset).ToList();

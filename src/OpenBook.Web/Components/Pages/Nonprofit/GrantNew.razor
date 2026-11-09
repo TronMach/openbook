@@ -91,7 +91,7 @@
 </div>
 
 @code {
-    private IReadOnlyList<CustomerSummary> _funders = [];
+    private IReadOnlyList<CustomerEntry> _funders = [];
     private List<Account> _income = [];
     private IReadOnlyList<SegmentChoice> _classes = [];
     private ChartOfAccounts _chart = new([]);
@@ -101,7 +101,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _funders = (await CustomerService.ListAsync(CompanyTime.Today)).Where(c => c.Customer.IsActive).ToList();
+        _funders = (await CustomerService.ListRecordsAsync()).Where(c => c.Customer.IsActive).ToList();
         _chart = await AccountService.GetChartAsync();
         _income = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
         _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);

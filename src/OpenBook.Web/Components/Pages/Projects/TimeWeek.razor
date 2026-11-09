@@ -185,7 +185,7 @@
     private Worker? _worker;
     private IReadOnlyList<WeekRow> _rows = [];
     private WeekSheet? _sheet;
-    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyList<CustomerEntry> _customers = [];
     private IReadOnlyDictionary<Guid, string> _customerNames = new Dictionary<Guid, string>();
     private Dictionary<Guid, string> _itemNames = [];
     private List<Item> _services = [];
@@ -212,7 +212,7 @@
         _billableDefault = (await TimeService.DefaultsAsync()).BillableByDefault;
         if (Copy)
             _copied = await TimeService.RowsFromLastWeekAsync(_worker.Id, _monday);
-        _customers = (await CustomerService.ListAsync(today)).Where(c => c.Customer.IsActive).ToList();
+        _customers = (await CustomerService.ListRecordsAsync()).Where(c => c.Customer.IsActive).ToList();
         _customerNames = await CustomerService.FullNamesAsync();
         var items = await ItemService.ListAsync(includeInactive: true);
         _itemNames = items.ToDictionary(i => i.Id, i => i.Name);

@@ -108,7 +108,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _customers = (await CustomerService.ListAsync(Today, includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.Customer.DisplayName);
+        _customers = (await CustomerService.ListRecordsAsync(includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.Customer.DisplayName);
         await LoadAsync();
     }
 

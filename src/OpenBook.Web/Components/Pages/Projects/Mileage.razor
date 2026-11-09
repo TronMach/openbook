@@ -181,7 +181,7 @@
     private MileageYear? _log;
     private IReadOnlyDictionary<int, decimal> _rates = new Dictionary<int, decimal>();
     private IReadOnlyList<Worker> _workers = [];
-    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyList<CustomerEntry> _customers = [];
     private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
 
     [SupplyParameterFromQuery] private int? Year { get; set; }
@@ -193,7 +193,7 @@
         _log = await MileageService.YearAsync(_year);
         _rates = await MileageService.RatesAsync();
         _workers = await WorkerService.ListAsync();
-        _customers = await CustomerService.ListAsync(CompanyTime.Today);
+        _customers = await CustomerService.ListRecordsAsync();
         _names = await CustomerService.FullNamesAsync();
     }
 }

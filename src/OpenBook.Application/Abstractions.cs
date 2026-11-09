@@ -106,6 +106,9 @@ public interface ILedgerStore
     /// </summary>
     Task<IReadOnlyDictionary<Guid, (decimal Before, decimal Through)>> GetAccrualTotalsAsync(DateOnly splitAt, DateOnly toDate, CancellationToken ct);
 
+    /// <summary>The balances (debit-positive) of just these accounts on the accrual basis through the date: the same sums as <see cref="GetAccrualTotalsAsync"/>, reading only their lines.</summary>
+    Task<IReadOnlyDictionary<Guid, decimal>> GetAccrualBalancesAsync(IReadOnlyCollection<Guid> accountIds, DateOnly toDate, CancellationToken ct);
+
     /// <summary>
     /// Hand-entered entries matching a search (its number, memo, a line's memo, or a line of the amount either way),
     /// newest first, untracked, with lines.

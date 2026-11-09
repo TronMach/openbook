@@ -85,7 +85,7 @@
 </div>
 
 @code {
-    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyList<CustomerEntry> _customers = [];
     private List<Account> _banks = [];
     private ChartOfAccounts _chart = new([]);
 
@@ -95,7 +95,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _customers = await CustomerService.ListAsync(CompanyTime.Today);
+        _customers = await CustomerService.ListRecordsAsync();
         _chart = await AccountService.GetChartAsync();
         // A bank account, or Undeposited Funds to group it into a deposit later.
         _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account)

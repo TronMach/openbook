@@ -243,7 +243,7 @@
         (_chart, _useNumbers, var vendors) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
-            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(CompanyTime.Today)).Select(v => v.Vendor).ToList()));
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListRecordsAsync()).ToList()));
         if (_chart.Find(AccountId) is null)
         {
             _error = "That account doesn't exist.";

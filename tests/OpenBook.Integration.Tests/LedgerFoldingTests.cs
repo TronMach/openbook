@@ -77,6 +77,13 @@ public sealed class LedgerFoldingTests : IAsyncLifetime
         Assert.Equal(Sums(all.Where(l => l.Date < splitAt)), Sums(totals.Where(l => l.Date < splitAt)));
         Assert.Equal(all.Count(l => l.Date >= splitAt), since.Count(l => l.Date >= splitAt));
         Assert.All(since.Where(l => l.Date < splitAt), l => Assert.Equal(ReportLedger.BroughtForwardSource, l.Source));
+
+        // A few accounts' balances, as the sales tax figures read them: the same sums, for just those accounts.
+        var some = all.Select(l => l.AccountId).Distinct().Order().Take(3).Append(Guid.NewGuid()).ToList();
+        var balances = await In<ReportLedger, IReadOnlyDictionary<Guid, decimal>>(s => s.BalancesAsync(basis, some, to));
+        Assert.Equal(
+            Sums(all.Where(l => some.Contains(l.AccountId))).Where(x => x.Value != 0m).OrderBy(x => x.Key),
+            balances.Where(x => x.Value != 0m).OrderBy(x => x.Key));
     }
 
     [Fact]

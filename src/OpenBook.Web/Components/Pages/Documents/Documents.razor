@@ -133,9 +133,9 @@
         _settings = await DocumentService.GetSettingsAsync();
         _documents = (await DocumentService.ListAsync()).Where(d => ShowAll || d.Status == CapturedDocumentStatus.New).ToList();
         var today = CompanyTime.Today;
-        foreach (var v in await VendorService.ListAsync(today))
-            _names[v.Vendor.Id] = v.Vendor.DisplayName;
-        foreach (var c in await CustomerService.ListAsync(today))
+        foreach (var v in await VendorService.ListRecordsAsync())
+            _names[v.Id] = v.DisplayName;
+        foreach (var c in await CustomerService.ListRecordsAsync())
             _names[c.Customer.Id] = c.Customer.DisplayName;
     }
 

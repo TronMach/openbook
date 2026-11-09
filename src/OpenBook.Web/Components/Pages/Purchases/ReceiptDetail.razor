@@ -152,6 +152,6 @@
         var accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
         _payFrom = accounts.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
         _categories = accounts.Where(a => a.Type.ClassOf() is AccountClass.Expense || a.Type is AccountType.CostOfGoodsSold or AccountType.OtherCurrentAsset or AccountType.FixedAsset).ToList();
-        _vendors = (await VendorService.ListAsync(CompanyTime.Today)).Select(v => v.Vendor).ToList();
+        _vendors = (await VendorService.ListRecordsAsync()).ToList();
     }
 }

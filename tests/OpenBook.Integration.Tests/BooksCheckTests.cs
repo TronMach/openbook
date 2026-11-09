@@ -195,6 +195,7 @@ public sealed class BooksCheckTests : IAsyncLifetime
             {
                 AssertAgrees(await Check(), $"seed {seed}, step {step} ({string.Join("; ", done.TakeLast(10))})");
                 await AssertAgingFromNarrowedDocuments($"seed {seed}, step {step}");
+                await AssertPayablesAgingFromNarrowedDocuments($"seed {seed}, step {step}");
             }
         }
     }
@@ -224,6 +225,27 @@ public sealed class BooksCheckTests : IAsyncLifetime
             }
         }
     }
+
+    /// <summary>A/P aging likewise: from the narrowed documents exactly as from every document.</summary>
+    private async Task AssertPayablesAgingFromNarrowedDocuments(string when)
+    {
+        foreach (var asOf in new[] { Start.AddDays(7), Start.AddDays(20), DateOnly.MaxValue })
+        {
+            var narrowed = await In<PayablesService, PayablesAgingReport>(s => s.AgingAsync(asOf));
+            var everything = await _db.InScope(async sp =>
+            {
+                var store = sp.GetRequiredService<IPurchasesStore>();
+                return PayablesService.Aging(await store.ListVendorsAsync(default), new PayableDocuments(
+                    await store.ListBillsAsync(null, default), await store.ListPaymentsAsync(null, default),
+                    await store.ListVendorCreditsAsync(null, default), await store.ListVendorRefundsAsync(null, default)), asOf);
+            });
+            Assert.True(Describe(everything) == Describe(narrowed), $"{when}, A/P aging on {asOf}:{Environment.NewLine}{Describe(everything)}{Environment.NewLine}---{Environment.NewLine}{Describe(narrowed)}");
+        }
+    }
+
+    private static string Describe(PayablesAgingReport report) => string.Join(Environment.NewLine, report.Vendors.Select(v =>
+        $"{v.Vendor.DisplayName} {v.Buckets} ahead {v.PaidAhead} " + string.Join(",", v.Bills.Select(b => $"{b.Bill.Id}:{b.Balance}"))
+        + " | " + string.Join(",", v.Credits.Select(c => $"{c.Credit.Id}:{c.Amount}"))));
 
     private static string Describe(AgingReport report) => string.Join(Environment.NewLine, report.Customers.Select(Describe));
 

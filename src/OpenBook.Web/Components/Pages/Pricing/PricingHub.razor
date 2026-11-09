@@ -112,7 +112,7 @@
         _levels = await Pricing.ListLevelsAsync();
         _rules = await Pricing.ListRulesAsync();
         _rounding = await Pricing.GetRoundingAsync();
-        _customerCounts = (await Customers.ListAsync(CompanyTime.Today, includeInactive: false))
+        _customerCounts = (await Customers.ListRecordsAsync())
             .Where(c => c.Customer.PriceLevelId is not null)
             .GroupBy(c => c.Customer.PriceLevelId!.Value)
             .ToDictionary(g => g.Key, g => g.Count());

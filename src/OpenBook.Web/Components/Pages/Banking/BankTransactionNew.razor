@@ -196,11 +196,11 @@
                 await sp.GetRequiredService<AccountService>().GetChartAsync(),
                 (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
                 await sp.GetRequiredService<BankingService>().SuggestCheckNumberAsync(AccountId),
-                (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(v => v.Vendor).ToList()));
+                (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListRecordsAsync()).ToList()));
             _account = _chart.Get(AccountId);
             BankingRules.EnsurePayFrom(_account, _kind);
             if (_kind == BankTransactionKind.Spend)
-                _customers = await Ops.RunAsync(async sp => (IReadOnlyList<OpenBook.Domain.Sales.Customer>)(await sp.GetRequiredService<OpenBook.Application.Sales.CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList());
+                _customers = await Ops.RunAsync(async sp => (IReadOnlyList<OpenBook.Domain.Sales.Customer>)(await sp.GetRequiredService<OpenBook.Application.Sales.CustomerService>().ListRecordsAsync()).Select(s => s.Customer).ToList());
             _ownMoney = !BankTransaction.IsBankingAccount(_account.Type);
             _accountName = _chart.FullName(AccountId);
             _title = _ownMoney ? "Paid with your own money" : Labels.For(_kind, _account.Type);

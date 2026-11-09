@@ -156,7 +156,7 @@
     private IReadOnlyList<RecurringGift> _templates = [];
     private RecurringGift? _editing;
     private Dictionary<Guid, string> _names = [];
-    private IReadOnlyList<CustomerSummary> _donors = [];
+    private IReadOnlyList<CustomerEntry> _donors = [];
     private List<Account> _deposit = [];
     private List<Account> _income = [];
     private IReadOnlyList<SegmentChoice> _classes = [];
@@ -171,7 +171,7 @@
     {
         _templates = await Recurring.ListAsync();
         _editing = _templates.FirstOrDefault(t => t.Id == Edit);
-        var customers = await CustomerService.ListAsync(_today);
+        var customers = await CustomerService.ListRecordsAsync();
         _names = customers.ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
         _donors = customers.Where(c => c.Customer.IsActive).ToList();
         _chart = await AccountService.GetChartAsync();

@@ -51,9 +51,10 @@ public sealed class SalesTaxPaymentService(
     public async Task<IReadOnlyDictionary<Guid, decimal>> OwedAsync(DateOnly asOf, ReportBasis basis = ReportBasis.Accrual, CancellationToken ct = default)
     {
         var agencies = await store.ListAgenciesAsync(ct);
-        var balances = (await ledger.LinesAsync(basis, null, asOf, ct))
-            .GroupBy(l => l.AccountId)
-            .ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
+        if (agencies.Count == 0)
+            return new Dictionary<Guid, decimal>();
+        // Only the agencies' accounts: on the accrual basis the database adds up just their lines.
+        var balances = await ledger.BalancesAsync(basis, agencies.Select(a => a.LiabilityAccountId).ToList(), asOf, ct);
         return agencies.ToDictionary(a => a.Id, a => -balances.GetValueOrDefault(a.LiabilityAccountId));
     }
 
@@ -64,7 +65,12 @@ public sealed class SalesTaxPaymentService(
     public async Task<IReadOnlyDictionary<Guid, decimal>> OwedForPeriodAsync(DateOnly periodEnd, CancellationToken ct = default)
     {
         var owed = await OwedAsync(periodEnd, ct: ct);
-        var paid = (await store.ListPaymentsAsync(null, ct))
+        return LessPaidSince(owed, periodEnd, await store.ListPaymentsAsync(null, ct));
+    }
+
+    private static Dictionary<Guid, decimal> LessPaidSince(IReadOnlyDictionary<Guid, decimal> owed, DateOnly periodEnd, IReadOnlyList<SalesTaxPayment> payments)
+    {
+        var paid = payments
             .Where(p => p.Status == DocumentStatus.Posted && p.PeriodEnd == periodEnd && p.Date > periodEnd)
             .GroupBy(p => p.AgencyId)
             .ToDictionary(g => g.Key, g => g.Sum(p => p.LiabilitySettled));
@@ -78,11 +84,19 @@ public sealed class SalesTaxPaymentService(
     public async Task<IReadOnlyList<ReturnDue>> ReturnsDueAsync(DateOnly today, CancellationToken ct = default)
     {
         var due = new List<ReturnDue>();
+        var active = (await store.ListAgenciesAsync(ct)).Where(a => a.IsActive).ToList();
+        if (active.Count == 0)
+            return due;
         var filed = (await store.ListFilingsAsync(null, ct)).Select(f => (f.AgencyId, f.PeriodTo)).ToHashSet();
-        foreach (var agency in (await store.ListAgenciesAsync(ct)).Where(a => a.IsActive))
+        var payments = await store.ListPaymentsAsync(null, ct);
+        // Agencies filing on the same schedule share a period end, so each balance is read once.
+        var byPeriodEnd = new Dictionary<DateOnly, IReadOnlyDictionary<Guid, decimal>>();
+        foreach (var agency in active)
         {
             var (from, to) = FilingPeriods.LastCompleted(agency.FilingFrequency, today);
-            var owed = (await OwedForPeriodAsync(to, ct)).GetValueOrDefault(agency.Id);
+            if (!byPeriodEnd.TryGetValue(to, out var forPeriod))
+                byPeriodEnd[to] = forPeriod = LessPaidSince(await OwedAsync(to, ct: ct), to, payments);
+            var owed = forPeriod.GetValueOrDefault(agency.Id);
             if (owed > 0m && !filed.Contains((agency.Id, to)))
                 due.Add(new ReturnDue(agency, from, to, agency.DueOn(to), owed));
         }

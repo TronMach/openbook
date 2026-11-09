@@ -115,7 +115,7 @@
     protected override async Task OnInitializedAsync()
     {
         _vendors = await Ops.RunAsync(async sp =>
-            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(s => s.Vendor).ToList());
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListRecordsAsync()).ToList());
         if (PresetVendor is { } preset)
             await LoadAsync(preset);
         _loaded = true;

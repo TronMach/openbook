@@ -85,6 +85,21 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
             .Where(t => t.Before != 0m || t.Through != 0m)
             .ToDictionary(t => t.AccountId, t => (t.Before, t.Through));
 
+    public async Task<IReadOnlyDictionary<Guid, decimal>> GetAccrualBalancesAsync(IReadOnlyCollection<Guid> accountIds, DateOnly toDate, CancellationToken ct)
+    {
+        if (accountIds.Count == 0)
+            return new Dictionary<Guid, decimal>();
+        var ids = accountIds.Distinct().ToList();
+        return (await (
+            from l in db.Set<JournalLine>()
+            join e in db.JournalEntries on EF.Property<Guid>(l, "JournalEntryId") equals e.Id
+            where ids.Contains(l.AccountId) && e.Date <= toDate && e.Basis != EntryBasis.CashOnly
+            group l.Amount by l.AccountId into g
+            select new { AccountId = g.Key, Balance = g.Sum() })
+            .ToListAsync(ct))
+            .ToDictionary(t => t.AccountId, t => t.Balance);
+    }
+
 #pragma warning disable CA1304, CA1311, CA1862 // Translated to SQL lower(): the culture overloads these rules suggest don't translate.
     public async Task<IReadOnlyList<JournalEntry>> SearchManualEntriesAsync(DocumentSearch search, long? number, CancellationToken ct)
     {

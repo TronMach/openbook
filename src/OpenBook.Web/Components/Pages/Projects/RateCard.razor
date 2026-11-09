@@ -218,7 +218,7 @@
             _roles = [.. _roles, editingRole];
         _services = (await ItemService.ListAsync(includeInactive: true))
             .Where(i => (i.IsActive || _rates.Any(r => r.ItemId == i.Id)) && i.Type is ItemType.Service or ItemType.NonInventory).ToList();
-        _customers = (await CustomerService.ListAsync(today, includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
+        _customers = (await CustomerService.ListRecordsAsync(includeInactive: true)).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
         if (TryWorker is { } worker)
         {
             try

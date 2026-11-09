@@ -11,6 +11,9 @@ namespace OpenBook.Application.Sales;
 /// <param name="Level">0 at the top; sub-customers count up from 1.</param>
 /// <param name="FullName">"Parent:Child".</param>
 /// <param name="Credit">Unused credit memos and unapplied payments.</param>
+/// <summary>A customer with its place in the tree and full name ("Parent:Child"), without balances.</summary>
+public sealed record CustomerEntry(Customer Customer, int Level, string FullName);
+
 public sealed record CustomerSummary(Customer Customer, decimal Balance, int OpenInvoices, decimal Overdue, int Level = 0, string? FullName = null, decimal Credit = 0m);
 
 public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPricingStore pricing, ReceivablesService receivables, IClock clock, ICurrentUser user)
@@ -35,6 +38,19 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
             return null;
         var owed = (await ListAsync(CompanyTime.Today, includeInactive: true, ct)).Where(s => CustomerTree.BillTo(s.Customer.Id, byId) == billTo.Id).Sum(s => s.Balance);
         return owed >= limit ? $"{billTo.DisplayName} owes {owed:N2} against a credit limit of {limit:N2}." : null;
+    }
+
+    /// <summary>
+    /// Customers in tree order with their full names, for pickers and names: no balances, so no A/R aging behind it.
+    /// Use <see cref="ListAsync"/> only where balances are shown.
+    /// </summary>
+    public async Task<IReadOnlyList<CustomerEntry>> ListRecordsAsync(bool includeInactive = false, CancellationToken ct = default)
+    {
+        var customers = await store.ListCustomersAsync(ct);
+        var names = CustomerTree.FullNames(customers);
+        return CustomerTree.Ordered(customers.Where(c => includeInactive || c.IsActive))
+            .Select(x => new CustomerEntry(x.Customer, x.Level, names[x.Customer.Id]))
+            .ToList();
     }
 
     public async Task<IReadOnlyList<CustomerSummary>> ListAsync(DateOnly today, bool includeInactive = false, CancellationToken ct = default)

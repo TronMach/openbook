@@ -117,9 +117,9 @@
     protected override async Task OnInitializedAsync()
     {
         _deposits = await Deposits.ListAsync();
-        var all = await Vendors.ListAsync(CompanyTime.Today, includeInactive: true);
-        _names = all.ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
-        _vendors = [.. all.Select(v => v.Vendor).Where(v => v.IsActive)];
+        var all = await Vendors.ListRecordsAsync(includeInactive: true);
+        _names = all.ToDictionary(v => v.Id, v => v.DisplayName);
+        _vendors = [.. all.Where(v => v.IsActive)];
         _chart = await AccountService.GetChartAsync();
         _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
         _orders = (await Orders.ListAsync()).Where(o => o.Status == PurchaseOrderStatus.Open).ToList();

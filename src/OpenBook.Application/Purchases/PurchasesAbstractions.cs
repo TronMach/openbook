@@ -7,6 +7,15 @@ using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Purchases;
 
+/// <summary>The documents A/P aging is worked out from, untracked, with lines.</summary>
+/// <param name="BillsDatedLater">Every bill dated after the aging's date, when <paramref name="Bills"/> leaves them out: money applied to them by then is paid ahead.</param>
+public sealed record PayableDocuments(
+    IReadOnlyList<Bill> Bills,
+    IReadOnlyList<BillPayment> Payments,
+    IReadOnlyList<VendorCredit> Credits,
+    IReadOnlyList<VendorRefund> Refunds,
+    IReadOnlyCollection<Guid>? BillsDatedLater = null);
+
 public interface IPurchasesStore
 {
     /// <summary>Tracked.</summary>
@@ -65,6 +74,13 @@ public interface IPurchasesStore
 
     /// <summary>These vendor credits (those that exist), untracked, with lines.</summary>
     Task<IReadOnlyList<VendorCredit>> FindVendorCreditsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+    /// <summary>
+    /// Only the documents that can matter to A/P aging on the date: bills dated by then that are unpaid now or settled
+    /// by something dated after it, the bill payments by then applied to those or to bills dated later, the vendor
+    /// credits settling those or holding credit on the date, and those credits' refunds.
+    /// </summary>
+    Task<PayableDocuments> ListPayablesAsync(DateOnly asOf, CancellationToken ct);
 
     /// <summary>Posted bills with a balance (<see cref="Bill.IsOpen"/>), untracked, newest first.</summary>
     Task<IReadOnlyList<Bill>> ListOpenBillsAsync(Guid? vendorId, CancellationToken ct);

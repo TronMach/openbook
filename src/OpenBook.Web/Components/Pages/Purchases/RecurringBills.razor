@@ -99,7 +99,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _vendors = (await VendorService.ListAsync(Today, includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        _vendors = (await VendorService.ListRecordsAsync(includeInactive: true)).ToDictionary(v => v.Id, v => v.DisplayName);
         await LoadAsync();
     }
 

@@ -44,13 +44,18 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
     /// </summary>
     public static decimal DefaultThreshold(int year) => year <= 2025 ? 600m : 2000m;
 
-    public async Task<PayablesAgingReport> AgingAsync(DateOnly asOf, CancellationToken ct = default)
+    /// <summary>A/P aging on the date, from only the documents that can be open on it (<see cref="IPurchasesStore.ListPayablesAsync"/>).</summary>
+    public async Task<PayablesAgingReport> AgingAsync(DateOnly asOf, CancellationToken ct = default) =>
+        Aging(await store.ListVendorsAsync(ct), await store.ListPayablesAsync(asOf, ct), asOf);
+
+    /// <summary>The A/P aging worked out from the documents given: every document, or those <see cref="IPurchasesStore.ListPayablesAsync"/> picks.</summary>
+    public static PayablesAgingReport Aging(IReadOnlyList<Vendor> vendors, PayableDocuments documents, DateOnly asOf)
     {
-        var vendors = await store.ListVendorsAsync(ct);
-        var bills = await store.ListBillsAsync(null, ct);
-        var payments = await store.ListPaymentsAsync(null, ct);
-        var credits = await store.ListVendorCreditsAsync(null, ct);
-        var refunds = await store.ListVendorRefundsAsync(null, ct);
+        ArgumentNullException.ThrowIfNull(documents);
+        var bills = documents.Bills;
+        var payments = documents.Payments;
+        var credits = documents.Credits;
+        var refunds = documents.Refunds;
 
         // Settlements by bill up to the as-of date.
         var settled = new Dictionary<Guid, decimal>();
@@ -62,7 +67,7 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
                 settled[a.BillId] = settled.GetValueOrDefault(a.BillId) + a.Amount;
 
         // Paid or credited ahead of a bill dated after the day: money you're owed on it, not a settlement of anything.
-        var later = bills.Where(b => b.Date > asOf).Select(b => b.Id).ToHashSet();
+        var later = (documents.BillsDatedLater ?? bills.Where(b => b.Date > asOf).Select(b => b.Id)).ToHashSet();
         var paidAhead = payments.Where(p => p.Status == DocumentStatus.Posted && p.Date <= asOf)
             .GroupBy(p => p.VendorId)
             .ToDictionary(g => g.Key, g => g.SelectMany(p => p.Applications).Where(a => later.Contains(a.BillId)).Sum(a => a.Amount));

@@ -100,12 +100,12 @@ public sealed class GrantService(
         var grants = await ListAsync(ct);
         if (grants.Count == 0)
             return [];
-        var context = await ContextAsync(asOf, ct);
+        var context = await ContextAsync(asOf, grants.Min(g => g.StartsOn), ct);
         return grants.Select(g => Position(g, context)).ToList();
     }
 
     public async Task<GrantPosition?> PositionAsync(Guid id, DateOnly asOf, CancellationToken ct = default) =>
-        await store.GetGrantAsync(id, ct) is { } grant ? Position(grant, await ContextAsync(asOf, ct)) : null;
+        await store.GetGrantAsync(id, ct) is { } grant ? Position(grant, await ContextAsync(asOf, grant.StartsOn, ct)) : null;
 
     public async Task<Grant> CreateAsync(GrantCommand command, CancellationToken ct = default)
     {
@@ -464,12 +464,10 @@ public sealed class GrantService(
         var reports = grants.SelectMany(g => g.ReportsDue.Where(r => r.SentOn is null && r.DueOn <= today.AddDays(days)).Select(r => (Grant: g, Report: r)))
             .OrderBy(x => x.Report.DueOn).ToList();
         var ending = grants.Where(g => g.EndsOn >= today && g.EndsOn <= today.AddDays(30)).OrderBy(g => g.EndsOn).ToList();
-        var toRecognize = new List<Grant>();
-        foreach (var g in grants.Where(g => g.Conditional))
-        {
-            if ((await PositionAsync(g.Id, today, ct))?.ReadyToRecognize > 0m)
-                toRecognize.Add(g);
-        }
+        // One read of the ledger for all of them: this runs on every visit to the home page.
+        var conditional = grants.Where(g => g.Conditional).ToList();
+        var context = conditional.Count == 0 ? null : await ContextAsync(today, conditional.Min(g => g.StartsOn), ct);
+        var toRecognize = conditional.Where(g => Position(g, context!).ReadyToRecognize > 0m).ToList();
 
         return new GrantReminders(reports, ending, toRecognize, reports.Any(r => r.Report.DueOn < today));
     }
@@ -511,10 +509,11 @@ public sealed class GrantService(
 
     private sealed record Context(ChartOfAccounts Chart, IReadOnlyList<LedgerLine> Expenses, IReadOnlyList<SegmentChoice> Classes, IReadOnlyDictionary<Guid, string> Funders);
 
-    private async Task<Context> ContextAsync(DateOnly asOf, CancellationToken ct)
+    /// <param name="from">The earliest start of the grants asked about: spending only counts from a grant's start.</param>
+    private async Task<Context> ContextAsync(DateOnly asOf, DateOnly from, CancellationToken ct)
     {
         var chart = await accounts.GetChartAsync(ct);
-        var lines = (await ledger.LinesAsync(ReportBasis.Accrual, null, asOf, ct)).Where(l => l.ClassId is not null && chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense).ToList();
+        var lines = (from > asOf ? (IReadOnlyList<LedgerLine>)[] : await ledger.LinesAsync(ReportBasis.Accrual, from, asOf, ct)).Where(l => l.ClassId is not null && chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense).ToList();
         return new Context(chart, lines, await segments.ListAsync(SegmentKind.Class, includeInactive: true, ct),
             (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName));
     }

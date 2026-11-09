@@ -102,6 +102,47 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public async Task<IReadOnlyList<VendorCredit>> FindVendorCreditsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         ids.Count == 0 ? [] : await db.VendorCredits.AsNoTracking().Where(c => ids.Contains(c.Id)).ToListAsync(ct);
 
+    public async Task<PayableDocuments> ListPayablesAsync(DateOnly asOf, CancellationToken ct)
+    {
+        var posted = DocumentStatus.Posted;
+        // Bills settled after the date may have had a balance on it, though they're paid now.
+        var settledLater = new HashSet<Guid>(await db.BillPayments.Where(p => p.Status == posted && p.Date > asOf)
+            .SelectMany(p => p.Applications.Select(a => a.BillId)).ToListAsync(ct));
+        settledLater.UnionWith(await db.VendorCredits.Where(c => c.Status == posted)
+            .SelectMany(c => c.Applications.Where(a => a.AppliedOn > asOf).Select(a => a.BillId)).ToListAsync(ct));
+        var later = settledLater.ToList();
+        var bills = await db.Bills.AsNoTracking()
+            .Where(b => b.Status == posted && b.Date <= asOf && (b.Total != b.AmountPaid || later.Contains(b.Id)))
+            .ToListAsync(ct);
+        var billIds = bills.Select(b => b.Id).ToList();
+
+        // Paid or credited ahead of a bill dated after the day: money owed back on it then, though nothing's unused now.
+        var datedLater = await db.Bills.Where(b => b.Date > asOf).Select(b => b.Id).ToListAsync(ct);
+        var datedLaterQuery = db.Bills.Where(b => b.Date > asOf).Select(b => b.Id);
+
+        // From the applications (indexed by bill) to their documents, rather than every document's applications.
+        var applyingPayments = await db.BillPayments.SelectMany(p => p.Applications)
+            .Where(a => billIds.Contains(a.BillId) || datedLaterQuery.Contains(a.BillId))
+            .Select(a => EF.Property<Guid>(a, "BillPaymentId")).Distinct().ToListAsync(ct);
+        var payments = await db.BillPayments.AsNoTracking()
+            .Where(p => p.Status == posted && p.Date <= asOf && applyingPayments.Contains(p.Id))
+            .ToListAsync(ct);
+
+        var applyingCredits = await db.VendorCredits.SelectMany(c => c.Applications)
+            .Where(a => billIds.Contains(a.BillId))
+            .Select(a => EF.Property<Guid>(a, "VendorCreditId")).Distinct().ToListAsync(ct);
+        var refundedLater = await db.VendorRefunds.Where(r => r.Status == posted && r.Date > asOf).Select(r => r.VendorCreditId).ToListAsync(ct);
+        var credits = await db.VendorCredits.AsNoTracking()
+            .Where(c => c.Status == posted && (applyingCredits.Contains(c.Id) || (c.Date <= asOf
+                && (c.Total - c.Applications.Sum(a => a.Amount) - c.AmountRefunded != 0m
+                    || c.Applications.Any(a => a.AppliedOn > asOf || datedLaterQuery.Contains(a.BillId))
+                    || refundedLater.Contains(c.Id)))))
+            .ToListAsync(ct);
+        var creditIds = credits.Select(c => c.Id).ToList();
+        var refunds = creditIds.Count == 0 ? [] : await db.VendorRefunds.AsNoTracking().Where(r => creditIds.Contains(r.VendorCreditId)).ToListAsync(ct);
+        return new PayableDocuments(bills, payments, credits, refunds, datedLater);
+    }
+
     public async Task<IReadOnlyList<Bill>> ListOpenBillsAsync(Guid? vendorId, CancellationToken ct) =>
         (await db.Bills.AsNoTracking()
             .Where(b => b.Status == DocumentStatus.Posted && b.Total > b.AmountPaid && (vendorId == null || b.VendorId == vendorId))

@@ -79,6 +79,6 @@
         _from = DateOnly.TryParseExact(From, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : Donor is null ? yearStart : new DateOnly(2000, 1, 1);
         _to = DateOnly.TryParseExact(To, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : today;
         _gifts = await GiftService.ListAsync(_from, _to, Donor);
-        _names = (await CustomerService.ListAsync(today)).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
+        _names = (await CustomerService.ListRecordsAsync()).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
     }
 }

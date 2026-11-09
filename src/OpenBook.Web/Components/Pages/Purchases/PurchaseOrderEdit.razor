@@ -154,7 +154,7 @@
         PurchaseOrder? order;
         bool started;
         (_vendors, chart, useNumbers, _items, _number, order, started) = await Ops.RunAsync(async sp => (
-            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListAsync(_date)).Select(s => s.Vendor).ToList(),
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListRecordsAsync()).ToList(),
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
             (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListAsync()).Where(i => i.IsInventory && !i.IsAssembly).ToList(),

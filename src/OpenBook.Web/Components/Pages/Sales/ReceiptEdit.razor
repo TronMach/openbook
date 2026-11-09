@@ -138,7 +138,7 @@
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
             _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_receipt.TaxCodeId, _receipt.Lines));
             (_customers, _items, _chart) = await Ops.RunAsync(async sp => (
-                (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_receipt.Date)).Select(s => s.Customer)
+                (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(s => s.Customer)
                     .Where(c => c.IsActive || c.Id == _receipt.CustomerId).ToList(),
                 await sp.GetRequiredService<ItemService>().ListForDocumentAsync(_receipt.Lines.Select(l => l.ItemId)),
                 await sp.GetRequiredService<AccountService>().GetChartAsync()));

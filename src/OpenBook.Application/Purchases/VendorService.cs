@@ -17,6 +17,15 @@ public sealed class VendorService(IPurchasesStore store, AccountService accounts
 {
     private const string EntityType = "vendor";
 
+    /// <summary>
+    /// Vendors by name, for pickers and names: no balances, so no A/P aging behind it. Use <see cref="ListAsync"/> only
+    /// where balances are shown.
+    /// </summary>
+    public async Task<IReadOnlyList<Vendor>> ListRecordsAsync(bool includeInactive = false, CancellationToken ct = default) =>
+        [.. (await store.ListVendorsAsync(ct))
+            .Where(v => includeInactive || v.IsActive)
+            .OrderBy(v => v.DisplayName, StringComparer.CurrentCultureIgnoreCase)];
+
     /// <param name="today">For working out what's overdue.</param>
     public async Task<IReadOnlyList<VendorSummary>> ListAsync(DateOnly today, bool includeInactive = false, CancellationToken ct = default)
     {

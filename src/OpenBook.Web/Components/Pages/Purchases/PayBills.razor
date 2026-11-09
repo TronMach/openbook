@@ -153,10 +153,10 @@
     {
         var (accounts, vendors, bills) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<BankingService>().ListAccountsAsync(),
-            await sp.GetRequiredService<VendorService>().ListAsync(CompanyTime.Today, includeInactive: true),
+            await sp.GetRequiredService<VendorService>().ListRecordsAsync(includeInactive: true),
             await sp.GetRequiredService<BillPaymentService>().OpenBillsAsync()));
         _accounts = accounts.OrderBy(a => a.Account.Type != AccountType.Bank).ToList();
-        _vendors = vendors.ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        _vendors = vendors.ToDictionary(v => v.Id, v => v.DisplayName);
         _rows = bills.Select(b => new RowModel(b)).ToList();
         if (_accountId == Guid.Empty && _accounts.Count > 0)
             await SetAccountAsync(_accounts[0].Account.Id);

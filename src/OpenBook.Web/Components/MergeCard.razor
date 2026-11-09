@@ -71,8 +71,8 @@
         var today = CompanyTime.Today;
         _choices = Kind switch
         {
-            "customers" => (await Customers.ListAsync(today)).Where(c => c.Customer.Id != Id).Select(c => (c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList(),
-            "vendors" => (await Vendors.ListAsync(today)).Where(v => v.Vendor.Id != Id).Select(v => (v.Vendor.Id, v.Vendor.DisplayName)).ToList(),
+            "customers" => (await Customers.ListRecordsAsync()).Where(c => c.Customer.Id != Id).Select(c => (c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList(),
+            "vendors" => (await Vendors.ListRecordsAsync()).Where(v => v.Id != Id).Select(v => (v.Id, v.DisplayName)).ToList(),
             _ => (await Items.ListAsync()).Where(i => i.Id != Id && !i.IsInventory && !i.IsBundle).Select(i => (i.Id, i.Name)).ToList(),
         };
     }

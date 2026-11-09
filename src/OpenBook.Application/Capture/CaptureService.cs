@@ -250,20 +250,20 @@ public sealed class CaptureService(ICaptureStore store, AuthService auth, IServi
         var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
         var workers = await sp.GetRequiredService<WorkerService>().ListAsync(ct: ct);
         var me = await sp.GetRequiredService<WorkerService>().ForCurrentUserAsync(ct);
-        var customers = await sp.GetRequiredService<CustomerService>().ListAsync(today, ct: ct);
+        var customers = await sp.GetRequiredService<CustomerService>().ListRecordsAsync(ct: ct);
         var items = await sp.GetRequiredService<ItemService>().ListAsync(ct: ct);
         var chart = await sp.GetRequiredService<AccountService>().GetChartAsync(ct);
         var active = chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
-        var vendors = await sp.GetRequiredService<VendorService>().ListAsync(today, ct: ct);
+        var vendors = await sp.GetRequiredService<VendorService>().ListRecordsAsync(ct: ct);
         var rates = await sp.GetRequiredService<MileageService>().RatesAsync(ct);
         return new CaptureLists(
             me?.Id,
             May(CaptureKind.Time, CaptureKind.Mileage) ? workers.Select(w => new CaptureChoice(w.Id, w.Name)).ToList() : [],
-            May(CaptureKind.Time, CaptureKind.Mileage, CaptureKind.Invoice, CaptureKind.Estimate) ? customers.Select(c => new CaptureChoice(c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList() : [],
+            May(CaptureKind.Time, CaptureKind.Mileage, CaptureKind.Invoice, CaptureKind.Estimate) ? customers.Select(c => new CaptureChoice(c.Customer.Id, c.FullName)).ToList() : [],
             May(CaptureKind.Time) ? items.Where(i => i.Type is ItemType.Service or ItemType.NonInventory).Select(i => new CaptureChoice(i.Id, i.Name)).ToList() : [],
             May(CaptureKind.Expense) ? active.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).Select(a => new CaptureChoice(a.Id, chart.FullName(a.Id))).ToList() : [],
             May(CaptureKind.Expense) ? active.Where(a => a.Type.ClassOf() == AccountClass.Expense).Select(a => new CaptureChoice(a.Id, chart.FullName(a.Id))).ToList() : [],
-            May(CaptureKind.Expense, CaptureKind.Receipt) ? vendors.Select(v => new CaptureChoice(v.Vendor.Id, v.Vendor.DisplayName)).ToList() : [],
+            May(CaptureKind.Expense, CaptureKind.Receipt) ? vendors.Select(v => new CaptureChoice(v.Id, v.DisplayName)).ToList() : [],
             May(CaptureKind.Invoice, CaptureKind.Estimate) ? items.Select(i => new CaptureChoice(i.Id, i.Name)).ToList() : [],
             rates.GetValueOrDefault(today.Year),
             clock.UtcNow);

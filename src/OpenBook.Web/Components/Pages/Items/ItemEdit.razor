@@ -582,7 +582,7 @@
                 PreferredVendorId = _item.PreferredVendorId, ReorderQuantity = _item.ReorderQuantity, LeadTimeDays = _item.LeadTimeDays,
             };
         Input.Version ??= opened;
-        _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).Select(v => v.Vendor)
+        _vendors = (await VendorService.ListRecordsAsync(includeInactive: true))
             .Where(v => v.IsActive || v.Id == _item?.PreferredVendorId).ToList();
     }
 

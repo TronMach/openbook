@@ -137,7 +137,7 @@
         SalesOrder? order;
         bool invoiced;
         (_customers, _items, _number, order, invoiced) = await Ops.RunAsync(async sp => (
-            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(_date)).Select(s => s.Customer).ToList(),
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<SalesOrderService>().SuggestNumberAsync(),
             Id is { } id ? await sp.GetRequiredService<SalesOrderService>().GetAsync(id) : null,

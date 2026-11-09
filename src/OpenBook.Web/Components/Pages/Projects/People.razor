@@ -153,7 +153,7 @@
         _seesCosts = AuthState is not null && (await AuthState).User.CanPost("/time/people");
         _workers = await WorkerService.ListAsync(includeInactive: true);
         _editing = _workers.FirstOrDefault(w => w.Id == Edit);
-        _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).Select(v => v.Vendor).ToList();
+        _vendors = (await VendorService.ListRecordsAsync(includeInactive: true)).ToList();
         _users = (await UserService.ListAsync()).Where(u => u.IsActive).Select(u => u.Username).ToList();
     }
 }

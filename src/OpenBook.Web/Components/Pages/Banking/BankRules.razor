@@ -62,6 +62,6 @@
     {
         _rules = await Rules.ListAsync();
         _chart = await AccountService.GetChartAsync();
-        _vendors = (await VendorService.ListAsync(CompanyTime.Today, includeInactive: true)).ToDictionary(v => v.Vendor.Id, v => v.Vendor.DisplayName);
+        _vendors = (await VendorService.ListRecordsAsync(includeInactive: true)).ToDictionary(v => v.Id, v => v.DisplayName);
     }
 }

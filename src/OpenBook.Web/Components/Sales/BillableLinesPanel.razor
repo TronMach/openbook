@@ -97,7 +97,7 @@
 
 @code {
     private IReadOnlyList<BillableLine> _lines = [];
-    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyList<CustomerEntry> _customers = [];
     private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
 
     [Parameter, EditorRequired] public BillableSource Kind { get; set; }
@@ -123,7 +123,7 @@
             _lines = [];
         }
 
-        _customers = await CustomerService.ListAsync(CompanyTime.Today);
+        _customers = await CustomerService.ListRecordsAsync();
         _names = await CustomerService.FullNamesAsync();
     }
 }

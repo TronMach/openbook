@@ -136,7 +136,7 @@
 @code {
     private Donation? _gift;
     private int? _version;
-    private IReadOnlyList<CustomerSummary> _donors = [];
+    private IReadOnlyList<CustomerEntry> _donors = [];
     private List<Account> _accounts = [];
     private List<Account> _income = [];
     private IReadOnlyList<SegmentChoice> _classes = [];
@@ -152,7 +152,7 @@
         _gift = await Gifts.GetAsync(Id);
         if (_gift is null)
             return;
-        _donors = await CustomerService.ListAsync(CompanyTime.Today);
+        _donors = await CustomerService.ListRecordsAsync();
         _chart = await AccountService.GetChartAsync();
         var g = _gift;
         var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.IsActive || a.Id == g.DebitAccountId || a.Id == g.IncomeAccountId).ToList();

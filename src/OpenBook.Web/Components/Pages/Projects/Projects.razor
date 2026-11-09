@@ -108,7 +108,7 @@
 
 @code {
     private IReadOnlyList<ProjectFigures> _figures = [];
-    private IReadOnlyList<CustomerSummary> _customers = [];
+    private IReadOnlyList<CustomerEntry> _customers = [];
     private HashSet<Guid> _projectCustomers = [];
 
     [SupplyParameterFromQuery] private bool Closed { get; set; }
@@ -119,6 +119,6 @@
         var all = await Reports.ProfitabilityAsync(null, DateOnly.MaxValue);
         _projectCustomers = all.Select(f => f.Project.Customer.Id).ToHashSet();
         _figures = all.Where(f => Closed || f.Project.Project.IsOpen).ToList();
-        _customers = await CustomerService.ListAsync(CompanyTime.Today);
+        _customers = await CustomerService.ListRecordsAsync();
     }
 }

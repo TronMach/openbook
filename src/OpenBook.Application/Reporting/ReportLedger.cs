@@ -112,6 +112,21 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         return [.. history, .. period];
     }
 
+    /// <summary>
+    /// These accounts' balances (debit-positive) through the date, for figures that need a few accounts rather than a
+    /// report: on the accrual basis the database adds up only their lines.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, decimal>> BalancesAsync(ReportBasis basis, IReadOnlyCollection<Guid> accountIds, DateOnly asOf, CancellationToken ct = default)
+    {
+        if (basis == ReportBasis.Accrual)
+            return await ledger.GetAccrualBalancesAsync(accountIds, asOf, ct);
+        var wanted = accountIds.ToHashSet();
+        return (await TotalsAsync(basis, asOf, asOf, ct))
+            .Where(l => wanted.Contains(l.AccountId))
+            .GroupBy(l => l.AccountId)
+            .ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
+    }
+
     private static LedgerLine BroughtForward(DateOnly date, Guid accountId, decimal amount, Guid? classId, Guid? locationId) =>
         new(Guid.Empty, Guid.Empty, 0, date, accountId, amount, null, "Brought forward", BroughtForwardSource, null, EntryBasis.Both, classId, locationId);
 

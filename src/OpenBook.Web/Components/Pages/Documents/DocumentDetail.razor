@@ -413,9 +413,9 @@
         _linesTotal = _document.Lines.Any(l => l.Amount is not null) ? _document.Lines.Sum(l => l.Amount ?? 0m) : null;
 
         var today = CompanyTime.Today;
-        var vendors = (await VendorService.ListAsync(today)).Select(v => (v.Vendor.Id, v.Vendor.DisplayName)).ToList();
+        var vendors = (await VendorService.ListRecordsAsync()).Select(v => (v.Id, v.DisplayName)).ToList();
         _names = vendors.ToDictionary(v => v.Id, v => v.DisplayName);
-        _parties = _fromVendor ? vendors : (await CustomerService.ListAsync(today)).Select(c => (c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList();
+        _parties = _fromVendor ? vendors : (await CustomerService.ListRecordsAsync()).Select(c => (c.Customer.Id, c.FullName ?? c.Customer.DisplayName)).ToList();
         _items = (await ItemService.ListAsync()).Where(i => i.IsActive || _document.Lines.Any(l => l.ItemId == i.Id)).OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
         if (_fromVendor)
         {

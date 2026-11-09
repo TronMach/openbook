@@ -154,7 +154,7 @@
             _version = await Ops.VersionAsync<RecurringInvoice>(versionOf);
         RecurringInvoice? template;
         (_customers, _items, template) = await Ops.RunAsync(async sp => (
-            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListAsync(CompanyTime.Today)).Select(s => s.Customer).ToList(),
+            (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
             Id is { } id ? await sp.GetRequiredService<RecurringInvoiceService>().GetAsync(id) : null));
 

@@ -165,7 +165,7 @@
     protected override async Task OnInitializedAsync()
     {
         _items = await Items.ListAsync();
-        _customers = (await Customers.ListAsync(CompanyTime.Today)).Select(c => c.Customer).ToList();
+        _customers = (await Customers.ListRecordsAsync()).Select(c => c.Customer).ToList();
         _levels = await Pricing.ListLevelsAsync(includeInactive: false);
         if (Id is { } id)
         {
@@ -176,7 +176,7 @@
             // What the rule names stays listed even if it's inactive, or saving would drop it (and a rule left with no items covers every item).
             var chosen = _rule.TargetIds(RuleTargetKind.Item).ToHashSet();
             _items = [.. _items, .. (await Items.ListAsync(includeInactive: true)).Where(i => !i.IsActive && chosen.Contains(i.Id))];
-            _customers = [.. _customers, .. (await Customers.ListAsync(CompanyTime.Today, includeInactive: true)).Select(c => c.Customer).Where(c => !c.IsActive && targets.Contains(c.Id))];
+            _customers = [.. _customers, .. (await Customers.ListRecordsAsync(includeInactive: true)).Select(c => c.Customer).Where(c => !c.IsActive && targets.Contains(c.Id))];
             _levels = [.. _levels, .. (await Pricing.ListLevelsAsync(includeInactive: true)).Where(l => !l.IsActive && targets.Contains(l.Id))];
             Input ??= new RuleModel
             {

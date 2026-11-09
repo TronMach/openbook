@@ -137,7 +137,7 @@
         _today = CompanyTime.Today;
         var outlook = await Reorder.OutlookAsync();
         _rows = outlook.Where(o => !o.Item.IsAssembly && (All || o.NeedsReorder)).ToList();
-        _vendors = (await Vendors.ListAsync(_today)).Select(v => v.Vendor).ToList();
+        _vendors = (await Vendors.ListRecordsAsync()).ToList();
         _warehouses = await WarehouseService.ListAsync();
         foreach (var part in (Made ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(ReorderService.MaxLines))
         {

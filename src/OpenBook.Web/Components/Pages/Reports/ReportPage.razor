@@ -233,7 +233,7 @@
         _year = _parameters.GetNumber("year") ?? (_definition.Key.StartsWith("1099", StringComparison.Ordinal) ? today.Year - 1 : today.Year);
         if (Has(ReportInputs.PriceFor))
         {
-            _customers = (await Customers.ListAsync(today)).Select(c => c.Customer).ToList();
+            _customers = (await Customers.ListRecordsAsync()).Select(c => c.Customer).ToList();
             _levels = await Pricing.ListLevelsAsync();
         }
 
