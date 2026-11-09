@@ -158,7 +158,7 @@
         // The chosen one, else the first in the list, so the page always shows something.
         _selected = (Id is { } id ? _all.FirstOrDefault(i => i.Id == id) : null) ?? _shown.FirstOrDefault();
         if (_selected is not null)
-            _rows = await Centers.ItemAsync(_selected.Id, HttpContext.RequestAborted);
+            _rows = await Centers.ItemAsync(_selected.Id, CenterTransactions.Since(Dates), HttpContext.RequestAborted);
     }
 
     private string Link(Guid id) =>

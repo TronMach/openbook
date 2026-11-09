@@ -88,11 +88,11 @@ public sealed class NexusService(ISalesTaxStore store, ISalesStore sales, Channe
             totals[state.ToUpperInvariant()] = (sum + amount, n + count);
         }
 
-        foreach (var i in (await sales.ListInvoicesAsync(null, ct)).Where(i => i.Status == DocumentStatus.Posted && InRange(i.Date)))
+        foreach (var i in (await sales.ListInvoicesDatedAsync(from, to, ct)).Where(i => i.Status == DocumentStatus.Posted))
             Add(StateOf(i.CustomerId), TaxCalculator.SalesAmount(i.Lines), 1);
-        foreach (var r in (await sales.ListReceiptsAsync(ct)).Where(r => r.Status == DocumentStatus.Posted && InRange(r.Date)))
+        foreach (var r in (await sales.ListReceiptsDatedAsync(from, to, ct)).Where(r => r.Status == DocumentStatus.Posted))
             Add(StateOf(r.CustomerId), TaxCalculator.SalesAmount(r.Lines), 1);
-        foreach (var c in (await sales.ListCreditMemosAsync(null, ct)).Where(c => c.Status == DocumentStatus.Posted && InRange(c.Date)))
+        foreach (var c in (await sales.ListCreditMemosDatedAsync(from, to, ct)).Where(c => c.Status == DocumentStatus.Posted))
             Add(StateOf(c.CustomerId), -TaxCalculator.SalesAmount(c.Lines), 0);
         foreach (var line in (await channels.ListPayoutsAsync(null, ct)).Where(p => p.Status == Domain.Channels.PayoutStatus.Posted && InRange(p.Date)).SelectMany(p => p.Lines)
                      .Where(l => l.Type is Domain.Channels.ChannelLineType.Sale or Domain.Channels.ChannelLineType.Shipping or Domain.Channels.ChannelLineType.Refund))

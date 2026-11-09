@@ -1,4 +1,5 @@
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
@@ -49,6 +50,9 @@ public interface IPurchasesStore
 
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<Bill>> ListBillsAsync(Guid? vendorId, CancellationToken ct);
+
+    /// <summary>Posted bills waiting for approval or rejected, untracked.</summary>
+    Task<IReadOnlyList<Bill>> ListBillsAwaitingApprovalAsync(CancellationToken ct);
 
     Task<bool> AnyBillsAsync(CancellationToken ct);
 
@@ -112,6 +116,12 @@ public interface IPurchasesStore
     Task<BillPayment?> GetPaymentAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<BillPayment>> ListPaymentsAsync(Guid? vendorId, CancellationToken ct);
 
+    /// <summary>Posted bill payments from the account that are in no ACH file and not printed, untracked.</summary>
+    Task<IReadOnlyList<BillPayment>> ListPaymentsForAchAsync(Guid accountId, CancellationToken ct);
+
+    /// <summary>Bill payments in an ACH file (that one, or any with null), whatever their status, untracked.</summary>
+    Task<IReadOnlyList<BillPayment>> ListPaymentsInAchFilesAsync(Guid? batchId, CancellationToken ct);
+
     /// <summary>Posted bill payments not sent by ACH: what can be a check.</summary>
     Task<IReadOnlyList<BillPayment>> ListCheckPaymentsAsync(CancellationToken ct);
     Task<IReadOnlyList<BillPayment>> ListPaymentsForBillAsync(Guid billId, CancellationToken ct);
@@ -128,13 +138,17 @@ public interface IPurchasesStore
     /// <summary>Untracked, newest first.</summary>
     Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct);
 
+    /// <summary>Purchase orders dated in the range, whatever their status, untracked, newest first.</summary>
+    Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
+
     Task<IReadOnlyList<PurchaseOrder>> ListOpenPurchaseOrdersAsync(CancellationToken ct);
 
     Task<bool> AnyPurchaseOrdersAsync(CancellationToken ct);
 
     Task<int> CountNewReceiptsAsync(CancellationToken ct);
 
-    Task<IReadOnlyList<Bill>> ListBillsWithItemAsync(Guid itemId, CancellationToken ct);
+    /// <summary>Bills with a line for the item dated from <paramref name="since"/> (null: all): headings (number = the bill's reference) and that item's lines added up.</summary>
+    Task<IReadOnlyList<ItemDocumentRow<DocumentStatus>>> ListBillsWithItemAsync(Guid itemId, DateOnly? since, CancellationToken ct);
 
     /// <summary>What posted payments settled of these bills (null: of every bill), whatever their dates, for splitting each in turn.</summary>
     Task<IReadOnlyList<DocumentSettlement>> ListPaymentSettlementsAsync(IReadOnlyCollection<Guid>? billIds, CancellationToken ct);
@@ -143,7 +157,8 @@ public interface IPurchasesStore
 
     Task<IReadOnlyList<VendorRefund>> ListPostedRefundsOfVendorCreditsAsync(IReadOnlyCollection<Guid> vendorCreditIds, CancellationToken ct);
 
-    Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersWithItemAsync(Guid itemId, CancellationToken ct);
+    /// <summary>Purchase orders with a line for the item dated from <paramref name="since"/> (null: all): headings and that item's lines (quantity × unit cost, each to the cent) added up.</summary>
+    Task<IReadOnlyList<ItemDocumentRow<PurchaseOrderStatus>>> ListPurchaseOrdersWithItemAsync(Guid itemId, DateOnly? since, CancellationToken ct);
 
     Task<IReadOnlyList<string>> ListPurchaseOrderNumbersAsync(CancellationToken ct);
 

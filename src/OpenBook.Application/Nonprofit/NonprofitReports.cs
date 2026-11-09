@@ -28,15 +28,17 @@ public sealed class NonprofitReports(
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var all = await ledger.LinesAsync(reportBasis, null, to, filter, ct);
+        // A comparative statement: the earlier period's total beside this one's columns.
+        var earlier = comparison == Comparison.None ? null : Comparisons.Columns(from, to, comparison)[1];
+        // History before the periods is only net assets: folded into one line per account (added up by the database on accrual).
+        var detailFrom = earlier is null || earlier.From > from ? from : earlier.From;
+        var all = await ledger.LinesSinceAsync(reportBasis, detailFrom, to, filter, ct);
         var period = all.Where(l => l.Date >= from && !chart.Get(l.AccountId).Type.IsBalanceSheet()).ToList();
 
         var free = FinancialReports.Sum(period.Where(l => !chart.Get(l.AccountId).DonorRestricted));
         var held = FinancialReports.Sum(period.Where(l => chart.Get(l.AccountId).DonorRestricted));
         var total = FinancialReports.Sum(period);
 
-        // A comparative statement: the earlier period's total beside this one's columns.
-        var earlier = comparison == Comparison.None ? null : Comparisons.Columns(from, to, comparison)[1];
         var before = earlier is null ? null : FinancialReports.Sum(all.Where(l => l.Date >= earlier.From && l.Date <= earlier.To && !chart.Get(l.AccountId).Type.IsBalanceSheet()));
         var show = before is null ? Active(free, held, total) : Active(free, held, total, before);
         var columns = new[] { (Without, free, from, to), (With, held, from, to), ("Total", total, from, to) }
@@ -75,7 +77,6 @@ public sealed class NonprofitReports(
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = await ledger.LinesAsync(reportBasis, null, asOf, ct);
         static DateOnly MonthEnd(DateOnly d) => new DateOnly(d.Year, d.Month, 1).AddMonths(1).AddDays(-1);
         var isMonthEnd = asOf == MonthEnd(asOf);
         DateOnly[] dates = comparison switch
@@ -84,6 +85,8 @@ public sealed class NonprofitReports(
             Comparison.PreviousYear => [asOf, isMonthEnd ? MonthEnd(asOf.AddYears(-1)) : asOf.AddYears(-1)],
             _ => [asOf],
         };
+        // Years before the earliest column's fiscal year are only retained earnings: folded (added up by the database on accrual).
+        var lines = await ledger.LinesSinceAsync(reportBasis, dates.Min(d => company.FiscalYearStart(d)), asOf, ct: ct);
 
         var columnLines = dates.Select(d => (IReadOnlyList<LedgerLine>)lines.Where(l => l.Date <= d).ToList()).ToList();
         var boardDesignated = chart.All.Where(a => a.Type == AccountType.Equity && !a.DonorRestricted && IsBoardDesignated(chart.FullName(a.Id))).Select(a => a.Id).ToHashSet();
@@ -346,7 +349,7 @@ public sealed class NonprofitReports(
         var company = await companies.GetRequiredCompanyAsync(ct);
         var reportBasis = basis ?? company.DefaultReportBasis;
         var chart = await accounts.GetChartAsync(ct);
-        var lines = await ledger.LinesAsync(reportBasis, null, to, ct);
+        var lines = await ledger.LinesSinceAsync(reportBasis, from, to, ct: ct);
         var (openFree, openHeld) = NetAssets(chart, lines.Where(l => l.Date < from));
         var (endFree, endHeld) = NetAssets(chart, lines);
         var released = lines.Where(l => l.Date >= from && l.Source == RestrictionRelease.Source && chart.Get(l.AccountId).DonorRestricted).Sum(l => l.Amount);

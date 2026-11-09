@@ -117,47 +117,31 @@ public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, 
     /// Documents with a line for the item (quantity and amount summed over its lines), and the stock movements of
     /// anything else that moved it (adjustments, builds, transfers, channel orders), at their cost.
     /// </summary>
-    public async Task<IReadOnlyList<CenterRow>> ItemAsync(Guid itemId, CancellationToken ct = default)
+    /// <param name="since">Only what's dated from then (null: everything).</param>
+    public async Task<IReadOnlyList<CenterRow>> ItemAsync(Guid itemId, DateOnly? since = null, CancellationToken ct = default)
     {
         var rows = new List<CenterRow>();
-        void Sold(string type, Guid id, DateOnly date, string? number, string? memo, IEnumerable<SalesLine> lines, CenterState state)
+        void Sold<TStatus>(string type, IEnumerable<ItemDocumentRow<TStatus>> documents, Func<TStatus, CenterState> state)
         {
-            var mine = lines.Where(l => l.ItemId == itemId).ToList();
-            if (mine.Count > 0)
-                rows.Add(new(type, id, date, number, memo, mine.Sum(l => l.Amount), null, state, mine.Sum(l => l.Quantity)));
+            foreach (var d in documents)
+                rows.Add(new(type, d.Id, d.Date, d.Number, d.Memo, d.Amount, null, state(d.Status), d.Quantity));
         }
 
-        var documents = await sales.ListDocumentsWithItemAsync(itemId, ct);
-        foreach (var i in documents.Invoices)
-            Sold(InvoiceType, i.Id, i.Date, i.Number, i.Memo, i.Lines, Posted(i.Status));
-        foreach (var r in documents.Receipts)
-            Sold("sales_receipt", r.Id, r.Date, r.Number, r.Memo, r.Lines, Posted(r.Status));
-        foreach (var c in documents.CreditMemos)
-            Sold("credit_memo", c.Id, c.Date, c.Number, c.Memo, c.Lines, Posted(c.Status));
-        foreach (var e in documents.Estimates)
-            Sold("estimate", e.Id, e.Date, e.Number, e.Memo, e.Lines, e.Status == EstimateStatus.Closed ? CenterState.Closed : CenterState.Pending);
-        foreach (var o in documents.Orders)
-            Sold("sales_order", o.Id, o.Date, o.Number, o.Memo, o.Lines, Order(o.Status == SalesOrderStatus.Open, o.Status == SalesOrderStatus.Cancelled));
-
-        foreach (var b in await purchases.ListBillsWithItemAsync(itemId, ct))
-        {
-            var mine = b.Lines.Where(l => l.ItemId == itemId).ToList();
-            if (mine.Count > 0)
-                rows.Add(new("bill", b.Id, b.Date, b.Reference, b.Memo, mine.Sum(l => l.Amount), null, Posted(b.Status), mine.Sum(l => l.Quantity ?? 0m)));
-        }
-
-        foreach (var o in await purchases.ListPurchaseOrdersWithItemAsync(itemId, ct))
-        {
-            var mine = o.Lines.Where(l => l.ItemId == itemId).ToList();
-            if (mine.Count > 0)
-                rows.Add(new("purchase_order", o.Id, o.Date, o.Number, o.Memo, mine.Sum(l => decimal.Round(l.Quantity * l.UnitCost, 2, MidpointRounding.AwayFromZero)), null,
-                    Order(o.Status == PurchaseOrderStatus.Open, o.Status == PurchaseOrderStatus.Cancelled), mine.Sum(l => l.Quantity)));
-        }
+        var documents = await sales.ListDocumentsWithItemAsync(itemId, since, ct);
+        Sold(InvoiceType, documents.Invoices, Posted);
+        Sold("sales_receipt", documents.Receipts, Posted);
+        Sold("credit_memo", documents.CreditMemos, Posted);
+        Sold("estimate", documents.Estimates, s => s == EstimateStatus.Closed ? CenterState.Closed : CenterState.Pending);
+        Sold("sales_order", documents.Orders, s => Order(s == SalesOrderStatus.Open, s == SalesOrderStatus.Cancelled));
+        Sold("bill", await purchases.ListBillsWithItemAsync(itemId, since, ct), Posted);
+        Sold("purchase_order", await purchases.ListPurchaseOrdersWithItemAsync(itemId, since, ct),
+            s => Order(s == PurchaseOrderStatus.Open, s == PurchaseOrderStatus.Cancelled));
 
         // Documents above already show their own quantities; the rest of the stock ledger shows by source.
         // A component sold in a bundle moved on a document with no line of its own, so that one shows here too.
         var shown = rows.Select(r => (r.EntityType, r.Id)).ToHashSet();
-        foreach (var source in (await inventory.ListMovementsAsync(itemId, ct)).Where(m => !shown.Contains((m.SourceType, m.SourceId))).GroupBy(m => (m.SourceType, m.SourceId)))
+        foreach (var source in (await inventory.ListMovementsAsync(itemId, ct)).Where(m => !shown.Contains((m.SourceType, m.SourceId)))
+                     .GroupBy(m => (m.SourceType, m.SourceId)).Where(g => since is null || g.Min(m => m.Date) >= since))
         {
             var quantity = source.Sum(m => m.Quantity);
             var cost = source.Sum(m => m.Cost);

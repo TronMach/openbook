@@ -25,23 +25,16 @@ public sealed class AuditLogQuery(ILedgerStore store)
     public async Task<AuditPage> QueryAsync(AuditFilter filter, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        var all = await store.ListAuditAsync(null, null, null, ct);
-        var matching = all
-            .Where(r => filter.EntityType is null || r.EntityType == filter.EntityType)
-            .Where(r => filter.EntityId is null || r.EntityId == filter.EntityId)
-            .Where(r => filter.Actor is null || r.Actor == filter.Actor)
-            .Where(r => filter.From is null || CompanyTime.TodayAt(r.OccurredAt, CompanyTime.Zone) >= filter.From)
-            .Where(r => filter.To is null || CompanyTime.TodayAt(r.OccurredAt, CompanyTime.Zone) <= filter.To)
-            .ToList();
-
-        var page = matching.Skip(filter.Skip).Take(Math.Clamp(filter.Take, 1, 500))
-            .Select(r => new AuditEntry(r, Changes(r.Before, r.After)))
-            .ToList();
-        return new AuditPage(
-            page,
-            matching.Count,
-            all.Select(r => r.EntityType).Distinct().Order().ToList(),
-            all.Select(r => r.Actor).Distinct().Order().ToList());
+        // Filtered and paged by the database: the log grows with every save.
+        Func<DateTimeOffset, bool>? when = filter.From is null && filter.To is null ? null : at =>
+        {
+            var day = CompanyTime.TodayAt(at, CompanyTime.Zone);
+            return (filter.From is null || day >= filter.From) && (filter.To is null || day <= filter.To);
+        };
+        var (rows, total) = await store.PageAuditAsync(filter.EntityType, filter.EntityId, filter.Actor, when,
+            Math.Max(0, filter.Skip), Math.Clamp(filter.Take, 1, 500), ct);
+        var (entityTypes, actors) = await store.AuditChoicesAsync(ct);
+        return new AuditPage([.. rows.Select(r => new AuditEntry(r, Changes(r.Before, r.After)))], total, entityTypes, actors);
     }
 
     /// <summary>Top-level fields whose JSON differs between the snapshots; every field for a creation.</summary>

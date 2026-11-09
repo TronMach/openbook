@@ -46,31 +46,34 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
 
         bool InRange(DateOnly d) => d >= from && d <= to;
         var documents = new List<(IReadOnlyList<SalesLine> Lines, bool Exempt, decimal Sign)>();
-        var invoices = (await sales.ListInvoicesAsync(null, ct)).Where(i => i.Status == DocumentStatus.Posted).ToList();
-        var memos = (await sales.ListCreditMemosAsync(null, ct)).Where(c => c.Status == DocumentStatus.Posted).ToList();
         if (basis == ReportBasis.Cash)
         {
+            // From the money in the period to the documents it paid, rather than every document.
             var settled = new Dictionary<Guid, decimal>();
-            foreach (var p in (await sales.ListPaymentsAsync(null, ct)).Where(p => p.Status == DocumentStatus.Posted && InRange(p.Date) && p.StandsOn(to)))
+            foreach (var p in (await sales.ListPostedPaymentsAsync(from, to, ct)).Where(p => p.StandsOn(to)))
                 foreach (var a in p.Applications)
                     settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Settled;
             foreach (var r in await sales.ListRetainersAsync(null, ct))
                 foreach (var a in r.Applications.Where(a => !a.IsVoided && InRange(a.AppliedOn)))
                     settled[a.InvoiceId] = settled.GetValueOrDefault(a.InvoiceId) + a.Amount;
+            var invoices = (await sales.FindInvoicesAsync(settled.Keys, ct)).Where(i => i.Status == DocumentStatus.Posted);
             documents.AddRange(invoices.Where(i => settled.ContainsKey(i.Id) && i.Total != 0m)
                 .Select(i => (i.Lines, i.TaxExemption is not null, Math.Min(1m, settled[i.Id] / i.Total))));
-            var refunded = (await sales.ListRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && r.CreditMemoId is not null && InRange(r.Date))
+            var refunded = (await sales.ListPostedRefundsAsync(from, to, ct)).Where(r => r.CreditMemoId is not null)
                 .GroupBy(r => r.CreditMemoId!.Value).ToDictionary(g => g.Key, g => g.Sum(r => r.Amount));
+            var memos = (await sales.FindCreditMemosAsync(refunded.Keys, ct)).Where(c => c.Status == DocumentStatus.Posted);
             documents.AddRange(memos.Where(c => refunded.ContainsKey(c.Id) && c.Total != 0m)
                 .Select(c => (c.Lines, c.TaxExemption is not null, -Math.Min(1m, refunded[c.Id] / c.Total))));
         }
         else
         {
-            documents.AddRange(invoices.Where(i => InRange(i.Date)).Select(i => (i.Lines, i.TaxExemption is not null, 1m)));
-            documents.AddRange(memos.Where(c => InRange(c.Date)).Select(c => (c.Lines, c.TaxExemption is not null, -1m)));
+            documents.AddRange((await sales.ListInvoicesDatedAsync(from, to, ct)).Where(i => i.Status == DocumentStatus.Posted)
+                .Select(i => (i.Lines, i.TaxExemption is not null, 1m)));
+            documents.AddRange((await sales.ListCreditMemosDatedAsync(from, to, ct)).Where(c => c.Status == DocumentStatus.Posted)
+                .Select(c => (c.Lines, c.TaxExemption is not null, -1m)));
         }
 
-        documents.AddRange((await sales.ListReceiptsAsync(ct)).Where(r => r.Status == DocumentStatus.Posted && InRange(r.Date))
+        documents.AddRange((await sales.ListReceiptsDatedAsync(from, to, ct)).Where(r => r.Status == DocumentStatus.Posted)
             .Select(r => (r.Lines, r.TaxExemption is not null, 1m)));
         static decimal Cents(decimal amount) => decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
 

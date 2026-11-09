@@ -85,6 +85,9 @@ public sealed class NonprofitService(
     {
         var chart = await accounts.GetChartAsync(ct);
         var releasedFrom = FindReleaseAccount(chart, restricted: true)?.Id;
+        // Nothing restricted, nothing held: most companies, so the ledger isn't read for them.
+        if (releasedFrom is null && !chart.All.Any(a => a.DonorRestricted))
+            return [];
         var names = await segments.NamesAsync(ct);
         var lines = await ledger.LinesAsync(ReportBasis.Accrual, null, asOf, ct);
 

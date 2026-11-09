@@ -133,11 +133,57 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
             .AsNoTracking()
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<LedgerLine>> GetLinesByIdAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken ct)
+    {
+        if (lineIds.Count == 0)
+            return [];
+        var ids = lineIds.Distinct().ToList();
+        return await (
+            from l in db.Set<JournalLine>()
+            join e in db.JournalEntries on EF.Property<Guid>(l, "JournalEntryId") equals e.Id
+            from s in db.LineSegments.Where(s => s.JournalLineId == l.Id).DefaultIfEmpty()
+            where ids.Contains(l.Id)
+            orderby e.Date, e.Number, l.LineNumber
+            select new LedgerLine(l.Id, e.Id, e.Number, e.Date, l.AccountId, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Basis,
+                s == null ? null : s.ClassId, s == null ? null : s.LocationId))
+            .AsNoTracking()
+            .ToListAsync(ct);
+    }
+
+    public async Task<DateOnly?> FirstEntryDateAsync(CancellationToken ct) =>
+        await db.JournalEntries.MinAsync(e => (DateOnly?)e.Date, ct);
+
     public async Task<IReadOnlyList<RecurringEntry>> ListRecurringAsync(CancellationToken ct) =>
         (await db.RecurringEntries.ToListAsync(ct)).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 
     public Task<RecurringEntry?> GetRecurringAsync(Guid id, CancellationToken ct) =>
         db.RecurringEntries.SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    public async Task<(IReadOnlyList<AuditRecord> Page, int Total)> PageAuditAsync(
+        string? entityType, Guid? entityId, string? actor, Func<DateTimeOffset, bool>? occurredOn, int skip, int take, CancellationToken ct)
+    {
+        var matching = db.AuditRecords.AsNoTracking()
+            .Where(r => (entityType == null || r.EntityType == entityType)
+                && (entityId == null || r.EntityId == entityId)
+                && (actor == null || r.Actor == actor));
+        if (occurredOn is null)
+        {
+            var total = await matching.CountAsync(ct);
+            var page = await matching.OrderByDescending(r => r.Id).Skip(skip).Take(take).ToListAsync(ct);
+            return (page, total);
+        }
+
+        // SQLite can't compare the DateTimeOffset timestamp, so the dates are checked here, on the id and time only.
+        var ids = (await matching.Select(r => new { r.Id, r.OccurredAt }).ToListAsync(ct))
+            .Where(r => occurredOn(r.OccurredAt)).Select(r => r.Id).OrderDescending().ToList();
+        var chosen = ids.Skip(skip).Take(take).ToList();
+        var rows = chosen.Count == 0 ? [] : await db.AuditRecords.AsNoTracking().Where(r => chosen.Contains(r.Id)).ToListAsync(ct);
+        return ([.. rows.OrderByDescending(r => r.Id)], ids.Count);
+    }
+
+    public async Task<(IReadOnlyList<string> EntityTypes, IReadOnlyList<string> Actors)> AuditChoicesAsync(CancellationToken ct) =>
+        ((await db.AuditRecords.Select(r => r.EntityType).Distinct().ToListAsync(ct)).Order().ToList(),
+         (await db.AuditRecords.Select(r => r.Actor).Distinct().ToListAsync(ct)).Order().ToList());
 
     // Ordered by the sequential id: SQLite can't ORDER BY the DateTimeOffset timestamp.
     public async Task<IReadOnlyList<AuditRecord>> ListAuditAsync(string? entityType, Guid? entityId, string? actor, CancellationToken ct) =>

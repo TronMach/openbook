@@ -21,16 +21,35 @@ public sealed record ReceivableDocuments(
     IReadOnlyList<Retainer> Retainers,
     IReadOnlyCollection<Guid>? InvoicesDatedLater = null);
 
+/// <summary>A document with lines for one item: its heading and those lines added up (amount and quantity).</summary>
+public sealed record ItemDocumentRow<TStatus>(Guid Id, DateOnly Date, string? Number, string? Memo, TStatus Status, decimal Amount, decimal Quantity);
+
+/// <summary>One line of a document for an item, read without the rest of the document.</summary>
+public sealed record ItemLinePart(Guid DocumentId, decimal Amount, decimal Quantity);
+
 /// <summary>The sales documents with a line for one item, for a page about that item.</summary>
 public sealed record ItemDocuments(
-    IReadOnlyList<Invoice> Invoices, IReadOnlyList<SalesReceipt> Receipts, IReadOnlyList<CreditMemo> CreditMemos,
-    IReadOnlyList<Estimate> Estimates, IReadOnlyList<SalesOrder> Orders);
+    IReadOnlyList<ItemDocumentRow<DocumentStatus>> Invoices, IReadOnlyList<ItemDocumentRow<DocumentStatus>> Receipts,
+    IReadOnlyList<ItemDocumentRow<DocumentStatus>> CreditMemos, IReadOnlyList<ItemDocumentRow<EstimateStatus>> Estimates,
+    IReadOnlyList<ItemDocumentRow<SalesOrderStatus>> Orders)
+{
+    /// <summary>Each heading with its lines for the item added up; documents without any are left out.</summary>
+    public static IReadOnlyList<ItemDocumentRow<TStatus>> Combine<TStatus>(IEnumerable<ItemDocumentRow<TStatus>> headings, IEnumerable<ItemLinePart> lines)
+    {
+        var sums = lines.GroupBy(l => l.DocumentId).ToDictionary(g => g.Key, g => (Amount: g.Sum(l => l.Amount), Quantity: g.Sum(l => l.Quantity)));
+        return [.. headings.Where(h => sums.ContainsKey(h.Id)).Select(h => h with { Amount = sums[h.Id].Amount, Quantity = sums[h.Id].Quantity })];
+    }
+}
 
 public sealed record SalesSearchMore(IReadOnlyList<Estimate> Estimates, IReadOnlyList<SalesOrder> Orders, IReadOnlyList<CreditMemo> CreditMemos, IReadOnlyList<BankDeposit> Deposits);
 
 public interface ISalesStore
 {
-    Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct);
+    /// <summary>
+    /// Sales documents with a line for the item, dated from <paramref name="since"/> (null: all), read as their headings and
+    /// that item's lines only: a popular item is on thousands of documents.
+    /// </summary>
+    Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, DateOnly? since, CancellationToken ct);
 
     /// <summary>What posted payments settled of these invoices (null: of every invoice), whatever their dates, for splitting each in turn.</summary>
     Task<IReadOnlyList<DocumentSettlement>> ListPaymentSettlementsAsync(IReadOnlyCollection<Guid>? invoiceIds, CancellationToken ct);
@@ -61,6 +80,21 @@ public interface ISalesStore
 
     /// <summary>Untracked, with lines, newest first.</summary>
     Task<IReadOnlyList<Invoice>> ListInvoicesAsync(Guid? customerId, CancellationToken ct);
+
+    /// <summary>
+    /// Documents dated in the range, whatever their status, untracked, with lines, newest first: for reports and
+    /// lists of a period, which shouldn't read every document.
+    /// </summary>
+    Task<IReadOnlyList<Invoice>> ListInvoicesDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
+
+    /// <inheritdoc cref="ListInvoicesDatedAsync"/>
+    Task<IReadOnlyList<CreditMemo>> ListCreditMemosDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
+
+    /// <inheritdoc cref="ListInvoicesDatedAsync"/>
+    Task<IReadOnlyList<SalesReceipt>> ListReceiptsDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
+
+    /// <inheritdoc cref="ListInvoicesDatedAsync"/>
+    Task<IReadOnlyList<Estimate>> ListEstimatesDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
 
     /// <summary>The newest documents of each kind, for lists that show a page at a time.</summary>
     Task<RecentDocuments<Invoice>> ListRecentInvoicesAsync(int skip, int take, CancellationToken ct);

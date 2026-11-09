@@ -30,6 +30,22 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
             .ThenByDescending(i => i.CreatedAt)
             .ToList();
 
+    public async Task<IReadOnlyList<Invoice>> ListInvoicesDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) =>
+        (await db.Invoices.AsNoTracking().Where(i => i.Date >= fromDate && i.Date <= toDate).ToListAsync(ct))
+            .OrderByDescending(i => i.Date).ThenByDescending(i => i.CreatedAt).ToList();
+
+    public async Task<IReadOnlyList<CreditMemo>> ListCreditMemosDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) =>
+        (await db.CreditMemos.AsNoTracking().Where(c => c.Date >= fromDate && c.Date <= toDate).ToListAsync(ct))
+            .OrderByDescending(c => c.Date).ThenByDescending(c => c.CreatedAt).ToList();
+
+    public async Task<IReadOnlyList<SalesReceipt>> ListReceiptsDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) =>
+        (await db.SalesReceipts.AsNoTracking().Where(r => r.Date >= fromDate && r.Date <= toDate).ToListAsync(ct))
+            .OrderByDescending(r => r.Date).ThenByDescending(r => r.CreatedAt).ToList();
+
+    public async Task<IReadOnlyList<Estimate>> ListEstimatesDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) =>
+        (await db.Estimates.AsNoTracking().Where(e => e.Date >= fromDate && e.Date <= toDate).ToListAsync(ct))
+            .OrderByDescending(e => e.Date).ThenByDescending(e => e.CreatedAt).ToList();
+
     public Task<RecentDocuments<Invoice>> ListRecentInvoicesAsync(int skip, int take, CancellationToken ct) =>
         db.Invoices.RecentAsync(i => i.Date, i => i.Id, i => i.CreatedAt, skip, take, ct);
 
@@ -282,12 +298,43 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
         creditMemoIds.Count == 0 ? [] : await db.CustomerRefunds.AsNoTracking()
             .Where(r => r.Status == DocumentStatus.Posted && r.CreditMemoId != null && creditMemoIds.Contains(r.CreditMemoId.Value)).ToListAsync(ct);
 
-    public async Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, CancellationToken ct) => new(
-        await db.Invoices.AsNoTracking().Where(i => i.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
-        await db.SalesReceipts.AsNoTracking().Where(r => r.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
-        await db.CreditMemos.AsNoTracking().Where(c => c.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
-        await db.Estimates.AsNoTracking().Where(e => e.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct),
-        await db.SalesOrders.AsNoTracking().Where(o => o.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct));
+    public async Task<ItemDocuments> ListDocumentsWithItemAsync(Guid itemId, DateOnly? since, CancellationToken ct)
+    {
+        // The item's lines (from the lines' own tables, by their owners' keys), then only those documents' headings.
+        var invoiceLines = await db.Invoices.Where(i => since == null || i.Date >= since).SelectMany(i => i.Lines).Where(l => l.ItemId == itemId)
+            .Select(l => new ItemLinePart(EF.Property<Guid>(l, "InvoiceId"), l.Amount, l.Quantity)).ToListAsync(ct);
+        var invoiceIds = invoiceLines.Select(l => l.DocumentId).Distinct().ToList();
+        var invoices = invoiceIds.Count == 0 ? [] : await db.Invoices.Where(i => invoiceIds.Contains(i.Id))
+            .Select(i => new ItemDocumentRow<DocumentStatus>(i.Id, i.Date, i.Number, i.Memo, i.Status, 0m, 0m)).ToListAsync(ct);
+
+        var receiptLines = await db.SalesReceipts.Where(r => since == null || r.Date >= since).SelectMany(r => r.Lines).Where(l => l.ItemId == itemId)
+            .Select(l => new ItemLinePart(EF.Property<Guid>(l, "SalesReceiptId"), l.Amount, l.Quantity)).ToListAsync(ct);
+        var receiptIds = receiptLines.Select(l => l.DocumentId).Distinct().ToList();
+        var receipts = receiptIds.Count == 0 ? [] : await db.SalesReceipts.Where(r => receiptIds.Contains(r.Id))
+            .Select(r => new ItemDocumentRow<DocumentStatus>(r.Id, r.Date, r.Number, r.Memo, r.Status, 0m, 0m)).ToListAsync(ct);
+
+        var memoLines = await db.CreditMemos.Where(c => since == null || c.Date >= since).SelectMany(c => c.Lines).Where(l => l.ItemId == itemId)
+            .Select(l => new ItemLinePart(EF.Property<Guid>(l, "CreditMemoId"), l.Amount, l.Quantity)).ToListAsync(ct);
+        var memoIds = memoLines.Select(l => l.DocumentId).Distinct().ToList();
+        var memos = memoIds.Count == 0 ? [] : await db.CreditMemos.Where(c => memoIds.Contains(c.Id))
+            .Select(c => new ItemDocumentRow<DocumentStatus>(c.Id, c.Date, c.Number, c.Memo, c.Status, 0m, 0m)).ToListAsync(ct);
+
+        var estimateLines = await db.Estimates.Where(e => since == null || e.Date >= since).SelectMany(e => e.Lines).Where(l => l.ItemId == itemId)
+            .Select(l => new ItemLinePart(EF.Property<Guid>(l, "EstimateId"), l.Amount, l.Quantity)).ToListAsync(ct);
+        var estimateIds = estimateLines.Select(l => l.DocumentId).Distinct().ToList();
+        var estimates = estimateIds.Count == 0 ? [] : await db.Estimates.Where(e => estimateIds.Contains(e.Id))
+            .Select(e => new ItemDocumentRow<EstimateStatus>(e.Id, e.Date, e.Number, e.Memo, e.Status, 0m, 0m)).ToListAsync(ct);
+
+        var orderLines = await db.SalesOrders.Where(o => since == null || o.Date >= since).SelectMany(o => o.Lines).Where(l => l.ItemId == itemId)
+            .Select(l => new ItemLinePart(EF.Property<Guid>(l, "SalesOrderId"), l.Amount, l.Quantity)).ToListAsync(ct);
+        var orderIds = orderLines.Select(l => l.DocumentId).Distinct().ToList();
+        var orders = orderIds.Count == 0 ? [] : await db.SalesOrders.Where(o => orderIds.Contains(o.Id))
+            .Select(o => new ItemDocumentRow<SalesOrderStatus>(o.Id, o.Date, o.Number, o.Memo, o.Status, 0m, 0m)).ToListAsync(ct);
+
+        return new(
+            ItemDocuments.Combine(invoices, invoiceLines), ItemDocuments.Combine(receipts, receiptLines), ItemDocuments.Combine(memos, memoLines),
+            ItemDocuments.Combine(estimates, estimateLines), ItemDocuments.Combine(orders, orderLines));
+    }
 
     public async Task<IReadOnlyList<SalesReceipt>> ListReceiptsForCustomerAsync(Guid customerId, CancellationToken ct) =>
         await db.SalesReceipts.AsNoTracking().Where(r => r.CustomerId == customerId).ToListAsync(ct);

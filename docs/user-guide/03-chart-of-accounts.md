@@ -107,7 +107,7 @@ A posted entry doesn't change: **Change** on its page voids it and posts the cor
 
 ## Account registers
 
-Every account has a **Register** (link on the chart of accounts): every transaction that touched it, with a running balance. Amounts show in the account's natural direction, so a bank register shows money in and out, and a card register shows charges and payments.
+Every account has a **Register** (link on the chart of accounts): every transaction that touched it, with a running balance. Amounts show in the account's natural direction, so a bank register shows money in and out, and a card register shows charges and payments. A busy account shows its newest 100 lines, with one line adding up the earlier ones; **Show more** brings in the next 100.
 
 Accountants can enter a simple two-line transaction straight into a register using the quick-entry row at the bottom (`Alt` + `Q` jumps to it). Select any line to open the transaction behind it.
 

@@ -99,11 +99,11 @@ public sealed class PrintService(
         var names = await NamesAsync(ct);
         IEnumerable<PrintableDocument> all = document switch
         {
-            FormDocuments.Invoice => (await sales.ListInvoicesAsync(null, ct)).Select(i => Printable(i, names)),
-            FormDocuments.Estimate => (await sales.ListEstimatesAsync(null, ct)).Select(e => Printable(e, names)),
-            FormDocuments.CreditMemo => (await sales.ListCreditMemosAsync(null, ct)).Select(c => Printable(c, names)),
-            FormDocuments.SalesReceipt => (await sales.ListReceiptsAsync(ct)).Select(r => Printable(r, names)),
-            FormDocuments.PurchaseOrder => (await purchases.ListPurchaseOrdersAsync(null, ct)).Select(o => Printable(o, names)),
+            FormDocuments.Invoice => (await sales.ListInvoicesDatedAsync(from, to, ct)).Select(i => Printable(i, names)),
+            FormDocuments.Estimate => (await sales.ListEstimatesDatedAsync(from, to, ct)).Select(e => Printable(e, names)),
+            FormDocuments.CreditMemo => (await sales.ListCreditMemosDatedAsync(from, to, ct)).Select(c => Printable(c, names)),
+            FormDocuments.SalesReceipt => (await sales.ListReceiptsDatedAsync(from, to, ct)).Select(r => Printable(r, names)),
+            FormDocuments.PurchaseOrder => (await purchases.ListPurchaseOrdersDatedAsync(from, to, ct)).Select(o => Printable(o, names)),
             _ => throw new DomainException("print.document_invalid", "Choose invoices, estimates, credit memos, sales receipts or purchase orders."),
         };
         return [.. all.Where(d => d.Date >= from && d.Date <= to).OrderByDescending(d => d.Date).ThenByDescending(d => d.Number, StringComparer.Ordinal)];

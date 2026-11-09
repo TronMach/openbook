@@ -42,8 +42,7 @@ public sealed class BillApprovalService(IPurchasesStore store, ICompanyStore com
 
     /// <summary>Bills waiting for approval (and rejected ones not voided yet), oldest due first.</summary>
     public async Task<IReadOnlyList<Bill>> PendingAsync(CancellationToken ct = default) =>
-        (await store.ListBillsAsync(null, ct))
-            .Where(b => b.Status == DocumentStatus.Posted && b.Approval is BillApproval.Pending or BillApproval.Rejected)
+        (await store.ListBillsAwaitingApprovalAsync(ct))
             .OrderBy(b => b.Approval).ThenBy(b => b.DueDate).ToList();
 
     public Task<Bill> ApproveAsync(Guid billId, string? note, CancellationToken ct = default) =>
@@ -157,9 +156,8 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
         var banks = (await store.ListVendorBankAccountsAsync(ct)).ToDictionary(b => b.VendorId);
         var vendors = (await store.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
         var cleared = (await bank.ListFeedItemsAsync(accountId, ct)).SelectMany(i => i.MatchedEntryIds).ToHashSet();
-        var ready = (await store.ListPaymentsAsync(null, ct))
-            .Where(p => p.PaymentAccountId == accountId && p.Status == DocumentStatus.Posted && p.AchBatchId is null && p.PrintedAt is null
-                && banks.ContainsKey(p.VendorId) && !cleared.Contains(p.JournalEntryId))
+        var ready = (await store.ListPaymentsForAchAsync(accountId, ct))
+            .Where(p => banks.ContainsKey(p.VendorId) && !cleared.Contains(p.JournalEntryId))
             .OrderBy(p => p.Date).ThenBy(p => vendors[p.VendorId].DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
         var candidates = new List<AchCandidate>();
@@ -179,7 +177,7 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
     /// <summary>The account's files, newest first as listed, each with the payments in it voided since it was made.</summary>
     public async Task<IReadOnlyList<AchFile>> FilesAsync(Guid accountId, CancellationToken ct = default)
     {
-        var voided = (await store.ListPaymentsAsync(null, ct)).Where(p => p.AchBatchId is not null && p.Status == DocumentStatus.Voided)
+        var voided = (await store.ListPaymentsInAchFilesAsync(null, ct)).Where(p => p.Status == DocumentStatus.Voided)
             .GroupBy(p => p.AchBatchId!.Value).ToDictionary(g => g.Key, g => g.Count());
         return [.. (await store.ListAchBatchesAsync(accountId, ct)).Select(b => new AchFile(b, voided.GetValueOrDefault(b.Id)))];
     }
@@ -191,7 +189,7 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
     public async Task<AchBatch> WithdrawFileAsync(Guid batchId, string? reason, CancellationToken ct = default)
     {
         var batch = await store.GetAchBatchForChangeAsync(batchId, ct) ?? throw new EntityNotFoundException(BatchEntity, batchId);
-        var payments = (await store.ListPaymentsAsync(null, ct)).Where(p => p.AchBatchId == batch.Id).ToList();
+        var payments = (await store.ListPaymentsInAchFilesAsync(batch.Id, ct)).ToList();
         var cleared = (await bank.ListFeedItemsAsync(batch.AccountId, ct)).SelectMany(i => i.MatchedEntryIds).ToHashSet();
         foreach (var p in payments)
         {

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OpenBook.Application;
 using OpenBook.Application.Purchases;
+using OpenBook.Application.Sales;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
@@ -49,6 +50,11 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
 
     public async Task<IReadOnlyList<Bill>> GetBillsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         await db.Bills.Where(b => ids.Contains(b.Id)).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Bill>> ListBillsAwaitingApprovalAsync(CancellationToken ct) =>
+        await db.Bills.AsNoTracking()
+            .Where(b => b.Status == DocumentStatus.Posted && (b.Approval == BillApproval.Pending || b.Approval == BillApproval.Rejected))
+            .ToListAsync(ct);
 
     public async Task<IReadOnlyList<Bill>> ListBillsAsync(Guid? vendorId, CancellationToken ct) =>
         (await db.Bills.AsNoTracking().Where(b => vendorId == null || b.VendorId == vendorId).ToListAsync(ct))
@@ -156,6 +162,16 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public async Task<IReadOnlyList<BillPayment>> ListCheckPaymentsAsync(CancellationToken ct) =>
         await db.BillPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.AchBatchId == null).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<BillPayment>> ListPaymentsForAchAsync(Guid accountId, CancellationToken ct) =>
+        await db.BillPayments.AsNoTracking()
+            .Where(p => p.PaymentAccountId == accountId && p.Status == DocumentStatus.Posted && p.AchBatchId == null && p.PrintedAt == null)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<BillPayment>> ListPaymentsInAchFilesAsync(Guid? batchId, CancellationToken ct) =>
+        await db.BillPayments.AsNoTracking()
+            .Where(p => p.AchBatchId != null && (batchId == null || p.AchBatchId == batchId))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<BillPayment>> ListPaymentsAsync(Guid? vendorId, CancellationToken ct) =>
         (await db.BillPayments.AsNoTracking().Where(p => vendorId == null || p.VendorId == vendorId).ToListAsync(ct))
             .OrderByDescending(p => p.Date)
@@ -193,11 +209,25 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
         vendorCreditIds.Count == 0 ? [] : await db.VendorRefunds.AsNoTracking()
             .Where(r => r.Status == DocumentStatus.Posted && vendorCreditIds.Contains(r.VendorCreditId)).ToListAsync(ct);
 
-    public async Task<IReadOnlyList<Bill>> ListBillsWithItemAsync(Guid itemId, CancellationToken ct) =>
-        await db.Bills.AsNoTracking().Where(b => b.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct);
+    public async Task<IReadOnlyList<ItemDocumentRow<DocumentStatus>>> ListBillsWithItemAsync(Guid itemId, DateOnly? since, CancellationToken ct)
+    {
+        var lines = await db.Bills.Where(b => since == null || b.Date >= since).SelectMany(b => b.Lines).Where(l => l.ItemId == itemId)
+            .Select(l => new { Id = EF.Property<Guid>(l, "BillId"), l.Amount, l.Quantity }).ToListAsync(ct);
+        var ids = lines.Select(l => l.Id).Distinct().ToList();
+        var bills = ids.Count == 0 ? [] : await db.Bills.Where(b => ids.Contains(b.Id))
+            .Select(b => new ItemDocumentRow<DocumentStatus>(b.Id, b.Date, b.Reference, b.Memo, b.Status, 0m, 0m)).ToListAsync(ct);
+        return ItemDocuments.Combine(bills, lines.Select(l => new ItemLinePart(l.Id, l.Amount, l.Quantity ?? 0m)));
+    }
 
-    public async Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersWithItemAsync(Guid itemId, CancellationToken ct) =>
-        await db.PurchaseOrders.AsNoTracking().Where(o => o.Lines.Any(l => l.ItemId == itemId)).ToListAsync(ct);
+    public async Task<IReadOnlyList<ItemDocumentRow<PurchaseOrderStatus>>> ListPurchaseOrdersWithItemAsync(Guid itemId, DateOnly? since, CancellationToken ct)
+    {
+        var lines = await db.PurchaseOrders.Where(o => since == null || o.Date >= since).SelectMany(o => o.Lines).Where(l => l.ItemId == itemId)
+            .Select(l => new { Id = EF.Property<Guid>(l, "PurchaseOrderId"), l.Quantity, l.UnitCost }).ToListAsync(ct);
+        var ids = lines.Select(l => l.Id).Distinct().ToList();
+        var orders = ids.Count == 0 ? [] : await db.PurchaseOrders.Where(o => ids.Contains(o.Id))
+            .Select(o => new ItemDocumentRow<PurchaseOrderStatus>(o.Id, o.Date, o.Number, o.Memo, o.Status, 0m, 0m)).ToListAsync(ct);
+        return ItemDocuments.Combine(orders, lines.Select(l => new ItemLinePart(l.Id, decimal.Round(l.Quantity * l.UnitCost, 2, MidpointRounding.AwayFromZero), l.Quantity)));
+    }
 
     public async Task<IReadOnlyList<PurchaseOrder>> ListOpenPurchaseOrdersAsync(CancellationToken ct) =>
         await db.PurchaseOrders.AsNoTracking().Where(o => o.Status == PurchaseOrderStatus.Open).ToListAsync(ct);
@@ -205,6 +235,10 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public Task<bool> AnyPurchaseOrdersAsync(CancellationToken ct) => db.PurchaseOrders.AnyAsync(ct);
 
     public Task<int> CountNewReceiptsAsync(CancellationToken ct) => db.ReceiptCaptures.CountAsync(r => r.Status == ReceiptStatus.New, ct);
+
+    public async Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) =>
+        (await db.PurchaseOrders.AsNoTracking().Where(o => o.Date >= fromDate && o.Date <= toDate).ToListAsync(ct))
+            .OrderByDescending(o => o.Date).ThenByDescending(o => o.CreatedAt).ToList();
 
     public async Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct) =>
         (await db.PurchaseOrders.AsNoTracking().Where(o => vendorId == null || o.VendorId == vendorId).ToListAsync(ct))

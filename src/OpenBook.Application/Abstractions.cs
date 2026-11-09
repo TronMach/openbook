@@ -121,6 +121,12 @@ public interface ILedgerStore
     /// <summary>Every sealed ledger line dated within the range (inclusive), oldest first. Reports start here.</summary>
     Task<IReadOnlyList<LedgerLine>> GetLinesAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
 
+    /// <summary>These ledger lines (those that exist), as <see cref="GetLinesAsync"/> gives them.</summary>
+    Task<IReadOnlyList<LedgerLine>> GetLinesByIdAsync(IReadOnlyCollection<Guid> lineIds, CancellationToken ct);
+
+    /// <summary>The date of the earliest journal entry; null with none.</summary>
+    Task<DateOnly?> FirstEntryDateAsync(CancellationToken ct);
+
     Task<IReadOnlyList<RecurringEntry>> ListRecurringAsync(CancellationToken ct);
 
     /// <summary>Tracked, with lines.</summary>
@@ -128,6 +134,16 @@ public interface ILedgerStore
 
     /// <summary>Audit records matching the filters, newest first.</summary>
     Task<IReadOnlyList<AuditRecord>> ListAuditAsync(string? entityType, Guid? entityId, string? actor, CancellationToken ct);
+
+    /// <summary>
+    /// One page of the audit records matching the filters, newest first, with how many match. <paramref name="occurredOn"/>
+    /// (optional) is tested on each matching record's time, read without its snapshots, so a date filter doesn't load the whole log.
+    /// </summary>
+    Task<(IReadOnlyList<AuditRecord> Page, int Total)> PageAuditAsync(
+        string? entityType, Guid? entityId, string? actor, Func<DateTimeOffset, bool>? occurredOn, int skip, int take, CancellationToken ct);
+
+    /// <summary>Every entity type and actor in the audit log, for the filter's choices.</summary>
+    Task<(IReadOnlyList<string> EntityTypes, IReadOnlyList<string> Actors)> AuditChoicesAsync(CancellationToken ct);
 
     /// <summary>Classes, locations and tags, tracked.</summary>
     Task<IReadOnlyList<Segment>> ListSegmentsAsync(CancellationToken ct);

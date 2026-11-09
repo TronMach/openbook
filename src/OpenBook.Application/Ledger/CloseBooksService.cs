@@ -81,8 +81,7 @@ public sealed class CloseBooksService(
     public async Task<IReadOnlyList<FiscalYearSummary>> FiscalYearsAsync(DateOnly today, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var lines = await ledger.GetLinesAsync(null, today, ct);
-        var first = lines.Count == 0 ? today : lines.Min(l => l.Date);
+        var first = await ledger.FirstEntryDateAsync(ct) is { } earliest && earliest < today ? earliest : today;
 
         var years = new List<FiscalYearSummary>();
         for (var start = company.FiscalYearStart(first); start <= today; start = start.AddYears(1))

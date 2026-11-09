@@ -77,10 +77,7 @@
                 </tbody>
             </table>
         </div>
-        @if (_register.TotalLines > _register.Lines.Count)
-        {
-            <p class="muted">Showing the newest @_register.Lines.Count of @_register.TotalLines transactions.</p>
-        }
+        <ShowMore Shown="@_register.Lines.Count" Total="@_register.TotalLines" Href="@($"/banking/{AccountId}")" />
     }
 
     @if (_history.Count > 0)
@@ -131,6 +128,9 @@
     [Parameter]
     public Guid AccountId { get; set; }
 
+    [SupplyParameterFromQuery]
+    private int? Count { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -138,7 +138,7 @@
             _chart = await AccountService.GetChartAsync();
             BankingRules.EnsureBankingAccount(_chart.Get(AccountId));
             _useNumbers = (await Settings.GetAsync()).UseAccountNumbers;
-            _register = await BankingService.GetRegisterAsync(AccountId);
+            _register = await BankingService.GetRegisterAsync(AccountId, Count is > 0 and var n ? n : RecentDocuments.PageSize);
             _history = await Reconciliations.ListAsync(AccountId);
         }
         catch (DomainException ex)

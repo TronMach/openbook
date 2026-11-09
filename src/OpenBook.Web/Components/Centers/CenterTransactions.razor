@@ -59,7 +59,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var row in Shown)
+                @foreach (var row in Shown.Take(Limit))
                 {
                     var href = Links.ForAuditEntity(row.EntityType, row.Id);
                     <tr class="@(row.State == CenterState.Voided ? "inactive" : null)">
@@ -91,6 +91,7 @@ else
             </tbody>
         </table>
     </div>
+    <ShowMore Shown="@Math.Min(Limit, Shown.Count)" Total="@Shown.Count" Href="@MoreHref" />
 }
 
 @code {
@@ -118,11 +119,25 @@ else
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
-    private List<CenterRow> Shown =>
+    private List<CenterRow> Shown => _shown ??=
         Rows.Where(r => HttpContext is null || OpenBook.Application.Companies.AuthClaims.LevelIn(HttpContext.User, OpenBook.Application.Companies.RecordAreas.Of(r.EntityType)) is not null)
             .Where(r => string.IsNullOrEmpty(Type) || r.EntityType == Type)
-            .Where(r => !int.TryParse(Dates, out var days) || r.Date > CompanyTime.Today.AddDays(-days))
+            .Where(r => Since(Dates) is not { } since || r.Date >= since)
             .ToList();
+
+    private List<CenterRow>? _shown;
+
+    protected override void OnParametersSet() => _shown = null;
+
+    /// <summary>The first day the dates choice shows ("30" = the last 30 days, today included); null for all dates.</summary>
+    public static DateOnly? Since(string? dates) => int.TryParse(dates, out var days) && days > 0 ? CompanyTime.Today.AddDays(1 - days) : null;
+
+    // A long history draws a page at a time: the newest first, then more on request (?count=).
+    private int Limit => int.TryParse(HttpContext?.Request.Query["count"], out var n) && n > 0 ? n : RecentDocuments.PageSize;
+
+    private string MoreHref => HttpContext is null ? Action
+        : HttpContext.Request.Path + Microsoft.AspNetCore.Http.QueryString.Create(
+            HttpContext.Request.Query.Where(q => q.Key != "count").SelectMany(q => q.Value.Select(v => new KeyValuePair<string, string?>(q.Key, v))));
 
     // Each label is written out so the string catalog finds it.
     private LocalizedString TypeLabel(string entityType) => entityType switch

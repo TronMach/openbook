@@ -257,8 +257,7 @@ public sealed class SegmentService(
             EnsureUsable(segments, l, SegmentKind.Location);
 
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var allLines = await ledger.GetLinesAsync(null, DateOnly.MaxValue, ct);
-        var chosen = allLines.Where(x => lineIds.Contains(x.JournalLineId)).ToList();
+        var chosen = (await ledger.GetLinesByIdAsync(lineIds, ct)).ToList();
         if (chosen.Count != lineIds.Count)
             throw new EntityNotFoundException("journal_line", lineIds.First(id => chosen.All(x => x.JournalLineId != id)));
 

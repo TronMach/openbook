@@ -104,7 +104,11 @@
             </thead>
             <tbody>
                 <tr class="muted"><td>@Labels.Date(_from)</td><td></td><td></td><td>Opening balance</td><td></td><td></td><td class="num">@Labels.Amount(_opening)</td></tr>
-                @foreach (var line in _lines)
+                @if (Earlier > 0)
+                {
+                    <tr class="muted"><td></td><td></td><td></td><td>@Earlier.ToString("N0") earlier lines in the period</td><td></td><td></td><td class="num">@Labels.Amount(_lines[Earlier - 1].Balance)</td></tr>
+                }
+                @foreach (var line in _lines.Skip(Earlier))
                 {
                     var natural = _debitNormal ? line.Amount : -line.Amount;
                     <tr>
@@ -123,6 +127,7 @@
             </tfoot>
         </table>
     </div>
+    <ShowMore Shown="@(_lines.Count - Earlier)" Total="@_lines.Count" Href="@($"/accounts/{Id}/register?from={_from:yyyy-MM-dd}&to={_to:yyyy-MM-dd}")" />
 </div>
 
 @code {
@@ -144,6 +149,10 @@
     [SupplyParameterFromQuery] private DateOnly? From { get; set; }
     [SupplyParameterFromQuery] private DateOnly? To { get; set; }
     [SupplyParameterFromQuery] private long? Posted { get; set; }
+    [SupplyParameterFromQuery] private int? Count { get; set; }
+
+    // A busy account's year is thousands of lines: the newest are drawn, the balances still run over all of them.
+    private int Earlier => Math.Max(0, _lines.Count - (Count is > 0 and var n ? n : RecentDocuments.PageSize));
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     [SupplyParameterFromForm(FormName = "quick")]
