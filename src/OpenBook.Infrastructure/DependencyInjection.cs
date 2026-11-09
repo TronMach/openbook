@@ -56,7 +56,7 @@ public static class DependencyInjection
             if (!string.IsNullOrEmpty(encryptionKey))
                 throw new ArgumentException("OpenBook:EncryptionKey is for SQLite files; encrypt PostgreSQL with its own storage encryption.", nameof(encryptionKey));
             services.AddSingleton(new OpenBookStorage(connectionString, backupDirectory ?? Path.GetFullPath("backups"), Provider: DatabaseProvider.Postgres));
-            services.AddDbContext<OpenBookDbContext>(o => o.UseNpgsql(connectionString, x => x.MigrationsAssembly(DatabaseProviders.PostgresMigrationsAssembly)));
+            services.AddDbContext<OpenBookDbContext>(o => QueryWarnings(o.UseNpgsql(connectionString, x => x.MigrationsAssembly(DatabaseProviders.PostgresMigrationsAssembly))));
             services.AddScoped<IBackupService, UnsupportedBackupService>();
         }
         else
@@ -64,7 +64,7 @@ public static class DependencyInjection
             connectionString = WithKey(connectionString, encryptionKey);
             services.AddSingleton(new OpenBookStorage(connectionString, backupDirectory ?? DefaultBackupDirectory(connectionString), !string.IsNullOrEmpty(encryptionKey)));
             // One JSON parameter for a list of ids: SQLite stops at 32,766 parameters, which a busy account's register passes.
-            services.AddDbContext<OpenBookDbContext>(o => o.UseSqlite(connectionString, x => x.UseParameterizedCollectionMode(ParameterTranslationMode.Parameter)));
+            services.AddDbContext<OpenBookDbContext>(o => QueryWarnings(o.UseSqlite(connectionString, x => x.UseParameterizedCollectionMode(ParameterTranslationMode.Parameter))));
             services.AddScoped<IBackupService, SqliteBackupService>();
         }
 
@@ -141,6 +141,14 @@ public static class DependencyInjection
         string.IsNullOrEmpty(encryptionKey)
             ? connectionString
             : new SqliteConnectionStringBuilder(connectionString) { Password = encryptionKey }.ToString();
+
+    /// <summary>
+    /// Records whose owned collections grow together (grants, loans, purchase orders) are read with split queries in
+    /// their stores; the rest load their collections in one query on purpose (measured faster when the second is
+    /// small or empty, as an invoice's source lines usually are). So EF's warning about it is only noise on the System page.
+    /// </summary>
+    private static DbContextOptionsBuilder QueryWarnings(DbContextOptionsBuilder options) =>
+        options.ConfigureWarnings(w => w.Log((Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.MultipleCollectionIncludeWarning, Microsoft.Extensions.Logging.LogLevel.Debug)));
 
     private static string DefaultBackupDirectory(string connectionString)
     {

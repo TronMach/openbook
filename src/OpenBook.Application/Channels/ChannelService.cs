@@ -288,8 +288,9 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         var references = payout.Lines.Where(l => l.Type is ChannelLineType.Sale or ChannelLineType.Cleared).Select(l => l.Reference).OfType<string>().ToHashSet(StringComparer.Ordinal);
         if (references.Count == 0)
             return [];
-        var found = (await gifts.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.Kind == Domain.Nonprofit.GiftKind.Cash
-            && d.DepositId is null && d.PayoutId is null && d.Reference is { } reference && references.Contains(reference)).ToList();
+        var wanted = references.ToList();
+        var found = (await gifts.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Kind == Domain.Nonprofit.GiftKind.Cash
+            && d.DepositId == null && d.PayoutId == null && d.Reference != null && wanted.Contains(d.Reference), ct)).ToList();
         if (found.Count == 0)
             return [];
         if (channel.ClearingAccountId is null)
@@ -337,7 +338,7 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         payout.Unpost();
         foreach (var payment in await sales.ListPaymentsInPayoutAsync(payout.Id, ct))
             payment.ClearPayout();
-        foreach (var gift in (await gifts.ListDonationsAsync(ct)).Where(d => d.PayoutId == payout.Id))
+        foreach (var gift in await gifts.FindDonationsAsync(d => d.PayoutId == payoutId, ct))
             gift.ClearPayout();
         store.Add(Audit(AuditAction.Voided, PayoutEntity, payout.Id, before, PayoutSnapshot(payout, channel)));
         await store.SaveChangesAsync(ct);

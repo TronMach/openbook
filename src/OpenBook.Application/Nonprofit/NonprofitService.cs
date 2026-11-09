@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Text.Json;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
@@ -19,6 +20,18 @@ public interface INonprofitStore
     Task<RestrictionRelease?> GetReleaseAsync(Guid id, CancellationToken ct);
 
     Task<IReadOnlyList<Donation>> ListDonationsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// The gifts matching the test, tracked, as <see cref="ListDonationsAsync"/> would give them filtered: the database
+    /// is asked for those rows only, and gifts the scope has added or changed are tested as they stand.
+    /// </summary>
+    Task<IReadOnlyList<Donation>> FindDonationsAsync(Expression<Func<Donation, bool>> test, CancellationToken ct);
+
+    /// <summary>The highest gift number, counting gifts added in this scope; 0 with none.</summary>
+    Task<int> MaxDonationNumberAsync(CancellationToken ct);
+
+    /// <summary>Each gift's campaign (where it has one) and date: two columns, for the forms' suggestions.</summary>
+    Task<IReadOnlyList<(string Campaign, DateOnly Date)>> ListCampaignUsesAsync(CancellationToken ct);
 
     Task<IReadOnlyList<AllocationRule>> ListAllocationRulesAsync(CancellationToken ct);
     Task<AllocationRule?> GetAllocationRuleAsync(Guid id, CancellationToken ct);

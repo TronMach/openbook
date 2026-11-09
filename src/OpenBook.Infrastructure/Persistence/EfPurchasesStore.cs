@@ -23,7 +23,7 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public async Task<(IReadOnlyList<PurchaseOrder> Orders, IReadOnlyList<VendorCredit> Credits)> SearchMoreAsync(DocumentSearch search, CancellationToken ct)
     {
         var (text, amount, parties) = (search.Text, search.Amount ?? -1m, search.PartyIds.ToList());
-        var orders = await db.PurchaseOrders.AsNoTracking()
+        var orders = await db.PurchaseOrders.AsNoTracking().AsSplitQuery()
             .Where(o => o.Number.ToLower().Contains(text) || (o.Memo != null && o.Memo.ToLower().Contains(text)) || parties.Contains(o.VendorId) || o.Total == amount)
             .OrderByDescending(o => o.Date).ThenByDescending(o => o.Id).Take(search.Take).ToListAsync(ct);
         var credits = await db.VendorCredits.AsNoTracking()
@@ -189,7 +189,7 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
             .ThenByDescending(t => t.CreatedAt)
             .ToList();
 
-    public Task<PurchaseOrder?> GetPurchaseOrderAsync(Guid id, CancellationToken ct) => db.PurchaseOrders.SingleOrDefaultAsync(o => o.Id == id, ct);
+    public Task<PurchaseOrder?> GetPurchaseOrderAsync(Guid id, CancellationToken ct) => db.PurchaseOrders.AsSplitQuery().SingleOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<IReadOnlyList<DocumentSettlement>> ListPaymentSettlementsAsync(IReadOnlyCollection<Guid>? billIds, CancellationToken ct)
     {
@@ -230,18 +230,18 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     }
 
     public async Task<IReadOnlyList<PurchaseOrder>> ListOpenPurchaseOrdersAsync(CancellationToken ct) =>
-        await db.PurchaseOrders.AsNoTracking().Where(o => o.Status == PurchaseOrderStatus.Open).ToListAsync(ct);
+        await db.PurchaseOrders.AsNoTracking().AsSplitQuery().Where(o => o.Status == PurchaseOrderStatus.Open).ToListAsync(ct);
 
     public Task<bool> AnyPurchaseOrdersAsync(CancellationToken ct) => db.PurchaseOrders.AnyAsync(ct);
 
     public Task<int> CountNewReceiptsAsync(CancellationToken ct) => db.ReceiptCaptures.CountAsync(r => r.Status == ReceiptStatus.New, ct);
 
     public async Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersDatedAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) =>
-        (await db.PurchaseOrders.AsNoTracking().Where(o => o.Date >= fromDate && o.Date <= toDate).ToListAsync(ct))
+        (await db.PurchaseOrders.AsNoTracking().AsSplitQuery().Where(o => o.Date >= fromDate && o.Date <= toDate).ToListAsync(ct))
             .OrderByDescending(o => o.Date).ThenByDescending(o => o.CreatedAt).ToList();
 
     public async Task<IReadOnlyList<PurchaseOrder>> ListPurchaseOrdersAsync(Guid? vendorId, CancellationToken ct) =>
-        (await db.PurchaseOrders.AsNoTracking().Where(o => vendorId == null || o.VendorId == vendorId).ToListAsync(ct))
+        (await db.PurchaseOrders.AsNoTracking().AsSplitQuery().Where(o => vendorId == null || o.VendorId == vendorId).ToListAsync(ct))
             .OrderByDescending(o => o.Date)
             .ThenByDescending(o => o.CreatedAt)
             .ToList();

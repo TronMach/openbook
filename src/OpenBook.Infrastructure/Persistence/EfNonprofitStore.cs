@@ -1,4 +1,5 @@
 using OpenBook.Application;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using OpenBook.Domain.Common;
 using OpenBook.Application.Nonprofit;
@@ -40,7 +41,7 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
         var pledges = await db.Pledges.AsNoTracking()
             .Where(p => (p.Memo != null && p.Memo.ToLower().Contains(text)) || parties.Contains(p.DonorId) || p.Amount == amount)
             .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id).Take(search.Take).ToListAsync(ct);
-        var grants = await db.Grants.AsNoTracking()
+        var grants = await db.Grants.AsNoTracking().AsSplitQuery()
             .Where(g => g.Name.ToLower().Contains(text) || (g.Reference != null && g.Reference.ToLower().Contains(text)) || parties.Contains(g.FunderId) || g.Amount == amount)
             .OrderByDescending(g => g.AwardedOn).ThenByDescending(g => g.Id).Take(search.Take).ToListAsync(ct);
         return (gifts, pledges, grants);
@@ -50,6 +51,20 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
     public async Task<IReadOnlyList<Donation>> ListDonationsAsync(CancellationToken ct) =>
         (await db.Donations.ToListAsync(ct)).Union(db.Donations.Local).Distinct().ToList();
 
+    public async Task<IReadOnlyList<Donation>> FindDonationsAsync(Expression<Func<Donation, bool>> test, CancellationToken ct)
+    {
+        var found = await db.Donations.Where(test).ToListAsync(ct);
+        // Tracked gifts as they stand in memory: one changed since loading may now match, or no longer.
+        var matches = test.Compile();
+        return [.. found.Union(db.Donations.Local).Distinct().Where(matches)];
+    }
+
+    public async Task<int> MaxDonationNumberAsync(CancellationToken ct) =>
+        Math.Max(await db.Donations.MaxAsync(d => (int?)d.Number, ct) ?? 0, db.Donations.Local.Select(d => d.Number).DefaultIfEmpty(0).Max());
+
+    public async Task<IReadOnlyList<(string Campaign, DateOnly Date)>> ListCampaignUsesAsync(CancellationToken ct) =>
+        [.. (await db.Donations.Where(d => d.Campaign != null).Select(d => new { d.Campaign, d.Date }).ToListAsync(ct)).Select(x => (x.Campaign!, x.Date))];
+
     public Task<Donation?> GetDonationAsync(Guid id, CancellationToken ct) => db.Donations.SingleOrDefaultAsync(d => d.Id == id, ct);
 
     public async Task<IReadOnlyList<Pledge>> ListPledgesAsync(CancellationToken ct) => await db.Pledges.ToListAsync(ct);
@@ -58,9 +73,9 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
 
     public Task<GiftSettings?> GetSettingsAsync(CancellationToken ct) => db.GiftSettings.FirstOrDefaultAsync(ct);
 
-    public async Task<IReadOnlyList<Grant>> ListGrantsAsync(CancellationToken ct) => await db.Grants.ToListAsync(ct);
+    public async Task<IReadOnlyList<Grant>> ListGrantsAsync(CancellationToken ct) => await db.Grants.AsSplitQuery().ToListAsync(ct);
 
-    public Task<Grant?> GetGrantAsync(Guid id, CancellationToken ct) => db.Grants.SingleOrDefaultAsync(g => g.Id == id, ct);
+    public Task<Grant?> GetGrantAsync(Guid id, CancellationToken ct) => db.Grants.AsSplitQuery().SingleOrDefaultAsync(g => g.Id == id, ct);
 
     public void Add(Grant grant) => db.Grants.Add(grant);
 

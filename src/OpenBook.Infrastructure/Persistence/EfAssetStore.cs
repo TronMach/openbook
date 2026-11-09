@@ -16,9 +16,9 @@ internal sealed class EfAssetStore(OpenBookDbContext db) : IAssetStore
 
     public Task<DepreciationRun?> GetRunAsync(Guid id, CancellationToken ct) => db.DepreciationRuns.SingleOrDefaultAsync(r => r.Id == id, ct);
 
-    public async Task<IReadOnlyList<Loan>> ListLoansAsync(CancellationToken ct) => await db.Loans.ToListAsync(ct);
+    public async Task<IReadOnlyList<Loan>> ListLoansAsync(CancellationToken ct) => await db.Loans.AsSplitQuery().ToListAsync(ct);
 
-    public Task<Loan?> GetLoanAsync(Guid id, CancellationToken ct) => db.Loans.SingleOrDefaultAsync(l => l.Id == id, ct);
+    public Task<Loan?> GetLoanAsync(Guid id, CancellationToken ct) => db.Loans.AsSplitQuery().SingleOrDefaultAsync(l => l.Id == id, ct);
 
     public void Add(FixedAsset asset) => db.FixedAssets.Add(asset);
 

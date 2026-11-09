@@ -124,8 +124,7 @@ public sealed class GiftService(
     public Task<int> UnthankedCountAsync(CancellationToken ct = default) => store.CountUnthankedDonationsAsync(ct);
 
     public async Task<IReadOnlyList<Donation>> ListAsync(DateOnly? from = null, DateOnly? to = null, Guid? donorId = null, CancellationToken ct = default) =>
-        (await store.ListDonationsAsync(ct))
-            .Where(d => (from is null || d.Date >= from) && (to is null || d.Date <= to) && (donorId is null || d.DonorId == donorId))
+        (await store.FindDonationsAsync(d => (from == null || d.Date >= from) && (to == null || d.Date <= to) && (donorId == null || d.DonorId == donorId), ct))
             .OrderByDescending(d => d.Date).ThenByDescending(d => d.Number).ToList();
 
     public Task<Donation?> GetAsync(Guid id, CancellationToken ct = default) => store.GetDonationAsync(id, ct);
@@ -203,7 +202,7 @@ public sealed class GiftService(
                 throw new DomainException("donation.pledge_voided", "That pledge is voided.");
             if (pledge.DonorId != donor.Id)
                 throw new DomainException("donation.pledge_donor", "That pledge is from another donor.");
-            var balance = pledge.Amount - pledge.CancelledAmount - Paid(pledge.Id, await store.ListDonationsAsync(ct));
+            var balance = pledge.Amount - pledge.CancelledAmount - await PaidAsync(pledge.Id, ct);
             if (command.Amount > balance)
                 throw new DomainException("donation.pledge_overpaid", $"Only {balance.ToString("N2", CultureInfo.CurrentCulture)} is left on that pledge.");
             incomeId = pledge.IncomeAccountId;
@@ -235,7 +234,8 @@ public sealed class GiftService(
                 $"{memo} (pledge {pledge.Number}, cash basis)", Donation.Source, id, EntryBasis.CashOnly), ct);
         }
 
-        var number = (await store.ListDonationsAsync(ct)).Select(d => d.Number).DefaultIfEmpty(0).Max() + 1;
+        // The highest number, not every gift: a batch or an import records hundreds in one scope.
+        var number = await store.MaxDonationNumberAsync(ct) + 1;
         var donation = Donation.Create(id, number, donor.Id, command.Date, command.Kind, command.Amount, debit.Id, incomeId, pledge?.Id, classId,
             command.Reference, command.Memo, command.Description, command.GoodsValue, command.GoodsDescription, entry.Id, cash?.Id, clock.UtcNow);
         donation.SetMethod(command.Kind == GiftKind.Cash ? command.Method : null);
@@ -260,10 +260,10 @@ public sealed class GiftService(
 
     /// <summary>The campaigns gifts have been credited to, for the forms' suggestions; the most recently used first.</summary>
     public async Task<IReadOnlyList<string>> CampaignsAsync(CancellationToken ct = default) =>
-        [.. (await store.ListDonationsAsync(ct)).Where(d => d.Campaign is not null)
-            .GroupBy(d => d.Campaign!, StringComparer.OrdinalIgnoreCase)
+        [.. (await store.ListCampaignUsesAsync(ct))
+            .GroupBy(d => d.Campaign, StringComparer.OrdinalIgnoreCase)
             .OrderByDescending(g => g.Max(d => d.Date)).ThenBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase)
-            .Select(g => g.OrderByDescending(d => d.Date).First().Campaign!)];
+            .Select(g => g.OrderByDescending(d => d.Date).First().Campaign)];
 
     /// <summary>
     /// Corrects a posted gift in place (same id and number): its entry is voided (the reversal dated the original date) and
@@ -391,7 +391,7 @@ public sealed class GiftService(
 
     public async Task<PledgeBalance?> GetPledgeAsync(Guid id, CancellationToken ct = default) =>
         await store.GetPledgeAsync(id, ct) is { } p
-            ? new PledgeBalance(p, (await DonorNamesAsync(ct)).GetValueOrDefault(p.DonorId, "?"), Paid(p.Id, await store.ListDonationsAsync(ct)))
+            ? new PledgeBalance(p, (await DonorNamesAsync(ct)).GetValueOrDefault(p.DonorId, "?"), await PaidAsync(p.Id, ct))
             : null;
 
     /// <summary>Records a promise to give: Dr "Pledges Receivable" / Cr the contribution account, accrual basis only.</summary>
@@ -423,7 +423,7 @@ public sealed class GiftService(
         var pledge = await store.GetPledgeAsync(id, ct) ?? throw new EntityNotFoundException(PledgeEntity, id);
         if (pledge.Status == DocumentStatus.Voided)
             throw new DomainException("pledge.already_voided", "This pledge is already voided.");
-        if (Paid(pledge.Id, await store.ListDonationsAsync(ct)) > 0m)
+        if (await PaidAsync(pledge.Id, ct) > 0m)
             throw new DomainException("pledge.has_payments", "Gifts have been paid on this pledge. Void them first.");
         await EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, pledge.Amount, ct);
         var before = Snapshot(pledge);
@@ -459,7 +459,7 @@ public sealed class GiftService(
     public async Task<Pledge> CancelRestAsync(Guid id, DateOnly on, CancellationToken ct = default)
     {
         var pledge = await store.GetPledgeAsync(id, ct) ?? throw new EntityNotFoundException(PledgeEntity, id);
-        var unpaid = pledge.Amount - Paid(pledge.Id, await store.ListDonationsAsync(ct));
+        var unpaid = pledge.Amount - await PaidAsync(pledge.Id, ct);
         pledge.Cancel(unpaid, on, Guid.Empty); // checks before anything is staged
         pledge.UndoCancel();
         await EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, unpaid, ct);
@@ -490,7 +490,8 @@ public sealed class GiftService(
     /// <summary>Every donor who gave in the year (posted gifts), by name.</summary>
     public async Task<IReadOnlyList<Giver>> GiversAsync(int year, CancellationToken ct = default)
     {
-        var gifts = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.Date.Year == year).ToList();
+        var (first, last) = (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
+        var gifts = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Date >= first && d.Date <= last, ct);
         var donors = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         return gifts.GroupBy(g => g.DonorId)
             .Select(g => new Giver(donors[g.Key], g.OrderBy(d => d.Date).ThenBy(d => d.Number).ToList()))
@@ -524,7 +525,8 @@ public sealed class GiftService(
         using var region = CompanyRegion.Use(company);
         var donor = await DonorAsync(pledge.DonorId, ct, activeOnly: false);
         var settings = await GetSettingsAsync(ct);
-        var payments = (await store.ListDonationsAsync(ct)).Where(d => d.PledgeId == pledge.Id && d.Status == DocumentStatus.Posted && d.Date <= asOf).OrderBy(d => d.Date).ToList();
+        var pledgeId = pledge.Id;
+        var payments = (await store.FindDonationsAsync(d => d.PledgeId == pledgeId && d.Status == DocumentStatus.Posted && d.Date <= asOf, ct)).OrderBy(d => d.Date).ToList();
         var paid = payments.Sum(p => p.Amount);
         var standing = pledge.Amount - (pledge.CancelledOn <= asOf ? pledge.CancelledAmount : 0m);
         var left = standing - paid;
@@ -670,6 +672,10 @@ public sealed class GiftService(
     }
 
     private static DateOnly YearEnd(int year) => new(year, 12, 31);
+
+    /// <summary>What's been paid on the pledge: its posted gifts, read on their own.</summary>
+    private async Task<decimal> PaidAsync(Guid pledgeId, CancellationToken ct) =>
+        Paid(pledgeId, await store.FindDonationsAsync(d => d.PledgeId == pledgeId, ct));
 
     internal static decimal Paid(Guid pledgeId, IEnumerable<Donation> gifts) =>
         gifts.Where(d => d.PledgeId == pledgeId && d.Status == DocumentStatus.Posted).Sum(d => d.Amount);

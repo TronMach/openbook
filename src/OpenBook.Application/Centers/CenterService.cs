@@ -61,7 +61,7 @@ public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, 
             rows.Add(new("sales_receipt", r.Id, r.Date, r.Number, r.Memo, r.Total, null, Posted(r.Status)));
         foreach (var c in await sales.ListCreditMemosAsync(customerId, ct))
             rows.Add(new("credit_memo", c.Id, c.Date, c.Number, c.Memo, c.Total, c.Status == DocumentStatus.Posted && c.Balance > 0m ? c.Balance : null, Posted(c.Status)));
-        var gifts = (await nonprofit.ListDonationsAsync(ct)).Where(g => g.DonorId == customerId).ToList();
+        var gifts = await nonprofit.FindDonationsAsync(g => g.DonorId == customerId, ct);
         foreach (var g in gifts)
             rows.Add(new("donation", g.Id, g.Date, g.Number.ToString(CultureInfo.InvariantCulture), g.Reference ?? g.Memo, g.Amount, null, Posted(g.Status)));
         foreach (var p in (await nonprofit.ListPledgesAsync(ct)).Where(p => p.DonorId == customerId))

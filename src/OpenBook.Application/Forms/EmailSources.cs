@@ -238,8 +238,9 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
 
         var year = source.Year ?? throw new DomainException("email.year_required", "Choose the year of the giving statement.");
         var giver = await DonorAsync(source.Id, ct);
-        var total = (await store.ListDonationsAsync(ct))
-            .Where(d => d.DonorId == giver.Id && d.Status == DocumentStatus.Posted && d.Date.Year == year && d.Kind != GiftKind.InKind).Sum(d => d.Amount);
+        var (giverId, first, last) = (giver.Id, new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
+        var total = (await store.FindDonationsAsync(d => d.DonorId == giverId && d.Status == DocumentStatus.Posted && d.Date >= first && d.Date <= last && d.Kind != GiftKind.InKind, ct))
+            .Sum(d => d.Amount);
         return new EmailContext("customer", giver.Id, giver.DisplayName, $"Giving statement {year}", FormService.FileName(company, $"Giving statement {year}", giver.DisplayName),
             giver.Email, new Dictionary<string, string>
             {
