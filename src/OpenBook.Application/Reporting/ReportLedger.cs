@@ -27,7 +27,7 @@ public sealed record SegmentFilter(Guid? ClassId = null, Guid? LocationId = null
 /// and credit memos (cost of goods sold against the inventory asset) are kept as posted: stock leaves when it's sold. So
 /// are a bill's corrections of the cost of stock sold before it came in (<see cref="Inventory.InventoryService.ShortfallMemo"/>).
 /// </summary>
-public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases, Companies.ICompanyStore companies)
+public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases, Companies.ICompanyStore companies, ReportHistoryCache history)
 {
     /// <summary>Entries whose effect cash basis replaces with payment-time recognition.</summary>
     private static readonly HashSet<string> AccrualDocuments =
@@ -76,13 +76,25 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             return [.. totals.Where(t => t.Value.Before != 0m).Select(t => BroughtForward(broughtForward, t.Key, t.Value.Before, null, null)), .. detail];
         }
 
+        // The history has to be worked out from every document (cash basis, or a filter): kept while the books don't change,
+        // and the period read on its own. The lines of a range are those of the whole ledger dated in it (LedgerFoldingTests).
+        var stamp = await ledger.ChangeStampAsync(ct);
+        if (stamp is not null && history.TryGet(stamp, basis, broughtForward, filter, out var kept))
+            return [.. kept, .. detailFrom > to ? [] : await LinesAsync(basis, detailFrom, to, filter, ct)];
+
+        // Not kept: one pass over everything, as before, and the history it gives is kept for the next report.
         var lines = await LinesAsync(basis, null, to, filter, ct);
-        var folded = lines.Where(l => l.Date < detailFrom)
-            .GroupBy(l => (l.AccountId, l.ClassId, l.LocationId))
-            .Select(g => BroughtForward(broughtForward, g.Key.AccountId, g.Sum(l => l.Amount), g.Key.ClassId, g.Key.LocationId))
-            .Where(l => l.Amount != 0m);
+        var folded = Fold(lines.Where(l => l.Date < detailFrom), broughtForward);
+        if (stamp is not null)
+            history.Put(stamp, basis, broughtForward, filter, folded);
         return [.. folded, .. lines.Where(l => l.Date >= detailFrom)];
     }
+
+    /// <summary>The lines folded into one per account, class and location, dated <paramref name="date"/>; those adding up to nothing left out.</summary>
+    private static IReadOnlyList<LedgerLine> Fold(IEnumerable<LedgerLine> lines, DateOnly date) =>
+        [.. lines.GroupBy(l => (l.AccountId, l.ClassId, l.LocationId))
+            .Select(g => BroughtForward(date, g.Key.AccountId, g.Sum(l => l.Amount), g.Key.ClassId, g.Key.LocationId))
+            .Where(l => l.Amount != 0m)];
 
     /// <summary>
     /// Totals only: each account's lines before <paramref name="splitAt"/> folded into one line dated the day before,

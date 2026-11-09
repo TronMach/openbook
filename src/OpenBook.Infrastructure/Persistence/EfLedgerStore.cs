@@ -153,6 +153,22 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
     public async Task<DateOnly?> FirstEntryDateAsync(CancellationToken ct) =>
         await db.JournalEntries.MinAsync(e => (DateOnly?)e.Date, ct);
 
+    /// <summary>Ids this close to the highest are counted, for transactions that took their ids before others committed.</summary>
+    private const long StampWindow = 10_000;
+
+    public async Task<string?> ChangeStampAsync(CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is not null || db.ChangeTracker.HasChanges())
+            return null;
+        var company = await db.Companies.Select(c => c.Id).FirstOrDefaultAsync(ct);
+        // The newest record itself too: after a backup is restored, new work can reach the same highest id with other records.
+        var newest = await db.AuditRecords.OrderByDescending(r => r.Id).Select(r => new { r.Id, r.EntityId, r.OccurredAt }).FirstOrDefaultAsync(ct);
+        var highest = newest?.Id ?? 0;
+        var floor = highest - StampWindow;
+        var latest = await db.AuditRecords.CountAsync(r => r.Id > floor, ct);
+        return $"{company}:{highest}:{latest}:{newest?.EntityId}:{newest?.OccurredAt.UtcTicks}";
+    }
+
     public async Task<IReadOnlyList<RecurringEntry>> ListRecurringAsync(CancellationToken ct) =>
         (await db.RecurringEntries.ToListAsync(ct)).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 

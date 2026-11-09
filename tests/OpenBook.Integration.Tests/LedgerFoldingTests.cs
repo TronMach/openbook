@@ -86,6 +86,30 @@ public sealed class LedgerFoldingTests : IAsyncLifetime
             balances.Where(x => x.Value != 0m).OrderBy(x => x.Key));
     }
 
+    /// <summary>
+    /// The cash-basis history is kept between reports (<see cref="ReportHistoryCache"/>) while the books stay as they were:
+    /// a payment dated in the history, entered after the history was kept, must show at once.
+    /// </summary>
+    [Fact]
+    public async Task Kept_history_is_worked_out_again_after_any_change()
+    {
+        var (split, to) = (new DateOnly(2025, 1, 1), new DateOnly(2026, 1, 30));
+        var before = await In<ReportLedger, IReadOnlyList<LedgerLine>>(s => s.TotalsAsync(ReportBasis.Cash, split, to));
+        Assert.Equal(Sums(await In<ReportLedger, IReadOnlyList<LedgerLine>>(s => s.LinesAsync(ReportBasis.Cash, null, to))), Sums(before));
+        // Asked again with nothing changed: the kept history, the same answer.
+        Assert.Equal(Sums(before), Sums(await In<ReportLedger, IReadOnlyList<LedgerLine>>(s => s.TotalsAsync(ReportBasis.Cash, split, to))));
+
+        // The rest of the 2024 invoice, paid in 2024: income in the history, on the cash basis.
+        var oldest = (await In<ISalesStore, IReadOnlyList<Invoice>>(s => s.ListOpenInvoicesAsync(null, default))).MinBy(i => i.Date)!;
+        var undeposited = (await In<Application.Accounts.AccountService, ChartOfAccounts>(s => s.GetChartAsync())).FindByFullName("Undeposited Funds")!;
+        await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(oldest.CustomerId, new DateOnly(2024, 12, 1), undeposited.Id,
+            [new ApplyToInvoice(oldest.Id, oldest.Balance)])));
+
+        var after = await In<ReportLedger, IReadOnlyList<LedgerLine>>(s => s.TotalsAsync(ReportBasis.Cash, split, to));
+        Assert.Equal(Sums(await In<ReportLedger, IReadOnlyList<LedgerLine>>(s => s.LinesAsync(ReportBasis.Cash, null, to))), Sums(after));
+        Assert.NotEqual(Sums(before.Where(l => l.Date < split)), Sums(after.Where(l => l.Date < split)));
+    }
+
     [Fact]
     public async Task An_account_brought_to_zero_on_the_last_day_is_zero_in_the_trial_balance()
     {

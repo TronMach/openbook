@@ -127,6 +127,13 @@ public interface ILedgerStore
     /// <summary>The date of the earliest journal entry; null with none.</summary>
     Task<DateOnly?> FirstEntryDateAsync(CancellationToken ct);
 
+    /// <summary>
+    /// A stamp that changes with any saved change to the books (every change writes an audit record in its save): the
+    /// company, the highest audit id and how many of the latest ids exist, since on PostgreSQL ids can show up out of
+    /// order as transactions commit. Null inside a transaction or with unsaved changes, whose state may still be undone.
+    /// </summary>
+    Task<string?> ChangeStampAsync(CancellationToken ct);
+
     Task<IReadOnlyList<RecurringEntry>> ListRecurringAsync(CancellationToken ct);
 
     /// <summary>Tracked, with lines.</summary>

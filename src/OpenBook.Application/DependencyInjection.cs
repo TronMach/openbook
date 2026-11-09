@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<OpeningBalanceService>();
         services.AddScoped<AuditLogQuery>();
         services.AddScoped<ReportLedger>();
+        services.AddSingleton<ReportHistoryCache>();
         services.AddScoped<FinancialReports>();
         services.AddScoped<StatementReports>();
         services.AddScoped<ActivityReports>();
