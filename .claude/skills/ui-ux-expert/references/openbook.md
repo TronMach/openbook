@@ -67,6 +67,7 @@ Pages are static server-rendered by default; `@rendermode InteractiveServer` onl
 |---|---|
 | Link that may need more access | `<ActionLink Href Class>` |
 | Post that may need more access | `<PostForm Action>` (static) with `<AntiforgeryToken />` |
+| A form the page handles itself (`EditForm`, `@formname`) that may need more access | `<FormAccess Action>` around what is inside the form |
 | Choose a customer, vendor, item, account (interactive) | `SearchSelect` with `PickerOptions.…`; `CustomerAdded` / `VendorAdded` / `ItemAdded` gives "+ Add" |
 | Same on a static form | `data-search` on the `<select>` / `InputSelect` |
 | Advanced or accounting fields | `<MoreOptions Open=… HasContent=… Title=…>` |

@@ -5,6 +5,7 @@
 @inject VendorService VendorService
 @inject BillService Bills
 @inject BillPaymentService Payments
+@inject PayablesService Payables
 @inject IPurchasesStore Purchases
 @inject AccountService AccountService
 @inject NavigationManager Navigation
@@ -45,7 +46,12 @@
     {
         var today = CompanyTime.Today;
         <div class="summary-bar">
-            <div><span class="label">You owe</span><span class="value">@Labels.Amount(_bills.Sum(b => b.Balance))</span></div>
+            @* Unpaid bills less credit not used yet, as the vendors list and the aging show it. *@
+            <div><span class="label">You owe</span><span class="value">@Labels.Amount(_bills.Sum(b => b.Balance) - _credit)</span></div>
+            @if (_credit != 0m)
+            {
+                <div><span class="label">Credit not used yet</span><span class="value">@Labels.Amount(_credit)</span></div>
+            }
             <div><span class="label">Overdue</span><span class="value">@Labels.Amount(_bills.Where(b => b.IsOverdue(today)).Sum(b => b.Balance))</span></div>
         </div>
         <div class="split-grid">
@@ -101,6 +107,7 @@
         <EditForm Model="Input" FormName="vendor" OnValidSubmit="SaveAsync" method="post">
             <input type="hidden" name="Input.Version" value="@Input.Version" />
             <DataAnnotationsValidator />
+            <FormAccess Action="@FormPath">
             <div class="row">
                 <div class="field">
                     <label for="name">Display name</label>
@@ -196,6 +203,7 @@
                 <button type="submit">@(_vendor is null ? "Create vendor" : "Save changes")</button>
                 <a href="/vendors">Cancel</a>
             </div>
+            </FormAccess>
         </EditForm>
     </div>
 
@@ -203,7 +211,9 @@
     {
         <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync">
             <AntiforgeryToken />
-            <button type="submit" class="secondary">@(_vendor.IsActive ? "Make inactive" : "Make active")</button>
+            <FormAccess Action="@FormPath">
+                <button type="submit" class="secondary">@(_vendor.IsActive ? "Make inactive" : "Make active")</button>
+            </FormAccess>
         </form>
         <AuthorizeView>
             <VendorBankDetails VendorId="_vendor.Id" CanEdit="@context.User.CanPost($"/purchases/ach/vendors/{_vendor.Id}")" Error="@BankError" />
@@ -224,9 +234,13 @@
     private ChartOfAccounts _chart = new([]);
     private List<Account> _categories = [];
     private string? _error;
+    private decimal _credit;
 
     [Parameter]
     public Guid? Id { get; set; }
+
+    /// <summary>Where this page's own forms post: the page itself.</summary>
+    private string FormPath => Id is { } id ? $"/vendors/{id}" : "/vendors/new";
 
     [SupplyParameterFromQuery(Name = "bankError")] private string? BankError { get; set; }
 
@@ -247,6 +261,8 @@
             _bills = await Bills.ListAsync(id);
             _payments = await Payments.ListAsync(id);
             _expenses = await Purchases.ListExpensesAsync(id, default);
+            var aging = (await Payables.AgingAsync(CompanyTime.Today)).Vendors.FirstOrDefault(a => a.Vendor.Id == id);
+            _credit = aging is null ? 0m : aging.Credits.Sum(c => c.Amount) + aging.PaidAhead;
         }
 
         Input ??= _vendor is null
