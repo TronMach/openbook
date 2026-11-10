@@ -9,10 +9,12 @@
         <h1>Petty cash</h1>
         <ActionLink Class="button secondary" Href="/banking">Back to banking</ActionLink>
     </div>
-    <p class="muted">
-        A petty cash box holds a fixed float. Record what's spent from it as ordinary spends from its account (keep the receipts),
-        count the cash now and then (any over or short is posted), and replenish it from the bank back up to the float.
-    </p>
+    <p class="muted">@L["A petty cash box holds a fixed float. Open a box to work through it, in this order:"]</p>
+    <ol class="muted">
+        <li>@L["Record what was spent from the box as spending from its account (keep the receipts)."]</li>
+        <li>@L["Count the cash. Any over or short is recorded, so the books match the box."]</li>
+        <li>@L["Replenish it from the bank, back up to the float."]</li>
+    </ol>
 
     @if (Error is not null)
     {
@@ -71,6 +73,7 @@
                 <div class="field">
                     <label for="float">Float</label>
                     <input id="float" name="float" class="amount" inputmode="decimal" required placeholder="200.00" />
+                    <span class="hint">@L["What the box should hold once it's replenished."]</span>
                 </div>
                 <div class="field">
                     <label for="custodian">Custodian <span class="muted">(optional)</span></label>

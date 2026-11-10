@@ -101,6 +101,9 @@
   <data name="A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role." xml:space="preserve">
     <value>A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role.</value>
   </data>
+  <data name="A petty cash box holds a fixed float. Open a box to work through it, in this order:" xml:space="preserve">
+    <value>A petty cash box holds a fixed float. Open a box to work through it, in this order:</value>
+  </data>
   <data name="A product, not counted in stock" xml:space="preserve">
     <value>A product, not counted in stock</value>
   </data>
@@ -359,6 +362,9 @@
   <data name="Barcode" xml:space="preserve">
     <value>Barcode</value>
   </data>
+  <data name="Before you count, record each receipt in the box as spending from it. Anything spent and not recorded shows up as cash short when you count." xml:space="preserve">
+    <value>Before you count, record each receipt in the box as spending from it. Anything spent and not recorded shows up as cash short when you count.</value>
+  </data>
   <data name="Biggest expenses, year to date" xml:space="preserve">
     <value>Biggest expenses, year to date</value>
   </data>
@@ -608,6 +614,18 @@
   <data name="Cost" xml:space="preserve">
     <value>Cost</value>
   </data>
+  <data name="Count recorded. The box agrees with the books." xml:space="preserve">
+    <value>Count recorded. The box agrees with the books.</value>
+  </data>
+  <data name="Count recorded. The box was over by {0}; that's been recorded to “{1}”, so the books now match the box." xml:space="preserve">
+    <value>Count recorded. The box was over by {0}; that's been recorded to “{1}”, so the books now match the box.</value>
+  </data>
+  <data name="Count recorded. The box was short by {0}; that's been recorded to “{1}”, so the books now match the box." xml:space="preserve">
+    <value>Count recorded. The box was short by {0}; that's been recorded to “{1}”, so the books now match the box.</value>
+  </data>
+  <data name="Count the cash. Any over or short is recorded, so the books match the box." xml:space="preserve">
+    <value>Count the cash. Any over or short is recorded, so the books match the box.</value>
+  </data>
   <data name="Counting what's on order and promised to customers" xml:space="preserve">
     <value>Counting what's on order and promised to customers</value>
   </data>
@@ -821,6 +839,9 @@
   <data name="Enter Vendor Credits" xml:space="preserve">
     <value>Enter Vendor Credits</value>
   </data>
+  <data name="Enter what's in the box. The books say it holds {0} today. If your count differs from the books on that date, the difference is recorded to “{1}” (created on first use) so the books match the box." xml:space="preserve">
+    <value>Enter what's in the box. The books say it holds {0} today. If your count differs from the books on that date, the difference is recorded to “{1}” (created on first use) so the books match the box.</value>
+  </data>
   <data name="Entered" xml:space="preserve">
     <value>Entered</value>
   </data>
@@ -1004,6 +1025,9 @@
   <data name="Go back" xml:space="preserve">
     <value>Go back</value>
   </data>
+  <data name="Go to Replenish" xml:space="preserve">
+    <value>Go to Replenish</value>
+  </data>
   <data name="Go to the home page" xml:space="preserve">
     <value>Go to the home page</value>
   </data>
@@ -1069,6 +1093,9 @@
   </data>
   <data name="If it keeps happening, give your administrator this reference:" xml:space="preserve">
     <value>If it keeps happening, give your administrator this reference:</value>
+  </data>
+  <data name="If the difference is really spending that wasn't recorded yet, void the difference, record the spending and count again." xml:space="preserve">
+    <value>If the difference is really spending that wasn't recorded yet, void the difference, record the spending and count again.</value>
   </data>
   <data name="Import" xml:space="preserve">
     <value>Import</value>
@@ -1394,6 +1421,9 @@
   <data name="Next" xml:space="preserve">
     <value>Next</value>
   </data>
+  <data name="Next: replenish {0} from the bank to bring the box back to its float." xml:space="preserve">
+    <value>Next: replenish {0} from the bank to bring the box back to its float.</value>
+  </data>
   <data name="Next: {0}, due {1}" xml:space="preserve">
     <value>Next: {0}, due {1}</value>
   </data>
@@ -1544,6 +1574,9 @@
   <data name="Nothing to receive" xml:space="preserve">
     <value>Nothing to receive</value>
   </data>
+  <data name="Nothing to replenish: the books say the box holds its float." xml:space="preserve">
+    <value>Nothing to replenish: the books say the box holds its float.</value>
+  </data>
   <data name="Number" xml:space="preserve">
     <value>Number</value>
   </data>
@@ -1594,6 +1627,9 @@
   </data>
   <data name="Open the capture page" xml:space="preserve">
     <value>Open the capture page</value>
+  </data>
+  <data name="Open the difference" xml:space="preserve">
+    <value>Open the difference</value>
   </data>
   <data name="Open the guide" xml:space="preserve">
     <value>Open the guide</value>
@@ -1753,6 +1789,9 @@
   </data>
   <data name="Petty cash" xml:space="preserve">
     <value>Petty cash</value>
+  </data>
+  <data name="Petty cash box created." xml:space="preserve">
+    <value>Petty cash box created.</value>
   </data>
   <data name="Phone" xml:space="preserve">
     <value>Phone</value>
@@ -1955,8 +1994,17 @@
   <data name="Record money paid on an invoice" xml:space="preserve">
     <value>Record money paid on an invoice</value>
   </data>
+  <data name="Record spending" xml:space="preserve">
+    <value>Record spending</value>
+  </data>
   <data name="Record what vendors bill you" xml:space="preserve">
     <value>Record what vendors bill you</value>
+  </data>
+  <data name="Record what was spent" xml:space="preserve">
+    <value>Record what was spent</value>
+  </data>
+  <data name="Record what was spent from the box as spending from its account (keep the receipts)." xml:space="preserve">
+    <value>Record what was spent from the box as spending from its account (keep the receipts).</value>
   </data>
   <data name="Recovery codes left: {0}." xml:space="preserve">
     <value>Recovery codes left: {0}.</value>
@@ -2041,6 +2089,9 @@
   </data>
   <data name="Replaces every recovery code; the old ones stop working." xml:space="preserve">
     <value>Replaces every recovery code; the old ones stop working.</value>
+  </data>
+  <data name="Replenish it from the bank, back up to the float." xml:space="preserve">
+    <value>Replenish it from the bank, back up to the float.</value>
   </data>
   <data name="Reported by the channel" xml:space="preserve">
     <value>Reported by the channel</value>
@@ -2357,6 +2408,9 @@
   <data name="Status" xml:space="preserve">
     <value>Status</value>
   </data>
+  <data name="Step {0} of 3" xml:space="preserve">
+    <value>Step {0} of 3</value>
+  </data>
   <data name="Stock" xml:space="preserve">
     <value>Stock</value>
   </data>
@@ -2428,6 +2482,15 @@
   </data>
   <data name="The agencies you pay, the rates they charge and the tax codes customers and invoices use." xml:space="preserve">
     <value>The agencies you pay, the rates they charge and the tax codes customers and invoices use.</value>
+  </data>
+  <data name="The box holds its float, so there's nothing to replenish. You're done until money is spent from it." xml:space="preserve">
+    <value>The box holds its float, so there's nothing to replenish. You're done until money is spent from it.</value>
+  </data>
+  <data name="The box is {0} under its float today, but there's no other bank account to replenish it from." xml:space="preserve">
+    <value>The box is {0} under its float today, but there's no other bank account to replenish it from.</value>
+  </data>
+  <data name="The box is {0} under its float today. Replenish records a transfer of the float less the balance on the date from the bank account you choose into the box. Take the same amount of cash from the bank and put it in the box." xml:space="preserve">
+    <value>The box is {0} under its float today. Replenish records a transfer of the float less the balance on the date from the bank account you choose into the box. Take the same amount of cash from the bank and put it in the box.</value>
   </data>
   <data name="The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below." xml:space="preserve">
     <value>The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below.</value>
@@ -2563,6 +2626,9 @@
   </data>
   <data name="Transfer stock" xml:space="preserve">
     <value>Transfer stock</value>
+  </data>
+  <data name="Transferred {0} into the box in the books. Now take that much cash from the bank and put it in the box, which brings it back to its float." xml:space="preserve">
+    <value>Transferred {0} into the box in the books. Now take that much cash from the bank and put it in the box, which brings it back to its float.</value>
   </data>
   <data name="Try again" xml:space="preserve">
     <value>Try again</value>
@@ -2713,6 +2779,9 @@
   </data>
   <data name="What is it?" xml:space="preserve">
     <value>What is it?</value>
+  </data>
+  <data name="What the box should hold once it's replenished." xml:space="preserve">
+    <value>What the box should hold once it's replenished.</value>
   </data>
   <data name="What You Owe" xml:space="preserve">
     <value>What You Owe</value>
