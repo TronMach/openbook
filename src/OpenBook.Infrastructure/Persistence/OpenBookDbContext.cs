@@ -48,6 +48,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<AuditRecord> AuditRecords => Set<AuditRecord>();
+    public DbSet<AuditLink> AuditLinks => Set<AuditLink>();
     public DbSet<Company> Companies => Set<Company>();
     public DbSet<User> Users => Set<User>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
@@ -436,6 +437,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(r => r.Action).HasConversion<string>().HasMaxLength(20);
             b.Property(r => r.EntityType).HasMaxLength(60);
             b.HasIndex(r => new { r.EntityType, r.EntityId });
+        });
+
+        // The tamper-evident chain over the audit log: append-only like it (triggers in the migration AuditChain).
+        modelBuilder.Entity<AuditLink>(b =>
+        {
+            b.ToTable("AuditChain");
+            b.HasKey(l => l.Position);
+            b.Property(l => l.Position).ValueGeneratedNever();
+            b.Property(l => l.Hash).HasMaxLength(64);
+            b.HasIndex(l => l.AuditRecordId).IsUnique();
+            b.HasOne<AuditRecord>().WithMany().HasForeignKey(l => l.AuditRecordId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Company>(b =>

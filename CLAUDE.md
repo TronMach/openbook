@@ -17,6 +17,7 @@ Licence: AGPL-3.0-or-later (`LICENSE`; decided 2026-11-01, when the repository w
 - Restore a backup too large to upload (OpenBook stopped; same checks and safety copy as the page, SQLite only): `dotnet run --project src/OpenBook.Web -- restore-backup <file>`
 - Move a SQLite company file into an empty PostgreSQL database (OpenBook stopped; the file is left unchanged): `dotnet run --project src/OpenBook.Web -- move-to-postgres --to "Host=…;Database=…;Username=…;Password=…" [--from <file>] [--source-keys <folder>] [--target-keys <folder>]` (file defaults to this install's; key folders to this install's Data Protection keys)
 - Demo company for trying OpenBook or timing pages on books with history: `dotnet run --project src/OpenBook.Web -- make-demo --ConnectionStrings:OpenBook="Data Source=artifacts/perf/demo.db" [--years 3] [--invoices 150] [--password …]` (a new file only; everything entered through the services, same data for the same options; three years at 150 invoices a month take about four minutes).
+- Check the audit trail (reads only; OpenBook may be running): `dotnet run --project src/OpenBook.Web -- verify-audit [--against <backup file>] [--fingerprint <position>:<hash>]` (exit 3 when the chain is broken or differs; `docs/dev/ledger.md`, Audit chain).
 - Encrypt / decrypt the SQLite company file in place (OpenBook stopped, key from `OpenBook:EncryptionKey`): `dotnet run --project src/OpenBook.Web -- encrypt-database` / `decrypt-database`
 - New migration (SQLite): `dotnet ef migrations add <Name> -p src/OpenBook.Infrastructure -s src/OpenBook.Infrastructure -o Persistence/Migrations`
 - New migration (PostgreSQL), every time a SQLite one is added: `dotnet ef migrations add <Name> -p src/OpenBook.Infrastructure.Postgres -s src/OpenBook.Infrastructure.Postgres -o Migrations`
@@ -39,7 +40,7 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 - Everything that affects balances posts through `PostingEngine` as a `JournalEntry`. No other code writes `JournalLines`.
 - Money is `decimal` (or `Money`) in code and integer minor units (`AmountMinor`) in the DB. Never `double`/`float` in Domain (`ArchitectureTests` enforces).
 - Posted entries are immutable. Corrections = `VoidAsync`, which posts a same-date reversal. Never delete.
-- Every change writes an `AuditRecord` in the same save.
+- Every change writes an `AuditRecord` in the same save. A background job then chains each record to the one before by a SHA-256 hash (`AuditChain`, append-only by trigger; only `AuditChainService` writes it), which the books check works out again.
 - DB triggers enforce balance-on-seal, immutability and append-only audit (overview in `SqliteLedgerTriggers`). New entries are inserted unsealed and sealed in the same transaction by `OpenBookDbContext.SaveChangesAsync`.
 
 ## Migrations (SQLite)

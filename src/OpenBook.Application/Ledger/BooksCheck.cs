@@ -58,7 +58,8 @@ public sealed class BooksCheckService(
     Assets.IAssetStore assets,
     Nonprofit.INonprofitStore nonprofit,
     Channels.IChannelStore channels,
-    Channels.IChannelOrderStore channelOrders)
+    Channels.IChannelOrderStore channelOrders,
+    Auditing.AuditChainService auditChain)
 {
     /// <summary>Most findings listed per check; the summary still counts them all.</summary>
     public const int MaxFindings = 50;
@@ -108,6 +109,7 @@ public sealed class BooksCheckService(
             await LoansTieAsync(data, ct),
             await ReconciliationsAsync(data, ct),
             await StockBelowZeroAsync(ct),
+            await AuditTrailAsync(ct),
         };
         return new BooksCheckReport(clock.UtcNow, results);
     }
@@ -641,6 +643,32 @@ public sealed class BooksCheckService(
             "Items are below zero on hand only when they may be sold short.",
             findings, $"{stock.Count:N0} items checked.");
     }
+
+    private async Task<CheckResult> AuditTrailAsync(CancellationToken ct)
+    {
+        const string key = "audit-trail", title = "The audit trail is unchanged";
+        const string description = "Every audit record is still exactly as it was written: each is chained to the one before it by a fingerprint, worked out again here.";
+        var report = await auditChain.VerifyAsync(ct);
+        var findings = report.Findings.Select(f => new CheckFinding(f.Text)).ToList();
+        var head = report.Head is { } h ? $" Latest: position {h.Position:N0}, fingerprint {Domain.Auditing.AuditChain.Fingerprint(h.Hash)}." : "";
+        if (report.Broken)
+            return new CheckResult(key, title, description, CheckOutcome.Problem,
+                $"The chain is broken: audit records were changed or deleted after they were written. {report.Checked:N0} links checked.{head}", findings);
+        // Before the first link (a company just upgraded: the job chains its history shortly after OpenBook starts).
+        if (report.Checked == 0)
+            return new CheckResult(key, title, description, CheckOutcome.Ok,
+                "No audit records chained yet: OpenBook chains them a few seconds after it starts.", findings);
+        var summary = $"{report.Checked:N0} audit records chained, unbroken.{head}";
+        // Records wait half a minute for the job that chains them; much longer means it isn't running (Settings → System
+        // says why). Said in the summary rather than as a note: it isn't a fault in the books.
+        if (report.Waiting.Count > 0)
+            summary += report.Waiting.Count > AuditChainLimit
+                ? $" More than {AuditChainLimit:N0} older records are still waiting to join the chain: is the job that adds them running (Settings → System)?"
+                : $" {report.Waiting.Count:N0} older record(s) still waiting to join the chain: is the job that adds them running (Settings → System)?";
+        return new CheckResult(key, title, description, findings.Count == 0 ? CheckOutcome.Ok : CheckOutcome.Note, summary, findings);
+    }
+
+    private const int AuditChainLimit = Auditing.AuditChainService.MaxFindings;
 
     private static CheckResult Result(string key, string title, string description, List<CheckFinding> findings, string whenOk) =>
         findings.Count == 0

@@ -7,7 +7,7 @@ namespace OpenBook.Infrastructure.Persistence;
 /// <item>an entry starts unsealed, and sealing it checks it has two or more lines that sum to zero;</item>
 /// <item>sealed entries can't change, except one Posted → Voided transition on a standard entry;</item>
 /// <item>lines can only be added to an unsealed entry, and can't be changed or deleted at all;</item>
-/// <item>audit records are append-only.</item>
+/// <item>audit records, and the chain of hashes over them (<c>AuditChain</c>), are append-only.</item>
 /// </list>
 /// Someone who can edit the file can drop the triggers too. Restore refuses a file that has lost one, by name; it
 /// doesn't compare what they say. The SQL lives in the migrations that create or replace each trigger (InitialLedger,
@@ -30,11 +30,15 @@ public static class SqliteLedgerTriggers
         "TR_JournalLines_NoDelete",
         "TR_AuditRecords_NoUpdate",
         "TR_AuditRecords_NoDelete",
+        "TR_AuditChain_NoUpdate",
+        "TR_AuditChain_NoDelete",
     ];
 
     /// <summary>The migration that added a trigger, when it's not there from the first: a file from before it hasn't got one yet, and gets it on migrating.</summary>
     public static IReadOnlyDictionary<string, string> AddedBy { get; } = new Dictionary<string, string>
     {
         ["TR_JournalEntries_NoSealedInsert"] = "20261106213648_LedgerGaps",
+        ["TR_AuditChain_NoUpdate"] = "20261110184528_AuditChain",
+        ["TR_AuditChain_NoDelete"] = "20261110184528_AuditChain",
     };
 }

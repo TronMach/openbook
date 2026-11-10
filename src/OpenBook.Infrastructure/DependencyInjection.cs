@@ -81,6 +81,8 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Reporting.IReportingStore, EfReportingStore>();
         services.AddScoped<OpenBook.Application.Inventory.IInventoryStore, EfInventoryStore>();
         services.AddScoped<OpenBook.Application.Webhooks.IWebhookStore, EfWebhookStore>();
+        services.AddScoped<OpenBook.Application.Auditing.IAuditChainStore, EfAuditChainStore>();
+        services.AddScoped<OpenBook.Application.Auditing.IAuditChainFiles, SqliteAuditChainFiles>();
         services.AddScoped<OpenBook.Application.Notes.INoteStore, EfNoteStore>();
         services.AddScoped<OpenBook.Application.Projects.IProjectStore, EfProjectStore>();
         services.AddScoped<OpenBook.Application.Assets.IAssetStore, EfAssetStore>();

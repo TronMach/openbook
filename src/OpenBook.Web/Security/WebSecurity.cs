@@ -65,6 +65,7 @@ public static class WebSecurity
         services.AddHostedService<BankSyncHostedService>();
         services.AddHostedService<ChannelSyncHostedService>();
         services.AddHostedService<WebhookDispatchService>();
+        services.AddHostedService<AuditChainLinkingService>();
         return services;
     }
 

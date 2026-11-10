@@ -41,6 +41,7 @@ The program folder's `openbook.install.json` makes every run of it a desktop one
 
 - `OpenBook.Web.exe reset-password <username>`: a forgotten password (OpenBook quit first is safest). Add `--restore-admin` to make them an active admin, when nobody else can.
 - `OpenBook.Web.exe encrypt-database` with `OpenBook__EncryptionKey` set: encrypt the company file. Quit OpenBook first (Settings > System > Quit OpenBook) and keep a backup; it refuses while OpenBook is running. `decrypt-database` undoes it. The original stays beside the file as a `.bak` until you delete it.
+- `OpenBook.Web.exe verify-audit`: check that the audit trail is as it was written (it reads only, so OpenBook may be running). Add `--against <backup file>` to check that nothing the backup holds has been rewritten since, or `--fingerprint <position>:<hash>` for a fingerprint noted from the accountant's package. Exit code 3 means it's broken or differs.
 - `OpenBook.Web.exe move-to-postgres …`: move the company to OpenBook Server (see [Moving a desktop company in](server.md#moving-a-desktop-company-in)).
 
 ## Building the installer

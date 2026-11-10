@@ -90,6 +90,9 @@ Once a year's books are done, **Allocate** that year: OpenBook takes the fiscal 
 - **Loan balances match the books**: what's left on each loan by its payments equals the loan accounts.
 - **Reconciliations still add up**: each finished reconciliation starts where the last ended and its cleared transactions still reach the statement's balance.
 - **No stock below zero unless allowed**.
+- **The audit trail is unchanged**: every record in the audit log is still exactly as it was written. OpenBook links each record to the one before it by a *fingerprint* worked out from both, a few seconds after the change is saved, and this check works every fingerprint out again. Changing or deleting a record afterwards, even by editing the company file directly, breaks the chain from there. The summary shows the latest position and fingerprint.
 
 A **note** means the figures agree once entries made straight to an account are counted, such as a journal entry to accounts receivable (aging can't list those); the entries are listed so you can see them. A **problem** lists the records involved, each a link. When the daily check finds a problem, the home page's to-do list says so. From the command line, `openbook check` runs it (exit code 3 when there are problems).
+
+Someone who can edit the company file could work every fingerprint out again after changing a record. Fingerprints kept outside OpenBook show that: the accountant's package (**Accountant tools**) writes the latest one into its README, and a backup holds the chain as it was. Whoever looks after the installation can check the company against either (`verify-audit`, in the admin guides): if a position's fingerprint has changed, the audit trail was rewritten after it was noted, or the company was restored from an older backup since.
 
