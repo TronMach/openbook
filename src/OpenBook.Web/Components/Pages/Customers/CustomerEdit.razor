@@ -55,7 +55,12 @@
     {
         var today = CompanyTime.Today;
         <div class="summary-bar">
-            <div><span class="label">Balance</span><span class="value">@Labels.Amount(_invoices.Sum(i => i.Balance))</span></div>
+            @* Open invoices less credit not used yet: the customer list's own figure, so the two agree. *@
+            <div><span class="label">Balance</span><span class="value">@Labels.Amount(_own?.Balance ?? _invoices.Sum(i => i.Balance))</span></div>
+            @if (_own is { Credit: not 0m })
+            {
+                <div><span class="label">Credit not used yet</span><span class="value">@Labels.Amount(_own.Credit)</span></div>
+            }
             <div><span class="label">Overdue</span><span class="value">@Labels.Amount(_invoices.Where(i => i.IsOverdue(today)).Sum(i => i.Balance))</span></div>
         </div>
         <div class="split-grid">
@@ -119,15 +124,17 @@
         <EditForm Model="Input" FormName="customer" OnValidSubmit="SaveAsync" method="post">
             <input type="hidden" name="Input.Version" value="@Input.Version" />
             <DataAnnotationsValidator />
+            <FormAccess Action="@FormPath">
             <div class="row">
                 <div class="field">
                     <label for="name">Display name</label>
-                    <InputText id="name" @bind-Value="Input.DisplayName" />
+                    <InputText id="name" @bind-Value="Input.DisplayName" maxlength="200" />
                     <ValidationMessage For="() => Input.DisplayName" />
                 </div>
                 <div class="field">
                     <label for="company">Company <span class="muted">(optional)</span></label>
-                    <InputText id="company" @bind-Value="Input.CompanyName" />
+                    <InputText id="company" @bind-Value="Input.CompanyName" maxlength="200" />
+                    <ValidationMessage For="() => Input.CompanyName" />
                 </div>
             </div>
             <div class="row">
@@ -138,17 +145,20 @@
                 </div>
                 <div class="field">
                     <label for="phone">Phone <span class="muted">(optional)</span></label>
-                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" />
+                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" maxlength="50" />
+                    <ValidationMessage For="() => Input.Phone" />
                 </div>
             </div>
             <div class="row">
                 <div class="field">
                     <label for="billing">Billing address <span class="muted">(optional)</span></label>
-                    <InputTextArea id="billing" rows="3" @bind-Value="Input.BillingAddress" />
+                    <InputTextArea id="billing" rows="3" @bind-Value="Input.BillingAddress" maxlength="500" />
+                    <ValidationMessage For="() => Input.BillingAddress" />
                 </div>
                 <div class="field">
                     <label for="shipping">Shipping address <span class="muted">(optional)</span></label>
-                    <InputTextArea id="shipping" rows="3" @bind-Value="Input.ShippingAddress" />
+                    <InputTextArea id="shipping" rows="3" @bind-Value="Input.ShippingAddress" maxlength="500" />
+                    <ValidationMessage For="() => Input.ShippingAddress" />
                 </div>
             </div>
             <div class="row">
@@ -243,7 +253,8 @@
                     <div class="row">
                         <div class="field">
                             <label for="exemption">Exemption certificate no. <span class="muted">(if exempt)</span></label>
-                            <InputText id="exemption" @bind-Value="Input.ExemptionCertificate" />
+                            <InputText id="exemption" @bind-Value="Input.ExemptionCertificate" maxlength="50" />
+                            <ValidationMessage For="() => Input.ExemptionCertificate" />
                         </div>
                         <div class="field">
                             <label for="exemption-reason">Reason</label>
@@ -273,13 +284,15 @@
             <div class="row">
                 <div class="field">
                     <label for="notes">Notes <span class="muted">(private)</span></label>
-                    <InputText id="notes" @bind-Value="Input.Notes" />
+                    <InputText id="notes" @bind-Value="Input.Notes" maxlength="2000" />
+                    <ValidationMessage For="() => Input.Notes" />
                 </div>
             </div>
             <div class="actions">
                 <button type="submit">@(_customer is null ? "Create customer" : "Save changes")</button>
                 <a href="/customers">Cancel</a>
             </div>
+            </FormAccess>
         </EditForm>
     </div>
 
@@ -287,7 +300,9 @@
     {
         <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync" class="no-print">
             <AntiforgeryToken />
-            <button type="submit" class="secondary">@(_customer.IsActive ? "Make inactive" : "Make active")</button>
+            <FormAccess Action="@FormPath">
+                <button type="submit" class="secondary">@(_customer.IsActive ? "Make inactive" : "Make active")</button>
+            </FormAccess>
         </form>
 
         <PortalLinks CustomerId="_customer.Id" CustomerName="@_customer.DisplayName" />
@@ -383,8 +398,14 @@
     private int _level;
     private string? _error;
 
+    /// <summary>This customer's line of the customer list (balance, credit not used yet).</summary>
+    private CustomerSummary? _own;
+
     [Parameter]
     public Guid? Id { get; set; }
+
+    /// <summary>Where this page's own forms post: the page itself.</summary>
+    private string FormPath => Id is { } id ? $"/customers/{id}" : "/customers/new";
 
     [SupplyParameterFromQuery(Name = "parent")]
     private Guid? ParentQuery { get; set; }
@@ -408,7 +429,8 @@
             if (_customer is null)
                 return;
             _descendants = CustomerTree.Descendants(id, _all.Select(c => c.Customer));
-            _level = _all.FirstOrDefault(c => c.Customer.Id == id)?.Level ?? 0;
+            _own = _all.FirstOrDefault(c => c.Customer.Id == id);
+            _level = _own?.Level ?? 0;
             _children = _all.Where(c => _descendants.Contains(c.Customer.Id)).ToList();
             _giving = await Gifts.GivingAsync(id);
             _invoices = await Invoices.ListAsync(id);
@@ -486,23 +508,23 @@
         public int? Version { get; set; }
 
         [Required(ErrorMessage = "Enter the customer's name.")]
-        [StringLength(200)]
+        [StringLength(200, ErrorMessage = "The name can be 200 characters at most.")]
         public string DisplayName { get; set; } = string.Empty;
 
-        [StringLength(200)]
+        [StringLength(200, ErrorMessage = "The company name can be 200 characters at most.")]
         public string? CompanyName { get; set; }
 
         // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
         [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
         public string? Email { get; set; }
 
-        [StringLength(50)]
+        [StringLength(50, ErrorMessage = "The phone number can be 50 characters at most.")]
         public string? Phone { get; set; }
 
-        [StringLength(500)]
+        [StringLength(500, ErrorMessage = "The billing address can be 500 characters at most.")]
         public string? BillingAddress { get; set; }
 
-        [StringLength(500)]
+        [StringLength(500, ErrorMessage = "The shipping address can be 500 characters at most.")]
         public string? ShippingAddress { get; set; }
 
         public int PaymentTermsDays { get; set; } = 30;
@@ -511,12 +533,12 @@
 
         public int? EarlyPaymentDiscountDays { get; set; }
 
-        [StringLength(2000)]
+        [StringLength(2000, ErrorMessage = "The notes can be 2,000 characters at most.")]
         public string? Notes { get; set; }
 
         public Guid? TaxCodeId { get; set; }
 
-        [StringLength(50)]
+        [StringLength(50, ErrorMessage = "The certificate number can be 50 characters at most.")]
         public string? ExemptionCertificate { get; set; }
 
         public ExemptionReason? ExemptionReason { get; set; }
