@@ -1,4 +1,4 @@
 schema_version: "1.1"
 name: add-inactive-vendors-page
 expected_outcome: |
-  A new static page following the existing list-page pattern (wide layout, toolbar, table.data, empty state), reactivation by an antiforgery-protected post that respects access rules, a link from the vendors list, and a closing account of what was and wasn't verified.
+  A new page that follows the existing list pattern and the project's rules, with a protected, access-aware post that tells the person when it is refused, a link from the vendors list, and nothing changed beyond what the request needs.

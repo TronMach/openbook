@@ -7,10 +7,13 @@ description: Expert guidance for designing, building, reviewing and scoring user
 
 An interface is good when the people it is for can do what they came to do, quickly, without mistakes they can't undo, and without having to think about the interface itself. Everything below serves that. Looks matter only as far as they help: visual polish on a confusing flow is still a confusing flow.
 
-Two rules sit above the rest.
+Three rules sit above the rest.
 
 1. **The project's own conventions win.** Before designing anything, read how the codebase already does it: its components, layout classes, wording, form patterns, and any project instructions. A page that follows the product's existing patterns is easier to use than a "better" page that works differently from its neighbours, because people have already learned the neighbours. Propose changing a convention separately; don't quietly fork it.
 2. **Claims about quality need evidence.** "This is more intuitive" is not a finding. "The primary task took 9 clicks and now takes 4", "contrast was 3.2:1 and is now 7.1:1" are. Use the scorecard at the end.
+3. **Stay inside the request.** Do what was asked, as well as it can be done, and no more. While working you will notice other things worth improving: a neighbouring page, a term you would have chosen differently, an old pattern. List those as recommendations for the person to decide on; don't do them. A small request answered with a large diff is harder to review and to trust, and it takes decisions away from the person who owns the product. Two cases come up often:
+   - **Established words stay.** A label people already use ("Replenish", "Float") is something they have learned, and it appears in help pages, emails and other screens you haven't read. Explain a term where it confuses (a hint, a sentence saying what happens next) before replacing it. If you believe a rename is right, propose it and say what else it would touch.
+   - **Touching a file is not a licence to rework it.** Adding a link to a page doesn't mean modernising the rest of that page.
 
 **In the OpenBook repository**, read `references/openbook.md` before designing or reviewing anything. It lists the page skeletons, components, CSS classes, script behaviours, access and wording rules this product already has, the checks a page must pass, and how its stylesheet stands against the scorecard.
 
@@ -55,6 +58,18 @@ The "happy path with realistic data" is one state of about eight. Unfinished sta
 | Success | Confirm what was done, in the place they are looking, and offer the likely next step |
 | Disabled / no permission | Show that the thing exists and say why it isn't available, rather than hiding it without trace |
 | Offline / slow / stale | Don't lose work; say when data may be out of date |
+
+### Reviewing something that already exists
+
+A review is read by someone deciding what to do next, so lead with the answer.
+
+- Open with the verdict in two or three sentences: how good it is, and the one or two things that matter most.
+- Then the findings, most serious first, each with where it is, why it costs the user something, its severity, and the fix. Group cosmetic points into one line instead of a finding each.
+- Check each claim against the code or the screen before writing it. A wrong finding costs more trust than a missed one. Read the components the page uses, not only the page.
+- Look for defects as well as design: the same figure shown with different values on two screens, a list in no particular order, an id used twice, a control left live for someone who can't use it, a link that goes somewhere other than its text says.
+- Say what the page does well in a line or two, so it survives the changes.
+- Keep it as short as the findings allow. One page rarely needs more than about 600 words plus the scorecard.
+- Don't change code unless asked to.
 
 ### 5. Build, then verify by using it
 
@@ -238,7 +253,7 @@ A cognitive walkthrough complements this. For each step of a top task ask: will 
 
 ### Reporting
 
-When you finish designing, building or reviewing an interface, close with a short scorecard so the result can be compared with the next version. Use this shape, and leave a line as "not measured" instead of guessing:
+When you finish designing, building or reviewing an interface, close with a short scorecard so the result can be compared with the next version. Size it to the job: a small change needs three to five lines, covering the measures the change was meant to move and any it could have harmed. Leave out measures that have nothing to do with the work. A figure that didn't change is reported as unchanged, never dressed as an improvement, and a line you couldn't measure says "not measured" instead of a guess. The full shape, for a new screen or a review:
 
 ```markdown
 ## Interface scorecard: <name of the view or flow>
@@ -273,4 +288,5 @@ Use this for a fast pass on any screen.
 7. Does it work at phone width, at 200% zoom, in dark mode, and with long or missing data?
 8. Is every destructive action either undoable or confirmed with its consequence named?
 9. Is anything asked of the person that the software could work out?
-10. Have I filled in the scorecard with real numbers?
+10. Is everything in the change something that was asked for, with the rest listed as recommendations?
+11. Have I filled in the scorecard with real numbers?

@@ -1,0 +1,341 @@
+@page "/vendors/new"
+@page "/vendors/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject OpenBook.Application.IRecordVersions Versions
+@inject VendorService VendorService
+@inject BillService Bills
+@inject BillPaymentService Payments
+@inject IPurchasesStore Purchases
+@inject AccountService AccountService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_vendor?.DisplayName ?? "New vendor") · OpenBook</PageTitle>
+
+@if (Id is not null && _vendor is null)
+{
+    <div class="card"><p>That vendor doesn't exist. <a href="/vendors">Back to vendors</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(_vendor?.DisplayName ?? "New vendor")</h1>
+        @if (_vendor is not null)
+        {
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_vendor.Id}")">History</ActionLink>
+        }
+        @if (_vendor is { IsActive: true })
+        {
+            <ActionLink Class="button secondary" Href="@($"/purchases/vendor-credits/new?vendor={_vendor.Id}")">Vendor credit</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/purchases/pay-bills?vendor={_vendor.Id}")">Pay bills</ActionLink>
+            <ActionLink Class="button" Href="@($"/purchases/bills/new?vendor={_vendor.Id}")">New bill</ActionLink>
+        }
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (_vendor is { IsActive: false })
+    {
+        <div class="alert notice" role="status">This vendor is inactive and can't be used on new bills or expenses.</div>
+    }
+
+    @if (_vendor is not null && _bills.Count + _payments.Count + _expenses.Count > 0)
+    {
+        var today = CompanyTime.Today;
+        <div class="summary-bar">
+            <div><span class="label">You owe</span><span class="value">@Labels.Amount(_bills.Sum(b => b.Balance))</span></div>
+            <div><span class="label">Overdue</span><span class="value">@Labels.Amount(_bills.Where(b => b.IsOverdue(today)).Sum(b => b.Balance))</span></div>
+        </div>
+        <div class="split-grid">
+            <div>
+                <h2>Bills</h2>
+                <table class="data">
+                    <thead><tr><th>Bill no.</th><th>Date</th><th>Due</th><th>Status</th><th class="num">Balance</th></tr></thead>
+                    <tbody>
+                        @foreach (var b in _bills)
+                        {
+                            <tr class="@(b.Status == DocumentStatus.Voided ? "inactive" : null)">
+                                <td><a href="/purchases/bills/@b.Id">@(b.Reference ?? "(no number)")</a></td>
+                                <td>@Labels.Date(b.Date)</td>
+                                <td>@Labels.Date(b.DueDate)</td>
+                                <td>@Labels.Status(b, today)</td>
+                                <td class="num">@Labels.Amount(b.Balance)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <h2>Payments and expenses</h2>
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Type</th><th>Ref</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _payments)
+                        {
+                            <tr class="@(p.Status == DocumentStatus.Voided ? "inactive" : null)">
+                                <td><a href="/purchases/payments/@p.Id">@Labels.Date(p.Date)</a></td>
+                                <td>Bill payment</td>
+                                <td>@p.Reference</td>
+                                <td class="num">@Labels.Amount(p.Amount)</td>
+                            </tr>
+                        }
+                        @foreach (var e in _expenses)
+                        {
+                            <tr class="@(e.Status == BankTransactionStatus.Voided ? "inactive" : null)">
+                                <td><a href="/banking/transactions/@e.Id">@Labels.Date(e.Date)</a></td>
+                                <td>Expense</td>
+                                <td>@e.Reference</td>
+                                <td class="num">@Labels.Amount(e.Amount)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>Details</h2>
+        <EditForm Model="Input" FormName="vendor" OnValidSubmit="SaveAsync" method="post">
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <DataAnnotationsValidator />
+            <div class="row">
+                <div class="field">
+                    <label for="name">Display name</label>
+                    <InputText id="name" @bind-Value="Input.DisplayName" />
+                    <ValidationMessage For="() => Input.DisplayName" />
+                </div>
+                <div class="field">
+                    <label for="company">Company <span class="muted">(optional)</span></label>
+                    <InputText id="company" @bind-Value="Input.CompanyName" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="email">Email <span class="muted">(optional)</span></label>
+                    <InputText id="email" type="email" @bind-Value="Input.Email" />
+                    <ValidationMessage For="() => Input.Email" />
+                </div>
+                <div class="field">
+                    <label for="phone">Phone <span class="muted">(optional)</span></label>
+                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="address">Address <span class="muted">(optional)</span></label>
+                    <InputTextArea id="address" rows="3" @bind-Value="Input.Address" />
+                </div>
+                <div class="field">
+                    <label for="account-number">Your account number with them <span class="muted">(optional)</span></label>
+                    <InputText id="account-number" @bind-Value="Input.AccountNumber" />
+                    <span class="hint">Used as the memo on bill payments.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="terms">Payment terms</label>
+                    <InputSelect id="terms" @bind-Value="Input.PaymentTermsDays">
+                        @foreach (var days in new[] { 0, 7, 10, 15, 30, 45, 60, 90, Input.PaymentTermsDays }.Distinct().Order())
+                        {
+                            <option value="@days">@Labels.Terms(days)</option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="field">
+                    <label for="category">Default category <span class="muted">(optional)</span></label>
+                    <InputSelect id="category" @bind-Value="Input.DefaultExpenseAccountId" data-search>
+                        <option value="">None</option>
+                        @foreach (var a in _categories)
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </InputSelect>
+                    <span class="hint">Pre-fills bills and expenses for this vendor.</span>
+                </div>
+            </div>
+            <div class="field">
+                <label for="notes">Notes <span class="muted">(private)</span></label>
+                <InputText id="notes" @bind-Value="Input.Notes" />
+            </div>
+            <MoreOptions Open="@(Input.Track1099 || _vendor?.TaxId is not null)" Title="More options: 1099 reporting">
+                <fieldset>
+                    <legend>1099</legend>
+                    <label class="check">
+                        <InputCheckbox @bind-Value="Input.Track1099" />
+                        <span>Track payments for a 1099 (contractors, landlords, attorneys)</span>
+                    </label>
+                    <div class="row">
+                        <div class="field">
+                            <label for="box">Reported in</label>
+                            <InputSelect id="box" @bind-Value="Input.Form1099Box">
+                                @foreach (var box in Enum.GetValues<Form1099Box>())
+                                {
+                                    <option value="@box">@Labels.For(box)</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="field">
+                            <label for="tax-id">Tax ID (EIN or SSN) @(_vendor?.MaskedTaxId is { } masked ? $"· saved: {masked}" : "")</label>
+                            <InputText id="tax-id" @bind-Value="Input.TaxId" autocomplete="off" placeholder="@(_vendor?.MaskedTaxId is null ? "12-3456789" : "Leave blank to keep it")" />
+                            <span class="hint">From their W-9. It's never shown in full again; enter a new one to replace it.</span>
+                        </div>
+                    </div>
+                    @if (_vendor?.TaxId is not null)
+                    {
+                        <label class="check">
+                            <InputCheckbox @bind-Value="Input.ClearTaxId" />
+                            <span>Remove the saved tax ID</span>
+                        </label>
+                    }
+                </fieldset>
+            </MoreOptions>
+            <div class="actions">
+                <button type="submit">@(_vendor is null ? "Create vendor" : "Save changes")</button>
+                <a href="/vendors">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+
+    @if (_vendor is not null)
+    {
+        <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync">
+            <AntiforgeryToken />
+            <button type="submit" class="secondary">@(_vendor.IsActive ? "Make inactive" : "Make active")</button>
+        </form>
+        <AuthorizeView>
+            <VendorBankDetails VendorId="_vendor.Id" CanEdit="@context.User.CanPost($"/purchases/ach/vendors/{_vendor.Id}")" Error="@BankError" />
+        </AuthorizeView>
+        <Attachments EntityType="vendor" EntityId="_vendor.Id" />
+        <CustomFieldPanel EntityType="vendor" EntityId="_vendor.Id" />
+        <Notes EntityType="vendor" EntityId="_vendor.Id" />
+        <OpenBook.Web.Components.Documents.LearnedCodes PartyId="_vendor.Id" Back="@($"/vendors/{_vendor.Id}")" />
+        <MergeCard Kind="vendors" Id="_vendor.Id" Name="@_vendor.DisplayName" />
+    }
+</div>
+
+@code {
+    private Vendor? _vendor;
+    private IReadOnlyList<Bill> _bills = [];
+    private IReadOnlyList<BillPayment> _payments = [];
+    private IReadOnlyList<BankTransaction> _expenses = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _categories = [];
+    private string? _error;
+
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "bankError")] private string? BankError { get; set; }
+
+    [SupplyParameterFromForm(FormName = "vendor")]
+    private VendorModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var opened = Id is { } version ? await Versions.GetAsync<Vendor>(version) : null;
+        _chart = await AccountService.GetChartAsync();
+        _categories = _chart.Ordered(includeInactive: false).Select(x => x.Account)
+            .Where(a => a.Type is not (AccountType.AccountsPayable or AccountType.AccountsReceivable)).ToList();
+        if (Id is { } id)
+        {
+            _vendor = await VendorService.GetAsync(id);
+            if (_vendor is null)
+                return;
+            _bills = await Bills.ListAsync(id);
+            _payments = await Payments.ListAsync(id);
+            _expenses = await Purchases.ListExpensesAsync(id, default);
+        }
+
+        Input ??= _vendor is null
+            ? new VendorModel()
+            : new VendorModel
+            {
+                DisplayName = _vendor.DisplayName,
+                CompanyName = _vendor.CompanyName,
+                Email = _vendor.Email,
+                Phone = _vendor.Phone,
+                Address = _vendor.Address,
+                AccountNumber = _vendor.AccountNumber,
+                PaymentTermsDays = _vendor.PaymentTermsDays,
+                DefaultExpenseAccountId = _vendor.DefaultExpenseAccountId,
+                Notes = _vendor.Notes,
+                Track1099 = _vendor.Track1099,
+                Form1099Box = _vendor.Form1099Box,
+            };
+        Input.Version ??= opened;
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            var details = new VendorDetails(Input.DisplayName, Input.CompanyName, Input.Email, Input.Phone, Input.Address,
+                Input.AccountNumber, Input.PaymentTermsDays, Input.DefaultExpenseAccountId, Input.Notes, Input.Track1099,
+                Input.ClearTaxId ? "" : string.IsNullOrWhiteSpace(Input.TaxId) ? null : Input.TaxId, Input.Form1099Box);
+            await Versions.EnsureUnchangedAsync<Vendor>(_vendor?.Id ?? Guid.Empty, Input.Version);
+            var saved = _vendor is null ? await VendorService.CreateAsync(details) : await VendorService.UpdateAsync(_vendor.Id, details);
+            Navigation.NavigateTo($"/vendors/{saved.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleActiveAsync()
+    {
+        try
+        {
+            await VendorService.SetActiveAsync(_vendor!.Id, !_vendor.IsActive);
+            Navigation.NavigateTo($"/vendors/{_vendor.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private sealed class VendorModel
+    {
+        /// <summary>The record's version when the form opened.</summary>
+        public int? Version { get; set; }
+
+        [Required(ErrorMessage = "Enter the vendor's name.")]
+        [StringLength(200)]
+        public string DisplayName { get; set; } = string.Empty;
+
+        [StringLength(200)]
+        public string? CompanyName { get; set; }
+
+        // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
+        [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
+        public string? Email { get; set; }
+
+        [StringLength(50)]
+        public string? Phone { get; set; }
+
+        [StringLength(500)]
+        public string? Address { get; set; }
+
+        [StringLength(50)]
+        public string? AccountNumber { get; set; }
+
+        public int PaymentTermsDays { get; set; } = 30;
+
+        public Guid? DefaultExpenseAccountId { get; set; }
+
+        [StringLength(2000)]
+        public string? Notes { get; set; }
+
+        public bool Track1099 { get; set; }
+
+        public Form1099Box Form1099Box { get; set; }
+
+        public string? TaxId { get; set; }
+
+        public bool ClearTaxId { get; set; }
+    }
+}

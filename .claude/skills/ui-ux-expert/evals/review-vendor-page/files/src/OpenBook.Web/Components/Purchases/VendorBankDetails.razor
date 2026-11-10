@@ -1,0 +1,58 @@
+@* A vendor's bank details for ACH payments (accountant only). Posts to /purchases/ach/vendors/{id}. *@
+@inject AchService Ach
+
+<div class="card" id="bank" style="margin-top: 1.5rem">
+    <h2>Bank details for ACH payments</h2>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (_account is not null)
+    {
+        <p>@_account.Kind account @_account.Masked at routing number @_account.RoutingNumber.</p>
+    }
+    else
+    {
+        <p class="muted">None yet. Add them to pay this vendor by direct deposit from the <ActionLink Href="/purchases/ach">ACH payments</ActionLink> page.</p>
+    }
+    @if (CanEdit)
+    {
+        <PostForm Action="@($"/purchases/ach/vendors/{VendorId}")" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field"><label for="routing">Routing number</label><input id="routing" name="routing" maxlength="9" inputmode="numeric" value="@_account?.RoutingNumber" /></div>
+                <div class="field">
+                    <label for="account-number">Account number</label>
+                    <input id="account-number" name="accountNumber" maxlength="20" autocomplete="off" placeholder="@(_account is null ? "" : "Enter it again to change the details")" />
+                </div>
+                <div class="field">
+                    <label for="kind">Type</label>
+                    <select id="kind" name="kind">
+                        @foreach (var kind in Enum.GetValues<BankAccountKind>())
+                        {
+                            <option value="@kind" selected="@(kind == _account?.Kind)">@kind</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="actions">
+                <button type="submit" name="action" value="save" class="secondary">Save bank details</button>
+                @if (_account is not null)
+                {
+                    <button type="submit" name="action" value="remove" class="secondary">Remove</button>
+                }
+            </div>
+            <p class="hint">The account number is stored encrypted and only its last four digits are shown again.</p>
+        </PostForm>
+    }
+</div>
+
+@code {
+    private VendorBankAccount? _account;
+
+    [Parameter, EditorRequired] public Guid VendorId { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    protected override async Task OnParametersSetAsync() => _account = await Ach.GetVendorBankAccountAsync(VendorId);
+}

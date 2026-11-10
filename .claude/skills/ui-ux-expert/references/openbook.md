@@ -138,9 +138,10 @@ Keyboard: `/` search, `?` shortcut list, `g` + key go, `n` + key new, `Ctrl+Ente
 
 ## 8. Wording and formatting
 
+- Keep the product's own words (Replenish, Float, Custodian, Undeposited Funds, Void). They are in the user guide, the messages from the services and people's habits; a clearer page explains them, it doesn't rename them.
 - Sentence case. Buttons name the action and the thing ("New vendor", "Save anyway", "Mark them all").
 - Page title `<PageTitle>Thing · OpenBook</PageTitle>`.
-- Text through `@L["English text"]`, arguments in the call, whole sentences as one key; never join fragments. Two texts must not differ only in case. Convert a page when you touch it, then run `python tools/extract-strings.py`.
+- Text through `@L["English text"]`, arguments in the call, whole sentences as one key; never join fragments. Two texts must not differ only in case. A new page is written with `@L` from the start. On an existing page, write the lines you add with `@L`; convert the rest of the page only when the work reworks that page, not when you add a link to it. Run `python tools/extract-strings.py` after either.
 - Format with `Labels` (`Components/Labels.cs`): `Amount`, `AmountOrBlank` (blank for zero in tables), `Date`, `Quantity`, `Price`, `Percent`, `Terms`, `Status`, `For(enum)`.
 - "Today" is `CompanyTime.Today`; timestamps on pages go through `InCompanyTime()`.
 - When a label, menu path or rule changes, update the matching chapter in `docs/user-guide/` in the same commit; it is also the in-app help.
