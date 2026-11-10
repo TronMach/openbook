@@ -20,7 +20,7 @@ Moving in from QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks i
 - [User guide](docs/user-guide/README.md): every area, written for bookkeepers.
 - [Desktop admin guide](docs/admin/desktop.md) and [server admin guide](docs/admin/server.md).
 - [Roadmap](ROADMAP.md): what's built and what's planned.
-- [CLAUDE.md](CLAUDE.md): how the code is organized and the rules it keeps, for contributors.
+- [CLAUDE.md](CLAUDE.md): how the code is organized and the rules it keeps, for contributors, with each area's notes in [docs/dev](docs/dev).
 
 ## Building and testing
 

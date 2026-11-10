@@ -1,6 +1,6 @@
 # OpenBook interface conventions
 
-How the general guidance in `SKILL.md` is already answered in this repository. Use these before inventing anything. `CLAUDE.md` at the repository root is the authority; this file gathers its interface rules in one place and adds what the stylesheet and components show. Paths are relative to `src/OpenBook.Web`.
+How the general guidance in `SKILL.md` is already answered in this repository. Use these before inventing anything. `CLAUDE.md` at the repository root and the area notes it points to under `docs/dev/` (`docs/dev/ui.md` for pages) are the authority; this file gathers its interface rules in one place and adds what the stylesheet and components show. Paths are relative to `src/OpenBook.Web`.
 
 ## Contents
 

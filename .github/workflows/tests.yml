@@ -1,0 +1,88 @@
+# Builds OpenBook and runs the test suites on every push to master and every pull request: the whole suite on SQLite,
+# and the integration suite on PostgreSQL (the server that comes installed on GitHub's Windows runners, reached as a
+# login that may create databases but isn't a superuser, as locally). Windows, like the release workflow, whose test
+# step has passed there on every release. Failed tests are listed on the run's summary page and their trx files kept.
+name: Tests
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'docs/dev/**', 'docs/admin/**']
+  pull_request:
+    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'docs/dev/**', 'docs/admin/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request replaces its run; every push to master is tested to the end.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sqlite:
+    name: SQLite (all tests, Release build)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # The release workflow packages a Release build, where the analyzers are stricter; catch that here.
+      - name: Build (Release)
+        run: dotnet build -c Release -nologo
+
+      - name: Test
+        shell: pwsh
+        run: ./tools/run-tests.ps1 -Results "$env:RUNNER_TEMP/test-results"
+
+      - name: Keep the results of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sqlite-test-results
+          path: ${{ runner.temp }}/test-results/*.trx
+          retention-days: 14
+
+  postgres:
+    name: PostgreSQL (integration tests)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # The runner image installs PostgreSQL stopped, with PGBIN, PGUSER (postgres) and PGPASSWORD set.
+      - name: Start PostgreSQL
+        shell: pwsh
+        run: |
+          $service = Get-Service -Name 'postgresql*' | Select-Object -First 1
+          if (-not $service) { throw 'No PostgreSQL service on this runner.' }
+          Set-Service -Name $service.Name -StartupType Manual
+          Start-Service -Name $service.Name
+          $psql = Join-Path $env:PGBIN 'psql.exe'
+          & $psql -h localhost -tAc 'SELECT version()'
+          & $psql -h localhost -c "CREATE ROLE openbook_test LOGIN CREATEDB PASSWORD 'openbook-ci'"
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the test login failed.' }
+
+      - name: Test
+        shell: pwsh
+        env:
+          # A throwaway login on the runner's own server, which is gone when the job ends.
+          OPENBOOK_TEST_POSTGRES: Host=localhost;Username=openbook_test;Password=openbook-ci;Database=postgres
+        run: ./tools/run-tests.ps1 -Postgres -Results "$env:RUNNER_TEMP/test-results"
+
+      - name: Keep the results of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: postgres-test-results
+          path: ${{ runner.temp }}/test-results/*.trx
+          retention-days: 14
