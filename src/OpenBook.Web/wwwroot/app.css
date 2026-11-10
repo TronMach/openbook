@@ -184,6 +184,10 @@ form.inline .unavailable-note { display: inline; margin-left: 0.4rem; }
 .alert { padding: 0.6rem 0.8rem; border-radius: 6px; margin-bottom: 1rem; }
 .alert.error { background: var(--danger-bg); color: var(--danger); }
 .alert.notice { background: var(--notice-bg); }
+/* "Saved", "Done": the same calm band as a notice, with the accent down its side so it reads as a result. */
+.alert.success { background: var(--notice-bg); border-left: 3px solid var(--accent); }
+/* A filter box over a list (data-filter): not the full width of the page. */
+input.filter { max-width: 28rem; margin-bottom: 0.75rem; }
 
 dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0; }
 dl.facts dt { color: var(--muted); }

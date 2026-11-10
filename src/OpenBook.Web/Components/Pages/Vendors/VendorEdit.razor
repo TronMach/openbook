@@ -111,12 +111,13 @@
             <div class="row">
                 <div class="field">
                     <label for="name">Display name</label>
-                    <InputText id="name" @bind-Value="Input.DisplayName" />
+                    <InputText id="name" @bind-Value="Input.DisplayName" maxlength="200" />
                     <ValidationMessage For="() => Input.DisplayName" />
                 </div>
                 <div class="field">
                     <label for="company">Company <span class="muted">(optional)</span></label>
-                    <InputText id="company" @bind-Value="Input.CompanyName" />
+                    <InputText id="company" @bind-Value="Input.CompanyName" maxlength="200" />
+                    <ValidationMessage For="() => Input.CompanyName" />
                 </div>
             </div>
             <div class="row">
@@ -127,17 +128,20 @@
                 </div>
                 <div class="field">
                     <label for="phone">Phone <span class="muted">(optional)</span></label>
-                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" />
+                    <InputText id="phone" type="tel" @bind-Value="Input.Phone" maxlength="50" />
+                    <ValidationMessage For="() => Input.Phone" />
                 </div>
             </div>
             <div class="row">
                 <div class="field">
                     <label for="address">Address <span class="muted">(optional)</span></label>
-                    <InputTextArea id="address" rows="3" @bind-Value="Input.Address" />
+                    <InputTextArea id="address" rows="3" @bind-Value="Input.Address" maxlength="500" />
+                    <ValidationMessage For="() => Input.Address" />
                 </div>
                 <div class="field">
                     <label for="account-number">Your account number with them <span class="muted">(optional)</span></label>
-                    <InputText id="account-number" @bind-Value="Input.AccountNumber" />
+                    <InputText id="account-number" @bind-Value="Input.AccountNumber" maxlength="50" />
+                    <ValidationMessage For="() => Input.AccountNumber" />
                     <span class="hint">Used as the memo on bill payments.</span>
                 </div>
             </div>
@@ -165,7 +169,8 @@
             </div>
             <div class="field">
                 <label for="notes">Notes <span class="muted">(private)</span></label>
-                <InputText id="notes" @bind-Value="Input.Notes" />
+                <InputText id="notes" @bind-Value="Input.Notes" maxlength="2000" />
+                <ValidationMessage For="() => Input.Notes" />
             </div>
             <MoreOptions Open="@(Input.Track1099 || _vendor?.TaxId is not null)" Title="More options: 1099 reporting">
                 <fieldset>
@@ -320,30 +325,30 @@
         public int? Version { get; set; }
 
         [Required(ErrorMessage = "Enter the vendor's name.")]
-        [StringLength(200)]
+        [StringLength(200, ErrorMessage = "The name can be 200 characters at most.")]
         public string DisplayName { get; set; } = string.Empty;
 
-        [StringLength(200)]
+        [StringLength(200, ErrorMessage = "The company name can be 200 characters at most.")]
         public string? CompanyName { get; set; }
 
         // Not [EmailAddress]: it rejects the empty string an untouched optional field posts.
         [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter a valid email address, or leave it blank.")]
         public string? Email { get; set; }
 
-        [StringLength(50)]
+        [StringLength(50, ErrorMessage = "The phone number can be 50 characters at most.")]
         public string? Phone { get; set; }
 
-        [StringLength(500)]
+        [StringLength(500, ErrorMessage = "The address can be 500 characters at most.")]
         public string? Address { get; set; }
 
-        [StringLength(50)]
+        [StringLength(50, ErrorMessage = "The account number can be 50 characters at most.")]
         public string? AccountNumber { get; set; }
 
         public int PaymentTermsDays { get; set; } = 30;
 
         public Guid? DefaultExpenseAccountId { get; set; }
 
-        [StringLength(2000)]
+        [StringLength(2000, ErrorMessage = "The notes can be 2,000 characters at most.")]
         public string? Notes { get; set; }
 
         public bool Track1099 { get; set; }
