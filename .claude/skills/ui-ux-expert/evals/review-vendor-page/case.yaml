@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: review-vendor-page
+expected_outcome: |
+  A review of the vendor page grounded in the actual file: specific findings with where they are and how serious, stated in measurable terms where possible, honest about what could not be measured without running the app, and no code changes.

@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: simplify-petty-cash
+expected_outcome: |
+  Changes to the petty cash pages that make the next step after a count obvious, in plain bookkeeping words, reusing existing components and classes without changing rules or data, with a before/after account of what improved.
