@@ -10,7 +10,7 @@ An interface is good when the people it is for can do what they came to do, quic
 Three rules sit above the rest.
 
 1. **The project's own conventions win.** Before designing anything, read how the codebase already does it: its components, layout classes, wording, form patterns, and any project instructions. A page that follows the product's existing patterns is easier to use than a "better" page that works differently from its neighbours, because people have already learned the neighbours. Propose changing a convention separately; don't quietly fork it.
-2. **Claims about quality need evidence.** "This is more intuitive" is not a finding. "The primary task took 9 clicks and now takes 4", "contrast was 3.2:1 and is now 7.1:1" are. Use the scorecard at the end.
+2. **Claims about quality need evidence.** "This is more intuitive" is not a finding. "The primary task took 9 clicks and now takes 4", "contrast was 3.2:1 and is now 7.1:1" are. Use the scorecard at the end. The same holds for your own work: report what you did, not what the process calls for. If you could not build, run or open the result, say so. If a file is normally produced by a script and you edited it by hand because the script couldn't run, say "edited by hand, needs regenerating", never "regenerated". Someone will act on your account of the work without rechecking it.
 3. **Stay inside the request.** Do what was asked, as well as it can be done, and no more. While working you will notice other things worth improving: a neighbouring page, a term you would have chosen differently, an old pattern. List those as recommendations for the person to decide on; don't do them. A small request answered with a large diff is harder to review and to trust, and it takes decisions away from the person who owns the product. Two cases come up often:
    - **Established words stay.** A label people already use ("Replenish", "Float") is something they have learned, and it appears in help pages, emails and other screens you haven't read. Explain a term where it confuses (a hint, a sentence saying what happens next) before replacing it. If you believe a rename is right, propose it and say what else it would touch.
    - **Touching a file is not a licence to rework it.** Adding a link to a page doesn't mean modernising the rest of that page.
@@ -64,11 +64,11 @@ The "happy path with realistic data" is one state of about eight. Unfinished sta
 A review is read by someone deciding what to do next, so lead with the answer.
 
 - Open with the verdict in two or three sentences: how good it is, and the one or two things that matter most.
-- Then the findings, most serious first, each with where it is, why it costs the user something, its severity, and the fix. Group cosmetic points into one line instead of a finding each.
-- Check each claim against the code or the screen before writing it. A wrong finding costs more trust than a missed one. Read the components the page uses, not only the page.
+- Then the findings, most serious first, each with where it is, why it costs the user something, its severity, and the fix. Write out at most seven; a reader acts on the first few and skims the rest, so everything below that line goes in a single closing list of one-line items. Three or four sentences per finding is enough.
+- Check each claim against the code or the screen before writing it. A wrong finding costs more trust than a missed one. Read the components the page uses, not only the page. Be as careful with praise and with general statements ("the rest of the page greys these out") as with findings: check them or leave them out, because a wrong reassurance hides a defect.
 - Look for defects as well as design: the same figure shown with different values on two screens, a list in no particular order, an id used twice, a control left live for someone who can't use it, a link that goes somewhere other than its text says.
 - Say what the page does well in a line or two, so it survives the changes.
-- Keep it as short as the findings allow. One page rarely needs more than about 600 words plus the scorecard.
+- Budget about 600 words for one page, before the scorecard, and count before you send. When the draft runs over, cut explanation and move findings to the one-line list; don't cut the verdict or the top findings. The scorecard for a review is six rows at most.
 - Don't change code unless asked to.
 
 ### 5. Build, then verify by using it
@@ -148,6 +148,10 @@ Forms are where most effort and most errors happen.
 - Error messages say what happened, in plain words, and what to do. No codes alone, no blame, no "invalid input".
 - Write in sentence case, in the second person, with verbs on buttons. Put the important words first; people scan the first few words of each line.
 - Be specific: "Delete 3 invoices" beats "Delete"; "Saved at 2:14 PM" beats "Success".
+- Put the specifics on the control. A button that will move 62.50 says "Replenish 62.50"; one that acts on three ticked rows says "Pay 3 bills". The person sees what will happen before it does.
+- When a message mentions a thing, link to it. "The difference was recorded" with a link to that entry beats "find it in the table below".
+- After an action, say what happened and what comes next, with the control for the next step right there. People are most lost at the moment a step ends.
+- A step with nothing to do right now steps back: fold it away or disable it with the reason ("The box is full, nothing to replenish"), so the one thing that is needed stands out.
 - Help belongs at the point of need: a short hint under the field, a link to the relevant help section, an example. Long instructions above a form go unread.
 
 ### Visual system

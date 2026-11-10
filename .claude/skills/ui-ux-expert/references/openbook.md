@@ -90,10 +90,11 @@ A new record type needs its label in `CenterTransactions`, a link in `Links.ForA
 All in `wwwroot/app.css`. Colours are tokens: `--bg`, `--surface`, `--text`, `--muted`, `--border`, `--accent`, `--accent-text`, `--danger`, `--danger-bg`, `--notice-bg`, chart `--series-1/2`. Use tokens, never literal colours, so both themes work. Dark values are defined twice (the `prefers-color-scheme` block and `:root[data-theme="dark"]`); change both together.
 
 - Layout: `.wide`, `.card`, `.narrow`, `.toolbar`, `.hub-actions` / `.hub-group` / `.hub-label`, `.summary-bar` (`.label`, `.value`, `.value.off`, `.value.zero`), `.split-grid`, `.row` (two columns, one under 560px), `.row.wrap`, `.tiles` / `.tile`.
+- Filter box over a list: `input.filter` with `data-filter`.
 - Forms: `.field` (label above input, optional `.hint`, `.hint.warn`), `.check`, `.check-list`, `.actions`, `.inline`, `.inline-actions`, `.segmented`, `details.more-options`.
 - Buttons: `button` / `.button` (primary), `.secondary`, `.danger`, `.link`.
 - Tables: `table.data`, `.num`, `tr.inactive`, `td.indent-1…5`, `tfoot`, `.table-wrap`, `.pager`.
-- Status: `.alert.error` with `role="alert"`, `.alert.notice` with `role="status"`, `.badge`, `.badge.warn`, `.badge.ok`, `.out-of-balance`, `.muted`.
+- Status: `.alert.error` with `role="alert"`, `.alert.notice` and `.alert.success` ("Saved", "Done") with `role="status"`, `.badge`, `.badge.warn`, `.badge.ok`, `.out-of-balance`, `.muted`.
 - Hidden from sight, kept for screen readers: `.visually-hidden`.
 - Drop-downs: `details.menu` (one open at a time; Esc and outside clicks close them).
 
@@ -139,6 +140,7 @@ Keyboard: `/` search, `?` shortcut list, `g` + key go, `n` + key new, `Ctrl+Ente
 ## 8. Wording and formatting
 
 - Keep the product's own words (Replenish, Float, Custodian, Undeposited Funds, Void). They are in the user guide, the messages from the services and people's habits; a clearer page explains them, it doesn't rename them.
+- The string catalog (`SharedResource.resx`) is produced by `python tools/extract-strings.py`. If you can't run it, say the catalog still needs regenerating; don't edit it by hand and call it regenerated.
 - Sentence case. Buttons name the action and the thing ("New vendor", "Save anyway", "Mark them all").
 - Page title `<PageTitle>Thing · OpenBook</PageTitle>`.
 - Text through `@L["English text"]`, arguments in the call, whole sentences as one key; never join fragments. Two texts must not differ only in case. A new page is written with `@L` from the start. On an existing page, write the lines you add with `@L`; convert the rest of the page only when the work reworks that page, not when you add a link to it. Run `python tools/extract-strings.py` after either.
