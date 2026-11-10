@@ -14,7 +14,7 @@ How the general guidance in `SKILL.md` is already answered in this repository. U
 8. Wording and formatting
 9. Preferences already supported
 10. Checks before calling a page done
-11. Known gaps against the scorecard
+11. Scorecard notes for this stylesheet
 
 ## 1. Who the users are
 
@@ -171,11 +171,13 @@ Per-person presentation choices are stored unaudited beside the books; anything 
 7. A page counts as fixed only when it passes on SQLite and PostgreSQL; only PostgreSQL really waits, so loading states differ.
 8. `PageSmokeTests` must still pass; a new prefix needs its place in `AccessRulesTests`.
 
-## 11. Known gaps against the scorecard
+## 11. Scorecard notes for this stylesheet
 
-Seen in `wwwroot/app.css` on 2026-11-10. Report them when relevant; fix them as their own change, across the product, not on one page.
+Settled on 2026-11-10; keep them so.
 
-- Body text is 15px, under the general 16px guidance.
-- There is no `prefers-reduced-motion` rule.
-- Only inputs, selects and textareas get a designed focus ring; buttons and links rely on the browser's default.
-- Breakpoints vary (560, 700, 760, 800, 860, 900, 1000px); 760px is the phone rule to follow for new work.
+- Body text is `1rem`, so it follows the size people set in their browser (16px by default). Size text in `rem` or `em`, never `px`.
+- Links, buttons, `summary` and anything with a `tabindex` get the accent focus ring on keyboard focus (`:focus-visible`); inputs get it on any focus. Never remove an outline without putting something as visible in its place.
+- `prefers-reduced-motion` switches off animation and transitions everywhere. The stylesheet itself has none; if you add motion, keep it short and non-essential.
+- Phone rules start at 760px. The other breakpoints (560, 800, 860, 900, 1000px) are where one particular layout stops fitting (form rows, the centers, side-by-side tables, the editors with a preview, the workflow home); pick a breakpoint by when the content breaks, and use 760px for anything meant for phones.
+
+Not measured here: contrast of every token pair, target sizes of small controls (`.badge`, `button.link`, table links), and anything needing real users.

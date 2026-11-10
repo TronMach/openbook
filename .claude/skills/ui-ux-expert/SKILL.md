@@ -12,7 +12,7 @@ Two rules sit above the rest.
 1. **The project's own conventions win.** Before designing anything, read how the codebase already does it: its components, layout classes, wording, form patterns, and any project instructions. A page that follows the product's existing patterns is easier to use than a "better" page that works differently from its neighbours, because people have already learned the neighbours. Propose changing a convention separately; don't quietly fork it.
 2. **Claims about quality need evidence.** "This is more intuitive" is not a finding. "The primary task took 9 clicks and now takes 4", "contrast was 3.2:1 and is now 7.1:1" are. Use the scorecard at the end.
 
-**In the OpenBook repository**, read `references/openbook.md` before designing or reviewing anything. It lists the page skeletons, components, CSS classes, script behaviours, access and wording rules this product already has, the checks a page must pass, and the known gaps against the scorecard.
+**In the OpenBook repository**, read `references/openbook.md` before designing or reviewing anything. It lists the page skeletons, components, CSS classes, script behaviours, access and wording rules this product already has, the checks a page must pass, and how its stylesheet stands against the scorecard.
 
 ## Method
 
