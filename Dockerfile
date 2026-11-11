@@ -4,7 +4,7 @@
 # Data (SQLite company file, backups, email folder, Data Protection keys) lives in /data. GET /healthz for probes.
 # For PostgreSQL, set ConnectionStrings__OpenBook to "Host=...;Database=...;Username=...;Password=..." (see docker-compose.yml).
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 # .editorconfig marks EF migrations as generated code, which the analyzers (warnings as errors) skip.
 COPY .editorconfig Directory.Build.props OpenBook.slnx ./
