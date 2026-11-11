@@ -1,0 +1,75 @@
+name: Something isn't working
+description: A page that fails, a figure that's wrong, an import that won't take a file.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting it. **Leave out anything private**: no real company files, customer or vendor names, amounts from real books, passwords or keys. A test company shows most problems (CONTRIBUTING.md says how to make one). For a security problem, don't use this form: see SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, including any message word for word.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: The pages and buttons, in order (for example "Sales → Invoices → New invoice, then Save").
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings → System shows it.
+      placeholder: 0.13.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install
+      options:
+        - OpenBook Desktop (Windows installer)
+        - OpenBook Server (Docker)
+        - Run from source
+    validations:
+      required: true
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      options:
+        - SQLite (a company file)
+        - PostgreSQL
+        - Not sure
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      placeholder: Edge 142 on Windows 11
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Screenshots (with private details covered), or lines from the log (Settings → System lists recent problems).
+  - type: checkboxes
+    id: private
+    attributes:
+      label: Private details
+      options:
+        - label: I've left out real company data, names, passwords and keys.
+          required: true

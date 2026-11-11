@@ -47,6 +47,10 @@ jobs:
         shell: pwsh
         run: ./tools/run-tests.ps1
 
+      - name: Package licences
+        shell: pwsh
+        run: ./tools/check-licences.ps1
+
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 

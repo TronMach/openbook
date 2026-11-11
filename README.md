@@ -22,6 +22,10 @@ Moving in from QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks i
 - [Roadmap](ROADMAP.md): what's built and what's planned.
 - [CLAUDE.md](CLAUDE.md): how the code is organized and the rules it keeps, for contributors, with each area's notes in [docs/dev](docs/dev).
 
+## Taking part
+
+Bug reports, ideas and pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) says how, and the [code of conduct](CODE_OF_CONDUCT.md) applies everywhere around the project. Please report security problems privately, as [SECURITY.md](SECURITY.md) describes, never in a public issue.
+
 ## Building and testing
 
 ```bash

@@ -1,0 +1,40 @@
+name: An idea or something missing
+description: Something OpenBook should do, or do differently.
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The roadmap (ROADMAP.md) says what's planned. Telling us about the work behind the idea helps more than describing a screen: what you're trying to get done, and how you do it today.
+  - type: textarea
+    id: need
+    attributes:
+      label: What you're trying to do
+      description: The task, and who does it (a bookkeeper, an owner, an accountant at year end).
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How you do it now
+      description: In OpenBook, in another program (QuickBooks, Xero, a spreadsheet), or not at all.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Sales and customers
+        - Purchases and vendors
+        - Banking
+        - Reports
+        - Inventory
+        - Sales tax
+        - Projects and time
+        - Nonprofit
+        - Moving in from another program
+        - Users, security, backups
+        - Something else

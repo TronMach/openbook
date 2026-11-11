@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A security problem
+    url: https://github.com/TronMach/openbook/security/advisories/new
+    about: Report it privately, so it can be fixed before it's public (SECURITY.md).
+  - name: The user guide
+    url: https://github.com/TronMach/openbook/blob/master/docs/user-guide/README.md
+    about: How each area works, written for bookkeepers. Help in OpenBook shows the same chapters.
