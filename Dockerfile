@@ -20,7 +20,7 @@ COPY src/ src/
 COPY docs/user-guide/ docs/user-guide/
 RUN dotnet publish src/OpenBook.Web/OpenBook.Web.csproj -c Release -o /app --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS runtime
 # PDF forms need a sans-serif font (see SystemFontResolver); Npgsql loads the Kerberos (GSSAPI) library when it connects.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-dejavu-core libgssapi-krb5-2 \
