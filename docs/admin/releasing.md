@@ -34,6 +34,8 @@ git push origin v1.2.0
 
 3. The **Release** workflow (`.github/workflows/release.yml`) runs the tests, builds the installer with that version, signs `latest.json` and creates the GitHub release with both files and generated notes. You can also run it by hand from the Actions tab with a version; untick **publish** for a trial run, which builds and signs everything and keeps the installer and `latest.json` on the run for a week instead of creating a release.
 
+Each release also carries `OpenBook-<version>.cdx.json`, the package list (a CycloneDX 1.5 software bill of materials) that `tools/make-sbom.ps1` writes from the published files: every NuGet package in the installer with its version and licence, the .NET runtime it was published with, and the fonts for printed forms. Organisations that review software before installing it often ask for one. To make one by hand after packaging: `powershell -File tools/make-sbom.ps1 -Version 1.2.0`.
+
 Versions are three numbers, `major.minor.patch`. Installed copies offer a release only when its version is higher than theirs.
 
 To check a manifest by hand:

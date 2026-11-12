@@ -1,7 +1,7 @@
 # Publishes an OpenBook Desktop release: tests, builds the Windows installer, signs latest.json with the release key and
-# puts both on the GitHub release, where installed copies look for updates. Run it by pushing a tag like v1.2.0, or by
-# hand with a version (and "publish" unticked to only build and sign, as a trial). Needs the OPENBOOK_UPDATE_KEY secret
-# (the private release key, PEM). See docs/admin/releasing.md.
+# puts both on the GitHub release, where installed copies look for updates, with the package list (SBOM). Run it by
+# pushing a tag like v1.2.0, or by hand with a version (and "publish" unticked to only build and sign, as a trial).
+# Needs the OPENBOOK_UPDATE_KEY secret (the private release key, PEM). See docs/admin/releasing.md.
 name: Release
 
 on:
@@ -58,6 +58,10 @@ jobs:
         shell: pwsh
         run: ./tools/package-desktop.ps1 -Version ${{ steps.version.outputs.version }}
 
+      - name: Package list (SBOM)
+        shell: pwsh
+        run: ./tools/make-sbom.ps1 -Version ${{ steps.version.outputs.version }}
+
       - name: Sign the update manifest
         shell: pwsh
         env:
@@ -79,6 +83,7 @@ jobs:
           path: |
             artifacts/desktop/OpenBook-Setup-${{ steps.version.outputs.version }}.exe
             artifacts/desktop/latest.json
+            artifacts/desktop/OpenBook-${{ steps.version.outputs.version }}.cdx.json
           retention-days: 7
 
       - name: Publish the release
@@ -89,5 +94,6 @@ jobs:
         run: |
           $version = '${{ steps.version.outputs.version }}'
           gh release create "v$version" "artifacts/desktop/OpenBook-Setup-$version.exe" artifacts/desktop/latest.json `
+            "artifacts/desktop/OpenBook-$version.cdx.json" `
             --title "OpenBook $version" --generate-notes --target '${{ github.sha }}'
           if ($LASTEXITCODE -ne 0) { throw 'Creating the release failed.' }
