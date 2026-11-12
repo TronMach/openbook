@@ -54,7 +54,7 @@ To correct a bill, use **Change** at the top of its page: the bill number, dates
 
 A bill can be voided (with a reason) from its page until a payment is made against it.
 
-Bills that arrive regularly with the same amounts, such as rent, can be entered automatically: see **Purchases → Recurring**.
+Bills that arrive regularly with the same amounts, such as rent, can be entered automatically: see **Purchases → Recurring bills**.
 
 ## Paying bills
 

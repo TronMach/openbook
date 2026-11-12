@@ -27,7 +27,7 @@ Once stock has moved, the type, asset account, costing and lot/serial setting ar
 
 ## Selling more than is on hand
 
-If you don't keep exact counts, tick **Settings → Stock → Allow selling more than is on hand**. Each item's **Selling more than is on hand** setting follows the company or makes an exception: **Always allowed** or **Never allowed**. Items with lot or serial numbers are never sold beyond what's on hand, because each unit sold needs its number. Neither are stock transfers and quantity adjustments.
+If you don't keep exact counts, tick **Allow selling more than is on hand** under **Stock** on **Settings → Company details**. Each item's **Selling more than is on hand** setting follows the company or makes an exception: **Always allowed** or **Never allowed**. Items with lot or serial numbers are never sold beyond what's on hand, because each unit sold needs its number. Neither are stock transfers and quantity adjustments.
 
 When a sale (or an assembly build) needs more than you have:
 
