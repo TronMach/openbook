@@ -44,7 +44,7 @@ public static class PluginLoader
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 // An add-in's own code, whatever it throws, stops that add-in and not OpenBook.
-                registry.Skip(name, PluginState.Failed, ex.Message);
+                registry.Skip(name, PluginState.Failed, PluginApi.Explain(ex));
             }
         }
 

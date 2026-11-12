@@ -122,3 +122,4 @@ Each area's rules, names and decisions, by milestone. Read the file for the area
 - `install-and-moving-in.md`: company setup, backup and restore, imports (IIF, journal CSV, every migration reader), the data export, notes, registers, theme and shortcuts, scheduled backups, desktop and server installs, updates, moving to PostgreSQL, the QuickBooks Desktop export helper.
 - `ui.md`: the simple view, centers, simpler forms and setup, access on pages, settings index, help, top bar and menus, home to-do list, phones, pickers.
 - `lists-and-fields.md`: custom fields and merging duplicates.
+- `api-stability.md`: what API, webhook, CLI and add-in users can rely on, how breaking changes are announced, and the add-in API version (`PluginApi.Version`/`Oldest`; raise `Version` when the add-in contract grows). Update its change log with any such change.

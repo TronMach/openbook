@@ -37,7 +37,7 @@ OpenBook has a REST API for connecting other programs and writing your own tools
 
 A key acts as you, with your role, and never does more than your role allows. A limited key can't reach users, keys, webhooks or anything else only administrators may change, such as the sign-in, email and online payment settings. Backups and full exports are the exception: they come with the data area, so give that area only to a program you trust with everything. **Revoke** a key you no longer use; its last use is shown in the list.
 
-Programs send the key as `Authorization: Bearer obk_…`. The OpenAPI description of every endpoint, for developers, is at `/api/openapi/v1.json`.
+Programs send the key as `Authorization: Bearer obk_…`. The OpenAPI description of every endpoint, for developers, is at `/api/openapi/v1.json`. What stays the same from one release to the next, and how changes are announced, is in [API, webhook and add-in stability](../dev/api-stability.md).
 
 To retry a write safely after a timeout, send an `Idempotency-Key` header (any unique text up to 100 characters, such as a GUID) with POST, PUT or DELETE. The first request with a key is done and its answer kept for a day; sending the same request with the same key again gets that answer back (with `Idempotency-Replayed: true`) instead of, say, a second invoice. The same key with a different request is refused (422). The command-line tool takes `--idempotency-key`.
 
@@ -83,6 +83,6 @@ Add `--closing-password` when a change falls in a closed period. The command exi
 
 Add-ins extend OpenBook with extra reports and import formats. Whoever runs the server installs one by putting it in its own folder under `plugins` next to the app (on OpenBook Desktop, in the app's local data folder) and restarting.
 
-**Settings → Add-ins** (administrators) lists each folder, its version, whether it loaded, and what it adds. **Turn off** or **Turn on** applies at the next restart. If an add-in stops OpenBook from starting, start it in safe mode (`--safe-mode`), which loads none.
+**Settings → Add-ins** (administrators) lists each folder, its version, whether it loaded, and what it adds. **Turn off** or **Turn on** applies at the next restart. If an add-in stops OpenBook from starting, start it in safe mode (`--safe-mode`), which loads none. An add-in made for a newer OpenBook, or for one too old, isn't loaded: it shows **Failed to load** with the reason, such as updating OpenBook or getting a newer version of the add-in.
 
 Only install add-ins you trust: they run inside OpenBook with full access to your books.
