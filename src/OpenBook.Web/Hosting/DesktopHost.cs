@@ -56,6 +56,21 @@ public static class DesktopHost
         builder.WebHost.ConfigureKestrel(o => o.ListenLocalhost(port));
     }
 
+    /// <summary>
+    /// Desktop answers only requests addressed to this computer by name: localhost, 127.0.0.1 or [::1], whatever
+    /// AllowedHosts says. Listening on localhost isn't enough on its own: a web page could point a name of its own at
+    /// 127.0.0.1 (DNS rebinding) and read what OpenBook answers. A request for any other name gets 400.
+    /// </summary>
+    public static void RestrictHosts(IServiceCollection services) =>
+        // After the host's own PostConfigure, which fills the list from AllowedHosts.
+        services.PostConfigure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(o =>
+        {
+            o.AllowedHosts = [.. LocalHosts];
+            o.AllowEmptyHosts = false;
+        });
+
+    public static readonly IReadOnlyList<string> LocalHosts = ["localhost", "127.0.0.1", "[::1]"];
+
     /// <summary>Records the address once listening, opens the browser, and removes the record when stopping.</summary>
     public static void OnStarted(WebApplication app, Installation installation)
     {

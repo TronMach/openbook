@@ -54,6 +54,7 @@ public sealed partial class SetupWebTests : IAsyncLifetime
         var read = await (await browser.PostAsync("/setup", new MultipartFormDataContent
         {
             { new StringContent("read"), "_handler" },
+            { new StringContent(WebTestDatabase.SetupCode), "SetupCode" },
             { new StringContent(Field(page, "__RequestVerificationToken")), "__RequestVerificationToken" },
             { new StringContent("QuickBooksQbxml"), "Source" },
             { new ByteArrayContent(Encoding.UTF8.GetBytes(qbxml)), "file", "rockcastle.xml" },
@@ -63,6 +64,7 @@ public sealed partial class SetupWebTests : IAsyncLifetime
         var created = await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["_handler"] = "setup",
+            ["Input.SetupCode"] = WebTestDatabase.SetupCode,
             ["__RequestVerificationToken"] = Field(read, "__RequestVerificationToken"),
             ["Input.ImportToken"] = Field(read, "Input.ImportToken"),
             ["Input.CompanyName"] = "Rock Castle",
@@ -77,5 +79,60 @@ public sealed partial class SetupWebTests : IAsyncLifetime
         await using var scope = _app.Services.CreateAsyncScope();
         var account = await scope.ServiceProvider.GetRequiredService<OpenBookDbContext>().AuditRecords.SingleAsync(a => a.EntityType == "account");
         Assert.Equal("owner", account.Actor);
+    }
+
+    [Fact]
+    public async Task A_server_is_set_up_only_with_its_setup_code()
+    {
+        var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var page = await browser.GetStringAsync("/setup");
+        Assert.Contains("Setup code", page, StringComparison.Ordinal);
+
+        var read = await (await browser.PostAsync("/setup", new MultipartFormDataContent
+        {
+            { new StringContent("read"), "_handler" },
+            { new StringContent(Field(page, "__RequestVerificationToken")), "__RequestVerificationToken" },
+            { new StringContent("WRONG-CODE"), "SetupCode" },
+            { new StringContent("QuickBooksQbxml"), "Source" },
+            { new ByteArrayContent(Encoding.UTF8.GetBytes("<QBXML></QBXML>")), "file", "books.xml" },
+        })).Content.ReadAsStringAsync();
+        Assert.Contains("That setup code isn&#x27;t right", read, StringComparison.Ordinal);
+        Assert.DoesNotContain("Input.ImportToken\" value=\"", read, StringComparison.Ordinal);
+
+        foreach (var code in new[] { "", "TEST-SETUQ" })
+        {
+            var refused = await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["_handler"] = "setup",
+                ["Input.SetupCode"] = code,
+                ["__RequestVerificationToken"] = Field(page, "__RequestVerificationToken"),
+                ["Input.CompanyName"] = "Taken Over",
+                ["Input.FiscalYearStartMonth"] = "1",
+                ["Input.HomeCurrency"] = "USD",
+                ["Input.Username"] = "intruder",
+                ["Input.Password"] = "correct horse battery",
+                ["Input.ConfirmPassword"] = "correct horse battery",
+            }));
+            Assert.Equal(HttpStatusCode.OK, refused.StatusCode);
+            Assert.Contains("That setup code isn&#x27;t right", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        }
+
+        await using var scope = _app.Services.CreateAsyncScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Companies.CompanySetupService>().IsSetUpAsync());
+
+        // Case, spaces and dashes don't matter.
+        var created = await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["_handler"] = "setup",
+            ["Input.SetupCode"] = " test setup ",
+            ["__RequestVerificationToken"] = Field(page, "__RequestVerificationToken"),
+            ["Input.CompanyName"] = "Rock Castle",
+            ["Input.FiscalYearStartMonth"] = "1",
+            ["Input.HomeCurrency"] = "USD",
+            ["Input.Username"] = "owner",
+            ["Input.Password"] = "correct horse battery",
+            ["Input.ConfirmPassword"] = "correct horse battery",
+        }));
+        Assert.Equal(HttpStatusCode.Redirect, created.StatusCode);
     }
 }

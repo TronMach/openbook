@@ -6,9 +6,10 @@ For whoever looks after the server. OpenBook Server is the Docker image with Pos
 
 From the folder with `docker-compose.yml`:
 
-1. Change both `change-me` passwords in `docker-compose.yml` (the database's and the one in the app's connection string) to the same long random password.
+1. Change both `change-me` passwords in `docker-compose.yml` (the database's and the one in the app's connection string) to the same long random password. OpenBook refuses to start with `change-me`, since anyone who has read the file knows it. PostgreSQL keeps the password a database was first created with, so for a database already started with the sample one, change it there too: `docker compose exec db psql -U openbook -c "ALTER USER openbook PASSWORD 'your new password'"`.
 2. `docker compose up -d` builds the image and starts PostgreSQL and OpenBook. The first start creates the database tables.
-3. Open `http://<server>:8080` and set up the company (or move a desktop company in first: the move needs an empty database).
+3. Get the setup code: `docker compose logs openbook` shows a line saying OpenBook has no company yet, with a code like `K7QM-3XRT`. Until a company exists, anyone who can reach the server could open the setup page, so it asks for this code. A new code is made each time OpenBook starts without a company; set `OpenBook:SetupCode` to choose one yourself (for automated installs).
+4. Open `http://<server>:8080`, enter the code and set up the company (or move a desktop company in first: the move needs an empty database). Do it straight away.
 
 `GET /healthz` answers `ok` while OpenBook runs and its database answers, for load balancers and monitoring. The image has a Docker `HEALTHCHECK` that asks it every 30 seconds (with `dotnet OpenBook.Web.dll healthcheck`, since the image has no curl), so `docker ps` and compose show the container as healthy or unhealthy; `healthcheck --url …` asks another address.
 
@@ -147,6 +148,8 @@ Set these as environment variables, with `__` in place of `:`.
 
 | Setting | What it does |
 |---|---|
+| `AllowedHosts` | The names OpenBook answers to, separated by `;` (for example `books.example.com`). The default `*` answers any name; setting it refuses requests for other names, which stops a web page reaching the server under a name of its own (DNS rebinding). Desktop always answers only `localhost`, `127.0.0.1` and `[::1]`. |
+| `OpenBook:SetupCode` | The code the setup page asks for until a company exists. Without it, OpenBook makes one when it starts without a company and writes it to the log. |
 | `OpenBook:Ocr:TesseractPath` | The Tesseract program, for reading photos and scans of documents and receipts. The image doesn't include it; without it, photos are kept but not read. |
 | `OpenBook:EncryptionKey` | The key of an encrypted SQLite company file (below). |
 | `OpenBook:Plugins:Path` | Where add-ins live. It defaults to `plugins` in the working directory, which in a container is outside `/data`: point it into the volume. |

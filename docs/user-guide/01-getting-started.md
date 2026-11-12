@@ -42,13 +42,13 @@ The repository's `docker-compose.yml` starts OpenBook and PostgreSQL 17 together
 docker compose up -d
 ```
 
-Before you do, change both `change-me` passwords in `docker-compose.yml` to the same new password. Open `http://localhost:8080` (or the server's address). For anything beyond your own office network, put an HTTPS reverse proxy such as Caddy, nginx or Traefik in front of it.
+Before you do, change both `change-me` passwords in `docker-compose.yml` to the same new password: OpenBook won't start with the sample one. Then `docker compose logs openbook` shows a **setup code**, which the setup page asks for, so only whoever runs the server can set up the company. Open `http://localhost:8080` (or the server's address). For anything beyond your own office network, put an HTTPS reverse proxy such as Caddy, nginx or Traefik in front of it.
 
 > In-app backups (see [People, backups and safety](08-users-and-backups.md)) work with the single company file. With PostgreSQL, back up the database with `pg_dump`.
 
 ## Set up your company
 
-The first time you open OpenBook it shows **Set up your company**. Fill in three parts:
+The first time you open OpenBook it shows **Set up your company**. On OpenBook Server it first asks for the **Setup code** from the server's log (see above); OpenBook Desktop doesn't. Then fill in three parts:
 
 **Moving from QuickBooks?** Before filling anything in, choose your export under **Export from**, pick the file and select **Read the file**. OpenBook fills in the company details it finds (name, legal name, address, phone, email, fiscal year, currency, and the legal structure from QuickBooks Desktop's tax form) and says what the file holds. QuickBooks Desktop qbXML files with a company query, QuickBooks Online files with CompanyInfo and GnuCash books carry these details; IIF and CSV exports don't, so type them in. The button then reads **Create company and import**: the company is created and everything in the file is imported with it, or, if any row has a problem, nothing is created and the problems are listed. See [Moving in](24-moving-in.md#importing-the-history) for what to export.
 

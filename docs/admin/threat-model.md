@@ -29,15 +29,16 @@ For admins deciding how to run OpenBook, and for security reviewers. It says wha
 
 What OpenBook does:
 
-- **Every page and endpoint needs sign-in** unless marked public; the API answers 401 rather than redirecting. Public pages are the sign-in pages, `/setup` (only until a company exists), the anonymous links below, `/healthz` and the OpenAPI description.
+- **Every page and endpoint needs sign-in** unless marked public; the API answers 401 rather than redirecting. Public pages are the sign-in pages, `/setup` (only until a company exists, and on a server only with the setup code OpenBook writes to its log when it starts without a company, or `OpenBook:SetupCode`; its posts count against the sign-in rate limit), the anonymous links below, `/healthz` and the OpenAPI description.
 - **Password guessing**: per-address rate limits (`RateLimits`: 20 sign-in posts a minute, covering passwords, two-factor codes, single sign-on and invitations; 120 a minute to anonymous links; then 429). After 5 wrong passwords one address is shut out of that account for 5 minutes (`SignInThrottle`) while the owner can still sign in elsewhere; after 100 from all addresses the account itself is shut. Two-factor codes lock after 5, and count against the password too. The sign-in page doesn't say which usernames exist.
 - **Passwords** are hashed with ASP.NET Core Identity's PBKDF2 hasher, 8 to 128 characters.
 - **Two-factor sign-in** (TOTP; recovery codes stored as SHA-256 hashes; no code accepted twice) can be required from a role upwards. Single sign-on (one OpenID Connect provider, code flow with PKCE) can be required for all but admins.
 - **Cookies**: `OpenBook.Auth` is HttpOnly, SameSite=Lax, and secure on HTTPS (behind a proxy, with forwarded headers on). Its security stamp and session id are checked on every request, so a password, role or permission set change, deactivation, "Sign out all other sessions" or a restore ends sessions. Sessions end after 8 hours unused; people see and end theirs on `/account/password`.
 - **Headers** (`SecurityHeadersMiddleware`): `nosniff`, no framing by other sites, `Referrer-Policy: same-origin` (link tokens don't leak); HSTS outside development. No full content security policy: the pages use inline script.
 - **Cross-site requests**: every signed-in form post checks an antiforgery token (a test walks every route), on top of SameSite cookies.
+- **The database password**: a server won't start with the sample `change-me` from `docker-compose.yml` (`SamplePasswords`).
 
-Left to you: HTTPS from a reverse proxy, with nothing but the proxy able to reach port 8080 (OpenBook trusts `X-Forwarded-*` from whoever sends them when forwarded headers are on); a firewall; requiring two-factor sign-in for admins and accountants; setting up the company as soon as a new server starts, since until then anyone who reaches `/setup` becomes its owner.
+Left to you: HTTPS from a reverse proxy, with nothing but the proxy able to reach port 8080 (OpenBook trusts `X-Forwarded-*` from whoever sends them when forwarded headers are on); a firewall; requiring two-factor sign-in for admins and accountants; setting `AllowedHosts` to the server's own name; setting up the company as soon as a new server starts, and keeping its log, which holds the setup code until then, from others.
 
 ### A customer, or whoever has their link
 
@@ -109,7 +110,7 @@ Left to you: an add-in can do anything OpenBook can (below), so install only one
 
 ### A fake update
 
-What OpenBook does: each release's `latest.json` names the version, the installer's address, size and SHA-256, and is signed with the release key (ECDSA P-256). Copies trust only the public key built into them (`UpdateKeys`); they ignore an unsigned or wrongly signed manifest and throw away a download whose size or hash doesn't match. Only a higher version is offered. The feed must be https (plain http only on the same computer). Desktop backs up before installing. A server never installs anything; it only reports when `OpenBook:Updates:Check` is on.
+What OpenBook does: each release's `latest.json` names the version, the installer's address, size and SHA-256, and is signed with the release key (ECDSA P-256). Copies trust only the public key built into them (`UpdateKeys`); they ignore an unsigned or wrongly signed manifest and throw away a download whose size or hash doesn't match, and check the downloaded installer again just before running it. Only a higher version is offered. A genuine manifest older than one already seen is ignored (someone replaying it to hold updates back), and when the newest release a copy can see is more than six months old, Settings → System says so: OpenBook can't otherwise tell a quiet project from a feed being held back. The feed must be https (plain http only on the same computer). Desktop backs up before installing. A server never installs anything; it only reports when `OpenBook:Updates:Check` is on.
 
 Left to you (maintainers): the release key is kept outside the repository and as a GitHub Actions secret; whoever holds it can sign an update every desktop copy will install.
 
@@ -129,6 +130,8 @@ Left to you (maintainers): the release key is kept outside the repository and as
 | | Desktop | Server |
 |---|---|---|
 | Listens on | `localhost` only, whatever the URL settings say (`DesktopHost`: Kestrel's `ListenLocalhost`), port 5180 or a free one | Plain HTTP on 8080; the compose file publishes it to `127.0.0.1` for a proxy |
+| Answers to | Only `localhost`, `127.0.0.1` and `[::1]` (`DesktopHost.RestrictHosts`), so a web page can't reach it through a name of its own pointed at this computer (DNS rebinding) | Whatever `AllowedHosts` says (any name by default) |
+| Setting up | No setup code: only this computer can reach it | The setup code from the log |
 | Who can reach it | Programs on this computer, other Windows users of it included (they still need an OpenBook password) | Whoever the proxy and firewall let through |
 | Database | SQLite, optionally SQLCipher | PostgreSQL (or SQLite) |
 | Backups | Daily from the start (14 kept), on quit and before updates | `pg_dump`, scheduled by you |
@@ -141,7 +144,7 @@ Customer links, invitations, capture devices and Stripe webhooks need others to 
 
 Server ([server.md](server.md)):
 
-1. Change both `change-me` passwords in `docker-compose.yml` before the first start, and set up the company straight away.
+1. Change both `change-me` passwords in `docker-compose.yml` before the first start (OpenBook won't start with them), set `AllowedHosts` to the server's name, and set up the company straight away with the setup code from `docker compose logs openbook`.
 2. Put an HTTPS reverse proxy in front, and let nothing else reach port 8080 ([HTTPS behind a reverse proxy](server.md#https-behind-a-reverse-proxy)).
 3. Back up the database **and** `/data/keys`, keep copies off the server, and try a restore now and then ([Backups with pg_dump](server.md#backups-with-pg_dump), [Data Protection keys](server.md#data-protection-keys)).
 4. Require two-factor sign-in for admins and accountants (Settings → Sign-in); give everyone the lowest role that works.

@@ -114,10 +114,10 @@ public sealed class UpdateFlowTests : IAsyncLifetime
         return _app.Services.GetRequiredService<UpdateService>();
     }
 
-    private void Publish(string version, byte[]? served = null, string? signWith = null)
+    private void Publish(string version, byte[]? served = null, string? signWith = null, DateTimeOffset? publishedAt = null)
     {
         var manifest = new UpdateManifest(version, Installer, Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(InstallerBytes)),
-            InstallerBytes.Length, null, "https://updates.test/notes", DateTimeOffset.UtcNow).SignWith(signWith ?? _key.Private);
+            InstallerBytes.Length, null, "https://updates.test/notes", publishedAt ?? DateTimeOffset.UtcNow).SignWith(signWith ?? _key.Private);
         _releases.Manifest = manifest.ToJson();
         _releases.Installer = served ?? InstallerBytes;
     }
@@ -174,6 +174,52 @@ public sealed class UpdateFlowTests : IAsyncLifetime
         status = await updates.CheckAsync();
         Assert.Null(status.Error);
         Assert.Null(status.Available);
+    }
+
+    [Fact]
+    public async Task An_installer_changed_after_its_check_is_thrown_away_not_run()
+    {
+        var updates = await StartAsync();
+        Publish("99.1.0");
+        var status = await updates.CheckAsync();
+        Assert.NotNull(status.Ready);
+
+        // Something running as this Windows user swaps the file while it waits to be installed.
+        await File.WriteAllBytesAsync(status.Ready!, Encoding.UTF8.GetBytes("pretend this is malware!!!!"));
+        Assert.StartsWith("The downloaded installer changed after it was checked", await updates.InstallAsync(evenIfBackupFails: false), StringComparison.Ordinal);
+        Assert.Empty(_launcher.Started);
+        Assert.False(File.Exists(status.Ready));
+        Assert.Null(updates.Status.Ready);
+    }
+
+    [Fact]
+    public async Task An_older_update_list_after_a_newer_one_is_ignored_and_an_old_one_is_flagged()
+    {
+        var updates = await StartAsync();
+        var now = DateTimeOffset.UtcNow;
+        Publish("0.0.1", publishedAt: now.AddDays(-10));
+        var status = await updates.CheckAsync();
+        Assert.Null(status.Error);
+        Assert.Null(status.Warning);
+        Assert.Equal(now.AddDays(-10), status.ListedAt);
+
+        // The same release list from before, replayed: genuine and signed, but older than one already seen.
+        Publish("0.0.1", publishedAt: now.AddDays(-400));
+        status = await updates.CheckAsync();
+        Assert.Contains("older update list", status.Error, StringComparison.Ordinal);
+
+        // Remembered across restarts on the desktop.
+        Assert.True(File.Exists(Path.Combine(AppFolder, "updates-seen.json")));
+    }
+
+    [Fact]
+    public async Task A_feed_whose_newest_release_is_old_gets_a_warning()
+    {
+        var updates = await StartAsync();
+        Publish("0.0.1", publishedAt: DateTimeOffset.UtcNow - UpdateService.StaleAfter - TimeSpan.FromDays(1));
+        var status = await updates.CheckAsync();
+        Assert.Null(status.Error);
+        Assert.Contains("could be holding updates back", status.Warning, StringComparison.Ordinal);
     }
 
     [Fact]

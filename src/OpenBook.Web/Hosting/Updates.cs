@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using OpenBook.Application;
 using OpenBook.Application.Updates;
 
 namespace OpenBook.Web.Hosting;
@@ -9,8 +10,11 @@ namespace OpenBook.Web.Hosting;
 /// <param name="Available">A newer release than this one, signed by the release key.</param>
 /// <param name="Ready">OpenBook Desktop: its installer, downloaded and checked, ready to run.</param>
 /// <param name="Note">Why an available release can't be installed from here (a server, or too old a version to update straight from).</param>
+/// <param name="ListedAt">When the newest release the feed lists was published, as its signed manifest says.</param>
+/// <param name="Warning">The feed's newest release is old enough that newer ones may be held back on the way.</param>
 public sealed record UpdateStatus(
-    string Current, bool Enabled, DateTimeOffset? LastChecked, string? Error, UpdateManifest? Available, string? Ready, string? Note);
+    string Current, bool Enabled, DateTimeOffset? LastChecked, string? Error, UpdateManifest? Available, string? Ready, string? Note,
+    DateTimeOffset? ListedAt = null, string? Warning = null);
 
 /// <summary>The public key releases must be signed with: the one built in (<see cref="UpdateKeys"/>); only tests use another.</summary>
 public sealed record UpdateTrust(string PublicKey)
@@ -58,6 +62,13 @@ public sealed partial class UpdateService(
     private UpdateManifest? _available;
     private string? _ready;
     private string? _readyVersion;
+    private DateTimeOffset? _listedAt;
+
+    /// <summary>
+    /// A feed whose newest release is older than this gets a warning: OpenBook can't tell a quiet project from someone
+    /// between it and GitHub serving an old, still signed, manifest so newer releases never arrive.
+    /// </summary>
+    public static readonly TimeSpan StaleAfter = TimeSpan.FromDays(180);
 
     /// <summary>The version running, without the build suffix.</summary>
     public static string CurrentVersion { get; } =
@@ -101,7 +112,47 @@ public sealed partial class UpdateService(
         File.WriteAllText(file, JsonSerializer.Serialize(new { Check = enabled }));
     }
 
-    public UpdateStatus Status => new(CurrentVersion, Enabled, _lastChecked, _error, _available, _ready, Note(_available));
+    public UpdateStatus Status => new(CurrentVersion, Enabled, _lastChecked, _error, _available, _ready, Note(_available), _listedAt, Warning(_listedAt));
+
+    private static string? Warning(DateTimeOffset? listedAt) =>
+        listedAt is { } at && DateTimeOffset.UtcNow - at > StaleAfter
+            ? $"The newest release OpenBook can see was published on {at.InCompanyTime():d}. If you'd expect a newer one, look at the releases page on GitHub yourself: something between this computer and GitHub could be holding updates back."
+            : null;
+
+    // The publish date of the newest manifest seen, so an older one served later is noticed (Desktop keeps it across restarts).
+    private string? SeenFile => installation.AppFolder is null ? null : Path.Combine(installation.AppFolder, "updates-seen.json");
+
+    private DateTimeOffset? _seenInMemory;
+
+    private DateTimeOffset? Seen
+    {
+        get
+        {
+            if (SeenFile is { } file && File.Exists(file))
+            {
+                try
+                {
+                    using var json = JsonDocument.Parse(File.ReadAllText(file));
+                    if (json.RootElement.TryGetProperty("PublishedAt", out var at) && at.TryGetDateTimeOffset(out var value))
+                        return value;
+                }
+                catch (Exception ex) when (ex is IOException or JsonException)
+                {
+                }
+            }
+
+            return _seenInMemory;
+        }
+        set
+        {
+            _seenInMemory = value;
+            if (SeenFile is { } file && value is { } at)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                File.WriteAllText(file, JsonSerializer.Serialize(new { PublishedAt = at }));
+            }
+        }
+    }
 
     private string? Note(UpdateManifest? available) => available switch
     {
@@ -126,6 +177,13 @@ public sealed partial class UpdateService(
                 throw new UpdateException("The release feed didn't send an update manifest.");
             if (!manifest.IsSignedBy(trust.PublicKey))
                 throw new UpdateException("The release feed's manifest isn't signed by OpenBook's release key, so it was ignored.");
+            // A genuine but older manifest after a newer one: replayed to hold updates back, or a release taken down.
+            if (Seen is { } seen && manifest.PublishedAt < seen)
+                throw new UpdateException(
+                    $"The release feed sent an older update list (published {manifest.PublishedAt.InCompanyTime():d}) than one OpenBook has already seen (published {seen.InCompanyTime():d}), so it was ignored. Look at the releases page on GitHub yourself.");
+            if (Seen is not { } before || manifest.PublishedAt > before)
+                Seen = manifest.PublishedAt;
+            _listedAt = manifest.PublishedAt;
             if (!UpdateVersion.IsNewer(manifest.Version, CurrentVersion))
             {
                 (_available, _ready) = (null, null);
@@ -168,6 +226,14 @@ public sealed partial class UpdateService(
         var backup = await quit.BackUpAsync(ct);
         if (backup is { Succeeded: false } && !evenIfBackupFails)
             return DesktopQuit.Describe(backup);
+
+        // Checked again just before it runs: it may have waited a day in a folder this Windows user can write to.
+        if (!File.Exists(installer) || !await MatchesAsync(installer, release, ct))
+        {
+            File.Delete(installer);
+            (_ready, _readyVersion) = (null, null);
+            return "The downloaded installer changed after it was checked, so it was thrown away. Check for updates again to download it afresh.";
+        }
 
         LogInstalling(release.Version);
         launcher.Start(installer,

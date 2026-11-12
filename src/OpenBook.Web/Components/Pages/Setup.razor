@@ -11,6 +11,7 @@
 @inject ChartTemplates Templates
 @inject ItemService Items
 @inject NavigationManager Navigation
+@inject SetupCode Code
 
 <PageTitle>Set up your company · OpenBook</PageTitle>
 
@@ -51,6 +52,13 @@
             <AntiforgeryToken />
             <fieldset>
                 <legend>Moving from QuickBooks?</legend>
+                @if (Code.Required)
+                {
+                    <div class="field">
+                        <label for="read-setup-code">Setup code</label>
+                        <input id="read-setup-code" name="SetupCode" autocomplete="off" spellcheck="false" required />
+                    </div>
+                }
                 <p class="hint muted">Upload your export: OpenBook fills in the company details it finds below, and imports your accounts, customers, vendors, products and transactions when you create the company. Or skip this and start with a starter chart of accounts.</p>
                 <div class="row">
                     <div class="field">
@@ -81,6 +89,19 @@
     <EditForm Model="Input" FormName="setup" OnValidSubmit="SetUpAsync" method="post">
         <DataAnnotationsValidator />
         <input type="hidden" name="Input.ImportToken" value="@Input.ImportToken" />
+
+        @if (Code.Required)
+        {
+            <fieldset>
+                <legend>Setup code</legend>
+                <div class="field">
+                    <label for="setup-code">Setup code</label>
+                    <InputText id="setup-code" @bind-Value="Input.SetupCode" autocomplete="off" spellcheck="false" />
+                    <span class="hint">Proves you run this server. OpenBook writes it to its log when it starts without a company
+                        (with Docker: <code>docker compose logs openbook</code>), unless it was chosen in the setting OpenBook:SetupCode.</span>
+                </div>
+            </fieldset>
+        }
 
         <fieldset>
             <legend>1. Company</legend>
@@ -252,6 +273,14 @@
 
     private async Task ReadAsync()
     {
+        string? typed = HttpContext.Request.Form["SetupCode"];
+        if (!Code.Matches(typed))
+        {
+            _error = WrongCode;
+            return;
+        }
+
+        Input.SetupCode = typed;
         var file = HttpContext.Request.Form.Files.GetFile("file");
         var source = ImportService.Sources().FirstOrDefault(s => s.Key == Source).Key ?? nameof(MigrationSource.QuickBooksIif);
         if (file is null || file.Length == 0)
@@ -327,8 +356,16 @@
         return $"{found} {details}";
     }
 
+    private const string WrongCode = "That setup code isn't right. It's in OpenBook's log from when it started.";
+
     private async Task SetUpAsync()
     {
+        if (!Code.Matches(Input.SetupCode))
+        {
+            _error = WrongCode;
+            return;
+        }
+
         var upload = Upload;
         if (Input.ImportToken is { Length: > 0 } && upload is null)
         {
@@ -416,6 +453,8 @@
 
     private sealed class SetupModel
     {
+        public string? SetupCode { get; set; }
+
         [Required(ErrorMessage = "Enter your company's name.")]
         [StringLength(200)]
         public string CompanyName { get; set; } = string.Empty;

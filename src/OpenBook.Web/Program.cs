@@ -41,6 +41,14 @@ if (encryptionCommand is not null)
 if (isMoveToPostgres)
     return await MoveToPostgresCommand.RunAsync(builder.Configuration, installation, connectionString, args);
 
+// A server never serves the books with the sample database password from docker-compose.yml.
+if (!isResetPassword && !isRestoreBackup && !isMakeDemo && !isVerifyAudit && !installation.IsDesktop
+    && OpenBook.Web.Hosting.SamplePasswords.Refusal(connectionString) is { } samplePassword)
+{
+    await Console.Error.WriteLineAsync(samplePassword);
+    return 1;
+}
+
 // A desktop copy already running for this company: open its page instead of starting another.
 if (!isResetPassword && !isRestoreBackup && !isMakeDemo && !isVerifyAudit && installation.IsDesktop)
 {
@@ -69,7 +77,12 @@ if (!isResetPassword && !isRestoreBackup && !isMakeDemo && !isVerifyAudit)
 builder.Services.AddSingleton(installation);
 builder.Services.AddSingleton<OpenBook.Web.Hosting.DesktopQuit>();
 if (installation.IsDesktop)
+{
     builder.Services.AddHostedService<OpenBook.Web.Hosting.DesktopControlService>();
+    OpenBook.Web.Hosting.DesktopHost.RestrictHosts(builder.Services);
+}
+
+builder.Services.AddSingleton<SetupCode>();
 builder.Services.AddSingleton<OpenBook.Web.Hosting.IInstallerLauncher, OpenBook.Web.Hosting.ProcessInstallerLauncher>();
 builder.Services.AddSingleton(OpenBook.Web.Hosting.UpdateTrust.BuiltIn);
 builder.Services.AddSingleton<OpenBook.Web.Hosting.UpdateService>();
@@ -293,6 +306,7 @@ app.MapRazorComponents<App>()
 
 if (installation.IsDesktop)
     OpenBook.Web.Hosting.DesktopHost.OnStarted(app, installation);
+SetupCode.AnnounceWhenStarted(app);
 app.Run();
 return 0;
 
