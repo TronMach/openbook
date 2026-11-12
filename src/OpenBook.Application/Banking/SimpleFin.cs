@@ -174,6 +174,10 @@ public static class SimpleFin
             seconds = s;
         else
             return null;
-        return seconds <= 0 ? null : DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(seconds), zone).DateTime);
+        // A time no date can hold (found by fuzzing: FromUnixTimeSeconds throws past year 9999, and a zone's offset can
+        // carry the year 9999 past its end) is unreadable, like any other.
+        return seconds <= 0 || seconds > LatestSeconds ? null : DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(seconds), zone).DateTime);
     }
+
+    private static readonly long LatestSeconds = new DateTimeOffset(9000, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds();
 }

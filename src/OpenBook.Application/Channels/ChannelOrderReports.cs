@@ -215,8 +215,13 @@ public static class ChannelOrderReports
             return false;
         // Quantities and prices may have more decimals than money: parse plainly first.
         var plain = text.Trim().Replace("$", "", StringComparison.Ordinal).Replace(",", "", StringComparison.Ordinal).Replace("USD", "", StringComparison.OrdinalIgnoreCase).Trim();
-        return decimal.TryParse(plain, NumberStyles.Number | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out amount)
+        // Beyond what the books can store is unreadable, so quantity × price can't overflow (found by fuzzing).
+        var read = decimal.TryParse(plain, NumberStyles.Number | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out amount)
             || StatementValues.TryParseAmount(text, out amount);
+        if (read && Math.Abs(amount) <= Domain.Common.Money.MaxAmount)
+            return true;
+        amount = 0m;
+        return false;
     }
 
     private static string? Clean(string? text)

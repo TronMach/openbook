@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Domain.Documents;
@@ -187,7 +188,7 @@ public static partial class DocumentParser
             var l = found;
             // A leading quantity column ("2 ABC-100 Widget 10.00 20.00").
             if (prices && words.Length > 1 && l.Price is { } p && l.Amount is { } a
-                && decimal.TryParse(words[0], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var q) && q > 0m && (l.Quantity is null || l.Quantity == q)
+                && decimal.TryParse(words[0], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var q) && q > 0m && Plausible(q) && (l.Quantity is null || l.Quantity == q)
                 && Math.Abs(decimal.Round(q * p, 2, MidpointRounding.AwayFromZero) - a) <= 0.01m)
             {
                 var rest = Split(words[1..]);
@@ -206,6 +207,13 @@ public static partial class DocumentParser
     }
 
     /// <summary>Quantity, unit price and amount from the numbers at the end of a priced line.</summary>
+    /// <summary>
+    /// A number a document line can hold: none beyond what the books can store, and none finer than a price's four
+    /// decimals. Anything else is read as words, so quantity × price and amount ÷ quantity can't overflow (found by
+    /// fuzzing: "0.0000000000000000000000000001" or thirty digits made the reader fail instead of reading the line).
+    /// </summary>
+    private static bool Plausible(decimal value) => value == 0m || Math.Abs(value) is >= 0.0001m and <= Money.MaxAmount;
+
     private static (decimal? Quantity, decimal? Price, decimal? Amount)? Priced(List<(decimal Value, bool Money)> numbers)
     {
         var amount = numbers[^1];
@@ -272,7 +280,8 @@ public static partial class DocumentParser
             t = t[1..];
         }
 
-        if (!NumberPattern().IsMatch(t) || !decimal.TryParse(t.Replace(",", "", StringComparison.Ordinal), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value))
+        if (!NumberPattern().IsMatch(t) || !decimal.TryParse(t.Replace(",", "", StringComparison.Ordinal), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value)
+            || !Plausible(value))
             return null;
         var dot = t.IndexOf('.', StringComparison.Ordinal);
         var money = dot >= 0 && t.Length - dot - 1 == 2;

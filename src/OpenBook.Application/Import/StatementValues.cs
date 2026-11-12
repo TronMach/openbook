@@ -56,7 +56,7 @@ public static class StatementValues
 
     /// <summary>
     /// "1,234.56", "1.234,56", "$-12.00", "(12.00)", "12.00-" and "12,5" all parse. Rejects more than
-    /// two decimal places rather than rounding.
+    /// two decimal places rather than rounding, and anything beyond <see cref="Domain.Common.Money.MaxAmount"/>.
     /// </summary>
     public static bool TryParseAmount(string? text, out decimal amount)
     {
@@ -113,6 +113,13 @@ public static class StatementValues
             return false;
         if (decimal.Round(amount, 2) != amount)
             return false;
+        // More than the books can hold is no amount anyone was paid; refusing it also keeps sums of a file's lines from
+        // overflowing (found by fuzzing the channel reports).
+        if (amount > Domain.Common.Money.MaxAmount)
+        {
+            amount = 0m;
+            return false;
+        }
 
         amount = negative ? -amount : amount;
         return true;
