@@ -24,7 +24,7 @@ powershell -File tools/run-tests.ps1
 powershell -File tools/run-tests.ps1 -Filter "FullyQualifiedName~InvoiceTests"
 ```
 
-The script runs a few tests at a time at low priority, so your computer stays usable. A run of the whole suite on SQLite takes several minutes. The PostgreSQL run (`-Postgres`) needs a server and a login allowed to create databases (see `CLAUDE.md`); if you don't have one, the pull request's checks run it for you.
+Browser tests drive Microsoft Edge or Chrome if one is installed (they never download a browser) and are skipped otherwise; set `OPENBOOK_TEST_BROWSER=0` to skip them anyway. The script runs a few tests at a time at low priority, so your computer stays usable. A run of the whole suite on SQLite takes several minutes. The PostgreSQL run (`-Postgres`) needs a server and a login allowed to create databases (see `CLAUDE.md`); if you don't have one, the pull request's checks run it for you.
 
 Run OpenBook with `dotnet run --project src/OpenBook.Web` and open the address it prints. A company with three years of history to try things on:
 
