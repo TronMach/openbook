@@ -33,4 +33,4 @@ Fixes go into the latest release. Please check a problem against it (or `master`
 
 ## Running OpenBook safely
 
-The admin guides cover what's needed: [the server guide](docs/admin/server.md) (HTTPS behind a proxy, the Data Protection keys, backups) and [the desktop guide](docs/admin/desktop.md).
+[The threat model](docs/admin/threat-model.md) says what OpenBook protects, against whom, what it leaves to whoever runs it, and what it doesn't protect against. The admin guides cover what's needed: [the server guide](docs/admin/server.md) (HTTPS behind a proxy, the Data Protection keys, backups) and [the desktop guide](docs/admin/desktop.md).
