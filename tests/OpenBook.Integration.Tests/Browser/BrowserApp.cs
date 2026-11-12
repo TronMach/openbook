@@ -70,7 +70,8 @@ public sealed class BrowserApp : IAsyncLifetime
             // A test signs in many times from one address: the sign-in limit is for people, not this.
             b.UseSetting("OpenBook:RateLimits:SignInPerMinute", "0");
         });
-        _app.UseKestrel(0);
+        // A free port each time (UseKestrel(0) falls back to the default 5000), so two runs at once don't collide.
+        _app.UseKestrel(k => k.Listen(System.Net.IPAddress.Loopback, 0));
         _app.StartServer();
         Address = _app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses
             .First().Replace("[::]", "127.0.0.1", StringComparison.Ordinal).Replace("0.0.0.0", "127.0.0.1", StringComparison.Ordinal).TrimEnd('/');

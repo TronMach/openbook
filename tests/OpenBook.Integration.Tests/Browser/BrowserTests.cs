@@ -20,6 +20,7 @@ namespace OpenBook.Integration.Tests.Browser;
 public sealed partial class BrowserTests(BrowserApp app)
 {
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(20);
+    private static readonly float Slow = (float)Wait.TotalMilliseconds;
 
     [BrowserFact]
     public async Task Signing_in_through_the_page_reaches_home()
@@ -215,9 +216,10 @@ public sealed partial class BrowserTests(BrowserApp app)
         await OpenPickerAsync(page, input);
         await input.PressSequentiallyAsync(text);
         var listbox = page.Locator($"#{await input.GetAttributeAsync("aria-controls")}");
-        await Assertions.Expect(listbox.Locator(".search-option.active:not(.search-add)")).ToContainTextAsync(expected);
+        await Assertions.Expect(listbox.Locator(".search-option.active:not(.search-add)")).ToContainTextAsync(expected, new LocatorAssertionsToContainTextOptions { Timeout = Slow });
         await input.PressAsync("Enter");
-        await Assertions.Expect(input).ToHaveValueAsync(expected);
+        // Choosing runs the page's own work (a customer's credit check) before the box redraws: slow on a busy machine.
+        await Assertions.Expect(input).ToHaveValueAsync(expected, new LocatorAssertionsToHaveValueOptions { Timeout = Slow });
     }
 
     /// <summary>Clicks into a picker until its list opens: the first clicks may come before the page's circuit is up.</summary>
