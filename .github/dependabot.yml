@@ -21,6 +21,9 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: 'Npgsql*'
         update-types: ['version-update:semver-major']
+      # System.* packages (System.Security.Cryptography.Pkcs) move with .NET's version too: 11.x is .NET 11's.
+      - dependency-name: 'System.*'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: '/'
