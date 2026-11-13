@@ -35,5 +35,9 @@ updates:
     schedule:
       interval: weekly
     ignore:
+      # A new .NET major is a change of its own (the target framework moves with it). Dependabot names these images
+      # without the registry ("dotnet/aspnet"), so both spellings are listed.
+      - dependency-name: 'dotnet/*'
+        update-types: ['version-update:semver-major']
       - dependency-name: 'mcr.microsoft.com/dotnet/*'
         update-types: ['version-update:semver-major']
