@@ -109,13 +109,16 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
 
     /// <summary>
     /// Drops a test database. A login that isn't a superuser can't end an autovacuum worker that's still busy in it
-    /// (42501 on PostgreSQL 17), so the drop is retried for a few seconds while the worker finishes.
+    /// (42501 on PostgreSQL 17), so the drop is retried while the worker finishes. On a machine busy with a full run
+    /// that can take well over 5 seconds (two full runs failed at 5), so it keeps trying for up to a minute.
     /// </summary>
     internal static async Task DropPostgresDatabaseAsync(string database)
     {
         await using var admin = new Npgsql.NpgsqlConnection(AdminConnection());
         await admin.OpenAsync();
-        for (var attempt = 1; ; attempt++)
+        var giveUp = DateTime.UtcNow + DropRetryWindow;
+        var wait = TimeSpan.FromMilliseconds(250);
+        while (true)
         {
             try
             {
@@ -123,12 +126,16 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
                 await drop.ExecuteNonQueryAsync();
                 return;
             }
-            catch (Npgsql.PostgresException ex) when (ex.SqlState == "42501" && attempt < 20)
+            catch (Npgsql.PostgresException ex) when (ex.SqlState == "42501" && DateTime.UtcNow < giveUp)
             {
-                await Task.Delay(250);
+                await Task.Delay(wait);
+                wait = TimeSpan.FromMilliseconds(Math.Min(wait.TotalMilliseconds * 2, 2000));
             }
         }
     }
+
+    /// <summary>How long a drop refused because an autovacuum worker is still busy keeps being retried.</summary>
+    internal static readonly TimeSpan DropRetryWindow = TimeSpan.FromSeconds(60);
 
     public Task<User> SetUpCompany(string name = "Test Co") =>
         InScope(sp => sp.GetRequiredService<CompanySetupService>().SetUpAsync(
