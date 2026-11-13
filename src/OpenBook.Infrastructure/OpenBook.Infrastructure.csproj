@@ -10,7 +10,7 @@
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="MailKit" Version="5.0.0" />
     <!-- MimeKit 5 asks for 8.0.1, which has security advisories (NU1902/NU1903). -->
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
