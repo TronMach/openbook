@@ -20,7 +20,8 @@ public static class RateLimits
     /// <summary>Anonymous link requests per address per minute (<c>OpenBook:RateLimits:LinksPerMinute</c>; 0 turns it off).</summary>
     public const int DefaultLinksPerMinute = 120;
 
-    private static readonly string[] SignInPaths = ["/login", "/invite/"];
+    // The setup page takes the setup code until a company exists.
+    private static readonly string[] SignInPaths = ["/login", "/invite/", "/setup"];
 
     private static readonly string[] LinkPaths = ["/portal/", "/pay/", "/invite/", "/capture/device-status/", "/hooks/", "/view/"];
 

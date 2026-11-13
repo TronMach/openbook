@@ -153,6 +153,7 @@ public static class DependencyInjection
         services.AddScoped<ApiKeyService>();
         services.AddScoped<WebhookService>();
         services.AddScoped<WebhookDispatcher>();
+        services.AddScoped<Auditing.AuditChainService>();
         services.AddScoped<OpenBook.Application.Projects.ProjectService>();
         services.AddScoped<OpenBook.Application.Projects.WorkerService>();
         services.AddScoped<OpenBook.Application.Projects.TimeService>();

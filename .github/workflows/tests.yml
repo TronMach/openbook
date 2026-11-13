@@ -2,14 +2,16 @@
 # and the integration suite on PostgreSQL (the server that comes installed on GitHub's Windows runners, reached as a
 # login that may create databases but isn't a superuser, as locally). Windows, like the release workflow, whose test
 # step has passed there on every release. Failed tests are listed on the run's summary page and their trx files kept.
+# The SQLite job also checks every package's licence (tools/check-licences.ps1), so a Dependabot update can't bring in
+# one OpenBook can't use.
 name: Tests
 
 on:
   push:
     branches: [master]
-    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'docs/dev/**', 'docs/admin/**']
+    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'docs/dev/**', 'docs/admin/**', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
   pull_request:
-    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'docs/dev/**', 'docs/admin/**']
+    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'docs/dev/**', 'docs/admin/**', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
   workflow_dispatch:
 
 permissions:
@@ -35,6 +37,11 @@ jobs:
       # The release workflow packages a Release build, where the analyzers are stricter; catch that here.
       - name: Build (Release)
         run: dotnet build -c Release -nologo
+
+      # Every package, direct or not, under a licence the AGPL can take, and PDFsharp-MigraDoc held at 6.2.4.
+      - name: Package licences
+        shell: pwsh
+        run: ./tools/check-licences.ps1
 
       - name: Test
         shell: pwsh

@@ -6,7 +6,7 @@ OpenBook on one Windows computer, for one business: the same program as [OpenBoo
 
 Run `OpenBook-Setup-<version>.exe`. It installs for the current Windows user only, without administrator rights, into `%LOCALAPPDATA%\Programs\OpenBook`, and adds **OpenBook** to the Start menu. The installer isn't code-signed yet, so Windows SmartScreen may warn before it runs (**More info → Run anyway**).
 
-Starting OpenBook runs it in the background and opens it in the browser at `http://localhost:5180` (another port if that one is taken). Starting it again just opens the browser. Only this computer can reach it. It keeps running, with an OpenBook icon in the system tray (the notification area by the clock, maybe under its ^ arrow), until you quit it or sign out of Windows. The tray icon's menu has **Open OpenBook** (also a double-click), **Back up now** and **Quit OpenBook**. Quitting there, or with **Settings → System → Quit OpenBook**, first makes a backup to the scheduled backups' destination (named `openbook-scheduled-quit-…`; the last 5 are kept, apart from the daily ones), then stops OpenBook. From the tray, if that backup fails you're asked whether to quit anyway. The tray talks to OpenBook through a named pipe only your Windows user can open; its name is in `running.json`.
+Starting OpenBook runs it in the background and opens it in the browser at `http://localhost:5180` (another port if that one is taken). Starting it again just opens the browser. Only this computer can reach it, and only as `localhost`, `127.0.0.1` or `[::1]`: requests for any other name are refused, so a web page can't reach it by pointing a name of its own at this computer. It keeps running, with an OpenBook icon in the system tray (the notification area by the clock, maybe under its ^ arrow), until you quit it or sign out of Windows. The tray icon's menu has **Open OpenBook** (also a double-click), **Back up now** and **Quit OpenBook**. Quitting there, or with **Settings → System → Quit OpenBook**, first makes a backup to the scheduled backups' destination (named `openbook-scheduled-quit-…`; the last 5 are kept, apart from the daily ones), then stops OpenBook. From the tray, if that backup fails you're asked whether to quit anyway. The tray talks to OpenBook through a named pipe only your Windows user can open; its name is in `running.json`.
 
 Installing a newer version over it keeps everything; it stops a running OpenBook first. Uninstalling (Windows **Settings → Apps**) removes the program only.
 
@@ -16,7 +16,7 @@ Copy `Documents\OpenBook` and `%LOCALAPPDATA%\OpenBook\keys`. Without the keys f
 
 ## Updates
 
-An installed OpenBook Desktop checks GitHub for a newer release a minute after starting and then once a day, sending nothing but its version. It downloads a newer installer into `%LOCALAPPDATA%\OpenBook\updates`. It only keeps it when the release key signed the release and the file's size and SHA-256 match. Then **Install OpenBook x.y.z** appears in the tray menu (with a notice) and on **Settings → System → Updates**.
+An installed OpenBook Desktop checks GitHub for a newer release a minute after starting and then once a day, sending nothing but its version. It downloads a newer installer into `%LOCALAPPDATA%\OpenBook\updates`. It only keeps it when the release key signed the release and the file's size and SHA-256 match, and checks the file again just before installing it. An update list older than one already seen is ignored, and when the newest release is more than six months old the System page says so, in case something is holding newer ones back. Then **Install OpenBook x.y.z** appears in the tray menu (with a notice) and on **Settings → System → Updates**.
 
 Installing backs up the books first, as Quit does; if that backup fails, you're asked whether to go on anyway. Then the installer runs silently (its `install.log` is beside the download), and OpenBook starts again with the same folders and port.
 
@@ -41,6 +41,7 @@ The program folder's `openbook.install.json` makes every run of it a desktop one
 
 - `OpenBook.Web.exe reset-password <username>`: a forgotten password (OpenBook quit first is safest). Add `--restore-admin` to make them an active admin, when nobody else can.
 - `OpenBook.Web.exe encrypt-database` with `OpenBook__EncryptionKey` set: encrypt the company file. Quit OpenBook first (Settings > System > Quit OpenBook) and keep a backup; it refuses while OpenBook is running. `decrypt-database` undoes it. The original stays beside the file as a `.bak` until you delete it.
+- `OpenBook.Web.exe verify-audit`: check that the audit trail is as it was written (it reads only, so OpenBook may be running). Add `--against <backup file>` to check that nothing the backup holds has been rewritten since, or `--fingerprint <position>:<hash>` for a fingerprint noted from the accountant's package. Exit code 3 means it's broken or differs.
 - `OpenBook.Web.exe move-to-postgres …`: move the company to OpenBook Server (see [Moving a desktop company in](server.md#moving-a-desktop-company-in)).
 
 ## Building the installer

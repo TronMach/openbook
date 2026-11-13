@@ -206,7 +206,7 @@ internal static class QuickBooksOnlineReader
         foreach (var property in element.EnumerateObject())
         {
             if (property.Value.ValueKind == JsonValueKind.Array && property.Value.EnumerateArray().All(v => v.ValueKind == JsonValueKind.Object)
-                && char.IsUpper(property.Name[0]) && property.Name is not ("Line" or "LinkedTxn" or "CustomField" or "Fault" or "Error"))
+                && property.Name.Length > 0 && char.IsUpper(property.Name[0]) && property.Name is not ("Line" or "LinkedTxn" or "CustomField" or "Fault" or "Error"))
             {
                 if (!lists.TryGetValue(property.Name, out var list))
                     lists[property.Name] = list = [];

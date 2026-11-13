@@ -10,6 +10,10 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 2. [Finding your way around](02-finding-your-way.md): the menu, editions, the simple view, search, keyboard shortcuts, dark mode, language.
 3. [Your chart of accounts](03-chart-of-accounts.md): starter charts, account types, subaccounts, opening balances.
 
+## Coming from QuickBooks
+
+30. [Coming from QuickBooks](30-coming-from-quickbooks.md): where each QuickBooks screen and task is in OpenBook, what works differently, what isn't there, and the words that differ.
+
 ## The simple view
 
 28. [The simple view](28-simple-view.md): a short menu bar by task and a home page that walks through each step, for a business one person runs; switching between it and the full view.
@@ -59,6 +63,11 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 25. [Custom fields, notes and attachments](25-custom-fields-notes-attachments.md): your own fields on records and documents, notes, files.
 26. [Offline capture, the command line, the API and add-ins](26-offline-cli-api.md): the phone capture page, API keys, webhooks, the `openbook` command, add-ins.
 27. [Printed forms: designs, fonts and printing](27-printed-forms.md): invoice and form designs with logos, layout and columns (custom fields included), ready-made designs, printing with another design, fonts, printing in batches and the print-later queue.
+
+## Reference
+
+31. [Glossary](31-glossary.md): accounting words and OpenBook's own, each with the chapter that covers it.
+32. [For accountants and bookkeepers](32-for-accountants.md): why the books can be trusted (the audit chain and the books check), getting access, month-end and year-end, the reports accountants use, and what OpenBook doesn't do.
 
 ## A few things OpenBook always does
 

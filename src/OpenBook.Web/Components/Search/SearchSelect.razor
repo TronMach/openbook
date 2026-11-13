@@ -6,8 +6,8 @@
 <div class="search-select @Class" @onfocusout="LeaveAsync">
     <input id="@Id" @ref="_input" class="search-input" type="text" role="combobox" autocomplete="off" spellcheck="false"
            aria-autocomplete="list" aria-expanded="@(_open ? "true" : "false")" aria-controls="@_listId" aria-label="@AriaLabel"
-           placeholder="@Placeholder" value="@_text" disabled="@Disabled"
-           @oninput="Typed" @onfocus="Open" @onclick="Open" />
+           placeholder="@Placeholder" disabled="@Disabled"
+           @bind:get="_text" @bind:set="Typed" @bind:event="oninput" @onfocus="Open" @onclick="Open" />
     @if (_open)
     {
         <ul id="@_listId" class="search-list" role="listbox" aria-label="@(AriaLabel ?? Placeholder)">
@@ -172,9 +172,12 @@
         _matches = PickerOptions.Filter(Options, _query);
     }
 
-    private void Typed(ChangeEventArgs e)
+    // Bound (not value= with @oninput) so Blazor knows what the box holds when each keystroke's render comes back:
+    // otherwise every render wrote that keystroke's text back into the box and dropped what was typed since (a fast
+    // typist on a slow connection, or a barcode scanner, lost characters).
+    private void Typed(string? value)
     {
-        _text = e.Value as string ?? string.Empty;
+        _text = value ?? string.Empty;
         _query = _text.Trim();
         _open = true;
         _matches = PickerOptions.Filter(Options, _query);

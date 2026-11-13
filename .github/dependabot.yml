@@ -1,0 +1,43 @@
+# Weekly update pull requests for NuGet packages, the GitHub Actions the workflows use and the Docker base images.
+# Each pull request runs the Tests workflow, whose package licence check (tools/check-licences.ps1) refuses a licence
+# OpenBook can't take. Related packages come together, so .NET and EF Core move as one.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories: ['/src/*', '/tests/*']
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dotnet:
+        patterns: ['Microsoft.*', 'System.*', 'Npgsql*']
+      tests:
+        patterns: ['xunit*', 'coverlet*']
+    ignore:
+      # 6.2.4 is the last MIT release; later ones are AGPL or commercial (CLAUDE.md, docs/dev/sales.md).
+      - dependency-name: 'PDFsharp-MigraDoc'
+      # A new major of .NET or EF Core comes with a new target framework: that's a change of its own, not an update.
+      - dependency-name: 'Microsoft.*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'Npgsql*'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: docker
+    directory: '/'
+    schedule:
+      interval: weekly
+    ignore:
+      # A new .NET major is a change of its own (the target framework moves with it). Dependabot names these images
+      # without the registry ("dotnet/aspnet"), so both spellings are listed.
+      - dependency-name: 'dotnet/*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'mcr.microsoft.com/dotnet/*'
+        update-types: ['version-update:semver-major']

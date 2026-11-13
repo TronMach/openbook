@@ -176,6 +176,7 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         md.AppendLine("- Journal entries (`JournalEntries`, `JournalLines`) are the books: each entry's lines sum to zero, debits positive. `IsSealed` is true for every posted entry. Voided entries stay, with a reversing entry beside them.");
         md.AppendLine("- Documents (invoices, bills, payments, ...) record their entry in `JournalEntryId`; journal entries name their document in `Source` and `SourceId`.");
         md.AppendLine("- `AuditRecords` is the full change history, with JSON snapshots in `Before` and `After`.");
+        md.AppendLine("- `AuditChain` links each audit record to the one before it: `Hash` is the SHA-256 of the previous link's hash and the record's fields, so a record changed afterwards no longer matches (the rule is in OpenBook's source, `AuditChain.Hash`).");
         md.AppendLine("- `attachments/` holds each attached file as `<attachment id>-<file name>`; `Attachments.csv` says what each belongs to.");
         md.AppendLine();
         md.AppendLine("## Left out on purpose");

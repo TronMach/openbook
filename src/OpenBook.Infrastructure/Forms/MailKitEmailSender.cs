@@ -44,7 +44,7 @@ internal sealed class MailKitEmailSender(OpenBookStorage storage) : IEmailSender
 
         if (!string.IsNullOrEmpty(settings.Username))
             await client.AuthenticateAsync(settings.Username, password ?? "", ct);
-        await client.SendAsync(mime, ct);
+        await client.SendAsync(new MailKit.SendRequest(mime), ct);
         try
         {
             await client.DisconnectAsync(quit: true, ct);

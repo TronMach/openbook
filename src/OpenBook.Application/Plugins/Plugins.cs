@@ -16,8 +16,52 @@ public interface IOpenBookPlugin
     string Version { get; }
     string? Description => null;
 
+    /// <summary>
+    /// The add-in API it was written for. Return <see cref="PluginApi.Version"/>: as a constant it's compiled into the
+    /// add-in, so it keeps saying which version the add-in was built against. Add-ins that don't say were written for
+    /// version 1, the first (this default never changes). OpenBook doesn't load an add-in it can't run
+    /// (<see cref="PluginApi.Refusal"/>).
+    /// </summary>
+    int ApiVersion => 1;
+
     /// <summary>Called once at startup; anything it adds is removed again if it throws.</summary>
     void Register(IPluginRegistry registry);
+}
+
+/// <summary>
+/// The version of the add-in contract (<see cref="IOpenBookPlugin"/>, <see cref="IPluginRegistry"/> and the types they
+/// use). See docs/dev/api-stability.md for when each number goes up.
+/// </summary>
+public static class PluginApi
+{
+    /// <summary>The contract this OpenBook offers. Goes up when something add-ins can use is added, such as a slot.</summary>
+    public const int Version = 1;
+
+    /// <summary>
+    /// The oldest contract this OpenBook still loads add-ins for. Goes up only when something older add-ins may use is
+    /// removed or changed, announced a minor release ahead.
+    /// </summary>
+    public const int Oldest = 1;
+
+    /// <summary>Why an add-in written for <paramref name="apiVersion"/> can't be loaded; null when it can.</summary>
+    public static string? Refusal(int apiVersion) =>
+        apiVersion > Version
+            ? $"It needs a newer OpenBook: it was written for add-in API version {apiVersion}, and this OpenBook has version {Version}. Update OpenBook, or use a version of the add-in made for this one."
+            : apiVersion < Oldest
+                ? $"It was written for add-in API version {apiVersion}, which this OpenBook no longer supports (version {Oldest} is the oldest it loads). Get a newer version of the add-in."
+                : null;
+
+    /// <summary>
+    /// What to say when an add-in's code fails because something it was compiled against isn't in this OpenBook: it
+    /// was built for another version, though it didn't say so.
+    /// </summary>
+    public static string Explain(Exception error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return error is MissingMemberException or TypeLoadException
+            ? $"It was built for a different version of OpenBook and uses something this one doesn't have ({error.Message}). Get a version of the add-in made for this OpenBook."
+            : error.Message;
+    }
 }
 
 /// <summary>The slots an add-in can fill.</summary>
@@ -44,7 +88,9 @@ public enum PluginState
     Failed,
 }
 
-public sealed record PluginInfo(string Folder, string? Name, string? Version, string? Description, PluginState State, string? Error, IReadOnlyList<string> Adds);
+/// <param name="ApiVersion">The add-in API it says it was written for (<see cref="IOpenBookPlugin.ApiVersion"/>); null when it wasn't read.</param>
+public sealed record PluginInfo(
+    string Folder, string? Name, string? Version, string? Description, PluginState State, string? Error, IReadOnlyList<string> Adds, int? ApiVersion = null);
 
 public sealed record PluginReport(string Plugin, ReportDefinition Definition, Func<IServiceProvider, ReportParameters, CancellationToken, Task<ReportTable>> Run);
 
@@ -79,21 +125,44 @@ public sealed class PluginRegistry
         ArgumentNullException.ThrowIfNull(plugin);
         var pending = new Pending(this, plugin.Name);
         PluginInfo info;
+        int? api = null;
         try
         {
+            // Checked before its code runs: an add-in for another contract may call what isn't there.
+            api = plugin.ApiVersion;
+            if (PluginApi.Refusal(api.Value) is { } refusal)
+            {
+                info = new PluginInfo(folder, plugin.Name, plugin.Version, plugin.Description, PluginState.Failed, refusal, [], api);
+                _plugins.Add(info);
+                return info;
+            }
+
             plugin.Register(pending);
             _reports.AddRange(pending.Reports);
             _importers.AddRange(pending.Importers);
             info = new PluginInfo(folder, plugin.Name, plugin.Version, plugin.Description, PluginState.Loaded, null,
-                [.. pending.Reports.Select(r => $"Report: {r.Definition.Title}"), .. pending.Importers.Select(i => $"Import format: {i.Label}")]);
+                [.. pending.Reports.Select(r => $"Report: {r.Definition.Title}"), .. pending.Importers.Select(i => $"Import format: {i.Label}")], api);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            info = new PluginInfo(folder, plugin.Name, plugin.Version, plugin.Description, PluginState.Failed, ex.Message, []);
+            info = new PluginInfo(folder, Safe(() => plugin.Name), Safe(() => plugin.Version), Safe(() => plugin.Description), PluginState.Failed,
+                PluginApi.Explain(ex), [], api);
         }
 
         _plugins.Add(info);
         return info;
+    }
+
+    private static string? Safe(Func<string?> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return null;
+        }
     }
 
     private sealed class Pending(PluginRegistry registry, string plugin) : IPluginRegistry

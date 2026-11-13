@@ -1,5 +1,6 @@
 # OpenBook with PostgreSQL, for several users on a server:  docker compose up -d   then open http://localhost:8080
-# Change the passwords below. Put a TLS reverse proxy (Caddy, nginx, Traefik) in front for anything beyond a LAN;
+# Change both change-me passwords below to one of your own first: OpenBook won't start with the sample one.
+# The first start logs a setup code (docker compose logs openbook) that /setup asks for. Put a TLS reverse proxy (Caddy, nginx, Traefik) in front for anything beyond a LAN;
 # ASPNETCORE_FORWARDEDHEADERS_ENABLED makes the app trust its X-Forwarded-* headers.
 services:
   db:

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using OpenBook.Application;
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Auditing;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Forms;
 using OpenBook.Application.Ledger;
@@ -114,7 +115,16 @@ public sealed class PostgresMoveTests : IAsyncLifetime
         var setup = await InScope(_sqlite!, sp => sp.GetRequiredService<TwoFactorService>().NewSetupAsync(user.Id));
         await InScope(_sqlite!, sp => sp.GetRequiredService<TwoFactorService>().EnableAsync(user.Id, setup.Secret,
             Totp.Code(Base32.Decode(setup.Secret)!, Totp.Step(new FixedClock().UtcNow))));
+        // A record timed below the microsecond, which PostgreSQL can't keep, then the chain over everything: it must check the same there.
+        await InScope(_sqlite!, async sp =>
+        {
+            var db = sp.GetRequiredService<OpenBookDbContext>();
+            db.AuditRecords.Add(AuditRecord.Create(new DateTimeOffset(2026, 1, 31, 9, 0, 0, TimeSpan.Zero).AddTicks(1234567), "mover", AuditAction.Updated, "company", Guid.NewGuid(), null, "{}"));
+            return await db.SaveChangesAsync();
+        });
+        var chained = await InScope(_sqlite!, sp => sp.GetRequiredService<AuditChainService>().ExtendAsync(late: false));
         var auditBefore = await InScope(_sqlite!, sp => sp.GetRequiredService<OpenBookDbContext>().AuditRecords.CountAsync());
+        Assert.Equal(auditBefore, chained);
         await _sqlite!.DisposeAsync();
         SqliteConnection.ClearAllPools();
         var fileBefore = await File.ReadAllBytesAsync(CompanyFile);
@@ -143,6 +153,11 @@ public sealed class PostgresMoveTests : IAsyncLifetime
         Assert.Equal(AuditAction.Restored, last.Action);
         Assert.Equal("mover", last.Actor);
         Assert.Contains("company.db", last.After, StringComparison.Ordinal);
+
+        // The audit chain came across whole and still checks.
+        var chain = await InScope(server, sp => sp.GetRequiredService<AuditChainService>().VerifyAsync());
+        Assert.False(chain.Broken, string.Join("; ", chain.Findings.Select(f => f.Text)));
+        Assert.Equal(chained, chain.Checked);
         await InScope(server, sp => sp.GetRequiredService<PostingEngine>().PostAsync(
             new PostJournalEntryCommand(new DateOnly(2026, 2, 1), [Dr(bank.Id, 1m), Cr(sales.Id, 1m)])));
         await InScope(server, async sp =>

@@ -16,13 +16,14 @@ var isRestoreBackup = args is [RestoreBackupCommand.Name, ..];
 var isMakeDemo = args is [DemoCompanyCommand.Name, ..];
 var encryptionCommand = args is [EncryptionCommands.Encrypt or EncryptionCommands.Decrypt, ..] ? args[0] : null;
 var isMoveToPostgres = args is [MoveToPostgresCommand.Name, ..];
+var isVerifyAudit = args is [VerifyAuditCommand.Name, ..];
 
 // "--safe-mode" starts without add-ins (for one that stops OpenBook starting); it isn't a configuration key.
 var safeModeArgument = args.Contains("--safe-mode", StringComparer.OrdinalIgnoreCase);
 var builder = WebApplication.CreateBuilder(args.Where(a => !string.Equals(a, "--safe-mode", StringComparison.OrdinalIgnoreCase)
     && !string.Equals(a, ResetPasswordCommand.ClearTwoFactor, StringComparison.OrdinalIgnoreCase)
     && !string.Equals(a, ResetPasswordCommand.RestoreAdmin, StringComparison.OrdinalIgnoreCase)).ToArray());
-if (isResetPassword || isRestoreBackup || isMakeDemo || encryptionCommand is not null || isMoveToPostgres)
+if (isResetPassword || isRestoreBackup || isMakeDemo || encryptionCommand is not null || isMoveToPostgres || isVerifyAudit)
     builder.Logging.ClearProviders();
 
 // Desktop or Server (L13). Desktop decides the company file and folders itself and ignores those settings.
@@ -40,8 +41,16 @@ if (encryptionCommand is not null)
 if (isMoveToPostgres)
     return await MoveToPostgresCommand.RunAsync(builder.Configuration, installation, connectionString, args);
 
+// A server never serves the books with the sample database password from docker-compose.yml.
+if (!isResetPassword && !isRestoreBackup && !isMakeDemo && !isVerifyAudit && !installation.IsDesktop
+    && OpenBook.Web.Hosting.SamplePasswords.Refusal(connectionString) is { } samplePassword)
+{
+    await Console.Error.WriteLineAsync(samplePassword);
+    return 1;
+}
+
 // A desktop copy already running for this company: open its page instead of starting another.
-if (!isResetPassword && !isRestoreBackup && !isMakeDemo && installation.IsDesktop)
+if (!isResetPassword && !isRestoreBackup && !isMakeDemo && !isVerifyAudit && installation.IsDesktop)
 {
     if (await OpenBook.Web.Hosting.DesktopHost.HandOverAsync(installation))
         return 0;
@@ -54,7 +63,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // The log goes to files beside the company file (or the backups folder), and the System page shows recent problems.
-if (!isResetPassword && !isRestoreBackup && !isMakeDemo)
+if (!isResetPassword && !isRestoreBackup && !isMakeDemo && !isVerifyAudit)
 {
     var logFolder = OpenBook.Web.Diagnostics.LogFolder.For(
         installation.LogFolder ?? builder.Configuration["OpenBook:LogDirectory"], backupDirectory, connectionString, builder.Environment.ContentRootPath);
@@ -68,7 +77,12 @@ if (!isResetPassword && !isRestoreBackup && !isMakeDemo)
 builder.Services.AddSingleton(installation);
 builder.Services.AddSingleton<OpenBook.Web.Hosting.DesktopQuit>();
 if (installation.IsDesktop)
+{
     builder.Services.AddHostedService<OpenBook.Web.Hosting.DesktopControlService>();
+    OpenBook.Web.Hosting.DesktopHost.RestrictHosts(builder.Services);
+}
+
+builder.Services.AddSingleton<SetupCode>();
 builder.Services.AddSingleton<OpenBook.Web.Hosting.IInstallerLauncher, OpenBook.Web.Hosting.ProcessInstallerLauncher>();
 builder.Services.AddSingleton(OpenBook.Web.Hosting.UpdateTrust.BuiltIn);
 builder.Services.AddSingleton<OpenBook.Web.Hosting.UpdateService>();
@@ -118,6 +132,8 @@ if (isRestoreBackup)
     return await RestoreBackupCommand.RunAsync(app.Services, args);
 if (isMakeDemo)
     return await DemoCompanyCommand.RunAsync(app.Services, args);
+if (isVerifyAudit)
+    return await VerifyAuditCommand.RunAsync(app.Services, args);
 
 try
 {
@@ -290,6 +306,7 @@ app.MapRazorComponents<App>()
 
 if (installation.IsDesktop)
     OpenBook.Web.Hosting.DesktopHost.OnStarted(app, installation);
+SetupCode.AnnounceWhenStarted(app);
 app.Run();
 return 0;
 

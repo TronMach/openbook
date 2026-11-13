@@ -359,7 +359,8 @@ public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore le
 /// in one ZIP. The 1099 file carries full taxpayer IDs, so building the package is audited.
 /// </summary>
 public sealed class AccountantPackageService(
-    ReportCatalog catalog, IReportExporter exporter, PayablesService payables, ICompanyStore companies, IClock clock, ICurrentUser user)
+    ReportCatalog catalog, IReportExporter exporter, PayablesService payables, ICompanyStore companies, IClock clock, ICurrentUser user,
+    Auditing.IAuditChainStore auditChain)
 {
     /// <summary>The reports in the package, with the query each runs with (from/to/asOf/year filled in).</summary>
     public static IReadOnlyList<(string Key, string File)> Reports { get; } =
@@ -437,13 +438,18 @@ public sealed class AccountantPackageService(
             await using (var stream = filing.Open())
                 await stream.WriteAsync(await Filing1099CsvAsync(taxYear, ct: ct), ct);
 
+            // The audit trail's fingerprint, kept outside OpenBook with the package: it can show later that nothing written
+            // before it has been rewritten.
+            var head = await auditChain.HeadAsync(ct);
+            var trail = head is null ? "" : $"\r\nAudit trail: chained up to audit record #{head.AuditRecordId:N0} (position {head.Position:N0}), fingerprint {head.Hash}. "
+                + "If the company's audit trail is ever in doubt, that position must still have that fingerprint (verify-audit, in the admin guide, checks it against a backup).\r\n";
             var readme = zip.CreateEntry("README.txt");
             await using (var stream = readme.Open())
             {
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(
                     $"{company.Name}: accountant's package for {from:MMM d, yyyy} to {to:MMM d, yyyy}, made {clock.UtcNow.InCompanyTime():g} by {user.Actor}.\r\n\r\n"
                     + $"Statements are on the {(used == Domain.Ledger.ReportBasis.Cash ? "cash" : "accrual")} basis. Mileage, sales tax, inventory and channel reports are included when the company has any. "
-                    + "The 1099 filing data has full taxpayer IDs: keep it private.\r\n"), ct);
+                    + "The 1099 filing data has full taxpayer IDs: keep it private.\r\n" + trail), ct);
             }
         }
 

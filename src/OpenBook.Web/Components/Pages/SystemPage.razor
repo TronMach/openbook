@@ -116,6 +116,10 @@
         {
             <p class="muted">@update.Note</p>
         }
+        @if (update.Warning is not null)
+        {
+            <p class="alert notice" role="status">@update.Warning</p>
+        }
         @if (!Install.IsDesktop && update.Available is not null)
         {
             <pre>git pull

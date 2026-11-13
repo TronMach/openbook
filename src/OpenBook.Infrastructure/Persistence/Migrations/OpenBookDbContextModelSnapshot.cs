@@ -405,6 +405,30 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("AttachmentContents", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Auditing.AuditLink", b =>
+                {
+                    b.Property<long>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AuditRecordId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LinkedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Position");
+
+                    b.HasIndex("AuditRecordId")
+                        .IsUnique();
+
+                    b.ToTable("AuditChain", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Auditing.AuditRecord", b =>
                 {
                     b.Property<long>("Id")
@@ -7459,6 +7483,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithOne()
                         .HasForeignKey("OpenBook.Domain.Attachments.AttachmentContent", "AttachmentId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Auditing.AuditLink", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Auditing.AuditRecord", null)
+                        .WithMany()
+                        .HasForeignKey("AuditRecordId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

@@ -93,7 +93,7 @@ Opening balances for many accounts can also be imported from a CSV file on **Set
 
 ## Journal entries
 
-Most entries make themselves: invoices, bills, payments and deposits each post their own. A journal entry is for what nothing else covers, such as a correction your accountant asks for. **Accounts and journal → New journal entry** (needs the accountant role):
+Most entries make themselves: invoices, bills, payments and deposits each post their own. A journal entry is for what nothing else covers, such as a correction your accountant asks for. **Journal → New entry** (in the drop-down menus, **Accounting → New journal entry**) (needs the accountant role):
 
 1. Enter the **date** and a line per account, each a **debit** or a **credit**. The debits and credits must come to the same total.
 2. **Reverse on** (optional) posts the opposite entry on that date, for something that undoes itself, such as an accrual at month end.
@@ -103,7 +103,7 @@ A posted entry doesn't change: **Change** on its page voids it and posts the cor
 
 ### Recurring entries
 
-**Journal → Recurring entries** holds entries that repeat, such as monthly rent or depreciation you work out yourself. Give it a name, the lines, how often and when it starts. **Automatic** ones post by themselves; **Manual** ones wait for **Post due entries**. A template stops at the first entry it can't post, and says why.
+**Journal → Recurring** (**Accounting → Recurring entries** in the drop-down menus) holds entries that repeat, such as monthly rent or depreciation you work out yourself. Give it a name, the lines, how often and when it starts. **Automatic** ones post by themselves; **Manual** ones wait for **Post due entries**. A template stops at the first entry it can't post, and says why.
 
 ## Account registers
 

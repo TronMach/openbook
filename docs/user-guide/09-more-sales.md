@@ -84,7 +84,7 @@ To pay a credit back, open the credit memo or the payment and choose **Refund**.
 
 ## Recurring invoices
 
-For invoices that repeat, such as a monthly retainer fee, a subscription or rent you charge, set up a template once: **Sales → Recurring → New**.
+For invoices that repeat, such as a monthly retainer fee, a subscription or rent you charge, set up a template once: **Sales → Recurring invoices → New**.
 
 - **Name** (for your own list), **customer**, and the lines.
 - **Repeat every**: so many weeks, months, quarters or years.

@@ -24,8 +24,12 @@ public sealed class WebTestDatabase(string folder, string file = "web.db")
         await create.ExecuteNonQueryAsync();
     }
 
+    /// <summary>The setup code every web test app is given (OpenBook:SetupCode), for the setup page.</summary>
+    public const string SetupCode = "TEST-SETUP";
+
     public void Apply(IWebHostBuilder builder)
     {
+        builder.UseSetting("OpenBook:SetupCode", SetupCode);
         if (LedgerDatabase.OnPostgres)
         {
             builder.UseSetting("OpenBook:Database", "Postgres");

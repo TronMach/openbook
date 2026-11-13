@@ -52,6 +52,7 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
         var created = await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["_handler"] = "setup",
+            ["Input.SetupCode"] = WebTestDatabase.SetupCode,
             ["__RequestVerificationToken"] = WebUtility.HtmlDecode(Token().Match(setup).Groups[1].Value),
             ["Input.CompanyName"] = "Empty Books",
             ["Input.FiscalYearStartMonth"] = "1",

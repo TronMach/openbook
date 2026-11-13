@@ -36,7 +36,7 @@ Voiding a transaction copies its classes, locations and tags onto the reversal, 
 
 Their classes and locations can be corrected here without changing the transaction itself or posting anything, because they're kept beside the ledger rather than in it.
 
-**Classes and locations → Reclassify** (accountant):
+**Accounts → Classes and locations → Reclassify transactions** (accountant):
 
 1. Filter the lines: **from** and **to** dates, an **account**, and what the **class** or location is **now** (including "not specified").
 2. **Show lines**, tick the ones to change.

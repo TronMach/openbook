@@ -15,9 +15,12 @@
     powershell -File tools/run-tests.ps1 -Postgres            # the integration suite on PostgreSQL (.env loaded)
     powershell -File tools/run-tests.ps1 -Postgres -EnvFile ..\..\..\.env    # from a worktree
     powershell -File tools/run-tests.ps1 -Filter "FullyQualifiedName~InviteTests" -Threads 2
+    dotnet build; then both suites at once, neither building (two builds at once lock each other's files):
+    powershell -File tools/run-tests.ps1 -NoBuild    and, in a second window,    powershell -File tools/run-tests.ps1 -Postgres -NoBuild
 #>
 param(
     [switch]$Postgres,
+    [switch]$NoBuild,
     [int]$Threads = 0,
     [string]$Filter,
     [string]$EnvFile,
@@ -48,6 +51,7 @@ if ($Postgres) {
     $env:OPENBOOK_TEST_ALL_ON_POSTGRES = '1'
 }
 if ($Filter) { $arguments += @('--filter', $Filter) }
+if ($NoBuild) { $arguments += '--no-build' }
 $arguments += @('-nologo', '-v', 'q', '--logger', "trx;LogFilePrefix=$name", '--results-directory', $Results, '--', "xUnit.MaxParallelThreads=$Threads")
 
 Write-Host "Running the $name tests, at most $Threads at once, at below-normal priority. Results: $Results\${name}_*.trx (one per test project)"

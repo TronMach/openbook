@@ -195,6 +195,7 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
         var form = new Dictionary<string, string>
         {
             ["_handler"] = "setup",
+            ["Input.SetupCode"] = WebTestDatabase.SetupCode,
             ["__RequestVerificationToken"] = TokenIn(setup),
             ["Input.CompanyName"] = "Corner Shop",
             ["Input.FiscalYearStartMonth"] = "1",
@@ -233,6 +234,7 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
         var created = await browser.PostAsync("/setup", new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["_handler"] = "setup",
+            ["Input.SetupCode"] = WebTestDatabase.SetupCode,
             ["__RequestVerificationToken"] = TokenIn(setup),
             ["Input.CompanyName"] = "Corner Shop",
             ["Input.FiscalYearStartMonth"] = "1",
