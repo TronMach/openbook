@@ -35,7 +35,7 @@ body:
     attributes:
       label: Version
       description: Settings → System shows it.
-      placeholder: 0.13.0
+      placeholder: 0.14.0
     validations:
       required: true
   - type: dropdown

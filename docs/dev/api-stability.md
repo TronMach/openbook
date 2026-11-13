@@ -2,7 +2,7 @@
 
 For people building on OpenBook: scripts and integrations using the API, webhook receivers, the `openbook` command-line tool, and add-ins. It says what you can rely on from one release to the next, what may change, and how changes are announced.
 
-OpenBook is before 1.0 (the latest release is 0.13.0). The policy below already applies; what changes at 1.0 is only where a breaking change may land (see "Rules for changes").
+OpenBook is before 1.0 (the latest release is 0.14.0). The policy below already applies; what changes at 1.0 is only where a breaking change may land (see "Rules for changes").
 
 ## What's covered
 
