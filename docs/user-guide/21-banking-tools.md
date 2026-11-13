@@ -54,7 +54,7 @@ The box's page sets out the routine as three steps, in the order to do them.
 
 ### Spending from the box
 
-Step 1. Record each purchase as an ordinary expense from the petty cash account (**Record spending** on the box's page, or **Check / payment** on the Banking page), with the receipt attached. Do this before counting: anything spent and not recorded shows up as cash short.
+Step 1. Record each purchase as an ordinary expense from the petty cash account (**Record spending** on the box's page, which brings you back to the box once it's saved, or **Check / payment** on the Banking page), with the receipt attached. Do this before counting: anything spent and not recorded shows up as cash short.
 
 ### Counting
 

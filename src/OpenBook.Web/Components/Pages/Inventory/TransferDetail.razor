@@ -64,7 +64,7 @@
             {
                 <div class="alert error" role="alert">@_error</div>
             }
-            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -73,6 +73,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void transfer</button>
+            </FormAccess>
             </EditForm>
         </div>
     }

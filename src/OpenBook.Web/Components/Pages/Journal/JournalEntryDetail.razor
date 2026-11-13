@@ -161,7 +161,7 @@
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this entry</h2>
             <p class="muted">Voiding posts a reversing entry on the same date, so both stay in the books and the effect cancels out.@(_autoReversal is { } mirror ? $" Its automatic reversal, entry #{mirror.Number}, is voided with it." : "")</p>
-            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -170,6 +170,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void entry</button>
+            </FormAccess>
             </EditForm>
         </div>
 
@@ -178,7 +179,7 @@
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Undo the whole import</h2>
                 <p class="muted">This entry is one of @_importStanding still standing from the same import. Void them all at once: either every one is voided, or none is (for example when one has been reconciled).</p>
-                <EditForm Model="ImportInput" FormName="void-import" OnValidSubmit="VoidImportAsync" method="post">
+                <EditForm Model="ImportInput" FormName="void-import" OnValidSubmit="VoidImportAsync" method="post"><FormAccess>
                     <DataAnnotationsValidator />
                     <div class="field">
                         <label for="import-reason">Reason</label>
@@ -187,6 +188,7 @@
                     </div>
                     <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="ImportInput.ClosingPassword" />
                     <button type="submit" class="danger">Void all @_importStanding entries</button>
+                </FormAccess>
                 </EditForm>
             </div>
         }

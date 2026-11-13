@@ -107,7 +107,7 @@
         <div class="card" style="margin-top: 1.5rem">
             <h2>The payment came back</h2>
             <p class="muted">For a check that bounced or a transfer the bank reversed. The payment and its deposit stay as they happened; on the day it came back the money leaves the bank and the invoices it paid are owed again.</p>
-            <EditForm Model="ReturnInput" FormName="return" OnValidSubmit="ReturnAsync" method="post">
+            <EditForm Model="ReturnInput" FormName="return" OnValidSubmit="ReturnAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="form-row">
                     <div class="field">
@@ -136,6 +136,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="ReturnInput.ClosingPassword" />
                 <div class="actions"><button type="submit" class="danger">Record the returned payment</button></div>
+            </FormAccess>
             </EditForm>
         </div>
     }
@@ -145,7 +146,7 @@
         <div class="card" style="margin-top: 1.5rem">
             <h2>Take the return back</h2>
             <p class="muted">If it was recorded by mistake (the check cleared after all): the return's entry is voided and the payment pays its invoices again.</p>
-            <EditForm Model="UndoInput" FormName="undo-return" OnValidSubmit="UndoReturnAsync" method="post">
+            <EditForm Model="UndoInput" FormName="undo-return" OnValidSubmit="UndoReturnAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="undo-reason">Reason</label>
@@ -154,6 +155,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="UndoInput.ClosingPassword" />
                 <div class="actions"><button type="submit" class="secondary">Take the return back</button></div>
+            </FormAccess>
             </EditForm>
         </div>
     }
@@ -163,7 +165,7 @@
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this payment</h2>
             <p class="muted">Voiding reverses the deposit and reopens the invoices it paid. Payments already reconciled at the bank can't be voided.</p>
-            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -172,6 +174,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void payment</button>
+            </FormAccess>
             </EditForm>
         </div>
     }

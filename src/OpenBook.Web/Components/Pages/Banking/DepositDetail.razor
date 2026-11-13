@@ -77,7 +77,7 @@
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this deposit</h2>
             <p class="muted">Voiding puts the payments back in undeposited funds, ready to deposit again. A reconciled deposit can't be voided.</p>
-            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -86,6 +86,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void deposit</button>
+            </FormAccess>
             </EditForm>
         </div>
     }

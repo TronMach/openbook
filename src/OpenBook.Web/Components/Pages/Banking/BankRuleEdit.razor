@@ -30,7 +30,7 @@
     }
     else
     {
-        <EditForm Model="Input" FormName="rule" OnValidSubmit="SaveAsync" method="post">
+        <EditForm Model="Input" FormName="rule" OnValidSubmit="SaveAsync" method="post"><FormAccess>
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -151,6 +151,7 @@
             <div class="actions">
                 <button type="submit">Save rule</button>
             </div>
+        </FormAccess>
         </EditForm>
 
         @if (_rule is not null)
@@ -202,9 +203,10 @@
                     <div class="actions"><button type="submit" class="secondary">Save the split</button></div>
                 </PostForm>
             </div>
-            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem"><FormAccess>
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">@(_rule.IsActive ? "Turn off this rule" : "Turn on this rule")</button>
+            </FormAccess>
             </form>
         }
     }

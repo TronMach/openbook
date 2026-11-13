@@ -57,7 +57,7 @@
             {
                 <div class="alert error" role="alert">@_error</div>
             }
-            <EditForm Model="Input" FormName="quick" OnValidSubmit="PostAsync" method="post" data-enhance="false">
+            <EditForm Model="Input" FormName="quick" OnValidSubmit="PostAsync" method="post" data-enhance="false"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="row">
                     <div class="field">
@@ -93,6 +93,7 @@
                     <button type="submit">Post <kbd>Enter</kbd></button>
                     <span class="hint">Posts a journal entry between this account and the other one. Alt+Q jumps here from anywhere on the page.</span>
                 </div>
+            </FormAccess>
             </EditForm>
         </div>
     }

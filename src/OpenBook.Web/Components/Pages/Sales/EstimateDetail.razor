@@ -87,13 +87,14 @@
     }
     @if (_estimate.Status != EstimateStatus.Closed)
     {
-        <form method="post" @formname="status" @onsubmit="SetStatusAsync" class="no-print actions">
+        <form method="post" @formname="status" @onsubmit="SetStatusAsync" class="no-print actions"><FormAccess>
             <AntiforgeryToken />
             <span class="muted">Mark as</span>
             @foreach (var status in new[] { EstimateStatus.Pending, EstimateStatus.Accepted, EstimateStatus.Declined }.Where(s => s != _estimate.Status))
             {
                 <button type="submit" class="secondary" name="NewStatus" value="@status">@Labels.For(status)</button>
             }
+        </FormAccess>
         </form>
     }
 

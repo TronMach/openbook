@@ -23,7 +23,7 @@
             <div class="alert error" role="alert">@_error</div>
         }
 
-        <EditForm Model="Input" FormName="change-transfer" OnValidSubmit="SaveAsync" method="post">
+        <EditForm Model="Input" FormName="change-transfer" OnValidSubmit="SaveAsync" method="post"><FormAccess>
 
             <input type="hidden" name="Input.Version" value="@Input.Version" />
             <DataAnnotationsValidator />
@@ -75,6 +75,7 @@
                 <button type="submit">Save changes</button>
                 <a href="/banking/transactions/@Id">Cancel</a>
             </div>
+        </FormAccess>
         </EditForm>
     }
 </div>

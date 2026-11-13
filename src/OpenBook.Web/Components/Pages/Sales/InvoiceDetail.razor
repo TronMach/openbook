@@ -287,7 +287,7 @@
             </p>
             @if (_invoice.AmountPaid == 0m)
             {
-                <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                     <DataAnnotationsValidator />
                     <div class="field">
                         <label for="reason">@L["Reason"]</label>
@@ -296,6 +296,7 @@
                     </div>
                     <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                     <button type="submit" class="danger">@L["Void invoice"]</button>
+                </FormAccess>
                 </EditForm>
             }
         </div>

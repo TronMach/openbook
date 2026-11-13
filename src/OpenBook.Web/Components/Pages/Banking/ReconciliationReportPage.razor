@@ -23,9 +23,10 @@
         <button type="button" class="secondary" onclick="window.print()">Print</button>
         @if (_isLatest)
         {
-            <form method="post" @formname="undo" @onsubmit="UndoAsync" class="inline-form">
+            <form method="post" @formname="undo" @onsubmit="UndoAsync" class="inline-form"><FormAccess>
                 <AntiforgeryToken />
                 <button type="submit" class="secondary" onclick="return confirm('Reopen this reconciliation for changes? Its ticks are kept; you finish it again afterwards.')">Undo reconciliation</button>
+            </FormAccess>
             </form>
         }
     </div>

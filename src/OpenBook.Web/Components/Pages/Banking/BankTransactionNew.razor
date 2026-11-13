@@ -8,7 +8,7 @@
 <div class="wide">
     <div class="toolbar">
         <h1>@_title</h1>
-        <ActionLink Class="button secondary" Href="@RegisterUrl">Back to register</ActionLink>
+        <ActionLink Class="button secondary" Href="@ReturnUrl">@(BackPath is null ? "Back to register" : "Back")</ActionLink>
     </div>
 
     @if (_error is not null)
@@ -120,7 +120,7 @@
                     <div class="alert notice" role="status">Check number @taken is already used on this account. Check the number, or save anyway if it's right.</div>
                 }
                 <button type="button" @onclick="SaveAsync" disabled="@(!CanSave || _busy)">@(_duplicateOf is { } t && t == _reference?.Trim() ? "Save anyway" : "Save")</button>
-                <a href="@RegisterUrl">Cancel</a>
+                <a href="@ReturnUrl">Cancel</a>
             </div>
         </div>
     }
@@ -170,8 +170,15 @@
     [SupplyParameterFromQuery(Name = "copy")]
     private Guid? Copy { get; set; }
 
+    /// <summary>Where to go once it's saved, or on Cancel, instead of the transaction (the petty cash box's page).</summary>
+    [SupplyParameterFromQuery(Name = "back")]
+    private string? Back { get; set; }
+
+    private string? BackPath => AccessRules.LocalPath(Back);
+
     private bool _ownMoney;
     private string RegisterUrl => _ownMoney ? $"/accounts/{AccountId}/register" : $"/banking/{AccountId}";
+    private string ReturnUrl => BackPath ?? RegisterUrl;
     private bool IsCheck => _kind == BankTransactionKind.Spend && _account?.Type == AccountType.Bank;
     private IEnumerable<LineModel> Filled => _lines.Where(l => l.AccountId is not null || (l.Amount ?? 0m) != 0m);
     private decimal Total => _lines.Sum(l => l.Amount ?? 0m);
@@ -268,7 +275,7 @@
                 await tx.CommitAsync(default);
                 return recorded;
             }, _closingPassword);
-            Navigation.NavigateTo($"/banking/transactions/{saved.Id}");
+            Navigation.NavigateTo(BackPath ?? $"/banking/transactions/{saved.Id}");
         }
         catch (DomainException ex)
         {

@@ -166,7 +166,7 @@
             </p>
             @if (_bill.AmountPaid == 0m)
             {
-                <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+                <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                     <DataAnnotationsValidator />
                     <div class="field">
                         <label for="reason">Reason</label>
@@ -175,6 +175,7 @@
                     </div>
                     <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                     <button type="submit" class="danger">Void bill</button>
+                </FormAccess>
                 </EditForm>
             }
         </div>

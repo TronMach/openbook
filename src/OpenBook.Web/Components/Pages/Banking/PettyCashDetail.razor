@@ -20,7 +20,7 @@
             <ActionLink Class="button secondary" Href="/banking/petty-cash">All boxes</ActionLink>
             @if (fund.IsActive)
             {
-                <ActionLink Class="button secondary" Href="@($"/banking/{fund.AccountId}/record/spend")">Record spending</ActionLink>
+                <ActionLink Class="button secondary" Href="@SpendUrl">Record spending</ActionLink>
             }
             <ActionLink Class="button secondary" Href="@($"/banking/{fund.AccountId}")">Register</ActionLink>
         </div>
@@ -78,6 +78,10 @@
                         <div><strong>@L["The box holds its float, so there's nothing to replenish. You're done until money is spent from it."]</strong></div>
                     }
                 }
+                else if (Done == "spent")
+                {
+                    <div>@L["Spending recorded. Record the next receipt, or count the cash once they're all in."]</div>
+                }
                 else if (Done == "replenished")
                 {
                     <div>@L["Transferred {0} into the box in the books. Now take that much cash from the bank and put it in the box, which brings it back to its float.", Labels.Amount(Amount ?? 0m)]</div>
@@ -108,7 +112,7 @@
                 <div class="muted">@L["Step {0} of 3", 1]</div>
                 <h2>@L["Record what was spent"]</h2>
                 <p class="muted">@L["Before you count, record each receipt in the box as spending from it. Anything spent and not recorded shows up as cash short when you count."]</p>
-                <p><ActionLink Href="@($"/banking/{fund.AccountId}/record/spend")">@L["Record spending"]</ActionLink></p>
+                <p><ActionLink Href="@SpendUrl">@L["Record spending"]</ActionLink></p>
             </div>
 
             <div class="card" id="count">
@@ -259,4 +263,7 @@
         _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type == AccountType.Bank && a.Id != _summary.Fund.AccountId).ToList();
     }
+
+    // Spending from the box comes back here once it's recorded, so the routine carries on from the box.
+    private string SpendUrl => $"/banking/{_summary!.Fund.AccountId}/record/spend?back={Uri.EscapeDataString($"/banking/petty-cash/{Id}?done=spent")}";
 }

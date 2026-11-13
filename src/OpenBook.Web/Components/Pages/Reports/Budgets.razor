@@ -47,7 +47,7 @@
         {
             <div class="alert error" role="alert">@_error</div>
         }
-        <EditForm Model="Input" FormName="new-budget" OnValidSubmit="CreateAsync" method="post">
+        <EditForm Model="Input" FormName="new-budget" OnValidSubmit="CreateAsync" method="post"><FormAccess>
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -116,6 +116,7 @@
             <div class="actions">
                 <button type="submit">Create budget</button>
             </div>
+        </FormAccess>
         </EditForm>
     </div>
 </div>

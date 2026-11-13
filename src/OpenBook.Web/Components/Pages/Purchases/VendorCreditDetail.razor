@@ -115,9 +115,10 @@
                             }
                             else
                             {
-                                <form method="post" @formname="@($"void-refund-{r.Id:N}")" @onsubmit="() => VoidRefundAsync(r.Id)" class="inline-form">
+                                <form method="post" @formname="@($"void-refund-{r.Id:N}")" @onsubmit="() => VoidRefundAsync(r.Id)" class="inline-form"><FormAccess>
                                     <AntiforgeryToken />
                                     <button type="submit" class="link">Void</button>
+                                </FormAccess>
                                 </form>
                             }
                         </td>
@@ -131,7 +132,7 @@
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Record a refund from the vendor</h2>
-            <EditForm Model="RefundInput" FormName="refund" OnValidSubmit="RecordRefundAsync" method="post">
+            <EditForm Model="RefundInput" FormName="refund" OnValidSubmit="RecordRefundAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="row">
                     <div class="field">
@@ -159,6 +160,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="RefundInput.ClosingPassword" />
                 <button type="submit" class="secondary">Record refund</button>
+            </FormAccess>
             </EditForm>
         </div>
     }
@@ -167,7 +169,7 @@
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this credit</h2>
-            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -176,6 +178,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void vendor credit</button>
+            </FormAccess>
             </EditForm>
         </div>
     }

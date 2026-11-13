@@ -51,10 +51,11 @@
     {
         @if (_dueCount > 0)
         {
-            <form class="card" method="post" @formname="create-due" @onsubmit="CreateDueAsync">
+            <form class="card" method="post" @formname="create-due" @onsubmit="CreateDueAsync"><FormAccess>
                 <AntiforgeryToken />
                 <p>@_dueCount recurring @(_dueCount == 1 ? "invoice is" : "invoices are") due.</p>
                 <button type="submit">@L["Create due invoices"]</button>
+            </FormAccess>
             </form>
         }
 

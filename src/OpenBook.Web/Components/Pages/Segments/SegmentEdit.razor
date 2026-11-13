@@ -30,7 +30,7 @@
     else
     {
         <p class="muted">@(_segment.Kind == SegmentKind.Location ? _label : _segment.Kind.ToString())@(_segment.IsActive ? "" : " · inactive")</p>
-        <EditForm Model="Input" FormName="segment" OnValidSubmit="SaveAsync" method="post">
+        <EditForm Model="Input" FormName="segment" OnValidSubmit="SaveAsync" method="post"><FormAccess>
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -53,6 +53,7 @@
                 }
             </div>
             <div class="actions"><button type="submit">Save</button></div>
+        </FormAccess>
         </EditForm>
 
         @if (_segment.Kind == SegmentKind.Class)
@@ -74,9 +75,10 @@
             </PostForm>
         }
 
-        <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+        <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem"><FormAccess>
             <AntiforgeryToken />
             <button type="submit" class="secondary">@(_segment.IsActive ? "Make inactive" : "Make active")</button>
+        </FormAccess>
         </form>
     }
 </div>

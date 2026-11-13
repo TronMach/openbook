@@ -53,7 +53,7 @@
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this payment</h2>
             <p class="muted">Voiding reverses the payment, so the tax is owed again. Payments already reconciled at the bank can't be voided.</p>
-            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -62,6 +62,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void payment</button>
+            </FormAccess>
             </EditForm>
         </div>
     }

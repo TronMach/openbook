@@ -27,7 +27,7 @@
     }
     else
     {
-        <EditForm Model="Input" FormName="rate" OnValidSubmit="SaveAsync" method="post">
+        <EditForm Model="Input" FormName="rate" OnValidSubmit="SaveAsync" method="post"><FormAccess>
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -66,6 +66,7 @@
             <div class="actions">
                 <button type="submit">Save rate</button>
             </div>
+        </FormAccess>
         </EditForm>
 
         @if (_rate is not null)
@@ -109,9 +110,10 @@
                     <button type="submit" class="secondary">Add the change</button>
                 </PostForm>
             </div>
-            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem"><FormAccess>
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">@(_rate.IsActive ? "Make inactive" : "Make active")</button>
+            </FormAccess>
             </form>
         }
     }

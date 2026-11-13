@@ -23,8 +23,9 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 4. [Customers and sales](04-sales.md): products and services, invoices, batch invoicing, receiving payments, deposits, sales receipts, merging duplicates.
 5. [Vendors and purchases](05-purchases.md): bills, paying bills, expenses, vendor credits.
 6. [Banking](06-banking.md): importing statements, reviewing transactions, bank rules, reconciling.
-29. [Email](29-email.md): writing emails beside a live preview, formatting, test sends, the wording of each email, how emails look, customers' copies and links, and what was sent.
 7. [Reports](07-reports.md): the main statements, accrual and cash basis, exporting and saving reports.
+
+29) [Email](29-email.md): writing emails beside a live preview, formatting, test sends, the wording of each email, how emails look, customers' copies and links, and what was sent.
 
 ## Running the books
 

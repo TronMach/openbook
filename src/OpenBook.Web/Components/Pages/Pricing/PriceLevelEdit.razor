@@ -33,7 +33,7 @@
     }
     else
     {
-        <EditForm Model="Input" FormName="level" OnValidSubmit="SaveAsync" method="post">
+        <EditForm Model="Input" FormName="level" OnValidSubmit="SaveAsync" method="post"><FormAccess>
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -57,6 +57,7 @@
             <div class="actions">
                 <button type="submit">Save price level</button>
             </div>
+        </FormAccess>
         </EditForm>
 
         @if (_level is { Kind: PriceLevelKind.PerItem })
@@ -105,9 +106,10 @@
 
         @if (_level is not null)
         {
-            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem"><FormAccess>
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">@(_level.IsActive ? "Make inactive" : "Make active")</button>
+            </FormAccess>
             </form>
         }
     }

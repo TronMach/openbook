@@ -111,7 +111,7 @@
         <div class="card no-print">
             <h2>Void this credit memo</h2>
             <p class="muted">Voiding reverses its journal entry on the same date. Credit that's been applied or refunded can't be voided.</p>
-            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -120,6 +120,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void credit memo</button>
+            </FormAccess>
             </EditForm>
         </div>
     }

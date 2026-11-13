@@ -33,7 +33,7 @@
             Rules apply after the customer's price level and the item's quantity break. Rules apply one after another, lowest priority number first.
             If an <strong>exclusive</strong> rule matches, only exclusive rules count and the one giving the lowest price wins.
         </p>
-        <EditForm Model="Input" FormName="rule" OnValidSubmit="SaveAsync" method="post">
+        <EditForm Model="Input" FormName="rule" OnValidSubmit="SaveAsync" method="post"><FormAccess>
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -137,13 +137,15 @@
             <div class="actions">
                 <button type="submit">Save price rule</button>
             </div>
+        </FormAccess>
         </EditForm>
 
         @if (_rule is not null)
         {
-            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem"><FormAccess>
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">@(_rule.IsActive ? "Make inactive" : "Make active")</button>
+            </FormAccess>
             </form>
         }
     }

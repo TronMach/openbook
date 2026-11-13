@@ -38,7 +38,7 @@
         <div class="alert error" role="alert">There are no income accounts yet. <ActionLink Href="/accounts/new">Add one</ActionLink> first.</div>
     }
 
-    <EditForm Model="Input" FormName="item" OnValidSubmit="SaveAsync" method="post">
+    <EditForm Model="Input" FormName="item" OnValidSubmit="SaveAsync" method="post"><FormAccess>
 
         <input type="hidden" name="Input.Version" value="@Input.Version" />
         <DataAnnotationsValidator />
@@ -169,13 +169,15 @@
             <button type="submit">@(_item is null ? "Create" : "Save changes")</button>
             <a href="/items">Cancel</a>
         </div>
+    </FormAccess>
     </EditForm>
 
     @if (_item is not null)
     {
-        <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync" style="margin-top: 1rem">
+        <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync" style="margin-top: 1rem"><FormAccess>
             <AntiforgeryToken />
             <button type="submit" class="secondary">@(_item.IsActive ? "Make inactive" : "Make active")</button>
+        </FormAccess>
         </form>
     }
 </div>

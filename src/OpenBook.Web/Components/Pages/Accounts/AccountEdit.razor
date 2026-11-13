@@ -30,7 +30,7 @@
         <div class="alert notice" role="status">This account is inactive: it can't be used in new transactions.</div>
     }
 
-    <EditForm Model="Input" FormName="account" OnValidSubmit="SaveAsync" method="post">
+    <EditForm Model="Input" FormName="account" OnValidSubmit="SaveAsync" method="post"><FormAccess>
         <DataAnnotationsValidator />
         <div class="row">
             <div class="field">
@@ -108,6 +108,7 @@
             <button type="submit">@(_account is null ? "Create account" : "Save changes")</button>
             <a href="/accounts">Cancel</a>
         </div>
+    </FormAccess>
     </EditForm>
 </div>
 
@@ -120,9 +121,10 @@
                 ? "Inactive accounts keep their history and still appear in reports, but can't be used in new transactions. Accounts are never deleted."
                 : "Make this account available for new transactions again.")
         </p>
-        <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync">
+        <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync"><FormAccess>
             <AntiforgeryToken />
             <button type="submit" class="secondary">@(_account.IsActive ? "Make inactive" : "Make active")</button>
+        </FormAccess>
         </form>
     </div>
 }

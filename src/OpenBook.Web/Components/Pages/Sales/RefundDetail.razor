@@ -61,7 +61,7 @@
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this refund</h2>
             <p class="muted">Voiding reverses the payment out and gives the customer their credit back.</p>
-            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post">
+            <EditForm Model="VoidInput" FormName="void" OnValidSubmit="VoidAsync" method="post"><FormAccess>
                 <DataAnnotationsValidator />
                 <div class="field">
                     <label for="reason">Reason</label>
@@ -70,6 +70,7 @@
                 </div>
                 <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="VoidInput.ClosingPassword" />
                 <button type="submit" class="danger">Void refund</button>
+            </FormAccess>
             </EditForm>
         </div>
     }

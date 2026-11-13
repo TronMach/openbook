@@ -31,7 +31,7 @@
             What a customer or document is taxed at. Tick one rate, or several to combine them (for example state + county + city):
             each rate becomes its own line on the invoice, so every agency's share is tracked.
         </p>
-        <EditForm Model="Input" FormName="code" OnValidSubmit="SaveAsync" method="post">
+        <EditForm Model="Input" FormName="code" OnValidSubmit="SaveAsync" method="post"><FormAccess>
             <DataAnnotationsValidator />
             <div class="row">
                 <div class="field">
@@ -66,14 +66,16 @@
             <div class="actions">
                 <button type="submit">Save tax code</button>
             </div>
+        </FormAccess>
         </EditForm>
 
         @if (_code is not null)
         {
             <p class="hint">Changing the rates affects documents from now on; existing ones keep their tax lines.</p>
-            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem"><FormAccess>
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">@(_code.IsActive ? "Make inactive" : "Make active")</button>
+            </FormAccess>
             </form>
         }
     }

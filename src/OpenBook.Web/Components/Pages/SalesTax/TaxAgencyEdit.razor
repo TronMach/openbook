@@ -34,7 +34,7 @@
                 the tax you charge is credited there and your payments debit it.
             </p>
         }
-        <EditForm Model="Input" FormName="agency" OnValidSubmit="SaveAsync" method="post">
+        <EditForm Model="Input" FormName="agency" OnValidSubmit="SaveAsync" method="post"><FormAccess>
             <DataAnnotationsValidator />
             <div class="field">
                 <label for="name">Name</label>
@@ -69,14 +69,16 @@
             <div class="actions">
                 <button type="submit">Save agency</button>
             </div>
+        </FormAccess>
         </EditForm>
 
         @if (_agency is not null)
         {
             <p class="muted">Tax owed to it is tracked in <a href="/reports/general-ledger?accountId=@_agency.LiabilityAccountId">its liability account</a>.</p>
-            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem">
+            <form method="post" @formname="toggle" @onsubmit="ToggleAsync" style="margin-top: 1rem"><FormAccess>
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">@(_agency.IsActive ? "Make inactive" : "Make active")</button>
+            </FormAccess>
             </form>
         }
     }
