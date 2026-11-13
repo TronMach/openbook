@@ -1,0 +1,45 @@
+@inject NavigationManager Navigation
+
+@* The fields and buttons of a form the page handles itself (an EditForm, or a form with @formname), which so can't be a
+   PostForm. Allowed: drawn as they are. Not allowed: the same controls greyed out (a disabled fieldset), saying what the
+   form needs and linking to who can give it, as PostForm does. Put it inside the form, around everything in it. *@
+@if (_allowed)
+{
+    @ChildContent
+}
+else
+{
+    <fieldset disabled class="unavailable-form" title="@_needs">
+        @ChildContent
+    </fieldset>
+    <a class="unavailable-note" href="@_deniedUrl">@_needs</a>
+}
+
+@code {
+    private bool _allowed = true;
+    private string? _deniedUrl;
+    private string? _needs;
+
+    /// <summary>The path the form posts to: the page's own.</summary>
+    [Parameter, EditorRequired]
+    public string Action { get; set; } = "/";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthState is null)
+            return;
+        var user = (await AuthState).User;
+        _allowed = user.CanPost(Action);
+        if (_allowed)
+            return;
+        var path = new PathString(Action.Split('?', '#')[0]);
+        AccessRules.Allows(user, path, HttpMethods.Post, out var needed);
+        _deniedUrl = AccessRules.DeniedUrl(user, path, needed, "/" + Navigation.ToBaseRelativePath(Navigation.Uri));
+        _needs = AccessRules.NeedsText(user, Action, HttpMethods.Post);
+    }
+}

@@ -13,6 +13,8 @@
     else
     {
         var fund = _summary.Fund;
+        // One filled button at a time: replenishing is the next thing only once today's count is in; until then it's the count.
+        var replenishNext = _summary.ToReplenish > 0m && _banks.Count > 0 && (Done == "counted" || _summary.LastCount?.Date == CompanyTime.Today);
         <div class="toolbar">
             <h1>@_summary.AccountName</h1>
             <ActionLink Class="button secondary" Href="/banking/petty-cash">All boxes</ActionLink>
@@ -29,7 +31,62 @@
         }
         else if (Done is not null)
         {
-            <div class="alert success" role="status">@DoneMessage()</div>
+            @* What happened, then what to do next: a count is the middle of the routine, not the end of it. *@
+            <div class="alert success" role="status">
+                @if (Done == "created")
+                {
+                    <div>@L["Petty cash box created."]</div>
+                }
+                else if (Done == "counted")
+                {
+                    if (Difference is null or 0m)
+                    {
+                        <div>@L["Count recorded. The box agrees with the books."]</div>
+                    }
+                    else if (Difference > 0m)
+                    {
+                        <div>@L["Count recorded. The box was over by {0}; that's been recorded to “{1}”, so the books now match the box.", Labels.Amount(Difference.Value), PettyCashService.OverShortName]</div>
+                    }
+                    else
+                    {
+                        <div>@L["Count recorded. The box was short by {0}; that's been recorded to “{1}”, so the books now match the box.", Labels.Amount(-Difference.Value), PettyCashService.OverShortName]</div>
+                    }
+
+                    if (Difference is not (null or 0m))
+                    {
+                        // The count this message is about: the newest one with that difference.
+                        var difference = _counts.Where(c => c.AdjustmentTransactionId is not null && c.Difference == Difference)
+                            .OrderByDescending(c => c.CountedAt).FirstOrDefault();
+                        <div>
+                            @L["If the difference is really spending that wasn't recorded yet, void the difference, record the spending and count again."]
+                            @if (difference is not null)
+                            {
+                                @(" ")<ActionLink Href="@($"/banking/transactions/{difference.AdjustmentTransactionId}")">@L["Open the difference"]</ActionLink>
+                            }
+                        </div>
+                    }
+
+                    if (fund.IsActive && _summary.ToReplenish > 0m)
+                    {
+                        <div>
+                            <strong>@L["Next: replenish {0} from the bank to bring the box back to its float.", Labels.Amount(_summary.ToReplenish)]</strong>
+                            <a href="#replenish">@L["Go to Replenish"]</a>
+                        </div>
+                    }
+                    else if (fund.IsActive)
+                    {
+                        <div><strong>@L["The box holds its float, so there's nothing to replenish. You're done until money is spent from it."]</strong></div>
+                    }
+                }
+                else if (Done == "replenished")
+                {
+                    <div>@L["Transferred {0} into the box in the books. Now take that much cash from the bank and put it in the box, which brings it back to its float.", Labels.Amount(Amount ?? 0m)]</div>
+                }
+                else
+                {
+                    <div>@L["Saved."]</div>
+                }
+            </div>
         }
 
         <div class="card">
@@ -48,10 +105,17 @@
         @if (fund.IsActive)
         {
             <div class="card">
+                <div class="muted">@L["Step {0} of 3", 1]</div>
+                <h2>@L["Record what was spent"]</h2>
+                <p class="muted">@L["Before you count, record each receipt in the box as spending from it. Anything spent and not recorded shows up as cash short when you count."]</p>
+                <p><ActionLink Href="@($"/banking/{fund.AccountId}/record/spend")">@L["Record spending"]</ActionLink></p>
+            </div>
+
+            <div class="card" id="count">
+                <div class="muted">@L["Step {0} of 3", 2]</div>
                 <h2>Count the cash</h2>
                 <p class="muted">
-                    Enter what's in the box. If it differs from the books on that date, the difference posts to
-                    “@PettyCashService.OverShortName” (created on first use) so the books match the box.
+                    @L["Enter what's in the box. The books say it holds {0} today. If your count differs from the books on that date, the difference is recorded to “{1}” (created on first use) so the books match the box.", Labels.Amount(_summary.Balance), PettyCashService.OverShortName]
                 </p>
                 <PostForm Action="@($"/banking/petty-cash/{Id}/count")" data-enhance="false">
                     <AntiforgeryToken />
@@ -74,31 +138,43 @@
                         <input id="note" name="note" maxlength="500" />
                     </div>
                     <ClosedPeriodPassword Visible="Password" Interactive="false" />
-                    <div class="actions"><button type="submit" data-confirm="@(_counts.Count == 0 && _summary.Balance == 0m ? "The books show nothing in this box, so the whole count would be booked as cash over, which lowers your expenses. If the money came from a bank account, record that first. Record the count anyway?" : null)">Record count</button></div>
+                    <div class="actions"><button type="submit" data-confirm="@(_counts.Count == 0 && _summary.Balance == 0m ? "The books show nothing in this box, so the whole count would be booked as cash over, which lowers your expenses. If the money came from a bank account, record that first. Record the count anyway?" : null)" class="@(replenishNext ? "secondary" : null)">Record count</button></div>
                 </PostForm>
             </div>
 
-            <div class="card">
+            <div class="card" id="replenish">
+                <div class="muted">@L["Step {0} of 3", 3]</div>
                 <h2>Replenish</h2>
-                <p class="muted">Transfers the float less the balance on the date (@Labels.Amount(_summary.ToReplenish) today) from a bank account into the box.</p>
-                <PostForm Action="@($"/banking/petty-cash/{Id}/replenish")" data-enhance="false" class="row">
-                    <AntiforgeryToken />
-                    <div class="field">
-                        <label for="from">From</label>
-                        <select id="from" name="fromAccountId" required>
-                            @foreach (var a in _banks)
-                            {
-                                <option value="@a.Id">@_chart.FullName(a.Id)</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="field">
-                        <label for="replenish-date">Date</label>
-                        <input id="replenish-date" type="date" name="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
-                    </div>
-                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
-                    <div class="actions"><button type="submit" disabled="@(_summary.ToReplenish <= 0m || _banks.Count == 0)">Replenish</button></div>
-                </PostForm>
+                @if (_summary.ToReplenish <= 0m)
+                {
+                    <p>@L["Nothing to replenish: the books say the box holds its float."]</p>
+                }
+                else if (_banks.Count == 0)
+                {
+                    <p>@L["The box is {0} under its float today, but there's no other bank account to replenish it from.", Labels.Amount(_summary.ToReplenish)] <ActionLink Href="/accounts/new">@L["Add a bank account"]</ActionLink></p>
+                }
+                else
+                {
+                    <p class="muted">@L["The box is {0} under its float today. Replenish records a transfer of the float less the balance on the date from the bank account you choose into the box. Take the same amount of cash from the bank and put it in the box.", Labels.Amount(_summary.ToReplenish)]</p>
+                    <PostForm Action="@($"/banking/petty-cash/{Id}/replenish")" data-enhance="false" class="row">
+                        <AntiforgeryToken />
+                        <div class="field">
+                            <label for="from">From</label>
+                            <select id="from" name="fromAccountId" required>
+                                @foreach (var a in _banks)
+                                {
+                                    <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="replenish-date">Date</label>
+                            <input id="replenish-date" type="date" name="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                        <div class="actions"><button type="submit" class="@(replenishNext ? null : "secondary")">Replenish</button></div>
+                    </PostForm>
+                }
             </div>
         }
 
@@ -146,6 +222,7 @@
                     <div class="field">
                         <label for="float">Float</label>
                         <input id="float" name="float" class="amount" inputmode="decimal" value="@fund.FloatAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" required />
+                        <span class="hint">@L["What the box should hold once it's replenished."]</span>
                     </div>
                     <div class="field">
                         <label for="custodian">Custodian</label>
@@ -182,17 +259,4 @@
         _banks = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type == AccountType.Bank && a.Id != _summary.Fund.AccountId).ToList();
     }
-
-    private string DoneMessage() => Done switch
-    {
-        "created" => "Petty cash box created.",
-        "counted" => Difference switch
-        {
-            null or 0m => "Count recorded. The box agrees with the books.",
-            > 0m => $"Count recorded. The box was over by {Labels.Amount(Difference.Value)}; that's been posted.",
-            _ => $"Count recorded. The box was short by {Labels.Amount(-Difference.Value)}; that's been posted.",
-        },
-        "replenished" => $"Transferred {Labels.Amount(Amount ?? 0m)} into the box.",
-        _ => "Saved.",
-    };
 }

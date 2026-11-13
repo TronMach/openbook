@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: simplify-petty-cash
+expected_outcome: |
+  The petty cash pages make the step after a count obvious, in the words the product already uses, with one clear primary action at a time, no change to rules or behaviour, working links, and an honest account of what changed for the main task.

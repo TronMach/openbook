@@ -50,17 +50,21 @@ A cash box for small purchases, kept at a fixed *float* (say $200) and topped up
 - **Custodian**: who looks after it (optional).
 - **Fund it from** a bank account on a date, which records the transfer into the box; or **don't record a transfer** if it's already funded in your books.
 
+The box's page sets out the routine as three steps, in the order to do them.
+
 ### Spending from the box
 
-Record each purchase as an ordinary expense from the petty cash account (**Check / payment** on the Banking page), with the receipt attached.
+Step 1. Record each purchase as an ordinary expense from the petty cash account (**Record spending** on the box's page, or **Check / payment** on the Banking page), with the receipt attached. Do this before counting: anything spent and not recorded shows up as cash short.
 
 ### Counting
 
-On the box's page, **Count the cash**: the **date** and the **cash counted**, and optionally the **notes and coins** as value x count (`20x5; 1x3; 0.25x8`). **Record count**. If the count differs from the balance in the books, OpenBook records the difference to "Cash Over and Short", so the box matches what's really there.
+Step 2. On the box's page, **Count the cash**: the **date** and the **cash counted**, and optionally the **notes and coins** as value x count (`20x5; 1x3; 0.25x8`). **Record count**. If the count differs from the balance in the books, OpenBook records the difference to "Cash Over and Short", so the box matches what's really there.
+
+After a count the page says what was recorded and what to do next: replenish the amount shown, or nothing when the box holds its float. If the difference was really spending that hadn't been recorded, **Open the difference** (or select its amount under **Over (short)** in the list of counts), void that transaction, record the spending and count again.
 
 ### Replenishing
 
-**Replenish** transfers the float less the balance from a bank account into the box, bringing it back to the float. The page shows how much that is today.
+Step 3. **Replenish** transfers the float less the balance from a bank account into the box, bringing it back to the float. The page shows how much that is today; take the same amount of cash from the bank and put it in the box. When the box already holds its float there is nothing to replenish, and the page says so in place of the form.
 
 ## Recurring expenses
 

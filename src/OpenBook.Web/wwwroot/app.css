@@ -90,7 +90,8 @@ body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* 1rem, not a pixel size: the text follows the size people set in their browser (16px unless they changed it). */
+    font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 a { color: var(--accent); }
@@ -146,6 +147,9 @@ input, select, textarea {
 }
 input[type=checkbox], input[type=radio] { width: auto; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Keyboard focus on everything else that can be operated: the same ring, a little further out so it shows around a
+   filled button. Only for the keyboard (:focus-visible), so a mouse click leaves no ring behind. */
+:is(a, button, .button, summary, [tabindex]:not([tabindex="-1"]), input[type=checkbox], input[type=radio]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .check { display: flex; gap: 0.5rem; align-items: flex-start; margin-bottom: 0.9rem; }
 
@@ -180,6 +184,10 @@ form.inline .unavailable-note { display: inline; margin-left: 0.4rem; }
 .alert { padding: 0.6rem 0.8rem; border-radius: 6px; margin-bottom: 1rem; }
 .alert.error { background: var(--danger-bg); color: var(--danger); }
 .alert.notice { background: var(--notice-bg); }
+/* "Saved", "Done": the same calm band as a notice, with the accent down its side so it reads as a result. */
+.alert.success { background: var(--notice-bg); border-left: 3px solid var(--accent); }
+/* A filter box over a list (data-filter): not the full width of the page. */
+input.filter { max-width: 28rem; margin-bottom: 0.75rem; }
 
 dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1rem; margin: 0; }
 dl.facts dt { color: var(--muted); }
@@ -593,7 +601,7 @@ input.copy-link { width: 100%; font-family: ui-monospace, SFMono-Regular, Consol
 .shortcuts a.active { background: var(--notice-bg); color: var(--text); font-weight: 600; }
 .shortcuts svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
-@media (max-width: 700px) {
+@media (max-width: 760px) {
     .simple-shell { grid-template-columns: minmax(0, 1fr); }
     .shortcuts {
         position: static;
@@ -652,7 +660,7 @@ a.flow-box:hover, a.flow-box:focus { border-color: var(--accent); }
     .workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "customers" "vendors" "banking" "company"; }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 760px) {
     .flow-steps.four, .flow-steps.sales { grid-template-columns: minmax(0, 1fr); }
     .flow-steps.four { grid-template-areas: "po" "a1" "recv" "a2" "bill" "a3" "pay"; }
     .flow-steps.sales { grid-template-areas: "est" "a1" "inv" "a2" "pay" "a3" "dep" "rec"; }
@@ -814,3 +822,7 @@ details.company-facts[open] > summary { margin-bottom: 0.75rem; }
 .skip-link { position: absolute; left: 0.5rem; top: -3rem; z-index: 100; background: var(--surface); padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 6px; }
 .skip-link:focus { top: 0.5rem; }
 main.page:focus { outline: none; }
+/* People who asked their device for less motion: nothing animates or glides (the reconnecting notice included). */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; scroll-behavior: auto !important; }
+}
