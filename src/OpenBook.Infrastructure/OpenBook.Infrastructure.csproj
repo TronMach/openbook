@@ -10,17 +10,17 @@
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="MailKit" Version="5.0.0" />
     <!-- MimeKit 5 asks for 8.0.1, which has security advisories (NU1902/NU1903). -->
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="11.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="10.0.15" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <!-- SQLCipher instead of plain SQLite, for encryption at rest (BSD-style licence; without a key it behaves like SQLite). -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlcipher" Version="2.1.11" />
-    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.15" />
     <!-- Pinned: 6.2.x is the last MIT release; 6.5+ is AGPL or commercial. -->
     <PackageReference Include="PDFsharp-MigraDoc" Version="[6.2.4]" />
   </ItemGroup>
