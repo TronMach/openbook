@@ -61,7 +61,7 @@
                             @L["If the difference is really spending that wasn't recorded yet, void the difference, record the spending and count again."]
                             @if (difference is not null)
                             {
-                                <ActionLink Href="@($"/banking/transactions/{difference.AdjustmentTransactionId}")">@L["Open the difference"]</ActionLink>
+                                @(" ")<ActionLink Href="@($"/banking/transactions/{difference.AdjustmentTransactionId}")">@L["Open the difference"]</ActionLink>
                             }
                         </div>
                     }
