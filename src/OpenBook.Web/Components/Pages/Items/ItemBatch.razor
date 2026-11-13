@@ -1,0 +1,420 @@
+@page "/items/batch"
+@using OpenBook.Application.Inventory
+@inject ItemBatchService Batch
+@inject ItemService ItemService
+@inject AccountService AccountService
+@inject OpenBook.Application.SalesTax.SalesTaxService Taxes
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Change products and services"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Change products and services"]</h1>
+        <a class="button secondary" href="@BackPath">@L["Back to the list"]</a>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_selected.Count == 0)
+    {
+        <div class="card"><p>@L["Nothing is ticked. On Products and services, tick the items to change, or the box at the top of the list to tick every one shown, then choose Change ticked items."] <a href="@BackPath">@L["Back to the list"]</a></p></div>
+    }
+    else
+    {
+        <form method="post" @formname="batch" @onsubmit="SubmitAsync">
+            <AntiforgeryToken />
+            <FormAccess Action="/items/batch">
+                <input type="hidden" name="Input.Back" value="@BackPath" />
+                @foreach (var id in _selected.Select(i => i.Id))
+                {
+                    <input type="hidden" name="Input.Ids" value="@id" />
+                }
+
+                @if (_plan is null)
+                {
+                    <p>@L["{0} item(s) ticked: {1}.", _selected.Count, Summary()]</p>
+                    <p class="muted">@L["Choose what to change on all of them. Anything left as it is stays as each item has it. Nothing is saved until you've seen what will change."]</p>
+
+                    <div class="row">
+                        <div class="field">
+                            <label for="batch-type">@L["Type"]</label>
+                            <select id="batch-type" name="Input.Type">
+                                <option value="" selected="@string.IsNullOrEmpty(Input.Type)">@L["Leave as it is"]</option>
+                                @foreach (var type in new[] { ItemType.Service, ItemType.NonInventory, ItemType.Inventory })
+                                {
+                                    <option value="@type" selected="@(Input.Type == type.ToString())">@Labels.For(type)</option>
+                                }
+                            </select>
+                            <span class="hint" data-shown-by="#batch-type" data-shown-for="Inventory">@L["OpenBook starts counting their stock. You can give each one its starting stock on the next step."]</span>
+                        </div>
+                        <div class="field">
+                            <label for="batch-income">@L["Income account"]</label>
+                            <select id="batch-income" name="Input.IncomeAccountId" data-search>
+                                <option value="" selected="@string.IsNullOrEmpty(Input.IncomeAccountId)">@L["Leave as it is"]</option>
+                                <optgroup label="@L["Income"]">
+                                    @foreach (var account in _incomeAccounts)
+                                    {
+                                        <option value="@account.Id" selected="@(Input.IncomeAccountId == account.Id.ToString())">@_chart.FullName(account.Id)</option>
+                                    }
+                                </optgroup>
+                                @if (_liabilities.Count > 0)
+                                {
+                                    <optgroup label="@L["Money taken now for something given later (services and non-inventory products only)"]">
+                                        @foreach (var account in _liabilities)
+                                        {
+                                            <option value="@account.Id" selected="@(Input.IncomeAccountId == account.Id.ToString())">@_chart.FullName(account.Id)</option>
+                                        }
+                                    </optgroup>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="field">
+                            <label for="batch-category-mode">@L["Category"]</label>
+                            <select id="batch-category-mode" name="Input.CategoryMode">
+                                <option value="" selected="@string.IsNullOrEmpty(Input.CategoryMode)">@L["Leave as it is"]</option>
+                                <option value="set" selected="@(Input.CategoryMode == "set")">@L["Put them all in a category"]</option>
+                                <option value="clear" selected="@(Input.CategoryMode == "clear")">@L["Take them out of their category"]</option>
+                            </select>
+                        </div>
+                        <div class="field" data-shown-by="#batch-category-mode" data-shown-for="set">
+                            <label for="batch-category">@L["Category name"]</label>
+                            <input id="batch-category" name="Input.Category" value="@Input.Category" maxlength="50" list="batch-categories" />
+                            <datalist id="batch-categories">
+                                @foreach (var category in _categories)
+                                {
+                                    <option value="@category"></option>
+                                }
+                            </datalist>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="field">
+                            <label for="batch-price-mode">@L["Price"]</label>
+                            <select id="batch-price-mode" name="Input.PriceMode">
+                                <option value="" selected="@string.IsNullOrEmpty(Input.PriceMode)">@L["Leave as it is"]</option>
+                                <option value="set" selected="@(Input.PriceMode == "set")">@L["Give them all the same price"]</option>
+                                <option value="percent" selected="@(Input.PriceMode == "percent")">@L["Raise or lower by a percentage"]</option>
+                            </select>
+                        </div>
+                        <div class="field" data-shown-by="#batch-price-mode" data-shown-for="set">
+                            <label for="batch-price">@L["New price"]</label>
+                            <input id="batch-price" name="Input.Price" value="@(Input.PriceMode == "set" ? Input.Price : null)" inputmode="decimal" />
+                        </div>
+                        <div class="field" data-shown-by="#batch-price-mode" data-shown-for="percent">
+                            <label for="batch-percent">@L["Percentage"]</label>
+                            <input id="batch-percent" name="Input.Percent" value="@Input.Percent" inputmode="decimal" />
+                            <span class="hint">@L["10 raises every price by 10%; -5 lowers it by 5%. New prices are rounded to the cent."]</span>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="field">
+                            <label for="batch-taxable">@L["Taxable"]</label>
+                            <select id="batch-taxable" name="Input.Taxable">
+                                <option value="" selected="@string.IsNullOrEmpty(Input.Taxable)">@L["Leave as it is"]</option>
+                                <option value="yes" selected="@(Input.Taxable == "yes")">@L["Sales tax applies"]</option>
+                                <option value="no" selected="@(Input.Taxable == "no")">@L["No sales tax"]</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="batch-active">@L["Active"]</label>
+                            <select id="batch-active" name="Input.Active">
+                                <option value="" selected="@string.IsNullOrEmpty(Input.Active)">@L["Leave as it is"]</option>
+                                <option value="yes" selected="@(Input.Active == "yes")">@L["Active: used on new sales"]</option>
+                                <option value="no" selected="@(Input.Active == "no")">@L["Inactive: kept, but not offered on new sales"]</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" name="Input.Step" value="review">@L["See what will change"]</button>
+                    </div>
+                }
+                else
+                {
+                    @* The choices go along again with Apply. *@
+                    <input type="hidden" name="Input.Type" value="@Input.Type" />
+                    <input type="hidden" name="Input.IncomeAccountId" value="@Input.IncomeAccountId" />
+                    <input type="hidden" name="Input.CategoryMode" value="@Input.CategoryMode" />
+                    <input type="hidden" name="Input.Category" value="@Input.Category" />
+                    <input type="hidden" name="Input.PriceMode" value="@Input.PriceMode" />
+                    <input type="hidden" name="Input.Price" value="@Input.Price" />
+                    <input type="hidden" name="Input.Percent" value="@Input.Percent" />
+                    <input type="hidden" name="Input.Taxable" value="@Input.Taxable" />
+                    <input type="hidden" name="Input.Active" value="@Input.Active" />
+                    @foreach (var row in _plan.Rows.Where(r => r.Version is not null))
+                    {
+                        <input type="hidden" name="Input.Versions" value="@($"{row.ItemId}:{row.Version}")" />
+                    }
+
+                    <div class="summary-bar">
+                        <div><span class="label">@L["Will change"]</span> <span class="value">@_plan.ChangedCount</span></div>
+                        <div><span class="label">@L["Already like this"]</span> <span class="value @(_plan.UnchangedCount == 0 ? "zero" : null)">@_plan.UnchangedCount</span></div>
+                        <div><span class="label">@L["Can't take the change"]</span> <span class="value @(_plan.SkippedCount == 0 ? "zero" : null)">@_plan.SkippedCount</span></div>
+                    </div>
+
+                    @if (_plan.Problem is { } problem)
+                    {
+                        <div class="alert error" role="alert">@problem</div>
+                    }
+                    @if (_plan.SkippedCount > 0 && _plan.ChangedCount > 0)
+                    {
+                        <p class="muted">@L["Items that can't take the change are left as they are; the others are changed."]</p>
+                    }
+
+                    var stockRows = _plan.Rows.Where(r => r.Status == ItemBatchRowStatus.Changed && r.BecomesInventory).ToList();
+                    var askStock = stockRows.Count > 0 && _canStock;
+                    @if (stockRows.Count > 0)
+                    {
+                        @if (_canStock)
+                        {
+                            <p>@L["They start with nothing on hand. If you have some now, give the quantity and what each one cost you: it's recorded as one inventory adjustment against equity (Opening Balance Equity, when you have that account). Leave a quantity blank to add stock later with a bill or Inventory → Adjust quantities."]</p>
+                            <div class="field">
+                                <label for="batch-stock-date">@L["Starting stock date"]</label>
+                                <input id="batch-stock-date" type="date" name="Input.StockDate" value="@(Input.StockDate ?? CompanyTime.Today.ToString("yyyy-MM-dd"))" />
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="muted">@L["They start with nothing on hand. Giving them starting stock needs access to inventory adjustments; someone who has it can add the stock under Inventory → Adjust quantities."]</p>
+                        }
+                    }
+
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead>
+                                <tr>
+                                    <th>@L["Item"]</th><th>@L["Type now"]</th><th>@L["What changes"]</th>
+                                    @if (askStock)
+                                    {
+                                        <th class="num">@L["Starting quantity"]</th><th class="num">@L["Unit cost"]</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ var stockIndex = 0; }
+                                @foreach (var row in _plan.Rows)
+                                {
+                                    <tr class="@(row.Status == ItemBatchRowStatus.Changed ? null : "inactive")">
+                                        <td><a href="/items/@row.ItemId">@row.Name</a></td>
+                                        <td class="muted">@Labels.For(row.Type)</td>
+                                        <td>
+                                            @switch (row.Status)
+                                            {
+                                                case ItemBatchRowStatus.Skipped:
+                                                    <text><span class="badge warn">@L["Left as it is"]</span> @row.Reason</text>
+                                                    break;
+                                                case ItemBatchRowStatus.Unchanged:
+                                                    <span class="muted">@L["Already like this"]</span>
+                                                    break;
+                                                default:
+                                                    <text>@string.Join("; ", row.Changes)</text>
+                                                    break;
+                                            }
+                                        </td>
+                                        @if (askStock)
+                                        {
+                                            @if (row.Status == ItemBatchRowStatus.Changed && row.BecomesInventory)
+                                            {
+                                                var typed = Input.Stock.FirstOrDefault(s => s.ItemId == row.ItemId);
+                                                <td class="num">
+                                                    <input type="hidden" name="Input.Stock[@stockIndex].ItemId" value="@row.ItemId" />
+                                                    <input class="amount" name="Input.Stock[@stockIndex].Quantity" value="@typed?.Quantity" inputmode="decimal" aria-label="@L["Starting quantity of {0}", row.Name]" />
+                                                </td>
+                                                <td class="num">
+                                                    <input class="amount" name="Input.Stock[@stockIndex].Cost" value="@(typed?.Cost ?? row.PurchaseCost.ToString("0.00##", System.Globalization.CultureInfo.InvariantCulture))" inputmode="decimal" aria-label="@L["Unit cost of {0}", row.Name]" />
+                                                </td>
+                                                stockIndex++;
+                                            }
+                                            else
+                                            {
+                                                <td></td><td></td>
+                                            }
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="actions">
+                        <button type="submit" name="Input.Step" value="apply" disabled="@(!_plan.CanApply)">@L["Change {0} item(s)", _plan.ChangedCount]</button>
+                        <button type="submit" class="secondary" name="Input.Step" value="choose">@L["Back to the choices"]</button>
+                    </div>
+                }
+            </FormAccess>
+        </form>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Item> _selected = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _incomeAccounts = [];
+    private List<Account> _liabilities = [];
+    private List<string> _categories = [];
+    private ItemBatchPlan? _plan;
+    private string? _error;
+    private bool _canStock;
+
+    /// <summary>The posted form, under the field names <c>Input.…</c>; null before anything is posted.</summary>
+    [SupplyParameterFromForm(FormName = "batch", Name = "Input")]
+    private BatchForm? Posted { get; set; }
+
+    private BatchForm Input => Posted ??= new();
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    /// <summary>Where the list was (its filter), else the whole list.</summary>
+    private string BackPath => AccessRules.LocalPath(Input.Back) is { } back && back.StartsWith("/items", StringComparison.OrdinalIgnoreCase) ? back : "/items";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _canStock = AuthState is not null && (await AuthState).User.CanPost("/inventory/adjustments/new");
+        _chart = await AccountService.GetChartAsync();
+        var accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _incomeAccounts = accounts.Where(a => a.Type.ClassOf() == AccountClass.Income).ToList();
+        // Sales tax liabilities (and the account above them) belong to the tax agencies, not to items.
+        var taxAccounts = (await Taxes.ListAgenciesAsync()).Select(t => t.LiabilityAccountId).ToHashSet();
+        var taxParents = taxAccounts.Select(id => _chart.Find(id)?.ParentId).OfType<Guid>().ToHashSet();
+        _liabilities = accounts.Where(a => a.Type == AccountType.OtherCurrentLiability && !taxAccounts.Contains(a.Id) && !taxParents.Contains(a.Id)).ToList();
+        var all = await ItemService.ListAsync(includeInactive: true);
+        _categories = [.. all.Select(i => i.Category).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
+        var ids = Input.Ids.ToHashSet();
+        _selected = all.Where(i => ids.Contains(i.Id)).ToList();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_selected.Count == 0)
+            return;
+        try
+        {
+            var command = Command();
+            switch (Input.Step)
+            {
+                case "review":
+                    _plan = await Batch.PreviewAsync(command);
+                    break;
+                case "apply":
+                    try
+                    {
+                        var result = await Batch.ApplyAsync(command with { Versions = Versions(), StartingStock = Stock(), StockDate = StockDate() });
+                        var back = BackPath;
+                        var url = $"{back}{(back.Contains('?') ? '&' : '?')}changed={result.Plan.ChangedCount}&skipped={result.Plan.SkippedCount}";
+                        if (result.AdjustmentId is { } adjustment)
+                            url += $"&adjustment={adjustment}";
+                        Navigation.NavigateTo(url);
+                    }
+                    catch (DomainException)
+                    {
+                        // Shown again with the message, the stock as typed, and the items as they are now.
+                        _plan = await Batch.PreviewAsync(command);
+                        throw;
+                    }
+
+                    break;
+            }
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private ItemBatchCommand Command()
+    {
+        ItemType? type = Enum.TryParse<ItemType>(Input.Type, out var t) && Enum.IsDefined(t) ? t : null;
+        Guid? income = Guid.TryParse(Input.IncomeAccountId, out var account) ? account : null;
+        var category = Input.CategoryMode switch
+        {
+            "set" => string.IsNullOrWhiteSpace(Input.Category)
+                ? throw new DomainException("item_batch.category_missing", L["Give the category's name, or choose to take them out of their category."])
+                : Input.Category.Trim(),
+            "clear" => "",
+            _ => null,
+        };
+        ItemPriceChange? price = Input.PriceMode switch
+        {
+            "set" => new(ItemPriceChangeKind.Set, OpenBook.Web.Endpoints.FormNumbers.Number(Input.Price)
+                ?? throw new DomainException("item_batch.price_missing", L["Give the new price."])),
+            "percent" => new(ItemPriceChangeKind.Percent, OpenBook.Web.Endpoints.FormNumbers.Number(Input.Percent)
+                ?? throw new DomainException("item_batch.percent_missing", L["Give the percentage."])),
+            _ => null,
+        };
+        bool? YesNo(string? value) => value switch { "yes" => true, "no" => false, _ => null };
+        return new ItemBatchCommand(Input.Ids, new ItemBatchChange(type, category, income, YesNo(Input.Taxable), YesNo(Input.Active), price));
+    }
+
+    private Dictionary<Guid, int> Versions()
+    {
+        var versions = new Dictionary<Guid, int>();
+        foreach (var text in Input.Versions)
+        {
+            var parts = text.Split(':', 2);
+            if (parts.Length == 2 && Guid.TryParse(parts[0], out var id) && int.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out var version))
+                versions[id] = version;
+        }
+
+        return versions;
+    }
+
+    /// <summary>Starting stock, only for someone who may make inventory adjustments.</summary>
+    private List<ItemStartingStock>? Stock()
+    {
+        if (!_canStock)
+            return null;
+        var list = new List<ItemStartingStock>();
+        foreach (var row in Input.Stock)
+        {
+            if (OpenBook.Web.Endpoints.FormNumbers.Number(row.Quantity) is not { } quantity || quantity == 0m)
+                continue;
+            list.Add(new ItemStartingStock(row.ItemId, quantity, OpenBook.Web.Endpoints.FormNumbers.Number(row.Cost)));
+        }
+
+        return list;
+    }
+
+    private DateOnly? StockDate() =>
+        string.IsNullOrWhiteSpace(Input.StockDate) ? null
+        : DateOnly.TryParseExact(Input.StockDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date) ? date
+        : throw new DomainException("item_batch.date_invalid", L["Give the starting stock date as a date."]);
+
+    /// <summary>"3 non-inventory products, 1 service".</summary>
+    private string Summary() => string.Join(", ", _selected.GroupBy(i => i.Type).OrderByDescending(g => g.Count())
+        .Select(g => $"{g.Count()} × {Labels.For(g.Key).ToLower(System.Globalization.CultureInfo.CurrentCulture)}"));
+
+    private sealed class BatchForm
+    {
+        public string? Step { get; set; }
+        public string? Back { get; set; }
+        public List<Guid> Ids { get; set => field = value ?? []; } = [];
+        public string? Type { get; set; }
+        public string? IncomeAccountId { get; set; }
+        public string? CategoryMode { get; set; }
+        public string? Category { get; set; }
+        public string? PriceMode { get; set; }
+        public string? Price { get; set; }
+        public string? Percent { get; set; }
+        public string? Taxable { get; set; }
+        public string? Active { get; set; }
+        public List<string> Versions { get; set => field = value ?? []; } = [];
+        public List<StockRow> Stock { get; set => field = value ?? []; } = [];
+        public string? StockDate { get; set; }
+    }
+
+    private sealed class StockRow
+    {
+        public Guid ItemId { get; set; }
+        public string? Quantity { get; set; }
+        public string? Cost { get; set; }
+    }
+}

@@ -83,6 +83,9 @@
   <data name="1 webhook" xml:space="preserve">
     <value>1 webhook</value>
   </data>
+  <data name="10 raises every price by 10%; -5 lowers it by 5%. New prices are rounded to the cent." xml:space="preserve">
+    <value>10 raises every price by 10%; -5 lowers it by 5%. New prices are rounded to the cent.</value>
+  </data>
   <data name="3–64 characters: letters, digits, '.', '_', '-' or '@'." xml:space="preserve">
     <value>3–64 characters: letters, digits, '.', '_', '-' or '@'.</value>
   </data>
@@ -154,6 +157,9 @@
   </data>
   <data name="Active" xml:space="preserve">
     <value>Active</value>
+  </data>
+  <data name="Active: used on new sales" xml:space="preserve">
+    <value>Active: used on new sales</value>
   </data>
   <data name="Add" xml:space="preserve">
     <value>Add</value>
@@ -239,8 +245,14 @@
   <data name="All transactions" xml:space="preserve">
     <value>All transactions</value>
   </data>
+  <data name="All types" xml:space="preserve">
+    <value>All types</value>
+  </data>
   <data name="Allow selling more than is on hand" xml:space="preserve">
     <value>Allow selling more than is on hand</value>
+  </data>
+  <data name="Already like this" xml:space="preserve">
+    <value>Already like this</value>
   </data>
   <data name="also sign out my other sessions" xml:space="preserve">
     <value>also sign out my other sessions</value>
@@ -320,8 +332,14 @@
   <data name="Back to the channel" xml:space="preserve">
     <value>Back to the channel</value>
   </data>
+  <data name="Back to the choices" xml:space="preserve">
+    <value>Back to the choices</value>
+  </data>
   <data name="Back to the invoice" xml:space="preserve">
     <value>Back to the invoice</value>
+  </data>
+  <data name="Back to the list" xml:space="preserve">
+    <value>Back to the list</value>
   </data>
   <data name="Back Up Company" xml:space="preserve">
     <value>Back Up Company</value>
@@ -440,6 +458,9 @@
   <data name="Can't scan it? Type this key into the app instead:" xml:space="preserve">
     <value>Can't scan it? Type this key into the app instead:</value>
   </data>
+  <data name="Can't take the change" xml:space="preserve">
+    <value>Can't take the change</value>
+  </data>
   <data name="Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
@@ -464,6 +485,12 @@
   <data name="Categorize bank lines by themselves: when a payee or memo contains some text, pick the category and vendor." xml:space="preserve">
     <value>Categorize bank lines by themselves: when a payee or memo contains some text, pick the category and vendor.</value>
   </data>
+  <data name="Category" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="Category name" xml:space="preserve">
+    <value>Category name</value>
+  </data>
   <data name="Change" xml:space="preserve">
     <value>Change</value>
   </data>
@@ -476,8 +503,17 @@
   <data name="Change password" xml:space="preserve">
     <value>Change password</value>
   </data>
+  <data name="Change products and services" xml:space="preserve">
+    <value>Change products and services</value>
+  </data>
+  <data name="Change ticked items…" xml:space="preserve">
+    <value>Change ticked items…</value>
+  </data>
   <data name="Change your password and see where you're signed in." xml:space="preserve">
     <value>Change your password and see where you're signed in.</value>
+  </data>
+  <data name="Change {0} item(s)" xml:space="preserve">
+    <value>Change {0} item(s)</value>
   </data>
   <data name="Changed {0} by {1}: {2}" xml:space="preserve">
     <value>Changed {0} by {1}: {2}</value>
@@ -523,6 +559,9 @@
   </data>
   <data name="Choose what the dashboard shows" xml:space="preserve">
     <value>Choose what the dashboard shows</value>
+  </data>
+  <data name="Choose what to change on all of them. Anything left as it is stays as each item has it. Nothing is saved until you've seen what will change." xml:space="preserve">
+    <value>Choose what to change on all of them. Anything left as it is stays as each item has it. Nothing is saved until you've seen what will change.</value>
   </data>
   <data name="Classes are off" xml:space="preserve">
     <value>Classes are off</value>
@@ -884,6 +923,9 @@
   <data name="Every other session is signed out. This browser stays signed in." xml:space="preserve">
     <value>Every other session is signed out. This browser stays signed in.</value>
   </data>
+  <data name="Every product and service as a spreadsheet (CSV), which Inventory → Items spreadsheet takes back" xml:space="preserve">
+    <value>Every product and service as a spreadsheet (CSV), which Inventory → Items spreadsheet takes back</value>
+  </data>
   <data name="Every report" xml:space="preserve">
     <value>Every report</value>
   </data>
@@ -907,6 +949,9 @@
   </data>
   <data name="Everything you can set up, grouped by what it's for. Each line says what the setting does and how it's set now. Greyed-out ones need more access: the line says whom to ask." xml:space="preserve">
     <value>Everything you can set up, grouped by what it's for. Each line says what the setting does and how it's set now. Greyed-out ones need more access: the line says whom to ask.</value>
+  </data>
+  <data name="Export" xml:space="preserve">
+    <value>Export</value>
   </data>
   <data name="Extra boxes for products, customers, vendors and documents (like a pack size or sales rep), which can print on invoices and orders." xml:space="preserve">
     <value>Extra boxes for products, customers, vendors and documents (like a pack size or sales rep), which can print on invoices and orders.</value>
@@ -1022,6 +1067,21 @@
   <data name="Give people a role under People and rates to set rates by role." xml:space="preserve">
     <value>Give people a role under People and rates to set rates by role.</value>
   </data>
+  <data name="Give the category's name, or choose to take them out of their category." xml:space="preserve">
+    <value>Give the category's name, or choose to take them out of their category.</value>
+  </data>
+  <data name="Give the new price." xml:space="preserve">
+    <value>Give the new price.</value>
+  </data>
+  <data name="Give the percentage." xml:space="preserve">
+    <value>Give the percentage.</value>
+  </data>
+  <data name="Give the starting stock date as a date." xml:space="preserve">
+    <value>Give the starting stock date as a date.</value>
+  </data>
+  <data name="Give them all the same price" xml:space="preserve">
+    <value>Give them all the same price</value>
+  </data>
   <data name="Go back" xml:space="preserve">
     <value>Go back</value>
   </data>
@@ -1118,8 +1178,14 @@
   <data name="Inactive" xml:space="preserve">
     <value>Inactive</value>
   </data>
+  <data name="Inactive: kept, but not offered on new sales" xml:space="preserve">
+    <value>Inactive: kept, but not offered on new sales</value>
+  </data>
   <data name="Including any overdue" xml:space="preserve">
     <value>Including any overdue</value>
+  </data>
+  <data name="Income" xml:space="preserve">
+    <value>Income</value>
   </data>
   <data name="Income account" xml:space="preserve">
     <value>Income account</value>
@@ -1165,6 +1231,9 @@
   </data>
   <data name="Items" xml:space="preserve">
     <value>Items</value>
+  </data>
+  <data name="Items that can't take the change are left as they are; the others are changed." xml:space="preserve">
+    <value>Items that can't take the change are left as they are; the others are changed.</value>
   </data>
   <data name="Items to reorder" xml:space="preserve">
     <value>Items to reorder</value>
@@ -1250,6 +1319,12 @@
   <data name="Latest payout" xml:space="preserve">
     <value>Latest payout</value>
   </data>
+  <data name="Leave as it is" xml:space="preserve">
+    <value>Leave as it is</value>
+  </data>
+  <data name="Left as it is" xml:space="preserve">
+    <value>Left as it is</value>
+  </data>
   <data name="Legal name" xml:space="preserve">
     <value>Legal name</value>
   </data>
@@ -1334,6 +1409,9 @@
   <data name="Money in the bank" xml:space="preserve">
     <value>Money in the bank</value>
   </data>
+  <data name="Money taken now for something given later (services and non-inventory products only)" xml:space="preserve">
+    <value>Money taken now for something given later (services and non-inventory products only)</value>
+  </data>
   <data name="Monthly amounts to compare the profit and loss against." xml:space="preserve">
     <value>Monthly amounts to compare the profit and loss against.</value>
   </data>
@@ -1393,6 +1471,9 @@
   </data>
   <data name="New permission set" xml:space="preserve">
     <value>New permission set</value>
+  </data>
+  <data name="New price" xml:space="preserve">
+    <value>New price</value>
   </data>
   <data name="New rates for the new year" xml:space="preserve">
     <value>New rates for the new year</value>
@@ -1463,11 +1544,17 @@
   <data name="No permission sets yet." xml:space="preserve">
     <value>No permission sets yet.</value>
   </data>
+  <data name="No products or services of this type." xml:space="preserve">
+    <value>No products or services of this type.</value>
+  </data>
   <data name="No rates yet: time uses each person's bill rate, else the service's price." xml:space="preserve">
     <value>No rates yet: time uses each person's bill rate, else the service's price.</value>
   </data>
   <data name="No rules yet" xml:space="preserve">
     <value>No rules yet</value>
+  </data>
+  <data name="No sales tax" xml:space="preserve">
+    <value>No sales tax</value>
   </data>
   <data name="No setting matches that. Try another word, or search the whole program with the box at the top." xml:space="preserve">
     <value>No setting matches that. Try another word, or search the whole program with the box at the top.</value>
@@ -1556,6 +1643,9 @@
   <data name="Nothing in the guide mentions {0}. Try fewer or different words." xml:space="preserve">
     <value>Nothing in the guide mentions {0}. Try fewer or different words.</value>
   </data>
+  <data name="Nothing is ticked. On Products and services, tick the items to change, or the box at the top of the list to tick every one shown, then choose Change ticked items." xml:space="preserve">
+    <value>Nothing is ticked. On Products and services, tick the items to change, or the box at the top of the list to tick every one shown, then choose Change ticked items.</value>
+  </data>
   <data name="Nothing is waiting." xml:space="preserve">
     <value>Nothing is waiting.</value>
   </data>
@@ -1579,6 +1669,9 @@
   </data>
   <data name="Number" xml:space="preserve">
     <value>Number</value>
+  </data>
+  <data name="of {0}" xml:space="preserve">
+    <value>of {0}</value>
   </data>
   <data name="off, set it up" xml:space="preserve">
     <value>off, set it up</value>
@@ -1642,6 +1735,9 @@
   </data>
   <data name="OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go." xml:space="preserve">
     <value>OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go.</value>
+  </data>
+  <data name="OpenBook starts counting their stock. You can give each one its starting stock on the next step." xml:space="preserve">
+    <value>OpenBook starts counting their stock. You can give each one its starting stock on the next step.</value>
   </data>
   <data name="OpenBook user guide on GitHub" xml:space="preserve">
     <value>OpenBook user guide on GitHub</value>
@@ -1775,6 +1871,9 @@
   <data name="People who track time" xml:space="preserve">
     <value>People who track time</value>
   </data>
+  <data name="Percentage" xml:space="preserve">
+    <value>Percentage</value>
+  </data>
   <data name="Period" xml:space="preserve">
     <value>Period</value>
   </data>
@@ -1898,6 +1997,9 @@
   <data name="Put the stock back" xml:space="preserve">
     <value>Put the stock back</value>
   </data>
+  <data name="Put them all in a category" xml:space="preserve">
+    <value>Put them all in a category</value>
+  </data>
   <data name="QR code for your authenticator app" xml:space="preserve">
     <value>QR code for your authenticator app</value>
   </data>
@@ -1921,6 +2023,9 @@
   </data>
   <data name="Raise by %" xml:space="preserve">
     <value>Raise by %</value>
+  </data>
+  <data name="Raise or lower by a percentage" xml:space="preserve">
+    <value>Raise or lower by a percentage</value>
   </data>
   <data name="Raise rates" xml:space="preserve">
     <value>Raise rates</value>
@@ -2192,6 +2297,9 @@
   <data name="Sales tax" xml:space="preserve">
     <value>Sales tax</value>
   </data>
+  <data name="Sales tax applies" xml:space="preserve">
+    <value>Sales tax applies</value>
+  </data>
   <data name="Sales tax returns to file" xml:space="preserve">
     <value>Sales tax returns to file</value>
   </data>
@@ -2261,8 +2369,14 @@
   <data name="See the contents" xml:space="preserve">
     <value>See the contents</value>
   </data>
+  <data name="See the starting stock adjustment" xml:space="preserve">
+    <value>See the starting stock adjustment</value>
+  </data>
   <data name="See them" xml:space="preserve">
     <value>See them</value>
+  </data>
+  <data name="See what will change" xml:space="preserve">
+    <value>See what will change</value>
   </data>
   <data name="Sending through {0}, from {1}" xml:space="preserve">
     <value>Sending through {0}, from {1}</value>
@@ -2296,6 +2410,9 @@
   </data>
   <data name="Show" xml:space="preserve">
     <value>Show</value>
+  </data>
+  <data name="Show all types" xml:space="preserve">
+    <value>Show all types</value>
   </data>
   <data name="Show inactive" xml:space="preserve">
     <value>Show inactive</value>
@@ -2390,6 +2507,15 @@
   <data name="Starting balances when you move your books to OpenBook." xml:space="preserve">
     <value>Starting balances when you move your books to OpenBook.</value>
   </data>
+  <data name="Starting quantity" xml:space="preserve">
+    <value>Starting quantity</value>
+  </data>
+  <data name="Starting quantity of {0}" xml:space="preserve">
+    <value>Starting quantity of {0}</value>
+  </data>
+  <data name="Starting stock date" xml:space="preserve">
+    <value>Starting stock date</value>
+  </data>
   <data name="Starts" xml:space="preserve">
     <value>Starts</value>
   </data>
@@ -2447,11 +2573,17 @@
   <data name="Take payments to the bank together" xml:space="preserve">
     <value>Take payments to the bank together</value>
   </data>
+  <data name="Take them out of their category" xml:space="preserve">
+    <value>Take them out of their category</value>
+  </data>
   <data name="Tax" xml:space="preserve">
     <value>Tax</value>
   </data>
   <data name="Tax lines" xml:space="preserve">
     <value>Tax lines</value>
+  </data>
+  <data name="Taxable" xml:space="preserve">
+    <value>Taxable</value>
   </data>
   <data name="Tell other systems about changes as they happen." xml:space="preserve">
     <value>Tell other systems about changes as they happen.</value>
@@ -2558,6 +2690,12 @@
   <data name="These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again." xml:space="preserve">
     <value>These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again.</value>
   </data>
+  <data name="They start with nothing on hand. Giving them starting stock needs access to inventory adjustments; someone who has it can add the stock under Inventory → Adjust quantities." xml:space="preserve">
+    <value>They start with nothing on hand. Giving them starting stock needs access to inventory adjustments; someone who has it can add the stock under Inventory → Adjust quantities.</value>
+  </data>
+  <data name="They start with nothing on hand. If you have some now, give the quantity and what each one cost you: it's recorded as one inventory adjustment against equity (Opening Balance Equity, when you have that account). Leave a quantity blank to add stock later with a bill or Inventory → Adjust quantities." xml:space="preserve">
+    <value>They start with nothing on hand. If you have some now, give the quantity and what each one cost you: it's recorded as one inventory adjustment against equity (Opening Balance Equity, when you have that account). Leave a quantity blank to add stock later with a bill or Inventory → Adjust quantities.</value>
+  </data>
   <data name="This browser" xml:space="preserve">
     <value>This browser</value>
   </data>
@@ -2578,6 +2716,15 @@
   </data>
   <data name="This tab still has what you were typing here, not yet saved. The connection may have dropped." xml:space="preserve">
     <value>This tab still has what you were typing here, not yet saved. The connection may have dropped.</value>
+  </data>
+  <data name="Tick every item shown" xml:space="preserve">
+    <value>Tick every item shown</value>
+  </data>
+  <data name="Tick {0}" xml:space="preserve">
+    <value>Tick {0}</value>
+  </data>
+  <data name="Ticked:" xml:space="preserve">
+    <value>Ticked:</value>
   </data>
   <data name="Time" xml:space="preserve">
     <value>Time</value>
@@ -2678,6 +2825,15 @@
   <data name="Type at least two characters. Search finds customers, vendors, products, accounts, invoices, bills, payments, bank transactions and journal entries, by name, number, reference, memo or amount." xml:space="preserve">
     <value>Type at least two characters. Search finds customers, vendors, products, accounts, invoices, bills, payments, bank transactions and journal entries, by name, number, reference, memo or amount.</value>
   </data>
+  <data name="Type now" xml:space="preserve">
+    <value>Type now</value>
+  </data>
+  <data name="Unit cost" xml:space="preserve">
+    <value>Unit cost</value>
+  </data>
+  <data name="Unit cost of {0}" xml:space="preserve">
+    <value>Unit cost of {0}</value>
+  </data>
   <data name="Unlink" xml:space="preserve">
     <value>Unlink</value>
   </data>
@@ -2774,6 +2930,9 @@
   <data name="What" xml:space="preserve">
     <value>What</value>
   </data>
+  <data name="What changes" xml:space="preserve">
+    <value>What changes</value>
+  </data>
   <data name="What do you sell it for?" xml:space="preserve">
     <value>What do you sell it for?</value>
   </data>
@@ -2848,6 +3007,9 @@
   </data>
   <data name="Why it wasn't entered" xml:space="preserve">
     <value>Why it wasn't entered</value>
+  </data>
+  <data name="Will change" xml:space="preserve">
+    <value>Will change</value>
   </data>
   <data name="With two-factor sign-in, signing in takes your password and a code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others), so a stolen password isn't enough." xml:space="preserve">
     <value>With two-factor sign-in, signing in takes your password and a code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others), so a stolen password isn't enough.</value>
@@ -2951,6 +3113,9 @@
   <data name="{0} connections" xml:space="preserve">
     <value>{0} connections</value>
   </data>
+  <data name="{0} couldn't take the change and were left as they were." xml:space="preserve">
+    <value>{0} couldn't take the change and were left as they were.</value>
+  </data>
   <data name="{0} due within a week" xml:space="preserve">
     <value>{0} due within a week</value>
   </data>
@@ -2968,6 +3133,12 @@
   </data>
   <data name="{0} is already paid, credited or written off, so the total can't go below that." xml:space="preserve">
     <value>{0} is already paid, credited or written off, so the total can't go below that.</value>
+  </data>
+  <data name="{0} item(s) changed." xml:space="preserve">
+    <value>{0} item(s) changed.</value>
+  </data>
+  <data name="{0} item(s) ticked: {1}." xml:space="preserve">
+    <value>{0} item(s) ticked: {1}.</value>
   </data>
   <data name="{0} items" xml:space="preserve">
     <value>{0} items</value>

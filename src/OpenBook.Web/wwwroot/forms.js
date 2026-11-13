@@ -208,11 +208,36 @@
         printPdf(button.getAttribute('data-print'));
     });
 
-    // Ticking the header box ticks every document in its table.
+    // Tick boxes on the rows of a table: its header box [data-check-all] ticks every row shown (so a filtered list ticks
+    // just those) and shows when some are; in the same form, [data-checked-count] says how many are ticked and
+    // [data-needs-checked] buttons wait for one. Without script the boxes still post one by one.
+    const rowBoxes = table => [...table.querySelectorAll('tbody input[type=checkbox]')];
+    const showChecked = () => {
+        for (const all of document.querySelectorAll('table input[data-check-all]')) {
+            const boxes = rowBoxes(all.closest('table'));
+            const ticked = boxes.filter(b => b.checked).length;
+            all.checked = boxes.length > 0 && ticked === boxes.length;
+            all.indeterminate = ticked > 0 && ticked < boxes.length;
+            const scope = all.closest('form') || document;
+            for (const count of scope.querySelectorAll('[data-checked-count]')) count.textContent = String(ticked);
+            for (const button of scope.querySelectorAll('[data-needs-checked]'))
+                if (!button.closest('fieldset[disabled]')) button.disabled = ticked === 0;
+        }
+    };
     document.addEventListener('change', e => {
-        if (!(e.target instanceof HTMLInputElement) || !e.target.hasAttribute('data-check-all')) return;
-        e.target.closest('form')?.querySelectorAll('input[type=checkbox][name=doc]').forEach(box => { box.checked = e.target.checked; });
+        const box = e.target;
+        if (!(box instanceof HTMLInputElement) || box.type !== 'checkbox') return;
+        const table = box.closest('table');
+        if (!table || !table.querySelector('input[data-check-all]')) return;
+        if (box.hasAttribute('data-check-all')) for (const row of rowBoxes(table)) row.checked = box.checked;
+        showChecked();
     });
+    // A page brought back from the browser's history keeps the boxes ticked there.
+    window.addEventListener('pageshow', showChecked);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showChecked);
+    else showChecked();
+    if (window.Blazor && typeof window.Blazor.addEventListener === 'function')
+        window.Blazor.addEventListener('enhancedload', showChecked);
 
     // A print form posts its choices and prints the PDF that comes back; buttons with their own formaction submit as usual.
     document.addEventListener('submit', async e => {

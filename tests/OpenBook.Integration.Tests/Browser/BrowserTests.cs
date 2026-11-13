@@ -241,5 +241,47 @@ public sealed partial class BrowserTests(BrowserApp app)
         }
     }
 
+    [BrowserFact]
+    public async Task Ticked_products_become_inventory_products_with_their_starting_stock()
+    {
+        var tag = Tag();
+        var income = await app.InScope(sp => sp.GetRequiredService<AccountService>().CreateAsync(new CreateAccountCommand($"Goods {tag}", AccountType.Income)));
+        foreach (var name in new[] { $"Jar {tag}", $"Lid {tag}" })
+            await app.InScope(sp => sp.GetRequiredService<ItemService>().CreateAsync(new ItemDetails(name, ItemType.NonInventory, income.Id, 6m, PurchaseCost: 2m)));
+
+        await using var page = await app.SignedInAsync();
+        var p = page.Page;
+        await p.GotoAsync("/items?type=NonInventory");
+        var change = p.GetByRole(AriaRole.Button, new() { Name = "Change ticked items…" });
+        var count = p.Locator("[data-checked-count]");
+        await Assertions.Expect(change).ToBeDisabledAsync();
+
+        // The header box ticks every row shown (the tests share a company, so other tests' items are listed too).
+        var all = p.Locator("input[data-check-all]");
+        await all.CheckAsync();
+        var rows = await p.Locator("tbody input[type=checkbox]").CountAsync();
+        await Assertions.Expect(count).ToHaveTextAsync(rows.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        await Assertions.Expect(change).ToBeEnabledAsync();
+        await all.UncheckAsync();
+        await Assertions.Expect(count).ToHaveTextAsync("0");
+
+        await p.GetByLabel($"Tick Jar {tag}").CheckAsync();
+        await p.GetByLabel($"Tick Lid {tag}").CheckAsync();
+        await Assertions.Expect(count).ToHaveTextAsync("2");
+        await change.ClickAsync();
+
+        await p.Locator("#batch-type").SelectOptionAsync("Inventory");
+        await p.GetByRole(AriaRole.Button, new() { Name = "See what will change" }).ClickAsync();
+        await p.GetByLabel($"Starting quantity of Jar {tag}").FillAsync("12");
+        await p.GetByRole(AriaRole.Button, new() { Name = "Change 2 item(s)" }).ClickAsync();
+        await Assertions.Expect(p.Locator(".alert.success")).ToContainTextAsync("2 item(s) changed.", new LocatorAssertionsToContainTextOptions { Timeout = Slow });
+
+        var stock = (await app.InScope(sp => sp.GetRequiredService<OpenBook.Application.Inventory.InventoryService>().StockAsync()))
+            .Where(s => s.Item.Name.EndsWith(tag, StringComparison.Ordinal)).ToDictionary(s => s.Item.Name, s => (s.Quantity, s.Value));
+        Assert.Equal((12m, 24m), stock[$"Jar {tag}"]);
+        Assert.Equal((0m, 0m), stock[$"Lid {tag}"]);
+        await page.AssertCleanAsync();
+    }
+
     private static string Tag() => Guid.NewGuid().ToString("N")[..6];
 }

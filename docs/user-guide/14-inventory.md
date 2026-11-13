@@ -25,6 +25,14 @@ If you sell goods you keep in stock, make them **inventory** items. OpenBook the
 
 Once stock has moved, the type, asset account, costing and lot/serial setting are fixed, so the history stays consistent.
 
+### Turning products into inventory products
+
+A product you sold as **Non-inventory** (or a service) can become an inventory product while it has no stock history: change its **Type** to **Inventory product** on its page, or turn many at once from **Sales → Products and services** (tick them, choose **Change ticked items…**, and set **Type** to **Inventory product**; see [Changing many items at once](04-sales.md#changing-many-items-at-once)). They get the default "Inventory Asset" and "Cost of Goods Sold" accounts and FIFO costing; change those on each item's page if you need others.
+
+A converted item starts with nothing on hand. When you change many at once, the review step asks for each one's **Starting quantity** and **Unit cost** (it starts at the item's purchase cost) and a **Starting stock date**. Saving records them as one inventory adjustment, "Batch change", against equity (Opening Balance Equity, when you have that account); the list links to it. Leave a quantity blank to bring stock in later with a bill or **Adjust quantities**. Giving starting stock there needs access to inventory adjustments; without it, the page says so and the items are converted with nothing on hand.
+
+Sales made before the change stay as they were: they recorded no cost of goods sold. From the change on, sales take their cost from stock.
+
 ## Selling more than is on hand
 
 If you don't keep exact counts, tick **Allow selling more than is on hand** under **Stock** on **Settings → Company details**. Each item's **Selling more than is on hand** setting follows the company or makes an exception: **Always allowed** or **Never allowed**. Items with lot or serial numbers are never sold beyond what's on hand, because each unit sold needs its number. Neither are stock transfers and quantity adjustments.

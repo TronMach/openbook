@@ -135,6 +135,11 @@ public sealed class Item
 
     public static bool HasComponents(ItemType type) => type is ItemType.Bundle or ItemType.Assembly;
 
+    /// <summary>The item's details as they are, to change a few and save them back.</summary>
+    public ItemDetails Details() => new(
+        Name, Type, IncomeAccountId, Rate, Description, Taxable, InventoryAssetAccountId, CostAccountId, ReorderPoint, PurchaseCost,
+        CostMethod, Tracking, Barcode, AutoBuild, SellShort, PreferredVendorId, ReorderQuantity, LeadTimeDays, Category);
+
     /// <summary>Replaces the components. The service checks what they are (no bundles in bundles, assemblies take tracked items, no cycles).</summary>
     public void SetComponents(IEnumerable<(Guid ItemId, decimal Quantity)> components)
     {

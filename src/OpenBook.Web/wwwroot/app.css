@@ -321,6 +321,10 @@ table.entry input.amount { text-align: right; min-width: 7rem; }
 table.entry .remove { background: none; border: 0; color: var(--muted); font-size: 1.1rem; padding: 0 0.3rem; }
 .out-of-balance { color: var(--danger); }
 .actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
+/* Tick boxes for changing many rows at once (Products and services). */
+.selection-bar { margin: 0 0 0.5rem; }
+th.select-col, td.select-col { width: 2rem; padding-right: 0; }
+th.select-col input, td.select-col input { width: auto; margin: 0; }
 
 .import-summary { display: flex; gap: 1.25rem; flex-wrap: wrap; margin: 0.75rem 0; }
 pre.sample { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; overflow-x: auto; font-size: 0.85rem; }

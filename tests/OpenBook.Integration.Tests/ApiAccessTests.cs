@@ -208,6 +208,35 @@ public sealed class ApiAccessTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Many_items_change_at_once_through_the_api()
+    {
+        var client = Client(UserRole.Standard);
+        var account = await (await Client(UserRole.Accountant).PostAsJsonAsync("/api/accounts", new { name = "Sales", type = "Income" }))
+            .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+        var ids = new List<Guid>();
+        foreach (var name in new[] { "Cup", "Saucer" })
+        {
+            var item = await (await client.PostAsJsonAsync("/api/items", new { name, type = "NonInventory", incomeAccountId = account!["id"].GetGuid(), rate = 10 }))
+                .Content.ReadFromJsonAsync<Dictionary<string, System.Text.Json.JsonElement>>();
+            ids.Add(item!["id"].GetGuid());
+        }
+
+        var body = new { itemIds = ids, change = new { type = "Inventory", price = new { kind = "Percent", value = 5 } } };
+        var preview = await (await client.PostAsJsonAsync("/api/items/batch?dryRun=true", body)).Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(2, preview.GetProperty("changedCount").GetInt32());
+        Assert.Equal("NonInventory", (await client.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/items/{ids[0]}")).GetProperty("type").GetString());
+
+        var applied = await client.PostAsJsonAsync("/api/items/batch", body);
+        Assert.Equal(HttpStatusCode.OK, applied.StatusCode);
+        var cup = await client.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/items/{ids[0]}");
+        Assert.Equal(("Inventory", 10.5m), (cup.GetProperty("type").GetString(), cup.GetProperty("rate").GetDecimal()));
+
+        var empty = await client.PostAsJsonAsync("/api/items/batch", new { itemIds = ids, change = new { } });
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client(UserRole.ViewOnly).PostAsJsonAsync("/api/items/batch", body)).StatusCode);
+    }
+
+    [Fact]
     public async Task Price_levels_and_rules_work_through_the_api()
     {
         var client = Client(UserRole.Standard);
@@ -526,6 +555,9 @@ public sealed class AccessRulesTests
     [InlineData("/api/reports/trial-balance-worksheet/table", "GET", UserRole.Accountant)]
     [InlineData("/api/reports/adjusting-entries/export", "GET", UserRole.Accountant)]
     [InlineData("/inventory/items.csv", "GET", UserRole.ViewOnly)]
+    [InlineData("/items/batch", "GET", UserRole.Standard)]
+    [InlineData("/items/batch", "POST", UserRole.Standard)]
+    [InlineData("/api/items/batch", "POST", UserRole.Standard)]
     [InlineData("/inventory/items/import", "GET", UserRole.Standard)]
     [InlineData("/api/inventory/items/file", "GET", UserRole.ViewOnly)]
     [InlineData("/api/inventory/items/file", "POST", UserRole.Standard)]

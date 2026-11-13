@@ -122,6 +122,7 @@ public static class DependencyInjection
         services.AddScoped<CustomerImportService>();
         services.AddScoped<ItemImportService>();
         services.AddScoped<OpenBook.Application.Inventory.ItemFileService>();
+        services.AddScoped<OpenBook.Application.Inventory.ItemBatchService>();
         services.AddScoped<PurchaseAccounts>();
         services.AddScoped<VendorService>();
         services.AddScoped<BillService>();

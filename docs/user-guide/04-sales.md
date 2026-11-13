@@ -52,6 +52,34 @@ Every line on an invoice that charges something names a *product or service* (an
 
 Items can be imported from CSV too.
 
+### Finding and exporting items
+
+The **Type** box above the list shows one type only (for example **Non-inventory product**); tick **Show inactive** to list inactive items too, then **Show**. **Export** downloads every product and service, inactive ones included, as a spreadsheet (CSV): the same file as **Inventory → Items spreadsheet**, which takes it back with your changes.
+
+### Changing many items at once
+
+1. On **Sales → Products and services**, tick the items to change. The box at the top of the list ticks every item shown, so choose a **Type** first to tick, say, every non-inventory product and nothing else. The bar above the list counts what's ticked.
+2. Choose **Change ticked items…**.
+3. Choose what to change on all of them; anything left on **Leave as it is** stays as each item has it:
+   - **Type**: service, non-inventory product or inventory product.
+   - **Income account**.
+   - **Category**: put them all in one, or take them out of theirs.
+   - **Price**: give them all the same price, or raise or lower every price by a percentage (10 raises it by 10%, -5 lowers it by 5%; new prices are rounded to the cent).
+   - **Taxable** and **Active**.
+4. **See what will change** lists every item with what changes. Nothing is saved yet.
+5. **Change … item(s)** saves them all together, and the list says how many changed. Each change is in the audit log like an edit on the item's own page.
+
+Items that can't take the change are listed with the reason and left as they are; the others are still changed. That happens to:
+
+- bundles and assemblies, whose type changes on their own page, with their components;
+- inventory products whose stock has already moved (bought, sold or adjusted): their type is fixed;
+- an item that is a component of an assembly, which must stay an inventory product;
+- an item whose sales go to an other current liability (a gift card, say), which can't become an inventory product.
+
+If someone changes one of the items between **See what will change** and saving, nothing is saved: open the list again and start over.
+
+Turning products into inventory products, with the stock you have now, is in [Inventory](14-inventory.md#turning-products-into-inventory-products). Changing items needs the standard role.
+
 ## Invoices
 
 An *invoice* records a sale the customer will pay for later. It increases what they owe you (accounts receivable) and records the income.

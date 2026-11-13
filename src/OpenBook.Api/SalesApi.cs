@@ -148,6 +148,10 @@ public sealed record SalesReceiptResponse(
 
 public sealed record SetActiveRequest(bool Active);
 
+/// <summary>One change to many items (<c>POST /api/items/batch</c>). Starting stock isn't taken here: it's an inventory adjustment (<c>POST /api/inventory/adjustments</c>).</summary>
+/// <param name="Versions">Each item's version (its ETag's number) when you read it; an item changed since is refused with 400 <c>save.stale</c>.</param>
+public sealed record ItemBatchRequest(IReadOnlyList<Guid> ItemIds, OpenBook.Application.Inventory.ItemBatchChange Change, IReadOnlyDictionary<Guid, int>? Versions = null);
+
 internal static class SalesApi
 {
     public static void MapSalesApi(this RouteGroupBuilder api)
@@ -197,6 +201,12 @@ internal static class SalesApi
             ItemResponse.From(await s.UpdateAsync(id, r, ct)));
         api.MapPut("/items/{id:guid}/active", async (Guid id, SetActiveRequest r, ItemService s, CancellationToken ct) =>
             ItemResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
+        // dryRun: what would change, item by item, saving nothing. Items that can't take the change are skipped with the reason.
+        api.MapPost("/items/batch", async (ItemBatchRequest r, bool? dryRun, OpenBook.Application.Inventory.ItemBatchService s, CancellationToken ct) =>
+        {
+            var command = new OpenBook.Application.Inventory.ItemBatchCommand(r.ItemIds ?? [], r.Change ?? new(), r.Versions);
+            return dryRun == true ? await s.PreviewAsync(command, ct) : (await s.ApplyAsync(command, ct)).Plan;
+        });
         api.MapPost("/items/import", async (HttpRequest request, bool? dryRun, Guid? defaultIncomeAccountId, ItemImportService s, CancellationToken ct) =>
         {
             var csv = await Body(request, ct);

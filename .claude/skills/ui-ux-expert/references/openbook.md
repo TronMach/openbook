@@ -113,7 +113,7 @@ Prefer these to new script. They live in `wwwroot/shortcuts.js`, `searchselect.j
 | `data-keep-typed` | Bring a form's values back after a refusal |
 | `data-unsaved-watch`, `data-needs-saved` | Ask before acting on a form with unsaved changes |
 | `data-print`, `data-print-form` | Open the print dialog without leaving the page |
-| `data-check-all` | Tick every row |
+| `data-check-all` (header box of a table) | Tick every row shown; `[data-checked-count]` in the same form counts the ticked rows, `[data-needs-checked]` buttons wait for one (`forms.js`) |
 
 Keyboard: `/` search, `?` shortcut list, `g` + key go, `n` + key new, `Ctrl+Enter` save, `Alt+Q` quick entry, `g` then `?` help for this page. A new area gets its prefix in `HelpTopics.For` and, where it earns one, a `g` or `n` key.
 

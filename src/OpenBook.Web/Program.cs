@@ -59,7 +59,8 @@ if (!isResetPassword && !isRestoreBackup && !isMakeDemo && !isVerifyAudit && ins
 
 // Add services to the container.
 builder.Services.AddLocalization(o => o.ResourcesPath = "Resources");
-builder.Services.AddRazorComponents()
+// A static form's list may be long: the batch change of products and services posts every ticked item (1,024 by default).
+builder.Services.AddRazorComponents(o => o.MaxFormMappingCollectionSize = OpenBook.Application.Inventory.ItemBatchService.MaxItems)
     .AddInteractiveServerComponents();
 
 // The log goes to files beside the company file (or the backups folder), and the System page shows recent problems.

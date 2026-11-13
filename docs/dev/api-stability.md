@@ -101,4 +101,5 @@ Contributors: a change to anything under "What's covered" that isn't additive ne
 
 ## Change log
 
+- **2026-11-13**: added `POST /api/items/batch` (`dryRun`): one change (type, category, income account, taxable, active, price) to many items, returning each item's outcome. Additive; nothing existing changed.
 - **2026-11-12**: policy written. Add-in API version 1 (`PluginApi.Version` = 1, `PluginApi.Oldest` = 1); add-ins that don't state an `ApiVersion` count as version 1.

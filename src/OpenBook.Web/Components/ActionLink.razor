@@ -5,7 +5,7 @@
    than the page. Nothing is hidden, and it works again by itself once an admin gives the person that access. *@
 @if (_allowed)
 {
-    <a class="@Class" href="@Href" title="@Title">@ChildContent</a>
+    <a class="@Class" href="@Href" title="@Title" @attributes="Attributes">@ChildContent</a>
 }
 else
 {
@@ -28,6 +28,10 @@ else
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Further attributes of an allowed link, such as <c>download</c>; a greyed-out one leads to the access denied page instead.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public Dictionary<string, object>? Attributes { get; set; }
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 

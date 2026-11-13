@@ -9,53 +9,100 @@
 <div class="wide">
     <div class="toolbar">
         <h1>Products and services</h1>
-        <a class="button secondary" href="@(ShowInactive ? "/items" : "/items?showInactive=true")">@(ShowInactive ? "Hide inactive" : "Show inactive")</a>
         <ActionLink Class="button secondary" Href="/inventory">Inventory</ActionLink>
         <ActionLink Class="button secondary" Href="/items/center">Item Center</ActionLink>
         <ActionLink Class="button secondary" Href="/items/import">Import CSV</ActionLink>
+        <ActionLink Class="button secondary" Href="/inventory/items.csv" Title="@L["Every product and service as a spreadsheet (CSV), which Inventory → Items spreadsheet takes back"]" download="items.csv">@L["Export"]</ActionLink>
         <ActionLink Class="button" Href="/items/new">New item</ActionLink>
     </div>
 
+    @if (Changed is { } changed)
+    {
+        <div class="alert success" role="status">
+            @L["{0} item(s) changed.", changed]
+            @if (Skipped is > 0)
+            {
+                @(" ")@L["{0} couldn't take the change and were left as they were.", Skipped.Value]
+            }
+            @if (Adjustment is { } adjustment)
+            {
+                @(" ")<a href="/inventory/adjustments/@adjustment">@L["See the starting stock adjustment"]</a>
+            }
+        </div>
+    }
+
+    <form method="get" action="/items" class="toolbar">
+        <div class="field">
+            <label for="type-filter">@L["Type"]</label>
+            <select id="type-filter" name="type">
+                <option value="" selected="@(_type is null)">@L["All types"]</option>
+                @foreach (var type in Enum.GetValues<ItemType>())
+                {
+                    <option value="@type" selected="@(_type == type)">@Labels.For(type)</option>
+                }
+            </select>
+        </div>
+        <label class="check"><input type="checkbox" name="showInactive" value="true" checked="@ShowInactive" /> @L["Show inactive"]</label>
+        <button type="submit" class="secondary">@L["Show"]</button>
+    </form>
+
     @if (_items.Count == 0)
     {
-        <div class="card"><p>Nothing yet. <ActionLink Href="/items/new">Add a product or service</ActionLink> or <ActionLink Href="/items/import">import a list</ActionLink>.</p></div>
+        @if (_type is null)
+        {
+            <div class="card"><p>Nothing yet. <ActionLink Href="/items/new">Add a product or service</ActionLink> or <ActionLink Href="/items/import">import a list</ActionLink>.</p></div>
+        }
+        else
+        {
+            <div class="card"><p>@L["No products or services of this type."] <a href="/items@(ShowInactive ? "?showInactive=true" : "")">@L["Show all types"]</a></p></div>
+        }
     }
     else
     {
-        <div class="table-wrap">
-            <table class="data">
-                <thead><tr><th>Name</th>@foreach (var column in _fields.Columns) { <th>@column.Name</th> }<th>Type</th><th>Description</th><th class="num">Price</th><th class="num">On hand</th><th>Income account</th></tr></thead>
-                <tbody>
-                    @foreach (var item in _items)
-                    {
-                        <tr class="@(item.IsActive ? null : "inactive")">
-                            <td>
-                                <a href="/items/@item.Id">@item.Name</a>
-                                @if (!item.IsActive)
-                                {
-                                    <span class="badge">Inactive</span>
-                                }
-                            </td>
-                            @foreach (var column in _fields.Columns) { <td>@(_fields.Values.GetValueOrDefault(item.Id)?.GetValueOrDefault(column.Id))</td> }
-                            <td class="muted">@Labels.For(item.Type)</td>
-                            <td class="muted">@item.Description</td>
-                            <td class="num">@item.Rate.ToString("#,##0.00##")</td>
-                            <td class="num">
-                                @if (_stock.TryGetValue(item.Id, out var level))
-                                {
-                                    @Labels.Quantity(level.Quantity)
-                                    @if (level.NeedsReorder)
+        <PostForm Action="/items/batch">
+            <AntiforgeryToken />
+            <input type="hidden" name="_handler" value="batch" />
+            <input type="hidden" name="Input.Back" value="@_back" />
+            <div class="actions selection-bar">
+                <span class="muted">@L["Ticked:"] <strong data-checked-count>0</strong> @L["of {0}", _items.Count]</span>
+                <button type="submit" class="secondary" data-needs-checked>@L["Change ticked items…"]</button>
+            </div>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th class="select-col"><input type="checkbox" data-check-all aria-label="@L["Tick every item shown"]" /></th><th>Name</th>@foreach (var column in _fields.Columns) { <th>@column.Name</th> }<th>Type</th><th>Description</th><th class="num">Price</th><th class="num">On hand</th><th>Income account</th></tr></thead>
+                    <tbody>
+                        @foreach (var item in _items)
+                        {
+                            <tr class="@(item.IsActive ? null : "inactive")">
+                                <td class="select-col"><input type="checkbox" name="Input.Ids" value="@item.Id" aria-label="@L["Tick {0}", item.Name]" /></td>
+                                <td>
+                                    <a href="/items/@item.Id">@item.Name</a>
+                                    @if (!item.IsActive)
                                     {
-                                        <span class="badge warn">Low</span>
+                                        <span class="badge">Inactive</span>
                                     }
-                                }
-                            </td>
-                            <td class="muted">@(_chart.Find(item.IncomeAccountId) is not null ? _chart.FullName(item.IncomeAccountId) : "")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+                                </td>
+                                @foreach (var column in _fields.Columns) { <td>@(_fields.Values.GetValueOrDefault(item.Id)?.GetValueOrDefault(column.Id))</td> }
+                                <td class="muted">@Labels.For(item.Type)</td>
+                                <td class="muted">@item.Description</td>
+                                <td class="num">@item.Rate.ToString("#,##0.00##")</td>
+                                <td class="num">
+                                    @if (_stock.TryGetValue(item.Id, out var level))
+                                    {
+                                        @Labels.Quantity(level.Quantity)
+                                        @if (level.NeedsReorder)
+                                        {
+                                            <span class="badge warn">Low</span>
+                                        }
+                                    }
+                                </td>
+                                <td class="muted">@(_chart.Find(item.IncomeAccountId) is not null ? _chart.FullName(item.IncomeAccountId) : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </PostForm>
     }
 </div>
 
@@ -63,14 +110,36 @@
     private IReadOnlyList<Item> _items = [];
     private ChartOfAccounts _chart = new([]);
     private Dictionary<Guid, OpenBook.Application.Inventory.StockLevel> _stock = [];
+    private ItemType? _type;
+    private string _back = "/items";
 
     [SupplyParameterFromQuery]
     private bool ShowInactive { get; set; }
 
+    /// <summary>A type's name (enums can't bind from the query); blank or unknown shows every type.</summary>
+    [SupplyParameterFromQuery]
+    private string? Type { get; set; }
+
+    [SupplyParameterFromQuery]
+    private int? Changed { get; set; }
+
+    [SupplyParameterFromQuery]
+    private int? Skipped { get; set; }
+
+    [SupplyParameterFromQuery]
+    private Guid? Adjustment { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
+        _type = Enum.TryParse<ItemType>(Type, ignoreCase: true, out var type) && Enum.IsDefined(type) ? type : null;
+        var query = new List<string>();
+        if (_type is not null)
+            query.Add($"type={_type}");
+        if (ShowInactive)
+            query.Add("showInactive=true");
+        _back = query.Count == 0 ? "/items" : "/items?" + string.Join('&', query);
         _chart = await AccountService.GetChartAsync();
-        _items = await ItemService.ListAsync(ShowInactive);
+        _items = (await ItemService.ListAsync(ShowInactive)).Where(i => _type is null || i.Type == _type).ToList();
         _stock = (await Inventory.StockAsync()).ToDictionary(s => s.Item.Id);
         _fields = await FieldService.ListColumnsAsync(OpenBook.Domain.CustomFields.CustomFieldTarget.Item);
     }

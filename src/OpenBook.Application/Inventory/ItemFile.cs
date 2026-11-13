@@ -346,7 +346,7 @@ public sealed class ItemFileService(
                 if (existing is not null && !targets.Add(existing.Id))
                     throw new DomainException("import.duplicate_row", $"{existing.Name} appears more than once in the file.");
 
-                var before = existing is null ? null : DetailsOf(existing);
+                var before = existing?.Details();
                 var type = F(typeCol) is { } typeText ? ParseType(typeText) : before?.Type ?? ItemType.Service;
                 var tracked = Item.IsTracked(type);
                 var details = new ItemDetails(
@@ -541,10 +541,6 @@ public sealed class ItemFileService(
         }
     }
 
-    private static ItemDetails DetailsOf(Item i) => new(
-        i.Name, i.Type, i.IncomeAccountId, i.Rate, i.Description, i.Taxable, i.InventoryAssetAccountId, i.CostAccountId, i.ReorderPoint, i.PurchaseCost,
-        i.CostMethod, i.Tracking, i.Barcode, i.AutoBuild, i.SellShort, i.PreferredVendorId, i.ReorderQuantity, i.LeadTimeDays, i.Category);
-
     private static RowPlan Failed(int line, string? name, string message) =>
         new() { Line = line, Name = name, Status = ItemFileRowStatus.Error, Message = message };
 
@@ -565,7 +561,7 @@ public sealed class ItemFileService(
 
     private static string FieldHeader(CustomField field) => Clashes(field) ? FieldPrefix + field.Name : field.Name;
 
-    private static string TypeText(ItemType type) => type switch
+    internal static string TypeText(ItemType type) => type switch
     {
         ItemType.Service => "Service",
         ItemType.Inventory => "Inventory",
