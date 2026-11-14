@@ -24,11 +24,17 @@
     the slowest classes first (OPENBOOK_TEST_TIMES, read by SlowestFirst in the integration tests); without that file
     it uses tools\test-times.json, kept in the repository for CI.
 
+    -Changed runs only the test classes that run code changed since -Base (default master: committed, uncommitted
+    and new files), going by the map tools/build-test-map.ps1 makes; see tools/changed-tests.ps1 for the rules. It
+    runs everything when the change is too wide or the map can't tell. Run both full suites before pushing anyway.
+
 .EXAMPLE
     powershell -File tools/run-tests.ps1                      # SQLite: every test project
     powershell -File tools/run-tests.ps1 -Postgres            # the integration suite on PostgreSQL (.env loaded)
     powershell -File tools/run-tests.ps1 -Postgres -EnvFile ..\..\..\.env    # from a worktree
-    powershell -File tools/run-tests.ps1 -Filter "FullyQualifiedName~InviteTests" -Threads 2    dotnet build; then both suites at once, neither building (two builds at once lock each other's files):
+    powershell -File tools/run-tests.ps1 -Filter "FullyQualifiedName~InviteTests" -Threads 2
+    powershell -File tools/run-tests.ps1 -Postgres -Changed  # only the classes that run what changed since master
+    dotnet build; then both suites at once, neither building (two builds at once lock each other's files):
     powershell -File tools/run-tests.ps1 -NoBuild    and, in a second window,    powershell -File tools/run-tests.ps1 -Postgres -NoBuild
 #>
 param(
@@ -38,6 +44,8 @@ param(
     [string]$Filter,
     [string]$EnvFile,
     [ValidateSet('Fast', 'Env')][string]$Server = 'Fast',
+    [switch]$Changed,
+    [string]$Base = 'master',
     [ValidateRange(10, 100)][int]$CpuPercent = 85,
     [string]$Results = (Join-Path ([IO.Path]::GetTempPath()) 'openbook-test-results')
 )
@@ -88,6 +96,16 @@ if ($Postgres) {
 # Slowest classes first: this computer's times from earlier runs, else the repository's.
 $timesFile = Join-Path $root "artifacts\test-times\$name.json"
 $env:OPENBOOK_TEST_TIMES = if (Test-Path $timesFile) { $timesFile } else { Join-Path $PSScriptRoot 'test-times.json' }
+
+if ($Changed) {
+    $selection = & (Join-Path $PSScriptRoot 'changed-tests.ps1') -Base $Base -Postgres:$Postgres
+    if ($selection.Filter) {
+        Write-Host "Changed since ${Base}: $($selection.Reason)"
+        $Filter = if ($Filter) { "($($selection.Filter))&($Filter)" } else { $selection.Filter }
+    }
+    elseif ($selection.Nothing) { Write-Host "Changed since ${Base}: $($selection.Reason). No tests to run."; exit 0 }
+    else { Write-Host "Changed since ${Base}: $($selection.Reason). Running everything." }
+}
 if ($Filter) { $arguments += @('--filter', $Filter) }
 if ($NoBuild) { $arguments += '--no-build' }
 # A build server started earlier (by another build) wouldn't keep to the processors below, so this run's build uses none.
@@ -98,7 +116,7 @@ Write-Host "Running the $name tests, at most $Threads at once, on $usable of $co
 # Windows PowerShell joins the arguments with spaces, so quote any that contain one.
 $quoted = $arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }
 $started = Get-Date
-$process =Start-Process -FilePath 'dotnet' -ArgumentList $quoted -WorkingDirectory $root -NoNewWindow -PassThru
+$process = Start-Process -FilePath 'dotnet' -ArgumentList $quoted -WorkingDirectory $root -NoNewWindow -PassThru
 # Windows PowerShell only gives a -PassThru process an ExitCode if its handle was asked for while it ran.
 $null = $process.Handle
 $process.PriorityClass = 'BelowNormal'
