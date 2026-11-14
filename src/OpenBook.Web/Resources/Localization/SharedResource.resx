@@ -227,6 +227,12 @@
   <data name="Admins who can give you access:" xml:space="preserve">
     <value>Admins who can give you access:</value>
   </data>
+  <data name="Alert" xml:space="preserve">
+    <value>Alert</value>
+  </data>
+  <data name="Alerts are off (OpenBook:Alerts:Enabled is false)." xml:space="preserve">
+    <value>Alerts are off (OpenBook:Alerts:Enabled is false).</value>
+  </data>
   <data name="All dates" xml:space="preserve">
     <value>All dates</value>
   </data>
@@ -1763,6 +1769,9 @@
   <data name="OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go." xml:space="preserve">
     <value>OpenBook Desktop can only be reached from this computer, so a phone can't send what it captured. Move the company to OpenBook Server to capture on the go.</value>
   </data>
+  <data name="OpenBook emails a problem to the people who look after it: a background job that fails twice in a row, a scheduled backup that fails, a books check that finds something wrong. The same problem isn't sent again within a day." xml:space="preserve">
+    <value>OpenBook emails a problem to the people who look after it: a background job that fails twice in a row, a scheduled backup that fails, a books check that finds something wrong. The same problem isn't sent again within a day.</value>
+  </data>
   <data name="OpenBook starts counting their stock. You can give each one its starting stock on the next step." xml:space="preserve">
     <value>OpenBook starts counting their stock. You can give each one its starting stock on the next step.</value>
   </data>
@@ -2065,6 +2074,9 @@
   </data>
   <data name="Raise rates" xml:space="preserve">
     <value>Raise rates</value>
+  </data>
+  <data name="Raised" xml:space="preserve">
+    <value>Raised</value>
   </data>
   <data name="Rate" xml:space="preserve">
     <value>Rate</value>
@@ -2423,6 +2435,9 @@
   <data name="Sending through {0}, from {1}" xml:space="preserve">
     <value>Sending through {0}, from {1}</value>
   </data>
+  <data name="Sent to" xml:space="preserve">
+    <value>Sent to</value>
+  </data>
   <data name="Service" xml:space="preserve">
     <value>Service</value>
   </data>
@@ -2734,6 +2749,12 @@
   </data>
   <data name="These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again." xml:space="preserve">
     <value>These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again.</value>
+  </data>
+  <data name="They go to the active admins who have an email address (Settings &gt; Users and invitations)." xml:space="preserve">
+    <value>They go to the active admins who have an email address (Settings &gt; Users and invitations).</value>
+  </data>
+  <data name="They go to {0} (OpenBook:Alerts:To)." xml:space="preserve">
+    <value>They go to {0} (OpenBook:Alerts:To).</value>
   </data>
   <data name="They start with nothing on hand. Giving them starting stock needs access to inventory adjustments; someone who has it can add the stock under Inventory → Adjust quantities." xml:space="preserve">
     <value>They start with nothing on hand. Giving them starting stock needs access to inventory adjustments; someone who has it can add the stock under Inventory → Adjust quantities.</value>

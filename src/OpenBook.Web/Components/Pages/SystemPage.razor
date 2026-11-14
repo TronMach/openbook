@@ -9,6 +9,7 @@
 @inject OpenBookStorage Storage
 @inject OpenBook.Web.Hosting.Installation Install
 @inject JobStatus Jobs
+@inject AdminAlerts Alerts
 @inject PluginRegistry Plugins
 @inject OpenBook.Infrastructure.Net.OutboundPolicy Outbound
 @inject IConfiguration Configuration
@@ -182,6 +183,37 @@ docker compose up -d</pre>
                 </tbody>
             </table>
         </div>
+    }
+
+    <h2>Alerts</h2>
+    @if (!Alerts.Enabled)
+    {
+        <p class="muted">@L["Alerts are off (OpenBook:Alerts:Enabled is false)."]</p>
+    }
+    else
+    {
+        <p class="muted">
+            @L["OpenBook emails a problem to the people who look after it: a background job that fails twice in a row, a scheduled backup that fails, a books check that finds something wrong. The same problem isn't sent again within a day."]
+            @(Alerts.ConfiguredTo.Count > 0 ? L["They go to {0} (OpenBook:Alerts:To).", string.Join(", ", Alerts.ConfiguredTo)] : L["They go to the active admins who have an email address (Settings > Users and invitations)."])
+        </p>
+        @if (Alerts.Recent.Count > 0)
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>@L["Raised"]</th><th>@L["Alert"]</th><th>@L["Sent to"]</th></tr></thead>
+                    <tbody>
+                        @foreach (var alert in Alerts.Recent)
+                        {
+                            <tr>
+                                <td class="nowrap">@alert.At.InCompanyTime().ToString("g")</td>
+                                <td>@alert.Subject</td>
+                                <td>@(alert.Problem ?? string.Join(", ", alert.To))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     }
 
     <h2>Recent warnings and errors</h2>

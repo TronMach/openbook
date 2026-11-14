@@ -148,6 +148,12 @@ Nothing is changed when a check fails; the message says what differed. `move.tar
 - **More than one OpenBook container** on the same PostgreSQL database (behind a load balancer): every container serves pages, and each background job (the hourly work, scheduled emails, webhooks, bank and channel syncs, backups) runs in one container at a time, which holds a lease on it and renews it each run. If that container stops, another takes the job over once the lease lapses (within 90 minutes for the hourly work, minutes for the rest). Share the Data Protection keys folder between them, or sign-ins and stored secrets won't work across containers.
 - **SQLite on a server**: the image also runs without PostgreSQL (`docker run -p 8080:8080 -v openbook-data:/data openbook`): one company file in `/data`, with the in-app backups. PostgreSQL is better for several people.
 
+## Alerts and monitoring
+
+**Alerts.** OpenBook emails the people who look after it when something needs attention: a background job that fails twice in a row (a scheduled backup at its first failure), or a daily books check that finds a problem, a broken audit chain among them. They go to the active admins who have an email address (Settings → Users and invitations), through the company's own email settings (Settings → Email), at most once a day per problem. `OpenBook__Alerts__To` sends them elsewhere (addresses separated by `,`), and `OpenBook__Alerts__Enabled=false` turns them off. **Settings → System** lists the latest alerts, including any that couldn't be sent and why.
+
+**OpenTelemetry.** Give an OTLP endpoint (`OpenBook__Telemetry__OtlpEndpoint=http://collector:4317`, or the standard `OTEL_EXPORTER_OTLP_ENDPOINT` with the other `OTEL_*` settings) and OpenBook sends traces and metrics to it: page and API requests, the calls it makes to other services, the .NET runtime, and its own `openbook.job.runs`, `openbook.job.duration` and `openbook.alerts`, with a span for each background job run. Without an endpoint nothing is collected or sent. Paths are sent with record ids, tokens and anything else that could identify a record replaced by `{id}`, and query values redacted, so a customer's portal link or an invitation never reaches the collector.
+
 ## Settings worth knowing
 
 Set these as environment variables, with `__` in place of `:`.

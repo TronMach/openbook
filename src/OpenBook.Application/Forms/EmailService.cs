@@ -79,6 +79,22 @@ public sealed class EmailService(
             []), ct);
     }
 
+    /// <summary>
+    /// A plain message from OpenBook itself to the people who look after it (an alert that a backup failed), one per
+    /// address, through the company's email settings. Not kept in any email history: no document is involved.
+    /// </summary>
+    public async Task SendNoticeAsync(IReadOnlyCollection<string> to, string subject, string body, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(to);
+        foreach (var address in to)
+            await TransportAsync(new EmailMessage(
+                EmailSettings.Address(address, "To") ?? throw new DomainException("email.to_required", "An alert needs an address to go to."),
+                subject, body, []), ct);
+    }
+
+    /// <summary>Whether email can be sent at all (Settings > Email set up).</summary>
+    public async Task<bool> CanSendAsync(CancellationToken ct = default) => (await GetSettingsAsync(ct)).IsConfigured;
+
     // ---- Wording ----
 
     /// <summary>Every kind's subject and message (payment reminders excepted: they're worded in the collection settings).</summary>

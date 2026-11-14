@@ -179,6 +179,7 @@ The desktop company file isn't changed. Keep it as a backup, but stop using it: 
 **Settings → System** (admins) shows how the server is set up: the OpenBook version, the database and where the company file is, the backups and log folders, and the company's time zone. On OpenBook Desktop it shows the company file, backups and log folders instead, with **Quit OpenBook**. Below that:
 
 - **Background jobs**: the jobs OpenBook runs on its own (recurring documents, late fees and reminders, scheduled emails and reports, bank feeds, sales channels, scheduled backups, webhooks), each with when it last ran, whether it worked and its last failure. If automatic invoices or bank feeds seem to have stopped, look here first.
+- **Alerts**: OpenBook emails the admins who have an email address (on **Settings → Users and invitations**, select the person) when a background job fails twice in a row, a scheduled backup fails, or the daily books check finds a problem, at most once a day for each. Email has to be set up (**Settings → Email**). This section lists the latest alerts, and says when one couldn't be sent and why.
 - **Recent warnings and errors** since OpenBook last started.
 
 OpenBook also writes a log file for each day (`openbook-yyyymmdd.log`) to the log folder, keeping two weeks. By default the folder is called `logs`, next to the company file or the backups folder; whoever runs the server can choose another with the `OpenBook:LogDirectory` setting.

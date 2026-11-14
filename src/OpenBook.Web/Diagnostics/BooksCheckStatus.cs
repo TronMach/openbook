@@ -6,7 +6,7 @@ namespace OpenBook.Web.Diagnostics;
 /// The latest books check, for the check page and the home page's to-do list. Kept in memory like <see cref="JobStatus"/>:
 /// the hourly job runs the check once a day (and soon after each start), and anyone can run it again from the page.
 /// </summary>
-public sealed class BooksCheckStatus
+public sealed class BooksCheckStatus(AdminAlerts? alerts = null)
 {
     /// <summary>How often the hourly job runs the check.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromDays(1);
@@ -15,7 +15,12 @@ public sealed class BooksCheckStatus
 
     public BooksCheckReport? Last => Volatile.Read(ref _last);
 
-    public void Record(BooksCheckReport report) => Volatile.Write(ref _last, report);
+    /// <summary>The latest check; one that found problems raises an admin alert.</summary>
+    public void Record(BooksCheckReport report)
+    {
+        Volatile.Write(ref _last, report);
+        alerts?.BooksChecked(report);
+    }
 
     /// <summary>After a restore: the result was about the file that's gone.</summary>
     public void Clear() => Volatile.Write(ref _last, null);

@@ -100,6 +100,11 @@ builder.Services.AddHttpClient(OpenBook.Web.Hosting.UpdateService.HttpClientName
     c.Timeout = TimeSpan.FromMinutes(15);
     c.DefaultRequestHeaders.UserAgent.ParseAdd($"OpenBook/{OpenBook.Web.Hosting.UpdateService.CurrentVersion}");
 });
+builder.Services.AddSingleton<OpenBook.Web.Diagnostics.AdminAlerts>();
+if (!isConsoleCommand)
+    builder.Services.AddHostedService<OpenBook.Web.Diagnostics.AdminAlertSender>();
+// Traces and metrics, only when an OTLP endpoint is given.
+OpenBook.Web.Diagnostics.Telemetry.AddOpenBookTelemetry(builder.Services, builder.Configuration);
 builder.Services.AddSingleton<OpenBook.Web.Diagnostics.JobStatus>();
 builder.Services.AddSingleton<OpenBook.Web.Diagnostics.BooksCheckStatus>();
 builder.Services.AddSingleton(OpenBook.Web.Help.HelpGuide.ForApp());
