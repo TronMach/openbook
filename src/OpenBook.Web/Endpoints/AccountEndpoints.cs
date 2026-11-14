@@ -77,10 +77,11 @@ public static class AccountEndpoints
         }).RequireAuthorization();
 
         // Form-bound, so the antiforgery token from the page is validated automatically.
-        app.MapPost("/backup/schedule", async (IFormCollection form, ScheduledBackupService schedules, CancellationToken ct) =>
+        app.MapPost("/backup/schedule", async (IFormCollection form, OpenBook.Application.IRecordVersions versions, ScheduledBackupService schedules, CancellationToken ct) =>
         {
             try
             {
+                await Components.SettingsVersions.EnsureUnchangedAsync<BackupSchedule>(versions, form, ct);
                 var details = new BackupScheduleDetails(
                     form["enabled"] == "true",
                     Enum.TryParse<BackupFrequency>(form["frequency"], out var frequency) ? frequency : BackupFrequency.Daily,

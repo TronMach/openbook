@@ -37,8 +37,12 @@ public static class FormDesignEndpoints
         }).RequireAuthorization();
 
         // Fields: see Details.
-        app.MapPost("/settings/forms/{id:guid}", async (Guid id, IFormCollection form, FormDesignService designs, CancellationToken ct) =>
-            await Back(id, async () => await designs.UpdateAsync(id, Details(form), ct))).RequireAuthorization();
+        app.MapPost("/settings/forms/{id:guid}", async (Guid id, IFormCollection form, OpenBook.Application.IRecordVersions versions, FormDesignService designs, CancellationToken ct) =>
+            await Back(id, async () =>
+            {
+                await Components.SettingsVersions.EnsureUnchangedAsync<FormDesign>(versions, id, form, ct);
+                await designs.UpdateAsync(id, Details(form), ct);
+            })).RequireAuthorization();
 
         // Field: logo (a PNG or JPEG file).
         app.MapPost("/settings/forms/{id:guid}/logo", async (Guid id, IFormFile? logo, FormDesignService designs, CancellationToken ct) =>

@@ -42,6 +42,7 @@
             <div class="design-settings">
                 <form method="post" action="/settings/forms/@_design.Id" data-enhance="false" data-preview="design-preview" data-logo="@(_design.Logo is null ? "" : _design.Id.ToString())" class="card design-form">
                     <AntiforgeryToken />
+                    <SettingsVersion TRecord="OpenBook.Domain.Companies.FormDesign" Id="_design.Id" />
                     <details class="design-section" open>
                         <summary>Look</summary>
                         <div class="row">

@@ -4,6 +4,7 @@
 @inject SingleSignOnService Sso
 @inject UserService UserService
 @inject NavigationManager Navigation
+@inject OpenBook.Application.IRecordVersions Versions
 
 <PageTitle>@L["Sign-in and two-factor"] · OpenBook</PageTitle>
 
@@ -27,6 +28,7 @@
         <p class="muted">@L["Everyone can turn on two-factor sign-in for themselves under their account. Require it here for some roles: people in them who haven't set it up are asked to at their next sign-in and can't do anything else until they have. API keys aren't affected."]</p>
         <form method="post" @formname="require" @onsubmit="SaveAsync">
             <AntiforgeryToken />
+            <SettingsVersion TRecord="SignInSettings" />
             <div class="field">
                 <label for="from">@L["Require it for"]</label>
                 <select id="from" name="From">
@@ -53,6 +55,7 @@
         </p>
         <form method="post" @formname="sso" @onsubmit="SaveSsoAsync">
             <AntiforgeryToken />
+            <SettingsVersion TRecord="SignInSettings" />
             <label class="check"><input type="checkbox" name="SsoEnabled" value="true" checked="@(_settings?.SsoEnabled == true)" /> <span>@L["Turn on single sign-on"]</span></label>
             <div class="row">
                 <div class="field">
@@ -129,6 +132,7 @@
         var form = HttpContext.Request.Form;
         try
         {
+            await Versions.EnsureOnlyUnchangedAsync<SignInSettings>(SettingsVersions.Opened(form));
             var provider = Enum.TryParse<SsoProvider>(form["SsoProvider"], out var p) ? p : SsoProvider.Microsoft;
             var secret = form["SsoClientSecret"].ToString();
             await Sso.SaveAsync(new SsoSettingsCommand(form["SsoEnabled"] == "true", provider, form["SsoTenant"], form["SsoAuthority"], form["SsoClientId"],
@@ -146,6 +150,7 @@
     {
         try
         {
+            await Versions.EnsureOnlyUnchangedAsync<SignInSettings>(SettingsVersions.Opened(HttpContext.Request.Form));
             UserRole? from = string.IsNullOrEmpty(PostedFrom) ? null
                 : Enum.TryParse<UserRole>(PostedFrom, out var role) ? role
                 : throw new DomainException("user.role_invalid", "Choose who must use two-factor sign-in.");

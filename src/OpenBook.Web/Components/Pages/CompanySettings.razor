@@ -3,6 +3,7 @@
 @using OpenBook.Domain.Companies
 @using OpenBook.Web.Localization
 @inject CompanySettingsService SettingsService
+@inject OpenBook.Application.IRecordVersions Versions
 
 <PageTitle>@L["Company details"] · OpenBook</PageTitle>
 
@@ -25,6 +26,7 @@
 
     <EditForm Model="Input" FormName="settings" OnValidSubmit="SaveAsync" method="post">
         <DataAnnotationsValidator />
+        <input type="hidden" name="@SettingsVersions.Field" value="@_version" />
 
         <fieldset>
             <legend>@L["Company"]</legend>
@@ -195,8 +197,15 @@
     [SupplyParameterFromForm]
     private SettingsModel Input { get; set; } = default!;
 
+    // The version the page opened with, kept through a refused save so it's refused again until the page is reopened.
+    [SupplyParameterFromForm(Name = SettingsVersions.Field, FormName = "settings")]
+    private int? PostedVersion { get; set; }
+
+    private int? _version;
+
     protected override async Task OnInitializedAsync()
     {
+        _version = PostedVersion ?? await Versions.GetOnlyAsync<OpenBook.Domain.Companies.Company>();
         var company = await SettingsService.GetAsync();
         _currency = company.HomeCurrency.Code;
         _regionChosen = company.Region is not null;
@@ -226,10 +235,12 @@
     {
         try
         {
+            await Versions.EnsureOnlyUnchangedAsync<OpenBook.Domain.Companies.Company>(PostedVersion);
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
                 Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort, Input.Region, TaxId: Input.TaxId ?? string.Empty));
             _saved = true;
+            _version = await Versions.GetOnlyAsync<OpenBook.Domain.Companies.Company>();
             _regionChosen = !string.IsNullOrEmpty(Input.Region);
         }
         catch (DomainException ex)

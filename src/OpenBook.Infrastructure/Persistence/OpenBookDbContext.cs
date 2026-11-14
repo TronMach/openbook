@@ -193,6 +193,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         typeof(Domain.Assets.Loan),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
         typeof(Item), typeof(Customer), typeof(Vendor), typeof(BankTransaction), typeof(BankDeposit),
+        // Settings pages note the version when they open and check it when they save (2026-11-14).
+        typeof(Company), typeof(EmailSettings), typeof(SignInSettings), typeof(OnlinePaymentSettings), typeof(OpenBook.Domain.Documents.DocumentReadingSettings),
+        typeof(CollectionSettings), typeof(OpenBook.Domain.Nonprofit.GiftSettings), typeof(PurchasingSettings), typeof(AchSettings), typeof(BackupSchedule),
+        typeof(FormDesign),
     ];
 
     /// <summary>Whether anything has been saved through this context, so an operation that then hit a conflict can't simply be run again.</summary>

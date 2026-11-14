@@ -15,7 +15,7 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.15");
 
             modelBuilder.Entity("OpenBook.Domain.Accounts.Account", b =>
                 {
@@ -1465,6 +1465,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Weekday")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1582,6 +1586,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<bool>("UseAccountNumbers")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.ToTable("Companies", (string)null);
@@ -1632,6 +1640,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("Username")
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -1728,6 +1740,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -1954,6 +1970,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("TwoFactorRequiredFrom")
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -2444,6 +2464,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("UseClaude")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -3355,6 +3379,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("SignerTitle")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -4275,6 +4303,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(23)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("AccountId");
 
                     b.ToTable("AchSettings", (string)null);
@@ -4628,6 +4660,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("RequireReceipt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -5478,6 +5514,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<bool>("RemindersEnabled")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("LateFeeItemId");
@@ -6305,6 +6345,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("PublicUrl")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

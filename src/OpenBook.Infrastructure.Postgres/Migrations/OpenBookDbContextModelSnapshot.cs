@@ -17,7 +17,7 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1472,6 +1472,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.Property<string>("Weekday")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1589,6 +1593,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("UseAccountNumbers")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.ToTable("Companies", (string)null);
@@ -1639,6 +1647,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("Username")
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -1735,6 +1747,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -1961,6 +1977,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("TwoFactorRequiredFrom")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -2452,6 +2472,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<bool>("UseClaude")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -3362,6 +3386,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("SignerTitle")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -4282,6 +4310,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(23)
                         .HasColumnType("character varying(23)");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("AccountId");
 
                     b.ToTable("AchSettings", (string)null);
@@ -4636,6 +4668,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<bool>("RequireReceipt")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -5485,6 +5521,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("RemindersEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("LateFeeItemId");
@@ -6312,6 +6352,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<string>("PublicUrl")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

@@ -30,6 +30,7 @@
         <h2>Late fees</h2>
         <PostForm Action="/sales/collections/settings/late-fees" data-enhance="false">
             <AntiforgeryToken />
+            <SettingsVersion TRecord="OpenBook.Domain.Sales.CollectionSettings" />
             <label class="check">
                 <input type="checkbox" name="enabled" value="true" checked="@_settings.LateFeesEnabled" />
                 <span>Charge late fees on overdue invoices</span>
@@ -73,6 +74,7 @@
         <h2>Payment reminders</h2>
         <PostForm Action="/sales/collections/settings/reminders" data-enhance="false" data-email-preview="/sales/collections/settings/preview">
             <AntiforgeryToken />
+            <SettingsVersion TRecord="OpenBook.Domain.Sales.CollectionSettings" />
             <label class="check">
                 <input type="checkbox" name="enabled" value="true" checked="@_settings.RemindersEnabled" />
                 <span>Send reminders automatically (otherwise review and send them on the collections page)</span>

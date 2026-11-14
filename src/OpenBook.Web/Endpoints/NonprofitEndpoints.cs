@@ -255,10 +255,11 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/pledges/{id}", () => gifts.UndoCancelAsync(id, Reason(form), ct));
         }).RequireAuthorization();
 
-        app.MapPost("/nonprofit/settings", async (IFormCollection form, GiftService gifts, CancellationToken ct) =>
+        app.MapPost("/nonprofit/settings", async (IFormCollection form, OpenBook.Application.IRecordVersions versions, GiftService gifts, CancellationToken ct) =>
         {
             try
             {
+                await Components.SettingsVersions.EnsureUnchangedAsync<OpenBook.Domain.Nonprofit.GiftSettings>(versions, form, ct);
                 await gifts.SaveSettingsAsync(new GiftSettingsCommand(form["ein"], form["signerName"], form["signerTitle"], form["intro"]), ct);
                 return Results.Redirect("/nonprofit/settings?saved=true");
             }

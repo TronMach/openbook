@@ -120,9 +120,10 @@ public static class OnlineEndpoints
             });
         }).RequireAuthorization();
 
-        app.MapPost("/settings/online-payments", async (IFormCollection form, OnlinePaymentService online, CancellationToken ct) =>
+        app.MapPost("/settings/online-payments", async (IFormCollection form, OpenBook.Application.IRecordVersions versions, OnlinePaymentService online, CancellationToken ct) =>
             await Back("/settings/online-payments", "", async () =>
             {
+                await Components.SettingsVersions.EnsureUnchangedAsync<OpenBook.Domain.Sales.OnlinePaymentSettings>(versions, form, ct);
                 await online.SaveSettingsAsync(new OnlinePaymentSettingsCommand(
                     form["enabled"] == "true", Guid.TryParse(form["depositAccountId"], out var account) ? account : null, form["publicUrl"],
                     form["secretKey"], form["webhookSecret"], form["clearSecretKey"] == "true", form["clearWebhookSecret"] == "true"), ct);

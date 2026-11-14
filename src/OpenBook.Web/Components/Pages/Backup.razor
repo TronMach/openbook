@@ -83,6 +83,7 @@ else
 
     <PostForm Action="/backup/schedule">
         <AntiforgeryToken />
+        <SettingsVersion TRecord="OpenBook.Domain.Companies.BackupSchedule" />
         <label class="check"><input type="checkbox" name="enabled" value="true" checked="@_schedule.Enabled" /> <span>Back up automatically</span></label>
         <div class="row">
             <div class="field">

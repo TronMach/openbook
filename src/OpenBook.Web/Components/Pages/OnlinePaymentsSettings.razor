@@ -46,6 +46,7 @@
         </details>
         <PostForm Action="/settings/online-payments" data-enhance="false">
             <AntiforgeryToken />
+            <SettingsVersion TRecord="OpenBook.Domain.Sales.OnlinePaymentSettings" />
             <label class="check">
                 <input type="checkbox" name="enabled" value="true" checked="@_settings.Enabled" />
                 <span>Take payments online</span>

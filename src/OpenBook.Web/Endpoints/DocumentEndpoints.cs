@@ -119,9 +119,10 @@ public static class DocumentEndpoints
             await Make(id, form, closing, async () => $"/purchases/orders/{(await conversions.MakePurchaseOrderAsync(id, Accounts(form), ct)).Id}")).RequireAuthorization();
 
         // Fields: useClaude, model, apiKey, clearApiKey.
-        app.MapPost("/settings/document-reading", async (IFormCollection form, DocumentCaptureService documents, CancellationToken ct) =>
+        app.MapPost("/settings/document-reading", async (IFormCollection form, OpenBook.Application.IRecordVersions versions, DocumentCaptureService documents, CancellationToken ct) =>
             await Back("/settings/document-reading", async () =>
             {
+                await Components.SettingsVersions.EnsureUnchangedAsync<OpenBook.Domain.Documents.DocumentReadingSettings>(versions, form, ct);
                 await documents.SaveSettingsAsync(new DocumentReadingSettingsCommand(
                     form["useClaude"] == "true", Text(form["model"]), form["apiKey"], form["clearApiKey"] == "true"), ct);
                 return "done=saved";

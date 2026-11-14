@@ -37,6 +37,7 @@
     <div class="card">
         <PostForm Action="/settings/document-reading" data-enhance="false">
             <AntiforgeryToken />
+            <SettingsVersion TRecord="OpenBook.Domain.Documents.DocumentReadingSettings" />
             <label class="check">
                 <input type="checkbox" name="useClaude" value="true" checked="@_settings.UseClaude" />
                 <span>Let documents be read by Claude</span>

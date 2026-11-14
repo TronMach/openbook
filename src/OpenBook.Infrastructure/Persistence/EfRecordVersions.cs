@@ -10,4 +10,9 @@ internal sealed class EfRecordVersions(OpenBookDbContext db) : IRecordVersions
             .Where(record => EF.Property<Guid>(record, "Id") == id)
             .Select(record => (int?)EF.Property<int>(record, OpenBookDbContext.VersionProperty))
             .FirstOrDefaultAsync(ct);
+
+    public async Task<int?> GetOnlyAsync<T>(CancellationToken ct = default) where T : class =>
+        await db.Set<T>().AsNoTracking()
+            .Select(record => (int?)EF.Property<int>(record, OpenBookDbContext.VersionProperty))
+            .FirstOrDefaultAsync(ct);
 }

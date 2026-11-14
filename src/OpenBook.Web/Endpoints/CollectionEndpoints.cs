@@ -50,18 +50,20 @@ public static class CollectionEndpoints
                 return "done=retry";
             })).RequireAuthorization();
 
-        app.MapPost("/sales/collections/settings/late-fees", async (IFormCollection form, CollectionService collections, CancellationToken ct) =>
+        app.MapPost("/sales/collections/settings/late-fees", async (IFormCollection form, OpenBook.Application.IRecordVersions versions, CollectionService collections, CancellationToken ct) =>
             await Back("/sales/collections/settings", "#late-fees", async () =>
             {
+                await Components.SettingsVersions.EnsureUnchangedAsync<OpenBook.Domain.Sales.CollectionSettings>(versions, form, ct);
                 await collections.SaveLateFeesAsync(new LateFeeSettingsCommand(
                     form["enabled"] == "true", form["automatic"] == "true", FormNumbers.Number(form["percent"]) ?? 0m, Amount(form["amount"]) ?? 0m,
                     Int(form["graceDays"]), Int(form["repeatDays"])), ct);
                 return "done=saved";
             })).RequireAuthorization();
 
-        app.MapPost("/sales/collections/settings/reminders", async (IFormCollection form, CollectionService collections, CancellationToken ct) =>
+        app.MapPost("/sales/collections/settings/reminders", async (IFormCollection form, OpenBook.Application.IRecordVersions versions, CollectionService collections, CancellationToken ct) =>
             await Back("/sales/collections/settings", "#reminders", async () =>
             {
+                await Components.SettingsVersions.EnsureUnchangedAsync<OpenBook.Domain.Sales.CollectionSettings>(versions, form, ct);
                 await collections.SaveRemindersAsync(new ReminderSettingsCommand(form["enabled"] == "true", form["schedule"], form["subject"], form["body"]), ct);
                 return "done=saved";
             })).RequireAuthorization();

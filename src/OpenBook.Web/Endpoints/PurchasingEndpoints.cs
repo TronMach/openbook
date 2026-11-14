@@ -120,9 +120,10 @@ public static class PurchasingEndpoints
                 return "done=approved";
             })).RequireAuthorization();
 
-        app.MapPost("/purchases/approvals/settings", async (IFormCollection form, BillApprovalService approvals, CancellationToken ct) =>
+        app.MapPost("/purchases/approvals/settings", async (IFormCollection form, OpenBook.Application.IRecordVersions versions, BillApprovalService approvals, CancellationToken ct) =>
             await Back("/purchases/approvals/settings", async () =>
             {
+                await Components.SettingsVersions.EnsureUnchangedAsync<PurchasingSettings>(versions, form, ct);
                 await approvals.SaveSettingsAsync(new PurchasingSettingsCommand(
                     Amount(form["threshold"]), Amount(form["tolerance"]) ?? 0m, form["requireReceipt"] == "true", form["allowSelfApproval"] == "true", form["receiveIntoStock"] == "true", form["net1099Refunds"] == "true"), ct);
                 return "done=saved";

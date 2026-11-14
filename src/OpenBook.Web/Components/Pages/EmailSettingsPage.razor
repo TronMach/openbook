@@ -3,6 +3,7 @@
 @using OpenBook.Application.Forms
 @using OpenBook.Domain.Companies
 @inject EmailService Email
+@inject OpenBook.Application.IRecordVersions Versions
 @inject NavigationManager Navigation
 
 <PageTitle>Email settings · OpenBook</PageTitle>
@@ -28,6 +29,7 @@
 
     <EditForm Model="Input" FormName="email-settings" OnValidSubmit="SaveAsync" method="post">
         <DataAnnotationsValidator />
+        <input type="hidden" name="@SettingsVersions.Field" value="@_version" />
         <div class="field">
             <label for="delivery">Sending</label>
             <InputSelect id="delivery" @bind-Value="Input.Delivery">
@@ -142,8 +144,15 @@
     [SupplyParameterFromQuery(Name = "saved")]
     private bool Saved { get; set; }
 
+    // The version the page opened with, kept through a refused save so it's refused again until the page is reopened.
+    [SupplyParameterFromForm(Name = SettingsVersions.Field, FormName = "email-settings")]
+    private int? PostedVersion { get; set; }
+
+    private int? _version;
+
     protected override async Task OnInitializedAsync()
     {
+        _version = PostedVersion ?? await Versions.GetOnlyAsync<OpenBook.Domain.Companies.EmailSettings>();
         var settings = await Email.GetSettingsAsync();
         _hasPassword = settings.ProtectedPassword is not null;
         _configured = settings.IsConfigured;
@@ -167,6 +176,7 @@
     {
         try
         {
+            await Versions.EnsureOnlyUnchangedAsync<OpenBook.Domain.Companies.EmailSettings>(PostedVersion);
             await Email.SaveSettingsAsync(new EmailSettingsCommand(Input.Delivery, Input.Host, Input.Port ?? 587, Input.Security, Input.Username,
                 Input.NewPassword, Input.ClearPassword, Input.FromAddress, Input.FromName, Input.BccAddress, Input.LinkAddress));
             Navigation.NavigateTo("/settings/email?saved=true");

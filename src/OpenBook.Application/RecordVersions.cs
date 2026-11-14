@@ -11,6 +11,9 @@ public interface IRecordVersions
 {
     /// <summary>The record's version now; null when there's no such record.</summary>
     Task<int?> GetAsync<T>(Guid id, CancellationToken ct = default) where T : class;
+
+    /// <summary>The version of the only row of a settings table (the company, email settings…); null when there's none yet.</summary>
+    Task<int?> GetOnlyAsync<T>(CancellationToken ct = default) where T : class;
 }
 
 public static class RecordVersionChecks
@@ -35,5 +38,16 @@ public static class RecordVersionChecks
         ArgumentNullException.ThrowIfNull(versions);
         if (opened is { } version && await versions.GetAsync<T>(id, ct) is { } now && now != version)
             throw new DomainException(StaleCode, "This was changed by someone else after you opened it, so nothing was saved. Open it again to see their change, then make yours.");
+    }
+
+    /// <summary>
+    /// <see cref="EnsureUnchangedAsync"/> for a settings page: refuses when the settings have changed since the page
+    /// noted <paramref name="opened"/> (someone else saved them meanwhile).
+    /// </summary>
+    public static async Task EnsureOnlyUnchangedAsync<T>(this IRecordVersions versions, int? opened, CancellationToken ct = default) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(versions);
+        if (opened is { } version && await versions.GetOnlyAsync<T>(ct) is { } now && now != version)
+            throw new DomainException(StaleCode, "These settings were changed by someone else after you opened the page, so nothing was saved. Open the page again to see their change, then make yours.");
     }
 }

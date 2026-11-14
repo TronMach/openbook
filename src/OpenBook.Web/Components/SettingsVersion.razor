@@ -1,0 +1,16 @@
+@typeparam TRecord where TRecord : class
+@inject OpenBook.Application.IRecordVersions Versions
+
+@* Inside a settings form that posts to an endpoint: the settings' version as the page opened them, which the endpoint
+   checks (SettingsVersions.EnsureUnchangedAsync) so a page left open can't undo someone else's change. Id names the
+   record for a table with many (a form design); without it, the table's only row (the company, email settings…). *@
+<input type="hidden" name="@SettingsVersions.Field" value="@_version" />
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private int? _version;
+
+    protected override async Task OnInitializedAsync() =>
+        _version = Id is { } id ? await Versions.GetAsync<TRecord>(id) : await Versions.GetOnlyAsync<TRecord>();
+}
