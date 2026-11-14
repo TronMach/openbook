@@ -198,6 +198,66 @@ public sealed class ActivityReports(
             Note: "Each product or service's sales, as on sales by product or service, added up by the category on its page.");
     }
 
+    /// <summary>
+    /// The card a line is about: the first word of its description with a digit in it ("Gift card 0001 redeemed" is card
+    /// 0001, so is "#0001"), else the whole description; null without one.
+    /// </summary>
+    public static string? CardNumber(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+            return null;
+        var word = description.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(w => w.Any(char.IsDigit));
+        return word?.Trim('#', ',', '.', ':', ';', '(', ')').TrimStart('#') is { Length: > 0 } number ? number : description.Trim();
+    }
+
+    /// <summary>
+    /// Gift cards and other prepaid items (products or services that post to a liability, C318): each card's sales and
+    /// redemptions up to a date and what's left on it. A card is told apart by the number in its line's description
+    /// (<see cref="CardNumber"/>), typed when it's sold and redeemed; lines without one add up under "No card number".
+    /// </summary>
+    public async Task<ReportTable> GiftCardBalancesAsync(DateOnly asOf, bool all, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var chart = await accounts.GetChartAsync(ct);
+        var prepaid = (await sales.ListItemsAsync(ct)).Where(i => chart.Find(i.IncomeAccountId)?.Type == AccountType.OtherCurrentLiability).ToDictionary(i => i.Id);
+        var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
+        bool Counts(DocumentStatus status, DateOnly date) => status == DocumentStatus.Posted && date <= asOf;
+        var documents = new List<(IReadOnlyList<SalesLine> Lines, Guid? CustomerId, decimal Sign)>();
+        documents.AddRange((await sales.ListInvoicesAsync(null, ct)).Where(i => Counts(i.Status, i.Date)).Select(i => (i.Lines, (Guid?)i.CustomerId, 1m)));
+        documents.AddRange((await sales.ListReceiptsAsync(ct)).Where(r => Counts(r.Status, r.Date)).Select(r => (r.Lines, r.CustomerId, 1m)));
+        documents.AddRange((await sales.ListCreditMemosAsync(null, ct)).Where(c => Counts(c.Status, c.Date)).Select(c => (c.Lines, (Guid?)c.CustomerId, -1m)));
+
+        const string NoNumber = "No card number";
+        var cards = new Dictionary<(Guid Item, string Card), (decimal Sold, decimal Redeemed, Guid? SoldTo)>();
+        foreach (var (lines, customerId, sign) in documents)
+        {
+            foreach (var line in lines.Where(l => l.Kind == SalesLineKind.Item && l.ItemId is { } id && prepaid.ContainsKey(id)))
+            {
+                var key = (line.ItemId!.Value, CardNumber(line.Description) ?? NoNumber);
+                var (sold, redeemed, soldTo) = cards.GetValueOrDefault(key);
+                var amount = sign * line.Amount;
+                cards[key] = amount >= 0m ? (sold + amount, redeemed, soldTo ?? customerId) : (sold, redeemed - amount, soldTo);
+            }
+        }
+
+        var rows = cards.Where(c => all || c.Value.Sold != c.Value.Redeemed)
+            .OrderBy(c => prepaid[c.Key.Item].Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(c => c.Key.Card == NoNumber ? 1 : 0)
+            .ThenBy(c => c.Key.Card, StringComparer.CurrentCultureIgnoreCase)
+            .Select(c => new ReportTableRow(
+            [
+                c.Key.Card, prepaid[c.Key.Item].Name, c.Value.SoldTo is { } who ? customers.GetValueOrDefault(who, "") : "",
+                c.Value.Sold, c.Value.Redeemed, c.Value.Sold - c.Value.Redeemed,
+            ])).ToList();
+        var shown = cards.Where(c => all || c.Value.Sold != c.Value.Redeemed).Select(c => c.Value).ToList();
+        rows.Add(new ReportTableRow(["Total", "", "", shown.Sum(v => v.Sold), shown.Sum(v => v.Redeemed), shown.Sum(v => v.Sold - v.Redeemed)], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Gift card balances",
+            [company.Name, $"As of {asOf:MMM d, yyyy}" + (all ? " · every card" : " · cards with money left")],
+            [new("Card"), new("Product or service"), new("Sold to"), new("Sold", ColumnFormat.Money), new("Redeemed", ColumnFormat.Money), new("Balance", ColumnFormat.Money)],
+            rows,
+            Note: "Products and services that post to a liability account (gift cards, prepaid packages). Each card is told apart by the number in its lines' description (the first word with a digit, as in 'Gift card 0001'): type it when the card is sold and when it's redeemed (a negative line). The balance of all of them is the liability account's balance.");
+    }
+
     public async Task<ReportTable> SalesByItemAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);

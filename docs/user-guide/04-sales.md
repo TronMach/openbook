@@ -46,7 +46,7 @@ Every line on an invoice that charges something names a *product or service* (an
 
 **Category** (optional) groups products and services into lines such as "Mugs" or "Consulting"; earlier categories are suggested as you type. **Reports → Sales by category** adds up sales by it.
 
-**Gift cards**: add an other current liability account such as "Gift Cards Outstanding" and a service item "Gift card" on it (not taxable). Selling a card (on a sales receipt or invoice) credits that account: it's money you owe in goods, not income. When the card is spent, add the same item to that sale with a quantity of **-1** at the card's value: it comes off the total and off what you owe. The account's register shows what's outstanding. Cards sold through a sales channel's payouts aren't split out yet.
+**Gift cards**: add an other current liability account such as "Gift Cards Outstanding" and a service item "Gift card" on it (not taxable). Selling a card (on a sales receipt or invoice) credits that account: it's money you owe in goods, not income. When the card is spent, add the same item to that sale with a quantity of **-1** at the card's value: it comes off the total and off what you owe. The account's register shows what's outstanding. Cards sold through a sales channel's payouts aren't split out yet. Type the card's number in the line's description each time ("Gift card 0001", "0001 redeemed"): **Reports → Gift card balances** then shows each card's sales, redemptions and what's left on it as of a date (tick **detail** to include used-up cards).
 - **Barcode** (optional): scanning it into any item picker chooses the item.
 - **Taxable**: whether sales tax applies.
 

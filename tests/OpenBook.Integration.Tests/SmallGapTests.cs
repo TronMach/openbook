@@ -247,6 +247,30 @@ public sealed class SmallGapTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Gift_card_balances_show_what_is_left_on_each_card()
+    {
+        var cards = await _db.CreateAccount("Gift Cards Outstanding", AccountType.OtherCurrentLiability);
+        var fees = await _db.CreateAccount("Fees", AccountType.Income, "4000");
+        var card = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Gift card", ItemType.Service, cards.Id, 50m, Taxable: false)));
+        var work = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Haircut", ItemType.Service, fees.Id, 80m, Taxable: false)));
+        var giver = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Gift buyer")));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(giver.Id, Mar1,
+            [new SalesLineDraft(card.Id, "Gift card 0001", 1m, 50m), new SalesLineDraft(card.Id, "Gift card #0002", 1m, 25m)])));
+        await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(giver.Id, Mar31,
+            [new SalesLineDraft(work.Id, null, 1m, 80m), new SalesLineDraft(card.Id, "Gift card 0001 redeemed", -1m, 20m), new SalesLineDraft(card.Id, "0002 used", -1m, 25m)])));
+
+        var open = await In<ReportCatalog, ReportTable>(s => s.RunAsync("gift-card-balances", ReportParameters.Parse("asOf=2026-03-31")));
+        var row = Assert.Single(open.Rows, r => r.Style != ReportRowStyle.Total);
+        Assert.Equal(("0001", 50m, 20m, 30m), ((string?)row.Cells[0].Value, row.Cells[3].Value, row.Cells[4].Value, row.Cells[5].Value));
+        Assert.Equal("Gift buyer", row.Cells[2].Value);
+        // Every card, the used-up one too; and before the redemptions both were whole.
+        var all = await In<ReportCatalog, ReportTable>(s => s.RunAsync("gift-card-balances", ReportParameters.Parse("asOf=2026-03-31&detail=true")));
+        Assert.Equal(["0001", "0002"], all.Rows.Where(r => r.Style != ReportRowStyle.Total).Select(r => (string?)r.Cells[0].Value));
+        var before = await In<ReportCatalog, ReportTable>(s => s.RunAsync("gift-card-balances", ReportParameters.Parse("asOf=2026-03-15")));
+        Assert.Equal(75m, before.Rows.Single(r => r.Style == ReportRowStyle.Total).Cells[5].Value);
+    }
+
+    [Fact]
     public async Task Sales_add_up_by_item_category()
     {
         var fees = await _db.CreateAccount("Fees", AccountType.Income, "4000");
