@@ -38,7 +38,8 @@ public sealed partial class AccessibilityTests(DemoBrowserApp app)
         var reached = new HashSet<string>(app.UnlinkedPages.Select(path => templates.First(t => t.Pattern.IsMatch(path)).Route), StringComparer.Ordinal);
         var findings = new Findings();
 
-        var folder = Path.Combine(Root(), "artifacts", "a11y");
+        // One folder per database: the SQLite and PostgreSQL suites run at the same time.
+        var folder = Path.Combine(Root(), "artifacts", "a11y", LedgerDatabase.OnPostgres ? "postgres" : "sqlite");
         Directory.CreateDirectory(folder);
         var progress = Path.Combine(folder, "progress.txt");
         await File.WriteAllTextAsync(progress, "");
