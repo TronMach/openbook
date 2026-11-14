@@ -52,6 +52,9 @@ public sealed record RecordGiftCommand(
     string? Campaign = null,
     Guid? ExchangeAccountId = null);
 
+/// <summary>A part of one check given to another purpose (C315): its amount, contribution account and class.</summary>
+public sealed record GiftPart(decimal Amount, Guid? IncomeAccountId = null, Guid? ClassId = null);
+
 /// <param name="IncomeAccountId">Null: "Contributions", created on first use.</param>
 public sealed record PledgeCommand(Guid DonorId, DateOnly Date, decimal Amount, Guid? IncomeAccountId = null, Guid? ClassId = null, DateOnly? DueDate = null, string? Memo = null);
 
@@ -245,6 +248,46 @@ public sealed class GiftService(
         store.Add(Audit(AuditAction.Posted, donation, null));
         await store.SaveChangesAsync(ct);
         return donation;
+    }
+
+    public const int MaxParts = 10;
+
+    /// <summary>
+    /// One check split between purposes (C315): the command's amount is the whole check; each part becomes a gift of its
+    /// own to its purpose, and the first gift (the command's purpose) keeps what's left, with any value received. Same
+    /// donor, date, check number, method and campaign, into the same account, in one transaction, so a deposit from
+    /// Undeposited Funds takes them together. Money gifts only, not pledge payments.
+    /// </summary>
+    public async Task<IReadOnlyList<Donation>> RecordSplitAsync(RecordGiftCommand command, IReadOnlyList<GiftPart> parts, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(parts);
+        if (parts.Count == 0)
+            return [await RecordAsync(command, ct)];
+        if (command.Kind != GiftKind.Cash || command.PledgeId is not null)
+            throw new DomainException("donation.split_cash_only", "Only a money gift that doesn't pay a pledge can be split between purposes.");
+        if (parts.Count > MaxParts)
+            throw new DomainException("donation.split_too_many", $"A gift can be split into at most {MaxParts + 1} purposes.");
+        if (parts.Any(p => p.Amount <= 0m || decimal.Round(p.Amount, 2) != p.Amount))
+            throw new DomainException("donation.split_amount", "Each part is an amount above zero, in cents.");
+        var rest = command.Amount - parts.Sum(p => p.Amount);
+        if (rest <= 0m)
+            throw new DomainException("donation.split_over", $"The parts come to {parts.Sum(p => p.Amount):N2}, which leaves nothing of the {command.Amount:N2} for the first purpose.");
+
+        await using var transaction = await unitOfWork.BeginAsync(ct);
+        var gifts = new List<Donation> { await RecordAsync(command with { Amount = rest }, ct) };
+        foreach (var part in parts)
+            gifts.Add(await RecordAsync(command with
+            {
+                Amount = part.Amount,
+                IncomeAccountId = part.IncomeAccountId ?? command.IncomeAccountId,
+                ClassId = part.ClassId,
+                GoodsValue = 0m,
+                GoodsDescription = null,
+                ExchangeAccountId = null,
+            }, ct));
+        await transaction.CommitAsync(ct);
+        return gifts;
     }
 
     /// <summary>Changes the campaign a gift is credited to (posts nothing; a voided gift too, for the record).</summary>

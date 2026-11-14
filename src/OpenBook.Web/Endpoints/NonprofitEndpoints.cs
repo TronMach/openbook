@@ -96,7 +96,17 @@ public static class NonprofitEndpoints
             closing.Password = Password(form);
             try
             {
-                var gift = await gifts.RecordAsync(new RecordGiftCommand(
+                // Parts of the check for other purposes (C315): split:amount:i with split:income:i and split:class:i.
+                var parts = new List<GiftPart>();
+                for (var i = 0; i < GiftService.MaxParts + 1 && form.ContainsKey($"split:amount:{i}"); i++)
+                {
+                    if (string.IsNullOrWhiteSpace(form[$"split:amount:{i}"]))
+                        continue;
+                    parts.Add(new GiftPart(Number(form[$"split:amount:{i}"]) ?? throw new DomainException("donation.split_amount", "Each part is an amount above zero, in cents."),
+                        Id(form[$"split:income:{i}"]), Id(form[$"split:class:{i}"])));
+                }
+
+                var recorded = await gifts.RecordSplitAsync(new RecordGiftCommand(
                     Id(form["donorId"]) ?? throw new DomainException("donation.donor_required", "Choose the donor."),
                     Date(form["date"]) ?? CompanyTime.Today,
                     Number(form["amount"]) ?? throw new DomainException("donation.amount", "Enter an amount above zero."),
@@ -112,8 +122,8 @@ public static class NonprofitEndpoints
                     form["goodsDescription"],
                     Enum.TryParse<OpenBook.Domain.Sales.PaymentMethod>(form["method"], out var method) ? method : null,
                     form["campaign"],
-                    Id(form["exchangeAccountId"])), ct);
-                return Results.Redirect($"/nonprofit/gifts/{gift.Id}");
+                    Id(form["exchangeAccountId"])), parts, ct);
+                return Results.Redirect(recorded.Count == 1 ? $"/nonprofit/gifts/{recorded[0].Id}" : $"/nonprofit/gifts/{recorded[0].Id}?split={recorded.Count}");
             }
             catch (DomainException ex)
             {

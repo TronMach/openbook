@@ -44,6 +44,10 @@
         {
             <div class="alert notice" role="status">Acknowledgment sent.</div>
         }
+        @if (Split is > 1)
+        {
+            <div class="alert success" role="status">The check was recorded as @Split gifts, one per purpose; this is the first. The others are on <a href="/customers/@_gift.DonorId">the donor's page</a>.</div>
+        }
         <dl class="facts">
             <dt>Donor</dt><dd><a href="/customers/@_gift.DonorId">@_donor?.DisplayName</a></dd>
             <dt>Date</dt><dd>@Labels.Date(_gift.Date)</dd>
@@ -137,6 +141,7 @@
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private bool Password { get; set; }
     [SupplyParameterFromQuery] private bool Sent { get; set; }
+    [SupplyParameterFromQuery] private int? Split { get; set; }
 
     private IReadOnlyList<string> _campaigns = [];
 

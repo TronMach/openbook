@@ -367,6 +367,37 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Equal(DocumentStatus.Voided, (await In<GiftService, Donation>(s => s.VoidAsync(gift.Id, "Bounced"))).Status);
     }
 
+    [Fact]
+    public async Task One_check_splits_between_purposes_and_is_deposited_as_one()
+    {
+        var pat = await Donor("Pat Giver");
+        var undeposited = Account("Undeposited Funds");
+        var check = new RecordGiftCommand(pat.Id, new DateOnly(2026, 5, 1), 500m, undeposited, Reference: "1202",
+            GoodsValue: 60m, GoodsDescription: "Gala dinner");
+        var gifts = await In<GiftService, IReadOnlyList<Donation>>(s => s.RecordSplitAsync(check,
+            [new GiftPart(200m, Account("Contributions:Restricted"), _scholarships), new GiftPart(50m, ClassId: _scholarships)]));
+
+        Assert.Equal([250m, 200m, 50m], gifts.Select(g => g.Amount));
+        Assert.All(gifts, g => Assert.Equal(("1202", pat.Id, undeposited), (g.Reference, g.DonorId, g.DebitAccountId)));
+        Assert.Equal((60m, 0m, 0m), (gifts[0].GoodsValue, gifts[1].GoodsValue, gifts[2].GoodsValue));
+        Assert.Equal((Account("Contributions:Restricted"), (Guid?)_scholarships), (gifts[1].IncomeAccountId, gifts[1].ClassId));
+        Assert.Equal((gifts[0].IncomeAccountId, (Guid?)_scholarships), (gifts[2].IncomeAccountId, gifts[2].ClassId));
+
+        var waiting = await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync());
+        var deposit = await In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(Account("Checking"), new DateOnly(2026, 5, 3),
+            waiting.Select(i => (i.Kind, i.Id)).ToList())));
+        Assert.Equal(500m, deposit.Total);
+
+        Assert.Equal("donation.split_over", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, IReadOnlyList<Donation>>(s => s.RecordSplitAsync(check with { GoodsValue = 0m }, [new GiftPart(500m)])))).Code);
+        Assert.Equal("donation.split_cash_only", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, IReadOnlyList<Donation>>(s => s.RecordSplitAsync(check with { Kind = GiftKind.InKind, Description = "Books" }, [new GiftPart(5m)])))).Code);
+        // A refused split records nothing.
+        Assert.Equal("donation.split_amount", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, IReadOnlyList<Donation>>(s => s.RecordSplitAsync(check with { GoodsValue = 0m }, [new GiftPart(5m), new GiftPart(-1m)])))).Code);
+        Assert.Equal(3, (await In<GiftService, IReadOnlyList<Donation>>(s => s.ListAsync(donorId: pat.Id))).Count);
+    }
+
     // ---- Grants and Form 990 (slice 3) ----
 
     private Task<Grant> NewGrant(GrantCommand command) => In<GrantService, Grant>(s => s.CreateAsync(command));
