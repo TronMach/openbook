@@ -24,6 +24,8 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+# The restore drills' company files from each release (ReleaseSampleTests) are kept.
+!tests/OpenBook.Integration.Tests/Samples/Releases/
 x64/
 x86/
 [Ww][Ii][Nn]32/
