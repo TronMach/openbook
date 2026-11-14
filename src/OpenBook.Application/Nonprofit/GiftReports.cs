@@ -14,7 +14,7 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var names = await NamesAsync(ct);
-        var posted = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Date >= from && d.Date <= to, ct);
+        var posted = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= from && d.Date <= to, ct);
         var rows = new List<ReportTableRow>();
         foreach (var donor in posted.GroupBy(d => d.DonorId).OrderBy(g => names.GetValueOrDefault(g.Key), StringComparer.CurrentCultureIgnoreCase))
         {
@@ -55,7 +55,7 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
             : $"{new DateOnly(y, startMonth, 1):MMM yyyy}–{new DateOnly(y, startMonth, 1).AddYears(1).AddDays(-1):MMM yyyy}";
         var fy = year ?? Fiscal(CompanyTime.Today);
         var names = await NamesAsync(ct);
-        var posted = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && Fiscal(d.Date) <= fy).ToList();
+        var posted = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && Fiscal(d.Date) <= fy).ToList();
         var byDonor = posted.GroupBy(d => d.DonorId).Where(g => g.All(d => Fiscal(d.Date) < fy)).ToList();
         var rows = new List<ReportTableRow>();
         foreach (var (title, lastYear) in new[] { ($"Gave in {Label(fy - 1)}, not yet in {Label(fy)}", true), ($"Gave before {Label(fy - 1)}, not since", false) })
@@ -86,7 +86,7 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
     public async Task<ReportTable> GivingByCampaignAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var gifts = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Date >= from && d.Date <= to, ct);
+        var gifts = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= from && d.Date <= to, ct);
         var rows = new List<ReportTableRow>();
         foreach (var campaign in gifts.GroupBy(d => d.Campaign ?? "", StringComparer.OrdinalIgnoreCase)
                      .OrderBy(g => g.Key.Length == 0).ThenByDescending(g => g.Sum(d => d.Amount)))
@@ -119,7 +119,7 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
         var company = await companies.GetRequiredCompanyAsync(ct);
         var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         var (first, last) = (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
-        var rows = (await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Date >= first && d.Date <= last, ct))
+        var rows = (await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= first && d.Date <= last, ct))
             .GroupBy(d => d.DonorId)
             .Select(g => (Donor: customers.GetValueOrDefault(g.Key), Cash: g.Where(d => d.Kind == GiftKind.Cash).Sum(d => d.Amount), InKind: g.Where(d => d.Kind == GiftKind.InKind).Sum(d => d.Amount), Id: g.Key))
             .Where(x => x.Cash + x.InKind >= threshold)
@@ -140,7 +140,7 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var names = await NamesAsync(ct);
-        var gifts = (await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Kind == GiftKind.InKind && d.Date >= from && d.Date <= to, ct))
+        var gifts = (await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Kind == GiftKind.InKind && d.Date >= from && d.Date <= to, ct))
             .OrderBy(d => d.Date).ThenBy(d => d.Number).ToList();
         var rows = gifts.Select(d => new ReportTableRow([new ReportCell($"{d.Number} · {names.GetValueOrDefault(d.DonorId, "?")}", new ReportLink("donation", d.Id)),
             d.Date.ToString("d", System.Globalization.CultureInfo.CurrentCulture), d.Description, d.Amount])).ToList();
@@ -163,7 +163,7 @@ public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftSe
         foreach (var p in (await gifts.ListPledgesAsync(null, ct)).Where(p => p.Pledge.Status == DocumentStatus.Posted && p.Pledge.Date <= asOf)
                      .OrderBy(p => p.Pledge.Date).ThenBy(p => p.Pledge.Number))
         {
-            var paidBy = donations.Where(d => d.PledgeId == p.Pledge.Id && d.Status == DocumentStatus.Posted && d.Date <= asOf).Sum(d => d.Amount);
+            var paidBy = donations.Where(d => d.PledgeId == p.Pledge.Id && d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date <= asOf).Sum(d => d.Amount);
             var cancelled = p.Pledge.CancelledOn <= asOf ? p.Pledge.CancelledAmount : 0m;
             if (paidBy + cancelled >= p.Pledge.Amount)
                 continue;

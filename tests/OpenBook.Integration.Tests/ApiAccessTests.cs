@@ -501,6 +501,8 @@ public sealed class AccessRulesTests
     [InlineData("/nonprofit", "GET", UserRole.ViewOnly)]
     [InlineData("/nonprofit/releases", "POST", UserRole.Accountant)]
     [InlineData("/nonprofit/gifts", "POST", UserRole.Standard)]
+    [InlineData("/nonprofit/gifts/0190a7a2-0000-7000-8000-000000000000/return", "POST", UserRole.Standard)]
+    [InlineData("/nonprofit/gifts/0190a7a2-0000-7000-8000-000000000000/return/undo", "POST", UserRole.Standard)]
     [InlineData("/nonprofit/recurring", "POST", UserRole.Standard)]
     [InlineData("/nonprofit/pledges/new", "GET", UserRole.Standard)]
     [InlineData("/nonprofit/settings", "POST", UserRole.Accountant)]

@@ -151,6 +151,20 @@ public static class NonprofitEndpoints
             return await Back($"/nonprofit/gifts/{id}", () => gifts.VoidAsync(id, Reason(form), ct));
         }).RequireAuthorization();
 
+        // A gift that came back from the bank (C132), and taking that back.
+        app.MapPost("/nonprofit/gifts/{id:guid}/return", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/gifts/{id}", () => gifts.ReturnAsync(id, Date(form["date"]) ?? CompanyTime.Today, Number(form["fee"]) ?? 0m,
+                Id(form["feeAccountId"]), form["reason"].ToString(), ct));
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/gifts/{id:guid}/return/undo", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await Back($"/nonprofit/gifts/{id}", () => gifts.UndoReturnAsync(id, Reason(form), ct));
+        }).RequireAuthorization();
+
         app.MapGet("/nonprofit/pledges/{id:guid}/statement", (Guid id, GiftService gifts, CancellationToken ct) =>
             Pdf($"/nonprofit/pledges/{id}", async () => (await gifts.PledgeStatementAsync(id, CompanyTime.Today, ct)).Pdf)).RequireAuthorization();
 

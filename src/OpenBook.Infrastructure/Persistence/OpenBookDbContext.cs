@@ -287,14 +287,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     private void TouchOwners()
     {
         // What's paid on a pledge is summed from its gifts: the same goes for it.
-        foreach (var gift in ChangeTracker.Entries<Domain.Nonprofit.Donation>().Where(e => e.State is EntityState.Added or EntityState.Modified && e.Entity.PledgeId is not null))
+        // Listed first: asking for other entries below may detect changes, which would alter what's being enumerated.
+        foreach (var gift in ChangeTracker.Entries<Domain.Nonprofit.Donation>().Where(e => e.State is EntityState.Added or EntityState.Modified && e.Entity.PledgeId is not null).ToList())
         {
             if (ChangeTracker.Entries<Domain.Nonprofit.Pledge>().FirstOrDefault(p => p.Entity.Id == gift.Entity.PledgeId) is { State: EntityState.Unchanged or EntityState.Modified } pledge)
                 pledge.Property(VersionProperty).IsModified = true;
         }
 
         // A tick is a row of its own: finishing a reconciliation must notice one made meanwhile.
-        foreach (var line in ChangeTracker.Entries<ReconciliationLine>().Where(e => e.State is EntityState.Added or EntityState.Deleted))
+        foreach (var line in ChangeTracker.Entries<ReconciliationLine>().Where(e => e.State is EntityState.Added or EntityState.Deleted).ToList())
         {
             var reconciliation = (Guid?)line.Property("ReconciliationId").CurrentValue;
             if (ChangeTracker.Entries<Reconciliation>().FirstOrDefault(r => r.Entity.Id == reconciliation) is { State: EntityState.Unchanged or EntityState.Modified } tracked)
@@ -1276,6 +1277,12 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(d => d.Description).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxTextLength);
             b.Property(d => d.GoodsDescription).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxTextLength);
             b.Ignore(d => d.Deductible);
+            b.Ignore(d => d.Counts);
+            b.Property(d => d.ReturnFee).HasColumnName("ReturnFeeMinor").HasConversion(MinorUnits);
+            b.Property(d => d.ReturnReason).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxTextLength);
+            b.HasOne<Account>().WithMany().HasForeignKey(d => d.ReturnAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(d => d.ReturnEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(d => d.ReturnCashEntryId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Customer>().WithMany().HasForeignKey(d => d.DonorId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(d => d.DebitAccountId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<Account>().WithMany().HasForeignKey(d => d.IncomeAccountId).OnDelete(DeleteBehavior.Restrict);

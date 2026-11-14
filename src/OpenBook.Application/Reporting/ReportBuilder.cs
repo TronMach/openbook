@@ -298,7 +298,10 @@ public sealed class ReportBuilder(
         }
 
         foreach (var d in await nonprofit.ListDonationsAsync(ct))
+        {
             Customer(Domain.Nonprofit.Donation.Source, d.Id, d.DonorId);
+            Customer(Domain.Nonprofit.Donation.ReturnSource, d.Id, d.DonorId);
+        }
         foreach (var p in await nonprofit.ListPledgesAsync(ct))
         {
             Customer(Domain.Nonprofit.Pledge.Source, p.Id, p.DonorId);

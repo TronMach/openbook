@@ -3333,6 +3333,26 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid?>("ReturnAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReturnCashEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReturnEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ReturnFee")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ReturnFeeMinor");
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateOnly?>("ReturnedOn")
+                        .HasColumnType("date");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -3361,6 +3381,12 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsUnique();
 
                     b.HasIndex("PledgeId");
+
+                    b.HasIndex("ReturnAccountId");
+
+                    b.HasIndex("ReturnCashEntryId");
+
+                    b.HasIndex("ReturnEntryId");
 
                     b.ToTable("Donations", (string)null);
                 });
@@ -9023,6 +9049,21 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasOne("OpenBook.Domain.Nonprofit.Pledge", null)
                         .WithMany()
                         .HasForeignKey("PledgeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ReturnAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ReturnCashEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("ReturnEntryId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

@@ -24,6 +24,10 @@
             {
                 <span class="badge">Voided</span>
             }
+            else if (_gift.ReturnedOn is not null)
+            {
+                <span class="badge warn">Returned by the bank</span>
+            }
             else
             {
                 <a class="button secondary" href="/nonprofit/gifts/@_gift.Id/letter" target="_blank">Acknowledgment (PDF)</a>
@@ -43,6 +47,14 @@
         @if (Sent)
         {
             <div class="alert notice" role="status">Acknowledgment sent.</div>
+        }
+        @if (_gift.ReturnedOn is { } returnedOn)
+        {
+            <div class="alert notice" role="status">
+                Came back from the bank on @Labels.Date(returnedOn): @_gift.ReturnReason.@(_gift.ReturnFee > 0m ? $" The bank's fee of {Labels.Amount(_gift.ReturnFee)} was recorded with it." : "")
+                It no longer counts on the donor's statements and letters@(_gift.PledgeId is null ? "" : ", and the pledge is owed again").
+                <a href="/journal/@_gift.ReturnEntryId">The entry</a>.
+            </div>
         }
         @if (Split is > 1)
         {
@@ -113,6 +125,38 @@
             </div>
 
             <EmailHistory EntityType="donation" EntityId="_gift.Id" />
+
+            @if (_gift.Kind == GiftKind.Cash && _gift.PayoutId is null)
+            {
+                <div class="card" style="margin-top: 1.5rem">
+                    @if (_gift.ReturnedOn is null)
+                    {
+                        <h2>Returned by the bank</h2>
+                        <p class="muted">For a check that bounced after it was deposited: takes the money out of the bank and the gift out of the donor's giving on the day it came back@(_gift.PledgeId is null ? "" : ", and the pledge is owed again"). The gift and its deposit stay as they happened. A gift still in Undeposited Funds is voided instead.</p>
+                        <PostForm Action="@($"/nonprofit/gifts/{_gift.Id}/return")" data-enhance="false">
+                            <AntiforgeryToken />
+                            <div class="row">
+                                <div class="field"><label for="return-date">Came back on</label><input id="return-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" /></div>
+                                <div class="field"><label for="return-fee">Bank's fee <span class="muted">(optional)</span></label><input id="return-fee" name="fee" class="amount" inputmode="decimal" placeholder="0.00" /></div>
+                                <div class="field"><label for="return-reason">Why</label><input id="return-reason" name="reason" required maxlength="500" placeholder="Insufficient funds" /></div>
+                            </div>
+                            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                            <div class="actions"><button type="submit" class="secondary" data-confirm="Record that this gift came back from the bank?">Record the return</button></div>
+                        </PostForm>
+                    }
+                    else
+                    {
+                        <h2>Take the return back</h2>
+                        <p class="muted">If the check cleared after all: the return's entries are voided and the gift counts again.</p>
+                        <PostForm Action="@($"/nonprofit/gifts/{_gift.Id}/return/undo")" data-enhance="false">
+                            <AntiforgeryToken />
+                            <div class="field"><label for="undo-reason">Reason</label><input id="undo-reason" name="reason" required maxlength="500" /></div>
+                            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                            <div class="actions"><button type="submit" class="secondary">Take the return back</button></div>
+                        </PostForm>
+                    }
+                </div>
+            }
 
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Void</h2>

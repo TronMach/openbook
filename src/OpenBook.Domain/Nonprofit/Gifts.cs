@@ -20,6 +20,9 @@ public enum GiftKind
 public sealed class Donation
 {
     public const string Source = "nonprofit.donation";
+
+    /// <summary>The entries of a gift that came back from the bank (a bounced check): <c>SourceId</c> is the gift.</summary>
+    public const string ReturnSource = "nonprofit.donation_return";
     public const int MaxTextLength = 500;
     public const int MaxReferenceLength = 50;
     public const int MaxCampaignLength = 100;
@@ -154,6 +157,7 @@ public sealed class Donation
     {
         if (Status != DocumentStatus.Posted)
             throw new DomainException("donation.voided", "This gift is voided, so it can't be changed.");
+        EnsureNotReturned();
         Check(Kind, amount, description, goodsValue, goodsDescription, PledgeId);
         DonorId = donorId;
         Date = date;
@@ -178,7 +182,13 @@ public sealed class Donation
         DepositId = depositId;
     }
 
-    public void ClearDeposit() => DepositId = null;
+    /// <summary>Its deposit was voided or changed; refused while the gift has come back from the bank, which leaves from that deposit's bank.</summary>
+    public void ClearDeposit()
+    {
+        if (ReturnedOn is not null)
+            throw new DomainException("deposit.gift_returned", "A gift in this deposit came back from the bank. Take the return back on the gift's page first.");
+        DepositId = null;
+    }
 
     /// <summary>The processor's payout that brought the money in, for a gift made online: it isn't for a bank deposit.</summary>
     public Guid? PayoutId { get; private set; }
@@ -187,8 +197,58 @@ public sealed class Donation
 
     public void ClearPayout() => PayoutId = null;
 
+    // ---- Returned by the bank (C132) ----
+
+    /// <summary>When the money came back (a bounced check); null while the gift stands.</summary>
+    public DateOnly? ReturnedOn { get; private set; }
+
+    /// <summary>The bank account the money left again.</summary>
+    public Guid? ReturnAccountId { get; private set; }
+
+    public Guid? ReturnEntryId { get; private set; }
+
+    /// <summary>A pledge payment's cash-basis entry taking the income back.</summary>
+    public Guid? ReturnCashEntryId { get; private set; }
+
+    /// <summary>The bank's charge for the returned check, posted with the return.</summary>
+    public decimal ReturnFee { get; private set; }
+
+    public string? ReturnReason { get; private set; }
+
+    /// <summary>Whether it counts as given: posted and not returned (statements, letters, pledge balances).</summary>
+    public bool Counts => Status == DocumentStatus.Posted && ReturnedOn is null;
+
+    public void MarkReturned(DateOnly on, Guid bankAccountId, Guid entryId, Guid? cashEntryId, decimal fee, string reason)
+    {
+        if (Status != DocumentStatus.Posted || Kind != GiftKind.Cash)
+            throw new DomainException("donation.not_returnable", "Only a posted money gift can come back from the bank.");
+        EnsureNotReturned();
+        if (on < Date)
+            throw new DomainException("donation.return_date", "It can't come back before the day it was given.");
+        if (fee < 0m || decimal.Round(fee, 2) != fee)
+            throw new DomainException("donation.return_fee", "The bank's fee is zero or more, in cents.");
+        ReturnReason = Text.Optional(reason, MaxTextLength, "donation.reason_too_long", "Reason")
+            ?? throw new DomainException("donation.return_reason", "Say why it came back (insufficient funds, say).");
+        (ReturnedOn, ReturnAccountId, ReturnEntryId, ReturnCashEntryId, ReturnFee) = (on, bankAccountId, entryId, cashEntryId, fee);
+    }
+
+    /// <summary>The return was a mistake: its entries are voided and the gift stands again.</summary>
+    public void UndoReturn()
+    {
+        if (ReturnedOn is null)
+            throw new DomainException("donation.not_returned", "This gift hasn't come back from the bank.");
+        (ReturnedOn, ReturnAccountId, ReturnEntryId, ReturnCashEntryId, ReturnFee, ReturnReason) = (null, null, null, null, 0m, null);
+    }
+
+    private void EnsureNotReturned()
+    {
+        if (ReturnedOn is not null)
+            throw new DomainException("donation.returned", "This gift came back from the bank. Take the return back first.");
+    }
+
     public void Void()
     {
+        EnsureNotReturned();
         if (PayoutId is not null)
             throw new DomainException("donation.in_payout", "This gift is part of a posted payout. Void the payout first.");
         if (Status == DocumentStatus.Voided)

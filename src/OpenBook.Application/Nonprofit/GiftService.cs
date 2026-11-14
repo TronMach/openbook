@@ -93,7 +93,7 @@ public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string
 public sealed class GiftService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, PostingEngine engine, NonprofitService nonprofit,
     ICompanyStore companies, IFormRenderer renderer, FormDesignService designs, IUnitOfWork unitOfWork, IClock clock, ICurrentUser user,
-    Banking.IBankingStore bank)
+    Banking.IBankingStore bank, SalesAccounts salesAccounts)
 {
     public const string DonationEntity = "donation";
     public const string PledgeEntity = "pledge";
@@ -135,7 +135,7 @@ public sealed class GiftService(
     /// <summary>What a donor has given and promised, for their page.</summary>
     public async Task<DonorGiving> GivingAsync(Guid donorId, CancellationToken ct = default)
     {
-        var all = (await store.ListDonationsAsync(ct)).Where(d => d.Status == DocumentStatus.Posted).ToList();
+        var all = (await store.ListDonationsAsync(ct)).Where(d => d.Counts).ToList();
         var theirs = all.Where(d => d.DonorId == donorId).ToList();
         var year = CompanyTime.Today.Year;
         var pledged = (await store.ListPledgesAsync(ct)).Where(p => p.DonorId == donorId && p.Status == DocumentStatus.Posted)
@@ -392,6 +392,93 @@ public sealed class GiftService(
         return donation;
     }
 
+    /// <summary>
+    /// A money gift that came back unpaid (a bounced check, C132): posts, on the day it came back, the gift's entry in reverse
+    /// against the bank it went into (the deposit's, or its own bank account): Dr the contribution (and exchange) accounts,
+    /// or for a pledge payment Dr the pledge receivable (owed again) and, on the cash basis, the income taken back; Cr the
+    /// bank. The bank's fee, if any, goes Dr "Bank Service Charges" (or the account chosen) / Cr the bank. The gift and its
+    /// deposit stand as they happened; the gift stops counting on statements, letters and pledge balances. Refused while
+    /// the gift is still in Undeposited Funds (void it instead) or came in through a processor's payout.
+    /// </summary>
+    public async Task<Donation> ReturnAsync(Guid id, DateOnly date, decimal fee, Guid? feeAccountId, string reason, CancellationToken ct = default)
+    {
+        var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
+        if (donation.Status != DocumentStatus.Posted)
+            throw new DomainException("donation.voided", "This gift is voided.");
+        if (donation.PayoutId is not null)
+            throw new DomainException("donation.in_payout", "This gift came in through a processor's payout: record the processor's refund or dispute there.");
+        var chart = await accounts.GetChartAsync(ct);
+        Guid bankId;
+        if (donation.DepositId is { } depositId)
+            bankId = (await sales.GetDepositAsync(depositId, ct) ?? throw new EntityNotFoundException("deposit", depositId)).BankAccountId;
+        else if (chart.Find(donation.DebitAccountId) is { Type: AccountType.Bank })
+            bankId = donation.DebitAccountId;
+        else
+            throw new DomainException("donation.not_in_bank", "This gift hasn't been deposited yet, so the bank hasn't taken it back. Void the gift instead.");
+
+        // Checked here, so a refusal leaves the gift as it was.
+        donation.MarkReturned(date, bankId, Guid.Empty, null, fee, reason);
+        donation.UndoReturn();
+        await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, donation.Amount - donation.ExchangePart, ct);
+
+        var donor = await DonorAsync(donation.DonorId, ct);
+        var memo = $"Gift returned · {donor.DisplayName}{(donation.Reference is { } r ? $" · {r}" : "")}";
+        List<JournalLineDraft> lines;
+        JournalEntry? cash = null;
+        if (donation.PledgeId is { } pledgeId)
+        {
+            var pledge = await store.GetPledgeAsync(pledgeId, ct) ?? throw new EntityNotFoundException(PledgeEntity, pledgeId);
+            lines = [JournalLineDraft.Dr(pledge.ReceivableAccountId, donation.Amount, memo, donation.ClassId), JournalLineDraft.Cr(bankId, donation.Amount, memo)];
+            if (donation.CashEntryId is not null)
+                cash = await engine.StageAsync(new PostJournalEntryCommand(date,
+                    [JournalLineDraft.Dr(donation.IncomeAccountId, donation.Amount, memo, donation.ClassId), JournalLineDraft.Cr(pledge.ReceivableAccountId, donation.Amount, memo, donation.ClassId)],
+                    $"{memo} (pledge {pledge.Number}, cash basis)", Donation.ReturnSource, donation.Id, EntryBasis.CashOnly), ct);
+        }
+        else
+        {
+            lines = [.. GiftLines(bankId, null, donation.IncomeAccountId, donation.ExchangeAccountId, donation.ClassId, donation.Amount, donation.GoodsValue, memo)
+                .Select(l => l with { Debit = l.Credit, Credit = l.Debit })];
+        }
+
+        if (fee > 0m)
+        {
+            var feeAccount = feeAccountId is { } chosen && chosen != Guid.Empty ? chosen : (await salesAccounts.GetOrCreateBankChargesAsync(ct)).Id;
+            lines.Add(JournalLineDraft.Dr(feeAccount, fee, $"{memo}: bank fee"));
+            lines.Add(JournalLineDraft.Cr(bankId, fee, $"{memo}: bank fee"));
+        }
+
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(date, lines, memo, Donation.ReturnSource, donation.Id), ct);
+        var before = Snapshot(donation);
+        donation.MarkReturned(date, bankId, entry.Id, cash?.Id, fee, reason);
+        store.Add(Audit(AuditAction.Updated, donation, before));
+        await store.SaveChangesAsync(ct);
+        return donation;
+    }
+
+    /// <summary>Takes back a return recorded by mistake (the check cleared after all): its entries are voided and the gift counts again.</summary>
+    public async Task<Donation> UndoReturnAsync(Guid id, string reason, CancellationToken ct = default)
+    {
+        var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
+        if (donation.ReturnEntryId is not { } entryId)
+            throw new DomainException("donation.not_returned", "This gift hasn't come back from the bank.");
+        if (donation.PledgeId is { } pledgeId)
+        {
+            var pledge = await store.GetPledgeAsync(pledgeId, ct) ?? throw new EntityNotFoundException(PledgeEntity, pledgeId);
+            var left = pledge.Amount - pledge.CancelledAmount - await PaidAsync(pledge.Id, ct);
+            if (pledge.Status != DocumentStatus.Posted || donation.Amount > left)
+                throw new DomainException("donation.pledge_paid_since", $"Pledge {pledge.Number} has been paid or cancelled since, so this gift can't pay it again.");
+        }
+
+        await engine.StageVoidAsync(entryId, reason, fromDocument: true, ct);
+        if (donation.ReturnCashEntryId is { } cash)
+            await engine.StageVoidAsync(cash, reason, fromDocument: true, ct);
+        var before = Snapshot(donation);
+        donation.UndoReturn();
+        store.Add(Audit(AuditAction.Updated, donation, before));
+        await store.SaveChangesAsync(ct);
+        return donation;
+    }
+
     /// <summary>Taking back restricted money that's been released would leave the purpose below zero: the release goes first.</summary>
     private async Task EnsureNotReleasedAsync(Guid incomeAccountId, Guid? classId, decimal amount, CancellationToken ct)
     {
@@ -534,7 +621,7 @@ public sealed class GiftService(
     public async Task<IReadOnlyList<Giver>> GiversAsync(int year, CancellationToken ct = default)
     {
         var (first, last) = (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
-        var gifts = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Date >= first && d.Date <= last, ct);
+        var gifts = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= first && d.Date <= last, ct);
         var donors = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         return gifts.GroupBy(g => g.DonorId)
             .Select(g => new Giver(donors[g.Key], g.OrderBy(d => d.Date).ThenBy(d => d.Number).ToList()))
@@ -569,7 +656,7 @@ public sealed class GiftService(
         var donor = await DonorAsync(pledge.DonorId, ct, activeOnly: false);
         var settings = await GetSettingsAsync(ct);
         var pledgeId = pledge.Id;
-        var payments = (await store.FindDonationsAsync(d => d.PledgeId == pledgeId && d.Status == DocumentStatus.Posted && d.Date <= asOf, ct)).OrderBy(d => d.Date).ToList();
+        var payments = (await store.FindDonationsAsync(d => d.PledgeId == pledgeId && d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date <= asOf, ct)).OrderBy(d => d.Date).ToList();
         var paid = payments.Sum(p => p.Amount);
         var standing = pledge.Amount - (pledge.CancelledOn <= asOf ? pledge.CancelledAmount : 0m);
         var left = standing - paid;
@@ -721,7 +808,7 @@ public sealed class GiftService(
         Paid(pledgeId, await store.FindDonationsAsync(d => d.PledgeId == pledgeId, ct));
 
     internal static decimal Paid(Guid pledgeId, IEnumerable<Donation> gifts) =>
-        gifts.Where(d => d.PledgeId == pledgeId && d.Status == DocumentStatus.Posted).Sum(d => d.Amount);
+        gifts.Where(d => d.PledgeId == pledgeId && d.Counts).Sum(d => d.Amount);
 
     private async Task<Customer> DonorAsync(Guid id, CancellationToken ct, bool activeOnly = true)
     {
@@ -806,6 +893,9 @@ public sealed class GiftService(
         d.Campaign,
         Status = d.Status.ToString(),
         d.AcknowledgedAt,
+        d.ReturnedOn,
+        d.ReturnFee,
+        d.ReturnReason,
     });
 
     private static string Snapshot(Pledge p) => JsonSerializer.Serialize(new

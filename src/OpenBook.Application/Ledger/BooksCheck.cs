@@ -180,6 +180,8 @@ public sealed class BooksCheckService(
         {
             Add($"Gift {g.Number}", "donation", g.Id, Domain.Nonprofit.Donation.Source, g.JournalEntryId, g.Status == DocumentStatus.Posted);
             Add($"Gift {g.Number}, its cash-basis entry", "donation", g.Id, Domain.Nonprofit.Donation.Source, g.CashEntryId, g.Status == DocumentStatus.Posted);
+            Add($"Gift {g.Number}, its return", "donation", g.Id, Domain.Nonprofit.Donation.ReturnSource, g.ReturnEntryId, g.ReturnedOn is not null);
+            Add($"Gift {g.Number}, its return's cash-basis entry", "donation", g.Id, Domain.Nonprofit.Donation.ReturnSource, g.ReturnCashEntryId, g.ReturnedOn is not null);
         }
 
         foreach (var p in await nonprofit.ListPledgesAsync(ct))
@@ -536,10 +538,11 @@ public sealed class BooksCheckService(
     {
         var pledges = await nonprofit.ListPledgesAsync(ct);
         var accountIds = pledges.Select(p => p.ReceivableAccountId).ToHashSet();
-        var (lines, others) = On(d, accountIds, Domain.Nonprofit.Pledge.Source, Domain.Nonprofit.Pledge.CancelSource, Domain.Nonprofit.Donation.Source);
+        var (lines, others) = On(d, accountIds, Domain.Nonprofit.Pledge.Source, Domain.Nonprofit.Pledge.CancelSource, Domain.Nonprofit.Donation.Source,
+            Domain.Nonprofit.Donation.ReturnSource);
         var standing = pledges.Where(p => p.Status == DocumentStatus.Posted).Select(p => p.Id).ToHashSet();
         var promised = pledges.Where(p => standing.Contains(p.Id)).Sum(p => p.Amount - p.CancelledAmount);
-        var paid = d.Gifts.Where(g => g.Status == DocumentStatus.Posted && g.PledgeId is { } id && standing.Contains(id)).Sum(g => g.Amount);
+        var paid = d.Gifts.Where(g => g.Counts && g.PledgeId is { } id && standing.Contains(id)).Sum(g => g.Amount);
         return Compare("pledges", "Pledges receivable match the open pledges",
             "What's still to come on pledges (promised, less cancelled and paid) equals the pledges receivable account, on the accrual basis.",
             promised - paid, lines.Sum(l => l.Amount), others, "Open pledges", Names(d, accountIds, "the pledges receivable account"));

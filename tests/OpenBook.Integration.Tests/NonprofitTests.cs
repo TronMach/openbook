@@ -398,6 +398,46 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Equal(3, (await In<GiftService, IReadOnlyList<Donation>>(s => s.ListAsync(donorId: pat.Id))).Count);
     }
 
+    [Fact]
+    public async Task A_gift_that_bounces_comes_out_of_the_bank_and_the_donors_giving()
+    {
+        var pat = await Donor("Pat Bouncer");
+        var checking = Account("Checking");
+        var gift = await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 5, 1), 100m, Account("Undeposited Funds"), Reference: "1203"));
+        Assert.Equal("donation.not_in_bank", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, Donation>(s => s.ReturnAsync(gift.Id, new DateOnly(2026, 5, 9), 0m, null, "Insufficient funds")))).Code);
+        var waiting = await In<DepositService, IReadOnlyList<UndepositedItem>>(s => s.UndepositedAsync());
+        var deposit = await In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(checking, new DateOnly(2026, 5, 2),
+            waiting.Select(i => (i.Kind, i.Id)).ToList())));
+
+        var returned = await In<GiftService, Donation>(s => s.ReturnAsync(gift.Id, new DateOnly(2026, 5, 9), 15m, null, "Insufficient funds"));
+        Assert.Equal((new DateOnly(2026, 5, 9), checking, 15m, false), (returned.ReturnedOn!.Value, returned.ReturnAccountId!.Value, returned.ReturnFee, returned.Counts));
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, GiftService.ContributionsName));
+        // Checking: the deposit in, the check and the fee out.
+        Assert.Equal(-15m, -await IncomeAsync(ReportBasis.Accrual, "Checking"));
+        Assert.Equal(0, (await In<GiftService, DonorGiving>(s => s.GivingAsync(pat.Id))).Gifts);
+        Assert.Equal("donation.returned", (await Assert.ThrowsAsync<DomainException>(() => In<GiftService, Donation>(s => s.VoidAsync(gift.Id, "x")))).Code);
+        Assert.Equal("deposit.gift_returned", (await Assert.ThrowsAsync<DomainException>(() => In<DepositService, BankDeposit>(s => s.VoidAsync(deposit.Id, "x")))).Code);
+        Assert.Equal("donation.returned", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, Donation>(s => s.ReturnAsync(gift.Id, new DateOnly(2026, 5, 9), 0m, null, "Again")))).Code);
+
+        // The check cleared after all.
+        var undone = await In<GiftService, Donation>(s => s.UndoReturnAsync(gift.Id, "Cleared on the second try"));
+        Assert.True(undone.Counts);
+        Assert.Equal(100m, await IncomeAsync(ReportBasis.Accrual, GiftService.ContributionsName));
+        Assert.Equal(1, (await In<GiftService, DonorGiving>(s => s.GivingAsync(pat.Id))).Gifts);
+
+        // A pledge payment that bounces leaves the pledge owed again, on both bases.
+        var pledge = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.PledgeAsync(new PledgeCommand(pat.Id, new DateOnly(2026, 1, 15), 500m, Account("Contributions:Unrestricted"))));
+        var payment = await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 2, 1), 200m, checking, PledgeId: pledge.Id));
+        await In<GiftService, Donation>(s => s.ReturnAsync(payment.Id, new DateOnly(2026, 2, 10), 0m, null, "Account closed"));
+        Assert.Equal(500m, (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Balance);
+        Assert.Equal(500m, await IncomeAsync(ReportBasis.Accrual, "Contributions:Unrestricted"));
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Cash, "Contributions:Unrestricted"));
+        var check = await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.Ledger.BooksCheckService>().RunAsync(CancellationToken.None));
+        Assert.Empty(check.Results.Where(r => r.Outcome == OpenBook.Application.Ledger.CheckOutcome.Problem).Select(r => $"{r.Key}: {r.Summary}"));
+    }
+
     // ---- Grants and Form 990 (slice 3) ----
 
     private Task<Grant> NewGrant(GrantCommand command) => In<GrantService, Grant>(s => s.CreateAsync(command));
