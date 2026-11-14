@@ -132,6 +132,11 @@
                                     @if (!item.IsMoneyIn)
                                     {
                                         <SearchSelect AriaLabel="Vendor" Options="_vendorOptions" @bind-Value="row.VendorId" EmptyText="No vendor" Placeholder="Vendor…" />
+                                        @if (_customerOptions.Count > 0)
+                                        {
+                                            @* Passed on to a customer: marked billable at their default markup as it's added. *@
+                                            <SearchSelect AriaLabel="Bill to customer" Options="_customerOptions" @bind-Value="row.BillTo" EmptyText="Not billed on" Placeholder="Bill to customer…" />
+                                        }
                                     }
                                     @if (_segments.Locations.Count > 0)
                                     {
@@ -220,6 +225,7 @@
     private bool _useNumbers;
     private IReadOnlyList<PickerOption> _categoryOptions = [];
     private IReadOnlyList<PickerOption> _vendorOptions = [];
+    private IReadOnlyList<PickerOption> _customerOptions = [];
     private BankFeedStatus _status = BankFeedStatus.Pending;
     private List<Row> _rows = [];
     private bool _loaded;
@@ -240,10 +246,11 @@
     protected override async Task OnInitializedAsync()
     {
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
-        (_chart, _useNumbers, var vendors) = await Ops.RunAsync(async sp => (
+        (_chart, _useNumbers, var vendors, var customers) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
-            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListRecordsAsync()).ToList()));
+            (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListRecordsAsync()).ToList(),
+            (await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(c => c.Customer).ToList()));
         if (_chart.Find(AccountId) is null)
         {
             _error = "That account doesn't exist.";
@@ -258,6 +265,7 @@
             .OrderBy(a => a.Type.ClassOf() is not (AccountClass.Expense or AccountClass.Income));
         _categoryOptions = PickerOptions.Accounts(categories, _chart, _useNumbers);
         _vendorOptions = PickerOptions.Vendors(vendors);
+        _customerOptions = PickerOptions.Customers(customers);
         await LoadAsync();
     }
 
@@ -293,7 +301,8 @@
 
     private static AddFeedItemCommand CommandFor(Row row) => new(
         row.Splits is { } splits ? splits[0].AccountId!.Value : row.CategoryId!.Value, row.Payee, row.VendorId, null, row.ClassId, row.LocationId,
-        row.Splits?.Select(s => new BankSplit(s.AccountId!.Value, s.Amount!.Value, null, s.ClassId)).ToList());
+        row.Splits?.Select(s => new BankSplit(s.AccountId!.Value, s.Amount!.Value, null, s.ClassId)).ToList(),
+        BillToCustomerId: row.Item.IsMoneyIn ? null : row.BillTo);
 
     private static void ToggleSplit(Row row)
     {
@@ -428,6 +437,7 @@
 
         public Guid? CategoryId { get; set; }
         public Guid? VendorId { get; set; }
+        public Guid? BillTo { get; set; }
         public string? Payee { get; set; }
         public string? RuleName { get; set; }
         public Guid? MatchEntryId { get; set; }

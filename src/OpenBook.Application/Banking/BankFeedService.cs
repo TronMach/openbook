@@ -42,7 +42,10 @@ public sealed record AddFeedItemCommand(
     Guid? ClassId = null,
     Guid? LocationId = null,
     IReadOnlyCollection<BankSplit>? Splits = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    // Money out passed on to a customer (C336): its lines marked billable with the markup (null = the customer's default).
+    Guid? BillToCustomerId = null,
+    decimal? MarkupPercent = null);
 
 /// <summary>
 /// The bank feed: imported statement lines wait in a review queue, where each is added as a new transaction,
@@ -54,6 +57,8 @@ public sealed class BankFeedService(
     AccountService accounts,
     BankingService banking,
     BankImportService csvImport,
+    OpenBook.Application.Sales.BillableExpenseService billable,
+    IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser user)
 {
@@ -216,11 +221,21 @@ public sealed class BankFeedService(
     {
         ArgumentNullException.ThrowIfNull(command);
         var item = await PendingAsync(itemId, ct);
+        if (command.BillToCustomerId is not null && item.IsMoneyIn)
+            throw new DomainException("feed.billable_money_in", "Only money going out can be billed on to a customer.");
+        // The expense and its billable marks are saved together, or neither is.
+        await using var tx = command.BillToCustomerId is null ? null : await unitOfWork.BeginAsync(ct);
         var before = Snapshot(item);
         var transaction = await banking.StageAsync(Command(item, command), item.ImportBatchId, ct);
         item.MarkAdded(transaction.Id, ruleId: null, clock.UtcNow, user.Actor);
         bank.Add(Audit(item, before));
         await bank.SaveChangesAsync(ct);
+        if (command.BillToCustomerId is { } customer)
+        {
+            await billable.MarkAllAsync(OpenBook.Domain.Sales.BillableSource.Expense, transaction.Id, customer, command.MarkupPercent, ct: ct);
+            await tx!.CommitAsync(ct);
+        }
+
         return transaction;
     }
 

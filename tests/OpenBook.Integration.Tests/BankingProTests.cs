@@ -278,6 +278,30 @@ public sealed class BankingProTests : IAsyncLifetime
         Assert.Equal(19.99m, tb.Lines.Single(l => l.AccountId == _card.Id).Credit.Amount);
     }
 
+    [Fact]
+    public async Task Money_out_added_from_the_feed_can_be_billed_on_to_a_customer()
+    {
+        var client = await In<OpenBook.Application.Sales.CustomerService, OpenBook.Domain.Sales.Customer>(s =>
+            s.CreateAsync(new OpenBook.Domain.Sales.CustomerDetails("Harbor Client")));
+        await In<BankFeedService, FeedImportResult>(s => s.QueueAsync(_checking.Id,
+        [
+            new FeedLine(new DateOnly(2026, 10, 3), -64.20m, "PRINT SHOP", null, null, "B1"),
+            new FeedLine(new DateOnly(2026, 10, 4), 500m, "CLIENT PAYMENT", null, null, "B2"),
+        ]));
+        var waiting = await Review(_checking.Id);
+        var print = waiting.Single(r => r.Item.FitId == "B1").Item;
+        var money = waiting.Single(r => r.Item.FitId == "B2").Item;
+
+        var expense = await In<BankFeedService, BankTransaction>(s => s.AddAsync(print.Id, new AddFeedItemCommand(_office.Id, BillToCustomerId: client.Id, MarkupPercent: 10m)));
+
+        var marked = Assert.Single(await _db.InDb(db => db.BillableExpenses.AsNoTracking().Where(b => b.DocumentId == expense.Id).ToListAsync()));
+        Assert.Equal((client.Id, 64.20m, 10m), (marked.CustomerId, marked.Cost, marked.MarkupPercent));
+        Assert.Equal("feed.billable_money_in", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<BankFeedService, BankTransaction>(s => s.AddAsync(money.Id, new AddFeedItemCommand(_office.Id, BillToCustomerId: client.Id))))).Code);
+        // Refused before anything was added: the line is still waiting.
+        Assert.Contains(await Review(_checking.Id), r => r.Item.Id == money.Id);
+    }
+
     // ---- Rules ----
 
     private Task<FeedImportResult> Line(DateOnly date, decimal amount, string fitId) =>
