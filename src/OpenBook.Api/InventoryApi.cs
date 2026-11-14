@@ -157,7 +157,7 @@ internal static class InventoryApi
 
         inventory.MapGet("/landed-costs", async (LandedCostService s, CancellationToken ct) => await s.ListAsync(ct));
         inventory.MapGet("/landed-costs/candidates", async (LandedCostService s, CancellationToken ct) =>
-            (await s.CandidatesAsync(ct)).Select(c => new { BillId = c.Bill.Id, c.Bill.Date, c.Bill.Reference, c.VendorName, c.StockQuantity, c.StockValue }));
+            (await s.CandidatesAsync(ct)).Select(c => new { BillId = c.Bill.Id, c.Bill.Date, c.Bill.Reference, c.VendorName, c.StockQuantity, c.StockValue, c.ItemIds }));
         inventory.MapGet("/landed-costs/{id:guid}", async (Guid id, LandedCostService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } l ? Results.Ok(l) : Results.NotFound());
         inventory.MapPost("/landed-costs", async (CreateLandedCostCommand c, LandedCostService s, CancellationToken ct) =>

@@ -13,11 +13,14 @@ using OpenBook.Domain.Purchases;
 namespace OpenBook.Application.Inventory;
 
 /// <param name="FromAccountId">Where the cost was entered (null: "Landed Cost Clearing", created on first use).</param>
+/// <param name="ItemIds">Only the stock of these items on the bills gets the cost (C077); empty or null for all of it.</param>
 public sealed record CreateLandedCostCommand(
-    DateOnly Date, decimal Amount, IReadOnlyList<Guid> BillIds, LandedCostMethod Method = LandedCostMethod.ByValue, Guid? FromAccountId = null, string? Memo = null);
+    DateOnly Date, decimal Amount, IReadOnlyList<Guid> BillIds, LandedCostMethod Method = LandedCostMethod.ByValue, Guid? FromAccountId = null, string? Memo = null,
+    IReadOnlyList<Guid>? ItemIds = null);
 
 /// <summary>A posted bill that brought stock in, which a landed cost can go on.</summary>
-public sealed record LandedCostCandidate(Bill Bill, string VendorName, decimal StockQuantity, decimal StockValue);
+/// <param name="ItemIds">The items it brought in.</param>
+public sealed record LandedCostCandidate(Bill Bill, string VendorName, decimal StockQuantity, decimal StockValue, IReadOnlyList<Guid>? ItemIds = null);
 
 /// <summary>
 /// Landed costs: spreads a cost (freight, duty, insurance) over the stock received on chosen bills. Each received
@@ -53,7 +56,8 @@ public sealed class LandedCostService(
             // A bill from an order also reaches the stock its order's deliveries brought in before it.
             var layers = receipts[b.Id].Concat((await DeliveriesAsync(b, ct)).SelectMany(id => receipts[id])).ToList();
             if (layers.Count > 0)
-                candidates.Add(new LandedCostCandidate(b, vendors.GetValueOrDefault(b.VendorId) ?? "", layers.Sum(m => m.Quantity), layers.Sum(m => m.Cost)));
+                candidates.Add(new LandedCostCandidate(b, vendors.GetValueOrDefault(b.VendorId) ?? "", layers.Sum(m => m.Quantity), layers.Sum(m => m.Cost),
+                    [.. layers.Select(m => m.ItemId).Distinct()]));
         }
 
         return candidates;
@@ -96,6 +100,15 @@ public sealed class LandedCostService(
             foreach (var layer in added)
                 billOf[layer.Id] = billId;
             received.AddRange(added);
+        }
+
+        // Only some of the products, when the cost was theirs alone (duty on one line of a shipment, say).
+        if (command.ItemIds is { Count: > 0 } chosenItems)
+        {
+            var only = chosenItems.ToHashSet();
+            received = [.. received.Where(r => only.Contains(r.ItemId))];
+            if (received.Count == 0)
+                throw new DomainException("landed_cost.no_chosen_items", "None of the products chosen came in on those bills.");
         }
 
         var shares = LandedCost.Allocate(command.Amount, received.Select(r => (r.Quantity, r.Cost)).ToList(), command.Method);

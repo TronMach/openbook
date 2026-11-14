@@ -139,8 +139,9 @@ Freight, duty and customs charges are part of what stock cost you. **Inventory â
 
 1. Enter the **date**, the **amount** and where it **comes out of**: by default "Landed Cost Clearing", where you post the freight bill itself.
 2. Choose the **bills** whose goods it belongs to.
-3. **Spread by** the goods' **value** or **quantity**.
-4. **Post landed cost**.
+3. If the cost belongs to only some of the products on them (duty on one line of a shipment, say), tick those under **Only these products**; with none ticked it goes on all of them.
+4. **Spread by** the goods' **value** or **quantity**.
+5. **Post landed cost**.
 
 The part for stock still on hand raises its cost; the part for stock already sold goes to cost of goods sold.
 

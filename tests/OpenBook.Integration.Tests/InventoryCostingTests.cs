@@ -204,6 +204,17 @@ public sealed class InventoryCostingTests : IAsyncLifetime
         var bank = await _db.CreateAccount("Checking", AccountType.Bank);
         Assert.Equal("landed_cost.account_type", await Refused(() => Run(sp => sp.GetRequiredService<LandedCostService>().CreateAsync(
             new CreateLandedCostCommand(Feb1, 5m, [bill.Id], FromAccountId: bank.Id)))));
+
+        // Only some products on the bill: duty on the gadgets alone (C077).
+        var candidateItems = (await Run(sp => sp.GetRequiredService<LandedCostService>().CandidatesAsync()))[0].ItemIds!;
+        Assert.Equal(2, candidateItems.Count);
+        Assert.Contains(gadget.Id, candidateItems);
+        var duty = await Run(sp => sp.GetRequiredService<LandedCostService>().CreateAsync(
+            new CreateLandedCostCommand(Feb1, 8m, [bill.Id], LandedCostMethod.ByValue, _freight.Id, ItemIds: [gadget.Id])));
+        Assert.Equal((8m, 8m * 4m / 5m), Share(duty, gadget)); // 4 of the 5 gadgets still on hand
+        Assert.DoesNotContain(duty.Lines, l => l.ItemId == widget.Id);
+        Assert.Equal("landed_cost.no_chosen_items", await Refused(() => Run(sp => sp.GetRequiredService<LandedCostService>().CreateAsync(
+            new CreateLandedCostCommand(Feb1, 5m, [bill.Id], ItemIds: [Guid.NewGuid()])))));
     }
 
     [Fact]

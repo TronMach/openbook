@@ -4,6 +4,7 @@
 @using OpenBook.Domain.Inventory
 @inject LandedCostService LandedCosts
 @inject AccountService AccountService
+@inject ItemService ItemService
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
 
@@ -89,6 +90,18 @@
                     </tbody>
                 </table>
             </div>
+            @if (_items.Count > 1)
+            {
+                <fieldset>
+                    <legend>Only these products <span class="muted">(optional: none ticked spreads it over all of them)</span></legend>
+                    <div class="check-list">
+                        @foreach (var (id, name) in _items)
+                        {
+                            <label class="check"><input type="checkbox" name="Input.ItemIds" value="@id" checked="@Input.ItemIds.Contains(id)" /> @name</label>
+                        }
+                    </div>
+                </fieldset>
+            }
             <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
             <div class="actions"><button type="submit">Post landed cost</button></div>
         </EditForm>
@@ -99,6 +112,7 @@
     private IReadOnlyList<LandedCostCandidate> _candidates = [];
     private ChartOfAccounts _chart = new([]);
     private List<Account> _accounts = [];
+    private IReadOnlyList<(Guid Id, string Name)> _items = [];
     private bool _needsClosingPassword;
     private string? _error;
 
@@ -111,6 +125,10 @@
     {
         Input ??= new LandedCostModel { BillIds = Bill is { } bill ? [bill] : [] };
         _candidates = await LandedCosts.CandidatesAsync();
+        // The products the listed bills brought in, for spreading over some of them only.
+        var itemIds = _candidates.SelectMany(c => c.ItemIds ?? []).Distinct().ToList();
+        _items = itemIds.Count == 0 ? []
+            : [.. (await ItemService.ListAsync(includeInactive: true)).Where(i => itemIds.Contains(i.Id)).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).Select(i => (i.Id, i.Name))];
         _chart = await AccountService.GetChartAsync();
         // Where freight is usually entered: asset clearing accounts and expense accounts.
         _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
@@ -125,7 +143,8 @@
         {
             ClosingOverride.Password = Input.ClosingPassword;
             var landed = await LandedCosts.CreateAsync(new CreateLandedCostCommand(
-                Input.Date, Input.Amount ?? 0m, Input.BillIds, Input.Method, Input.FromAccountId ?? _chart.FindByFullName(InventoryAccounts.LandedCostName)?.Id, Input.Memo));
+                Input.Date, Input.Amount ?? 0m, Input.BillIds, Input.Method, Input.FromAccountId ?? _chart.FindByFullName(InventoryAccounts.LandedCostName)?.Id, Input.Memo,
+                Input.ItemIds));
             Navigation.NavigateTo($"/inventory/landed-costs/{landed.Id}");
         }
         catch (DomainException ex)
@@ -151,6 +170,8 @@
 
         // Nothing ticked binds as null.
         public Guid[] BillIds { get; set => field = value ?? []; } = [];
+
+        public Guid[] ItemIds { get; set => field = value ?? []; } = [];
 
         public string? ClosingPassword { get; set; }
     }
