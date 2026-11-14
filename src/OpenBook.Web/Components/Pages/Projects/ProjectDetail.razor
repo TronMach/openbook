@@ -6,6 +6,7 @@
 @inject BillableExpenseService Billables
 @inject MileageService MileageService
 @inject ProjectMilestoneService Milestones
+@inject ProjectBudgetService BudgetLines
 @inject OpenBook.Application.Sales.ItemService Items
 
 <PageTitle>@(_project?.FullName ?? "Project") · OpenBook</PageTitle>
@@ -132,6 +133,67 @@
             <p>Not billed yet: @Labels.Amount(_figures.Unbilled) (time @Labels.Amount(_figures.UnbilledTime), expenses @Labels.Amount(_figures.UnbilledExpenses), mileage @Labels.Amount(_figures.UnbilledMileage)). <ActionLink Href="@($"/sales/invoices/new?customer={_project.Customer.Id}")">Put it on an invoice</ActionLink>.</p>
         }
 
+        <details class="card" id="budget-lines" open="@(_budgetLines.Count > 0)">
+            <summary><h2 style="display: inline">@L["Budget by role or service"]</h2></summary>
+            <p class="muted">@L["Hours and cost for each role (as on People and rates) or each service, the project's phases as time is entered. Time counts by the person's role or the entry's service, at each entry's cost rate."]</p>
+            @if (_budgetLines.Count > 0)
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>@L["Budget line"]</th><th class="num">@L["Hours"]</th><th class="num">@L["Budget"]</th><th class="num">@L["Cost"]</th><th class="num">@L["Budget"]</th><th><span class="visually-hidden">@L["Status"]</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var b in _budgetLines)
+                            {
+                                <tr>
+                                    <td>@b.Label</td>
+                                    <td class="num">@Labels.Quantity(b.Hours)</td>
+                                    <td class="num">@(b.Line.Hours is { } budgetHours ? Labels.Quantity(budgetHours) : "")</td>
+                                    <td class="num">@Labels.Amount(b.Cost)</td>
+                                    <td class="num">@(b.Line.Cost is { } budgetCost ? Labels.Amount(budgetCost) : "")</td>
+                                    <td>@if (b.Warn) {<span class="badge warn">@L["90% or more used"]</span>}</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            <PostForm Action="@($"/projects/{_project.Project.Id}/budget-lines")" data-enhance="false">
+                <AntiforgeryToken />
+                <datalist id="worker-roles">
+                    @foreach (var role in _roles)
+                    {
+                        <option value="@role"></option>
+                    }
+                </datalist>
+                <div class="table-wrap">
+                    <table class="data entry">
+                        <thead><tr><th>@L["Role"]</th><th>@L["or service"]</th><th class="num">@L["Hours"]</th><th class="num">@L["Cost"]</th></tr></thead>
+                        <tbody>
+                            @for (var i = 0; i < _project.Project.BudgetLines.Count + 3; i++)
+                            {
+                                var line = i < _project.Project.BudgetLines.Count ? _project.Project.BudgetLines[i] : null;
+                                <tr>
+                                    <td><input name="role:@i" list="worker-roles" maxlength="@Worker.MaxRoleLength" value="@line?.Role" aria-label="@L["Role of budget line {0}", i + 1]" /></td>
+                                    <td>
+                                        <select name="item:@i" aria-label="@L["Service of budget line {0}", i + 1]">
+                                            <option value="">@L["(none)"]</option>
+                                            @foreach (var s in _allServices)
+                                            {
+                                                <option value="@s.Id" selected="@(s.Id == line?.ItemId)">@s.Name</option>
+                                            }
+                                        </select>
+                                    </td>
+                                    <td class="num"><input name="hours:@i" class="short" inputmode="decimal" value="@line?.Hours?.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture)" aria-label="@L["Hours of budget line {0}", i + 1]" /></td>
+                                    <td class="num"><input name="cost:@i" class="short" inputmode="decimal" value="@line?.Cost?.ToString("0.00", System.Globalization.CultureInfo.CurrentCulture)" aria-label="@L["Cost of budget line {0}", i + 1]" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="actions"><button type="submit" class="secondary">@L["Save budget lines"]</button></div>
+            </PostForm>
+        </details>
+
         <ResponsibleCard CustomerId="_project.Customer.Id" Back="@($"/projects/{_project.Project.Id}")" />
 
         <h2>Time</h2>
@@ -230,6 +292,9 @@
     private Dictionary<Guid, string> _workers = [];
     private IReadOnlyList<MilestoneStatus> _milestones = [];
     private IReadOnlyList<OpenBook.Domain.Sales.Item> _services = [];
+    private IReadOnlyList<OpenBook.Domain.Sales.Item> _allServices = [];
+    private IReadOnlyList<BudgetLineStatus> _budgetLines = [];
+    private IReadOnlyList<string> _roles = [];
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -246,7 +311,11 @@
         _time = await TimeService.ListAsync(new TimeFilter(CustomerId: customerId));
         _expenses = await Billables.ListAsync(customerId);
         _trips = await MileageService.ListAsync(customerId: customerId);
-        _workers = (await WorkerService.ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name);
+        var people = await WorkerService.ListAsync(includeInactive: true);
+        _workers = people.ToDictionary(w => w.Id, w => w.Name);
+        _roles = [.. people.Select(w => w.Role).OfType<string>().Distinct(StringComparer.CurrentCultureIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
+        _budgetLines = await BudgetLines.StatusAsync(_project.Project.Id);
+        _allServices = (await Items.ListAsync()).Where(i => i.Type is OpenBook.Domain.Sales.ItemType.Service or OpenBook.Domain.Sales.ItemType.NonInventory).ToList();
         if (_project.Project.Arrangement == BillingArrangement.FixedFee)
         {
             _milestones = await Milestones.ListAsync(_project.Project.Id);

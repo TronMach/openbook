@@ -1138,6 +1138,18 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 m.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(p => p.Milestones).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(p => p.BudgetLines, l =>
+            {
+                l.ToTable("ProjectBudgetLines");
+                l.WithOwner().HasForeignKey("ProjectId");
+                l.HasKey("ProjectId", nameof(OpenBook.Domain.Projects.ProjectBudgetLine.LineNumber));
+                l.Property(x => x.LineNumber).ValueGeneratedNever();
+                l.Property(x => x.Role).HasMaxLength(OpenBook.Domain.Projects.Worker.MaxRoleLength);
+                l.Property(x => x.Hours).HasColumnName("HoursTenThousandths").HasConversion(NullableTenThousandths);
+                l.Property(x => x.Cost).HasColumnName("CostMinor").HasConversion(NullableMinorUnits);
+                l.HasOne<Item>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(p => p.BudgetLines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Projects.Worker>(b =>

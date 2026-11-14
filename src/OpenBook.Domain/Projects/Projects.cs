@@ -36,6 +36,46 @@ public sealed record ProjectDetails(
     BillingArrangement Arrangement = BillingArrangement.TimeAndMaterials,
     decimal? Fee = null);
 
+/// <summary>
+/// A budget line for one role (as on People and rates) or one service (a phase of the work, as time is entered by
+/// service): hours and cost (C310). Time counts against it by the person's role or the entry's service.
+/// </summary>
+public sealed record ProjectBudgetLineDraft(string? Role, Guid? ItemId, decimal? Hours, decimal? Cost);
+
+public sealed class ProjectBudgetLine
+{
+    private ProjectBudgetLine()
+    {
+    }
+
+    internal ProjectBudgetLine(int lineNumber, ProjectBudgetLineDraft draft)
+    {
+        LineNumber = lineNumber;
+        Role = Text.Optional(draft.Role, Worker.MaxRoleLength, "project.budget_role_too_long", "Role");
+        ItemId = draft.ItemId == Guid.Empty ? null : draft.ItemId;
+        if ((Role is null) == (ItemId is null))
+            throw new DomainException("project.budget_line_kind", $"Budget line {lineNumber}: choose a role or a service, not both.");
+        if (draft.Hours is null && draft.Cost is null)
+            throw new DomainException("project.budget_line_empty", $"Budget line {lineNumber}: enter its hours, its cost or both.");
+        if (draft.Hours is { } h && (h < 0m || decimal.Round(h, 2) != h || h > 1_000_000m))
+            throw new DomainException("project.budget_invalid", "Budgeted hours can't be negative and have at most 2 decimals.");
+        if (draft.Cost is { } c && (c < 0m || decimal.Round(c, 2) != c || c > Money.MaxAmount))
+            throw new DomainException("project.budget_invalid", "A budget can't be negative and is in cents.");
+        (Hours, Cost) = (draft.Hours, draft.Cost);
+    }
+
+    public int LineNumber { get; private set; }
+
+    /// <summary>The people's role it budgets; null for a service line.</summary>
+    public string? Role { get; private set; }
+
+    /// <summary>The service (phase) it budgets; null for a role line.</summary>
+    public Guid? ItemId { get; private set; }
+
+    public decimal? Hours { get; private set; }
+    public decimal? Cost { get; private set; }
+}
+
 /// <summary>A part of a fixed fee, billed by its own invoice when the work reaches it.</summary>
 public sealed class ProjectMilestone
 {
@@ -104,6 +144,26 @@ public sealed class Project
     public bool IsOpen => Status is ProjectStatus.NotStarted or ProjectStatus.InProgress;
 
     public const int MaxMilestones = 50;
+    public const int MaxBudgetLines = 50;
+
+    private readonly List<ProjectBudgetLine> _budgetLines = [];
+
+    /// <summary>The budget by role or by service (C310), beside the project's totals.</summary>
+    public IReadOnlyList<ProjectBudgetLine> BudgetLines => _budgetLines;
+
+    /// <summary>Replaces the budget lines; a role or service appears once.</summary>
+    public void SetBudgetLines(IReadOnlyList<ProjectBudgetLineDraft> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (lines.Count > MaxBudgetLines)
+            throw new DomainException("project.too_many_budget_lines", $"A project can have up to {MaxBudgetLines} budget lines.");
+        var built = lines.Select((l, i) => new ProjectBudgetLine(i + 1, l)).ToList();
+        if (built.Where(l => l.Role is not null).GroupBy(l => l.Role!, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1)
+            || built.Where(l => l.ItemId is not null).GroupBy(l => l.ItemId).Any(g => g.Count() > 1))
+            throw new DomainException("project.budget_line_duplicate", "Each role and each service can have one budget line.");
+        _budgetLines.Clear();
+        _budgetLines.AddRange(built);
+    }
 
     private readonly List<ProjectMilestone> _milestones = [];
 

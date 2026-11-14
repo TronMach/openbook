@@ -12,6 +12,8 @@ The project's page has its **status** (and dates) and **budgets** for revenue, c
 
 Once costs or hours reach 90% of their budget the page says so, and again when they go past it. A project with projects below it (phases set up as sub-projects of a job, say) also shows the figures with all of them added in. A **Completed** or **Cancelled** project takes no new time or trips; set it back to **In progress** first.
 
+**Budget by role or service** on the project's page breaks the budget down: a line per **Role** (the roles on **People and rates**, such as Designer) or per service (the project's phases, as time is entered by service), each with its **Hours** and **Cost**. Time counts against a role line by the person's role and against a service line by the entry's service, at each entry's cost rate; a line at 90% or more of its hours or cost is marked. Leave a row empty to drop it, and **Save budget lines**.
+
 The **Projects and time** card (on the customer page and the project page, once people are set up) has two settings. **Responsible** names the partner or manager answering for a client or project. A project without its own takes its client's. **Project profitability**, **Unbilled work**, **Unbilled work by age**, **Time by customer** and **Customer balance summary** have a **Responsible** choice, so each person can see their own clients' work. **Time on invoices** says how billed time shows on invoices addressed to that customer: **A line per entry** (date, person and notes; the usual), **A line per person**, **A line per service**, or **One sum per service** (the hours in its description). Summed lines add up to exactly what the entries would have billed. Every invoice with time on it also says how many **Hours** it bills.
 
 ## People and rates

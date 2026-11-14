@@ -33,6 +33,24 @@ public static class ProjectEndpoints
         app.MapPost("/projects/{id:guid}/milestones", async (Guid id, IFormCollection form, ProjectMilestoneService milestones, CancellationToken ct) =>
             await Back($"/projects/{id}#milestones", async () =>
                 await milestones.AddAsync(id, Text(form["name"]), Number(form["amount"]) ?? 0m, Date(form["dueOn"]), ct))).RequireAuthorization();
+        // The budget by role or service (C310): rows role:i, item:i, hours:i, cost:i; a row with nothing chosen is left out.
+        app.MapPost("/projects/{id:guid}/budget-lines", async (Guid id, IFormCollection form, ProjectBudgetService budgets, CancellationToken ct) =>
+            await Back($"/projects/{id}#budget-lines", async () =>
+            {
+                var lines = new List<ProjectBudgetLineDraft>();
+                for (var i = 0; i < Project.MaxBudgetLines + 10 && form.ContainsKey($"hours:{i}"); i++)
+                {
+                    var role = Text(form[$"role:{i}"]);
+                    var item = Id(form[$"item:{i}"]);
+                    var hours = Number(form[$"hours:{i}"]);
+                    var cost = Number(form[$"cost:{i}"]);
+                    if (role is null && item is null && hours is null && cost is null)
+                        continue;
+                    lines.Add(new ProjectBudgetLineDraft(role, item, hours, cost));
+                }
+
+                await budgets.SetAsync(id, lines, ct);
+            })).RequireAuthorization();
         app.MapPost("/projects/{id:guid}/milestones/{line:int}/remove", async (Guid id, int line, IFormCollection _, ProjectMilestoneService milestones, CancellationToken ct) =>
             await Back($"/projects/{id}#milestones", async () => await milestones.RemoveAsync(id, line, ct))).RequireAuthorization();
         app.MapPost("/projects/{id:guid}/milestones/{line:int}/bill", async (Guid id, int line, IFormCollection form, ProjectMilestoneService milestones, CancellationToken ct) =>

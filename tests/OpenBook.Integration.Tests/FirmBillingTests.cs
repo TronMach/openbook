@@ -38,6 +38,29 @@ public sealed class FirmBillingTests : IAsyncLifetime
         In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_dana.Id, on ?? Mar1, hours, (client ?? _acme).Id, _advice.Id, true)));
 
     [Fact]
+    public async Task A_budget_by_role_and_service_counts_the_time_against_each_line()
+    {
+        var project = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(new ProjectDetails(), "Rebrand", _acme.Id)));
+        var designer = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Sam", 40m, 90m, Role: "Designer")));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_dana.Id, Mar1, 5m, project.CustomerId, _advice.Id, true)));
+        await In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(designer.Id, Mar1, 4m, project.CustomerId, _advice.Id, true)));
+
+        await In<ProjectBudgetService, Project>(s => s.SetAsync(project.Id,
+            [new ProjectBudgetLineDraft("designer", null, 4m, 200m), new ProjectBudgetLineDraft(null, _advice.Id, 20m, null)]));
+        var lines = await In<ProjectBudgetService, IReadOnlyList<BudgetLineStatus>>(s => s.StatusAsync(project.Id));
+        Assert.Equal(("Role: designer", 4m, 160m, true), (lines[0].Label, lines[0].Hours, lines[0].Cost, lines[0].Warn));
+        Assert.Equal(("Service: Advice", 9m, 410m, false), (lines[1].Label, lines[1].Hours, lines[1].Cost, lines[1].Warn));
+        Assert.Equal(11m, lines[1].HoursLeft);
+
+        Assert.Equal("project.budget_line_duplicate", (await Assert.ThrowsAsync<DomainException>(() => In<ProjectBudgetService, Project>(s => s.SetAsync(project.Id,
+            [new ProjectBudgetLineDraft("Designer", null, 1m, null), new ProjectBudgetLineDraft("DESIGNER", null, 2m, null)])))).Code);
+        Assert.Equal("project.budget_line_kind", (await Assert.ThrowsAsync<DomainException>(() => In<ProjectBudgetService, Project>(s => s.SetAsync(project.Id,
+            [new ProjectBudgetLineDraft("Designer", _advice.Id, 1m, null)])))).Code);
+        await In<ProjectBudgetService, Project>(s => s.SetAsync(project.Id, []));
+        Assert.Empty(await In<ProjectBudgetService, IReadOnlyList<BudgetLineStatus>>(s => s.StatusAsync(project.Id)));
+    }
+
+    [Fact]
     public async Task A_fixed_fee_is_billed_milestone_by_milestone()
     {
         var project = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(

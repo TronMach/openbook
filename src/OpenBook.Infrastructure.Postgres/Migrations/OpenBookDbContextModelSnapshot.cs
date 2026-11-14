@@ -9742,6 +9742,44 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.OwnsMany("OpenBook.Domain.Projects.ProjectBudgetLine", "BudgetLines", b1 =>
+                        {
+                            b1.Property<Guid>("ProjectId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<long?>("Cost")
+                                .HasColumnType("bigint")
+                                .HasColumnName("CostMinor");
+
+                            b1.Property<long?>("Hours")
+                                .HasColumnType("bigint")
+                                .HasColumnName("HoursTenThousandths");
+
+                            b1.Property<Guid?>("ItemId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Role")
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)");
+
+                            b1.HasKey("ProjectId", "LineNumber");
+
+                            b1.HasIndex("ItemId");
+
+                            b1.ToTable("ProjectBudgetLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Sales.Item", null)
+                                .WithMany()
+                                .HasForeignKey("ItemId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ProjectId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Projects.ProjectMilestone", "Milestones", b1 =>
                         {
                             b1.Property<Guid>("ProjectId")
@@ -9785,6 +9823,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("ProjectId");
                         });
+
+                    b.Navigation("BudgetLines");
 
                     b.Navigation("Milestones");
                 });

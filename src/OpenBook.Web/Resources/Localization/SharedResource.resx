@@ -95,6 +95,9 @@
   <data name="3–64 characters: letters, digits, '.', '_', '-' or '@'." xml:space="preserve">
     <value>3–64 characters: letters, digits, '.', '_', '-' or '@'.</value>
   </data>
+  <data name="90% or more used" xml:space="preserve">
+    <value>90% or more used</value>
+  </data>
   <data name="A &quot;Pay now&quot; link on invoices so customers pay by card through Stripe; payments are recorded by themselves." xml:space="preserve">
     <value>A "Pay now" link on invoices so customers pay by card through Stripe; payments are recorded by themselves.</value>
   </data>
@@ -521,6 +524,15 @@
   <data name="Brings billable time that isn't invoiced yet to the rate the card gives now. Rates typed on an entry and time written up or down are left as they are." xml:space="preserve">
     <value>Brings billable time that isn't invoiced yet to the rate the card gives now. Rates typed on an entry and time written up or down are left as they are.</value>
   </data>
+  <data name="Budget" xml:space="preserve">
+    <value>Budget</value>
+  </data>
+  <data name="Budget by role or service" xml:space="preserve">
+    <value>Budget by role or service</value>
+  </data>
+  <data name="Budget line" xml:space="preserve">
+    <value>Budget line</value>
+  </data>
   <data name="Budgets" xml:space="preserve">
     <value>Budgets</value>
   </data>
@@ -751,6 +763,9 @@
   </data>
   <data name="Cost" xml:space="preserve">
     <value>Cost</value>
+  </data>
+  <data name="Cost of budget line {0}" xml:space="preserve">
+    <value>Cost of budget line {0}</value>
   </data>
   <data name="Count recorded. The box agrees with the books." xml:space="preserve">
     <value>Count recorded. The box agrees with the books.</value>
@@ -1285,6 +1300,15 @@
   </data>
   <data name="Hourly rates by client, person, role or service." xml:space="preserve">
     <value>Hourly rates by client, person, role or service.</value>
+  </data>
+  <data name="Hours" xml:space="preserve">
+    <value>Hours</value>
+  </data>
+  <data name="Hours and cost for each role (as on People and rates) or each service, the project's phases as time is entered. Time counts by the person's role or the entry's service, at each entry's cost rate." xml:space="preserve">
+    <value>Hours and cost for each role (as on People and rates) or each service, the project's phases as time is entered. Time counts by the person's role or the entry's service, at each entry's cost rate.</value>
+  </data>
+  <data name="Hours of budget line {0}" xml:space="preserve">
+    <value>Hours of budget line {0}</value>
   </data>
   <data name="How dates and numbers are shown to you, and the language of the screens. This is kept in this browser." xml:space="preserve">
     <value>How dates and numbers are shown to you, and the language of the screens. This is kept in this browser.</value>
@@ -1988,6 +2012,9 @@
   <data name="or import a list" xml:space="preserve">
     <value>or import a list</value>
   </data>
+  <data name="or service" xml:space="preserve">
+    <value>or service</value>
+  </data>
   <data name="Or sign out everywhere except here at once, without changing your password: use it for a lost or shared device." xml:space="preserve">
     <value>Or sign out everywhere except here at once, without changing your password: use it for a lost or shared device.</value>
   </data>
@@ -2522,6 +2549,12 @@
   <data name="Revoked {0}" xml:space="preserve">
     <value>Revoked {0}</value>
   </data>
+  <data name="Role" xml:space="preserve">
+    <value>Role</value>
+  </data>
+  <data name="Role of budget line {0}" xml:space="preserve">
+    <value>Role of budget line {0}</value>
+  </data>
   <data name="Round to whole dollars" xml:space="preserve">
     <value>Round to whole dollars</value>
   </data>
@@ -2587,6 +2620,9 @@
   </data>
   <data name="Save and hand in again" xml:space="preserve">
     <value>Save and hand in again</value>
+  </data>
+  <data name="Save budget lines" xml:space="preserve">
+    <value>Save budget lines</value>
   </data>
   <data name="Save changes" xml:space="preserve">
     <value>Save changes</value>
@@ -2668,6 +2704,9 @@
   </data>
   <data name="Service" xml:space="preserve">
     <value>Service</value>
+  </data>
+  <data name="Service of budget line {0}" xml:space="preserve">
+    <value>Service of budget line {0}</value>
   </data>
   <data name="Set it up" xml:space="preserve">
     <value>Set it up</value>
