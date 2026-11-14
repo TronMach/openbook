@@ -10,6 +10,12 @@
     project, so failures are named. Exits 1 if any test failed, going by the results files as well as dotnet's exit
     code, and if no tests ran at all.
 
+    The whole run (the build, the test host and what it starts, such as the headless browser) is also kept to
+    -CpuPercent of the processors (default 85, so 20 of 24 threads stay busy at most and the last cores are left
+    alone), and the default caps above are lowered by the same share (decided 2026-11-13, after a blue screen at the
+    end of a full run). Two runs at once share the same processors, so together they stay within it too. The
+    PostgreSQL server is a separate service and isn't limited.
+
 .EXAMPLE
     powershell -File tools/run-tests.ps1                      # SQLite: every test project
     powershell -File tools/run-tests.ps1 -Postgres            # the integration suite on PostgreSQL (.env loaded)
@@ -24,13 +30,21 @@ param(
     [int]$Threads = 0,
     [string]$Filter,
     [string]$EnvFile,
+    [ValidateRange(10, 100)][int]$CpuPercent = 85,
     [string]$Results = (Join-Path ([IO.Path]::GetTempPath()) 'openbook-test-results')
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $name = if ($Postgres) { 'postgres' } else { 'sqlite' }
-if ($Threads -le 0) { $Threads = if ($Postgres) { [Math]::Min(12, [Environment]::ProcessorCount) } else { [Math]::Max(2, [int]([Environment]::ProcessorCount / 4)) } }
+$cores = [Environment]::ProcessorCount
+$share = $CpuPercent / 100.0
+# Processors the run may use: the first ones, leaving the rest free (at least one used, and one free when there are 4+).
+$usable = [Math]::Max(1, [Math]::Min([int][Math]::Floor($cores * $share), $(if ($cores -ge 4) { $cores - 1 } else { $cores })))
+if ($Threads -le 0) {
+    $full = if ($Postgres) { [Math]::Min(12, $cores) } else { [Math]::Max(2, [int]($cores / 4)) }
+    $Threads = [Math]::Max(2, [int][Math]::Floor($full * $share))
+}
 $arguments = @('test')
 if ($Postgres) {
     $arguments += 'tests/OpenBook.Integration.Tests'
@@ -52,17 +66,48 @@ if ($Postgres) {
 }
 if ($Filter) { $arguments += @('--filter', $Filter) }
 if ($NoBuild) { $arguments += '--no-build' }
+# A build server started earlier (by another build) wouldn't keep to the processors below, so this run's build uses none.
+if (-not $NoBuild) { $arguments += '--disable-build-servers' }
 $arguments += @('-nologo', '-v', 'q', '--logger', "trx;LogFilePrefix=$name", '--results-directory', $Results, '--', "xUnit.MaxParallelThreads=$Threads")
 
-Write-Host "Running the $name tests, at most $Threads at once, at below-normal priority. Results: $Results\${name}_*.trx (one per test project)"
+Write-Host "Running the $name tests, at most $Threads at once, on $usable of $cores processors, at below-normal priority. Results: $Results\${name}_*.trx (one per test project)"
 # Windows PowerShell joins the arguments with spaces, so quote any that contain one.
 $quoted = $arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }
 $started = Get-Date
+# Set on this process first: what it starts inherits both, before it can start anything of its own.
+$self = [System.Diagnostics.Process]::GetCurrentProcess()
+if ($usable -lt $cores) { $self.ProcessorAffinity = [IntPtr]([long][Math]::Pow(2, $usable) - 1) }
+$self.PriorityClass = 'BelowNormal'
 $process = Start-Process -FilePath 'dotnet' -ArgumentList $quoted -WorkingDirectory $root -NoNewWindow -PassThru
 # Windows PowerShell only gives a -PassThru process an ExitCode if its handle was asked for while it ran.
 $null = $process.Handle
 $process.PriorityClass = 'BelowNormal'
-$process.WaitForExit()
+# The build's worker processes and the test host set their own priority back to normal (the processors limit holds),
+# so every few seconds anything this run started is put back to below normal while it lasts.
+$lowered = @{}
+while (-not $process.WaitForExit(3000)) {
+    try {
+        $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId -ErrorAction Stop)
+        $children = @{}
+        foreach ($p in $all) { $children[[int]$p.ParentProcessId] += @([int]$p.ProcessId) }
+        $queue = New-Object System.Collections.Queue
+        $queue.Enqueue($process.Id)
+        while ($queue.Count -gt 0) {
+            foreach ($id in @($children[[int]$queue.Dequeue()])) {
+                if ($null -eq $id -or $id -eq 0) { continue }
+                $queue.Enqueue($id)
+                if ($lowered.ContainsKey($id)) { continue }
+                try {
+                    $child = [System.Diagnostics.Process]::GetProcessById($id)
+                    if ($child.PriorityClass -eq 'Normal') { $child.PriorityClass = 'BelowNormal' }
+                    $lowered[$id] = $true
+                }
+                catch { }
+            }
+        }
+    }
+    catch { }
+}
 $code = $process.ExitCode
 
 # The results files decide as well, so a failure can't be lost to how a shell reports exit codes.
