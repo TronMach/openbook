@@ -283,7 +283,8 @@ public static class ChannelEndpoints
             form.ContainsKey("taxSet") ? form["marketplaceTax"] == "true" : null,
             Id("classId") is var cls && cls != Guid.Empty ? cls : null,
             Id("locationId") is var loc && loc != Guid.Empty ? loc : null,
-            Id("warehouseId") is var wh && wh != Guid.Empty ? wh : null);
+            Id("warehouseId") is var wh && wh != Guid.Empty ? wh : null,
+            Id("marketplaceWarehouseId") is var mw && mw != Guid.Empty ? mw : null);
     }
 
     private static async Task<IResult> Back(string page, Func<Task> change)

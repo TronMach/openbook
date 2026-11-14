@@ -54,7 +54,8 @@ public sealed record ChannelDetails(
     bool? MarketplaceCollectsTax = null,
     Guid? ClassId = null,
     Guid? LocationId = null,
-    Guid? WarehouseId = null);
+    Guid? WarehouseId = null,
+    Guid? MarketplaceWarehouseId = null);
 
 /// <summary>
 /// A place you sell (a Shopify store, an Amazon seller account, an Etsy shop…) and the accounts its payouts post to.
@@ -177,6 +178,15 @@ public sealed class SalesChannel
     /// </summary>
     public Guid? WarehouseId { get; private set; }
 
+    /// <summary>
+    /// The marketplace's own warehouse (Amazon's, for stock it ships), for order lines its report says it fulfilled
+    /// (C072); null sends those from <see cref="WarehouseId"/> too. Kept as chosen, the default warehouse included.
+    /// </summary>
+    public Guid? MarketplaceWarehouseId { get; private set; }
+
+    /// <summary>Where an order line's stock comes from, by who fulfilled it.</summary>
+    public Guid? WarehouseFor(bool? byMarketplace) => byMarketplace == true && MarketplaceWarehouseId is { } own ? own : WarehouseId;
+
     /// <summary>The channel's class on lines that don't have one.</summary>
     public IReadOnlyList<Ledger.JournalLineDraft> Classed(IEnumerable<Ledger.JournalLineDraft> lines) =>
         [.. lines.Select(l => l.ClassId is null && ClassId is { } c ? l with { ClassId = c } : l)];
@@ -209,6 +219,7 @@ public sealed class SalesChannel
         ClearingAccountId = details.ClearingAccountId == Guid.Empty ? null : details.ClearingAccountId;
         MarketplaceCollectsTax = details.MarketplaceCollectsTax ?? Kind is ChannelKind.Amazon or ChannelKind.Ebay or ChannelKind.Etsy;
         (ClassId, LocationId, WarehouseId) = (details.ClassId, details.LocationId, details.WarehouseId);
+        MarketplaceWarehouseId = details.MarketplaceWarehouseId == Guid.Empty ? null : details.MarketplaceWarehouseId;
         if (!CanConnect(Kind))
             Disconnect();
     }
@@ -448,8 +459,10 @@ public sealed class ChannelPayout
 
 /// <summary>One item line of an order, as the channel reported it.</summary>
 /// <param name="Sales">The item's price times quantity, after the order's discounts; without shipping and tax.</param>
+/// <param name="ByMarketplace">Whether the marketplace fulfilled it (Amazon's "AFN"), when the report says; null when it doesn't.</param>
 public sealed record ChannelOrderDraft(
-    string OrderId, DateOnly Date, string? Sku, string? Title, decimal Quantity, decimal Sales, decimal Shipping = 0m, decimal Tax = 0m, string? Region = null, string? OtherId = null);
+    string OrderId, DateOnly Date, string? Sku, string? Title, decimal Quantity, decimal Sales, decimal Shipping = 0m, decimal Tax = 0m, string? Region = null, string? OtherId = null,
+    bool? ByMarketplace = null);
 
 public sealed class ChannelOrderLine
 {
@@ -467,6 +480,7 @@ public sealed class ChannelOrderLine
         Shipping = decimal.Round(draft.Shipping, 2, MidpointRounding.AwayFromZero);
         Tax = decimal.Round(draft.Tax, 2, MidpointRounding.AwayFromZero);
         Region = Cut(draft.Region, 50)?.ToUpperInvariant();
+        ByMarketplace = draft.ByMarketplace;
     }
 
     public int LineNumber { get; private set; }
@@ -483,6 +497,9 @@ public sealed class ChannelOrderLine
     public decimal Shipping { get; private set; }
     public decimal Tax { get; private set; }
     public string? Region { get; private set; }
+
+    /// <summary>Whether the marketplace fulfilled it, as the report said; null when it didn't say (C072).</summary>
+    public bool? ByMarketplace { get; private set; }
 
     private static string? Cut(string? text, int max)
     {

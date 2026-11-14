@@ -364,6 +364,9 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
     {
         // The warehouse it ships from, in the stored form (the default is null).
         d = d with { WarehouseId = await warehouses.CheckAsync(d.WarehouseId, ct) };
+        // The marketplace's warehouse is kept as chosen (the default too, so it can differ from WarehouseId's), once checked.
+        if (d.MarketplaceWarehouseId is { } own && own != Guid.Empty)
+            await warehouses.CheckAsync(own, ct);
         var chart = await accounts.GetChartAsync(ct);
 
         async Task<Guid> Pick(Guid id, string name, AccountType type, string description, string role, params AccountType[] allowed)
@@ -422,6 +425,7 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         c.ClassId,
         c.LocationId,
         c.WarehouseId,
+        c.MarketplaceWarehouseId,
         Kind = c.Kind.ToString(),
         c.DepositAccountId,
         c.SalesAccountId,

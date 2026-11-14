@@ -24,6 +24,17 @@ public sealed record ReturnReadResult(IReadOnlyList<ChannelReturnRow> Rows, IRea
 /// </summary>
 public static class ChannelOrderReports
 {
+    /// <summary>
+    /// Who shipped a line, from a fulfilment column (C072): Amazon's "AFN"/"Amazon", FBA, WFS or "marketplace" is the
+    /// marketplace; "MFN"/"Merchant", "seller" or "self" is you; anything else says nothing.
+    /// </summary>
+    public static bool? ByMarketplace(string? value) => Csv.Normalize(value ?? "") switch
+    {
+        "afn" or "amazon" or "fba" or "fulfilledbyamazon" or "wfs" or "walmart" or "marketplace" or "platform" or "channel" => true,
+        "mfn" or "merchant" or "seller" or "self" or "me" or "merchantfulfilled" or "sellerfulfilled" or "manual" => false,
+        _ => null,
+    };
+
     private static readonly string[] TaxHeaders = ["itemtax", "ordersalestax", "taxes", "ebaycollectedtax", "sellercollectedtax", "salestax", "tax", "shippingtax"];
 
     public static OrderReadResult Read(ChannelKind kind, string text)
@@ -58,6 +69,7 @@ public static class ChannelOrderReports
         var shipping = First("shippingprice", "ordershipping", "shippingandhandling", "shipping");
         var taxColumns = TaxHeaders.Select(n => columns.Find(n)).OfType<int>().Distinct().ToList();
         var region = First("shipstate", "shiptostate", "shippingprovince", "shipprovince", "state");
+        var fulfilment = First("fulfillmentchannel", "fulfilmentchannel", "fulfilledby", "fulfillment", "fulfilment", "fulfillmentservice");
         var status = First("orderstatus", "status", "financialstatus");
         var cancelled = First("cancelledat");
         var dateOrder = StatementValues.DetectDateOrder(rows.Select(r => Clean(CsvColumns.Field(r, date))).OfType<string>().Take(500).ToList(), CultureInfo.CurrentCulture, out _);
@@ -134,7 +146,8 @@ public static class ChannelOrderReports
             else
                 lastRegion[id] = shipTo;
 
-            lines.Add(new ChannelOrderDraft(id, on, CsvColumns.Field(row, sku), CsvColumns.Field(row, title), qty, sales, ship, tax, shipTo));
+            lines.Add(new ChannelOrderDraft(id, on, CsvColumns.Field(row, sku), CsvColumns.Field(row, title), qty, sales, ship, tax, shipTo,
+                ByMarketplace: ByMarketplace(CsvColumns.Field(row, fulfilment))));
         }
 
         var warnings = new List<string>();

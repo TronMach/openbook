@@ -101,6 +101,7 @@ Contributors: a change to anything under "What's covered" that isn't additive ne
 
 ## Change log
 
+- **2026-11-14**: channel requests take optional `marketplaceWarehouseId`; order lines carry `byMarketplace`. Additive.
 - **2026-11-14**: `POST /api/inventory/landed-costs` takes optional `itemIds` (only those items' stock gets the cost); `GET /api/inventory/landed-costs/candidates` adds `itemIds`. Additive.
 - **2026-11-14**: `PUT /api/nonprofit/grants/{id}/budget` lines take optional `category`; a line with a category may have amount 0. The grant's budget rows carry `category`. Additive.
 - **2026-11-14**: `POST /api/sales/estimates/{id}/progress-invoice` takes optional `retainagePercent`. Additive.

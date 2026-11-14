@@ -1304,6 +1304,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("MarketplaceCollectsTax")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("MarketplaceWarehouseId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -8032,6 +8035,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasColumnType("integer");
 
                             NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<bool?>("ByMarketplace")
+                                .HasColumnType("boolean");
 
                             b1.Property<DateOnly>("Date")
                                 .HasColumnType("date");

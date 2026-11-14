@@ -535,6 +535,35 @@ public sealed class ChannelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Orders_the_marketplace_fulfilled_leave_its_warehouse_and_the_rest_leave_yours()
+    {
+        var sales = await _db.CreateAccount("Sales", AccountType.Income);
+        var mug = await In<ItemService, Domain.Sales.Item>(s => s.CreateAsync(new Domain.Sales.ItemDetails("Blue mug", Domain.Sales.ItemType.Inventory, sales.Id, 40m, Barcode: "MUG-1")));
+        var fba = await In<WarehouseService, Domain.Inventory.Warehouse>(s => s.CreateAsync("Amazon FBA"));
+        await In<InventoryAdjustmentService, Domain.Inventory.InventoryAdjustment>(s => s.CreateAsync(new CreateInventoryAdjustmentCommand(new DateOnly(2026, 3, 1),
+        [
+            new Domain.Inventory.InventoryAdjustmentLineDraft(mug.Id, 10m, 5m),
+            new Domain.Inventory.InventoryAdjustmentLineDraft(mug.Id, 10m, 5m, new Domain.Inventory.StockPlace(fba.Id, null)),
+        ])));
+        var amazon = await In<ChannelService, SalesChannel>(s => s.CreateAsync(new ChannelDetails("Amazon US", ChannelKind.Amazon, _checking.Id, MarketplaceWarehouseId: fba.Id)));
+        Assert.Equal((null, fba.Id), (amazon.WarehouseId, amazon.MarketplaceWarehouseId));
+
+        const string report =
+            "amazon-order-id\tpurchase-date\torder-status\tfulfillment-channel\tproduct-name\tsku\tquantity\titem-price\n" +
+            "114-1\t2026-03-02T10:00:00+00:00\tShipped\tAmazon\tBlue mug\tMUG-1\t3\t120.00\n" +
+            "114-2\t2026-03-02T11:00:00+00:00\tShipped\tMerchant\tBlue mug\tMUG-1\t2\t80.00\n";
+        var imported = await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(amazon.Id, Encoding.UTF8.GetBytes(report)));
+        var batch = imported.Saved.Single();
+        Assert.Equal([true, false], batch.Lines.Select(l => l.ByMarketplace));
+        await In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(batch.Id));
+
+        var places = await In<InventoryService, IReadOnlyList<StockAt>>(s => s.StockByPlaceAsync(mug.Id));
+        Assert.Equal(7m, places.Where(p => p.Place.WarehouseId == fba.Id).Sum(p => p.Quantity));
+        Assert.Equal(8m, places.Where(p => p.Place.WarehouseId != fba.Id).Sum(p => p.Quantity));
+        Assert.Equal((true, false, (bool?)null), (ChannelOrderReports.ByMarketplace("AFN"), ChannelOrderReports.ByMarketplace("Seller"), ChannelOrderReports.ByMarketplace("Unknown")));
+    }
+
+    [Fact]
     public async Task A_return_that_doesnt_go_back_on_the_shelf_leaves_stock_alone()
     {
         var sales = await _db.CreateAccount("Sales", AccountType.Income);

@@ -1297,6 +1297,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<bool>("MarketplaceCollectsTax")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("MarketplaceWarehouseId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -8018,6 +8021,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                             b1.Property<int>("LineNumber")
                                 .ValueGeneratedOnAdd()
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<bool?>("ByMarketplace")
                                 .HasColumnType("INTEGER");
 
                             b1.Property<DateOnly>("Date")

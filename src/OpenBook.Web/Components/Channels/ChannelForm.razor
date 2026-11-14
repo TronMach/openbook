@@ -50,6 +50,16 @@
             }
         </select>
     </div>
+    <div class="field">
+        <label for="channel-marketplace-warehouse">Orders the marketplace ships <span class="muted">(when its orders report says who fulfilled them, like Amazon's FBA)</span></label>
+        <select id="channel-marketplace-warehouse" name="marketplaceWarehouseId">
+            <option value="">(from the warehouse above too)</option>
+            @foreach (var w in _warehouses)
+            {
+                <option value="@w.Id" selected="@(Channel?.MarketplaceWarehouseId == w.Id)">@w.Name</option>
+            }
+        </select>
+    </div>
 }
 @if (_classes.Count > 0 || _locations.Count > 0)
 {

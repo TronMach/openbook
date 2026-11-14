@@ -64,7 +64,8 @@ public sealed record SkuChoice(string Sku, string? Title, Guid? ItemId, bool Map
 /// </summary>
 public sealed class ChannelOrderService(
     IChannelOrderStore store, IChannelStore channels, ISalesStore sales, InventoryService inventory, PostingEngine engine,
-    OpenBook.Application.Companies.ICompanyStore companies, IClock clock, ICurrentUser user, IUnitOfWork unitOfWork)
+    OpenBook.Application.Companies.ICompanyStore companies, IClock clock, ICurrentUser user, IUnitOfWork unitOfWork,
+    Inventory.WarehouseService warehouses)
 {
     public const string BatchEntity = "channel_orders";
 
@@ -331,12 +332,19 @@ public sealed class ChannelOrderService(
         if (unmapped.Count > 0)
             throw new DomainException("channel.sku_unmapped", $"Say which item each SKU is first (or that it isn't stocked): {string.Join(", ", unmapped.Take(10))}{(unmapped.Count > 10 ? "…" : "")}.");
 
+        // Each line from the warehouse of whoever fulfilled it: the marketplace's own, or the channel's (C072).
         var stocked = batch.Lines.Where(l => l.Quantity > 0m && mapping[l.MappingKey].ItemId is not null)
-            .GroupBy(l => mapping[l.MappingKey].ItemId!.Value).Select(g => (ItemId: g.Key, Quantity: g.Sum(l => l.Quantity))).ToList();
-        var items = await sales.GetItemsAsync(stocked.Select(s => s.ItemId).ToList(), ct);
-        var lines = stocked.Select((s, i) => SalesLine.Create(i + 1, new SalesLineDraft(s.ItemId, null, s.Quantity, 0m), items.GetValueOrDefault(s.ItemId))).ToList();
+            .GroupBy(l => (Warehouse: channel.WarehouseFor(l.ByMarketplace), ItemId: mapping[l.MappingKey].ItemId!.Value))
+            .Select(g => (g.Key.Warehouse, g.Key.ItemId, Quantity: g.Sum(l => l.Quantity))).ToList();
+        var items = await sales.GetItemsAsync(stocked.Select(s => s.ItemId).Distinct().ToList(), ct);
         var before = Snapshot(batch, channel);
-        var plan = lines.Count == 0 ? InventoryPlan.None : await inventory.PlanSaleAsync(lines, batch.Date, channel.WarehouseId, ct);
+        var plan = InventoryPlan.None;
+        foreach (var place in stocked.GroupBy(s => s.Warehouse))
+        {
+            var lines = place.Select((s, i) => SalesLine.Create(i + 1, new SalesLineDraft(s.ItemId, null, s.Quantity, 0m), items.GetValueOrDefault(s.ItemId))).ToList();
+            var part = await inventory.PlanSaleAsync(lines, batch.Date, await warehouses.CheckAsync(place.Key, ct), ct);
+            plan = new InventoryPlan([.. plan.Postings, .. part.Postings], [.. plan.Movements, .. part.Movements]);
+        }
         Guid? entryId = null;
         if (plan.Postings.Count > 0)
         {
