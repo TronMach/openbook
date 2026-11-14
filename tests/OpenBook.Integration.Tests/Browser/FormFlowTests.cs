@@ -220,9 +220,17 @@ public sealed class FormFlowTests(BrowserApp app)
 
         var finish = p.GetByRole(AriaRole.Button, new() { Name = "Finish reconciliation" });
         await Assertions.Expect(finish).ToBeDisabledAsync(new() { Timeout = Slow });
-        foreach (var all in await p.Locator("input[aria-label^='Tick all']").AllAsync())
-            if (await all.IsEnabledAsync())
-                await all.CheckAsync();
+        // A tick made while the page is still saving the one before is ignored (the handler is busy): tick again until
+        // everything that cleared is ticked and the difference is nil.
+        var deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (!await finish.IsEnabledAsync() && DateTime.UtcNow < deadline)
+        {
+            foreach (var all in await p.Locator("input[aria-label^='Tick all']").AllAsync())
+                if (await all.IsEnabledAsync() && !await all.IsCheckedAsync())
+                    await all.CheckAsync();
+            await p.WaitForTimeoutAsync(400);
+        }
+
         await Assertions.Expect(finish).ToBeEnabledAsync(new() { Timeout = Slow });
         await finish.ClickAsync();
         await p.WaitForURLAsync(new Regex("/banking/reconciliations/[0-9a-f-]{36}$"), new() { Timeout = Slow });
