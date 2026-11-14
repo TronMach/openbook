@@ -427,7 +427,6 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> Back(string page, Func<Task> change)
     {
-        var separator = page.Contains('?', StringComparison.Ordinal) ? '&' : '?';
         try
         {
             await change();
@@ -435,7 +434,11 @@ public static class ProjectEndpoints
         }
         catch (DomainException ex)
         {
-            return Results.Redirect($"{page}{separator}error={Uri.EscapeDataString(ex.Message)}");
+            // The error goes before a "#section", or the browser takes it as part of the fragment.
+            var hash = page.IndexOf('#', StringComparison.Ordinal);
+            var (path, fragment) = hash < 0 ? (page, "") : (page[..hash], page[hash..]);
+            var separator = path.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+            return Results.Redirect($"{path}{separator}error={Uri.EscapeDataString(ex.Message)}{fragment}");
         }
     }
 
