@@ -29,8 +29,8 @@ docker compose exec -T db createdb -U @_pg.User @_pg.Database
 docker compose exec -T db pg_restore -U @_pg.User -d @_pg.Database --no-owner &lt; openbook-20261101.dump
 docker compose start openbook</pre>
         <p class="muted">
-            Elsewhere, run the same <code>pg_dump</code> and <code>pg_restore</code> against database <strong>@_pg.Database</strong> on
-            <strong>@_pg.Host</strong>. Keep the Data Protection keys folder with your backups too: stored passwords, two-factor sign-in
+            Elsewhere, run the same <code>pg_dump</code> and <code>pg_restore</code> against database <code>@_pg.Database</code> on
+            <code>@_pg.Host</code>. Keep the Data Protection keys folder with your backups too: stored passwords, two-factor sign-in
             and connection keys can't be read without it.
         </p>
     </div>

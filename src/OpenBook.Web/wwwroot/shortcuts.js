@@ -279,7 +279,7 @@ window.obDrafts = {
     if ('serviceWorker' in navigator && window.isSecureContext)
         navigator.serviceWorker.register('/sw.js').catch(() => { });
 
-    // A wide table scrolls inside its box (.table-wrap): while it does, the box takes keyboard focus, so the arrow keys
+    // A wide table (.table-wrap) or a long sample (pre) scrolls inside its box: while it does, the box takes keyboard focus, so the arrow keys
     // scroll it, and is named after the heading above it. A box that fits the screen stays out of the tab order.
     const headingBefore = el => {
         for (let node = el; node && node !== document.body; node = node.parentElement) {
@@ -291,12 +291,17 @@ window.obDrafts = {
         return document.querySelector('h1')?.textContent.trim() || document.title;
     };
     const reachScrolling = () => {
-        for (const wrap of document.querySelectorAll('.table-wrap')) {
+        for (const wrap of document.querySelectorAll('.table-wrap, pre')) {
             const scrolls = wrap.scrollWidth > wrap.clientWidth + 1;
             if (scrolls && !wrap.hasAttribute('tabindex')) {
                 wrap.setAttribute('tabindex', '0');
                 wrap.setAttribute('role', 'region');
-                wrap.setAttribute('aria-label', wrap.querySelector('caption')?.textContent.trim() || headingBefore(wrap));
+                // Two boxes under one heading are numbered: each region on a page needs a name of its own.
+                const name = wrap.querySelector('caption')?.textContent.trim() || headingBefore(wrap);
+                const taken = new Set([...document.querySelectorAll('[role="region"][aria-label]')].map(r => r.getAttribute('aria-label')));
+                let label = name;
+                for (let n = 2; taken.has(label); n++) label = `${name} (${n})`;
+                wrap.setAttribute('aria-label', label);
                 wrap.dataset.scrollFocus = '';
             } else if (!scrolls && 'scrollFocus' in wrap.dataset) {
                 wrap.removeAttribute('tabindex');
