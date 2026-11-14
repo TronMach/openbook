@@ -496,6 +496,17 @@ public sealed class ProjectsTests : IAsyncLifetime
         Assert.Equal(437.5m, table.Find("Acme Corp:Kitchen remodel", 6));
         var time = await _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync("time-by-customer", ReportParameters.Parse("preset=Custom&from=2026-03-01&to=2026-03-31")));
         Assert.Equal(6m, time.Find("Total", 4));
+
+        // Grouped another way, and only billable or other time (C325).
+        Task<OpenBook.Application.Reporting.ReportTable> Time(string query) => _db.InScope(sp =>
+            sp.GetRequiredService<ReportCatalog>().RunAsync("time-by-customer", ReportParameters.Parse("preset=Custom&from=2026-03-01&to=2026-03-31&" + query)));
+        var byPerson = await Time("groupBy=person");
+        Assert.Equal(("Time by person", 6m), (byPerson.Title, byPerson.Find($"Total for {_ana.Name}", 4)));
+        var byService = await Time("groupBy=service&billable=true");
+        Assert.Equal((5m, 600m), (byService.Find("Total for Consulting", 4), byService.Find("Total", 5)));
+        Assert.Null(byService.Find("Total for No service", 4));
+        Assert.Equal(1m, (await Time("groupBy=week&billable=false")).Find("Total", 4));
+        Assert.Contains((await Time("groupBy=week")).Rows, r => r.Cells[0]?.Value is string s && s.StartsWith("Week of", StringComparison.Ordinal));
     }
 
     [Fact]

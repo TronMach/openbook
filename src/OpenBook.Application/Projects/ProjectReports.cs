@@ -194,40 +194,84 @@ public sealed class ProjectReports(
 
     /// <param name="workerId">Only that person's time.</param>
     /// <param name="responsibleId">Only time for clients and projects that person is responsible for.</param>
-    public async Task<ReportTable> TimeDetailAsync(DateOnly? from, DateOnly to, Guid? workerId = null, Guid? responsibleId = null, CancellationToken ct = default)
+    public enum TimeGroup
+    {
+        Customer,
+        Person,
+        Service,
+        Week,
+    }
+
+    /// <summary>The report's groupBy value; anything else is by customer.</summary>
+    public static TimeGroup TimeGroupFrom(string? value) =>
+        Enum.TryParse<TimeGroup>(value, ignoreCase: true, out var g) && Enum.IsDefined(g) ? g : TimeGroup.Customer;
+
+    /// <summary>
+    /// Time worked in a period, one row per entry, grouped by customer (the usual), person, service or week (from its
+    /// Monday) with a total for each (C325); <paramref name="billable"/> keeps only billable (true) or other (false) time.
+    /// </summary>
+    public async Task<ReportTable> TimeDetailAsync(DateOnly? from, DateOnly to, Guid? workerId = null, Guid? responsibleId = null,
+        TimeGroup groupBy = TimeGroup.Customer, bool? billable = null, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var mine = await ResponsibleFilterAsync(responsibleId, ct);
         var entries = (await store.ListTimeAsync(new TimeFilter(from, to, workerId), ct))
-            .Where(t => !t.IsRunning && (responsibleId is null || (t.CustomerId is { } c && mine(c)))).ToList();
+            .Where(t => !t.IsRunning && (responsibleId is null || (t.CustomerId is { } c && mine(c))) && (billable is null || t.Billable == billable)).ToList();
         var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
         var customers = CustomerTree.FullNames(await sales.ListCustomersAsync(ct));
         var items = (await sales.ListItemsAsync(ct)).ToDictionary(i => i.Id);
-        var rows = new List<ReportTableRow>();
-        foreach (var group in entries.GroupBy(e => e.CustomerId).OrderBy(g => g.Key is { } c ? customers[c] : "￿", StringComparer.OrdinalIgnoreCase))
+        string CustomerName(Guid? id) => id is { } c ? customers[c] : "No customer";
+        string ServiceName(Guid? id) => id is { } i ? items[i].Name : "No service";
+        const string Last = "￿";
+
+        // Each group's sort key and heading (with a link where there's a record).
+        (string Sort, ReportCell Heading) Group(TimeEntry e) => groupBy switch
         {
-            var name = group.Key is { } id ? customers[id] : "No customer";
-            rows.Add(new ReportTableRow(group.Key is { } cid ? [new ReportCell(name, new ReportLink("customer", cid))] : [name], 0, ReportRowStyle.Section));
+            TimeGroup.Person => (workers[e.WorkerId].Name, new ReportCell(workers[e.WorkerId].Name)),
+            TimeGroup.Service => (e.ItemId is null ? Last : ServiceName(e.ItemId), new ReportCell(ServiceName(e.ItemId))),
+            TimeGroup.Week => (TimeSheet.MondayOf(e.Date).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                new ReportCell($"Week of {TimeSheet.MondayOf(e.Date).ToString("d", System.Globalization.CultureInfo.CurrentCulture)}")),
+            _ => (e.CustomerId is null ? Last : CustomerName(e.CustomerId),
+                e.CustomerId is { } cid ? new ReportCell(CustomerName(cid), new ReportLink("customer", cid)) : new ReportCell("No customer")),
+        };
+
+        var rows = new List<ReportTableRow>();
+        foreach (var group in entries.GroupBy(e => Group(e).Sort, StringComparer.OrdinalIgnoreCase).OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            var heading = Group(group.First()).Heading;
+            var name = heading.Value?.ToString() ?? "";
+            rows.Add(new ReportTableRow([heading], 0, ReportRowStyle.Section));
             rows.AddRange(group.OrderBy(e => e.Date).ThenBy(e => e.CreatedAt).Select(e => new ReportTableRow(
             [
                 new ReportCell(e.Date),
-                workers[e.WorkerId].Name,
-                e.ItemId is { } item ? items[item].Name : null,
+                groupBy == TimeGroup.Customer ? workers[e.WorkerId].Name : CustomerName(e.CustomerId),
+                groupBy == TimeGroup.Service ? workers[e.WorkerId].Name : e.ItemId is { } item ? items[item].Name : null,
                 e.Notes,
                 new ReportCell(e.Hours),
                 e.Billable ? new ReportCell(e.Amount) : ReportCell.Empty,
                 e.Billable ? (e.InvoiceId is null ? "Not yet" : "Yes") : "Not billable",
             ], 1)));
             rows.Add(new ReportTableRow(
-                [$"Total for {name}", null, null, null, new ReportCell(group.Sum(e => e.Hours)), group.Sum(e => e.Amount), null], 0, ReportRowStyle.Subtotal));
+                [$"Total for {name}", null, null, null, new ReportCell(group.Sum(e => e.Hours)), group.Where(e => e.Billable).Sum(e => e.Amount), null], 0, ReportRowStyle.Subtotal));
         }
 
-        rows.Add(new ReportTableRow(["Total", null, null, null, new ReportCell(entries.Sum(e => e.Hours)), entries.Sum(e => e.Amount), null], 0, ReportRowStyle.Total));
+        rows.Add(new ReportTableRow(["Total", null, null, null, new ReportCell(entries.Sum(e => e.Hours)), entries.Where(e => e.Billable).Sum(e => e.Amount), null], 0, ReportRowStyle.Total));
+        var (second, third) = groupBy switch
+        {
+            TimeGroup.Customer => ("Person", "Service"),
+            TimeGroup.Service => ("Customer", "Person"),
+            _ => ("Customer", "Service"),
+        };
         return new ReportTable(
-            "Time by customer",
-            [company.Name, Describe(from, to), .. new[] { workerId is { } w && workers.TryGetValue(w, out var person) ? $"Person: {person.Name}" : null, await ResponsibleNameAsync(responsibleId, ct) }.OfType<string>()],
+            groupBy switch { TimeGroup.Person => "Time by person", TimeGroup.Service => "Time by service", TimeGroup.Week => "Time by week", _ => "Time by customer" },
+            [company.Name, Describe(from, to), .. new[]
+            {
+                workerId is { } w && workers.TryGetValue(w, out var person) ? $"Person: {person.Name}" : null,
+                await ResponsibleNameAsync(responsibleId, ct),
+                billable switch { true => "Billable time only", false => "Time that isn't billable only", _ => null },
+            }.OfType<string>()],
             [
-                new("Date", ColumnFormat.Date), new("Person"), new("Service"), new("Notes"), new("Hours", ColumnFormat.Number),
+                new("Date", ColumnFormat.Date), new(second), new(third), new("Notes"), new("Hours", ColumnFormat.Number),
                 new("Billable amount", ColumnFormat.Money), new("Invoiced"),
             ],
             rows);

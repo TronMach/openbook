@@ -64,6 +64,9 @@ public enum ReportInputs
 
     /// <summary>workerId: only that person's time (blank for everyone).</summary>
     Person = 16384,
+
+    /// <summary>groupBy (customer, person, service or week) and billable (blank, "true" or "false") for time (C325).</summary>
+    TimeGrouping = 32768,
 }
 
 public sealed record ReportDefinition(
@@ -244,7 +247,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         new("project-profitability", "Project profitability", "Each project's income, costs (expenses, labor, mileage) and profit, with its cost budget and what's not billed yet.",
             "Projects and time", ReportInputs.Period | ReportInputs.Responsible),
         new("time-by-customer", "Time by customer", "Hours worked for each customer and project, by whom, and whether they're billed.",
-            "Projects and time", ReportInputs.Period | ReportInputs.Person | ReportInputs.Responsible, DatePreset.ThisMonth),
+            "Projects and time", ReportInputs.Period | ReportInputs.Person | ReportInputs.Responsible | ReportInputs.TimeGrouping, DatePreset.ThisMonth),
         new("mileage-log", "Mileage log", "Business trips in a year with miles driven and their value at the standard mileage rate.",
             "Projects and time", ReportInputs.Year),
         new("channel-sales", "Sales by channel", "What each online channel's posted payouts came to: sales, shipping, refunds, fees and sales tax.",
@@ -380,7 +383,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "depreciation-schedule" => await Get<Assets.AssetReports>().ScheduleAsync(p.GetYear("year") ?? today.Year, ct),
             "loans" => await Get<Assets.AssetReports>().LoansAsync(asOf, ct),
             "project-profitability" => await Get<Projects.ProjectReports>().ProfitabilityTableAsync(range.From, range.To, p.GetId("responsibleId"), ct),
-            "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, p.GetId("workerId"), p.GetId("responsibleId"), ct),
+            "time-by-customer" => await Get<Projects.ProjectReports>().TimeDetailAsync(range.From, range.To, p.GetId("workerId"), p.GetId("responsibleId"),
+                Projects.ProjectReports.TimeGroupFrom(p.Get("groupBy")), bool.TryParse(p.Get("billable"), out var billable) ? billable : null, ct),
             "unbilled-aging" => await Get<Projects.ProjectReports>().UnbilledAgingAsync(asOf, p.GetId("responsibleId"), ct),
             "mileage-log" => await Get<Projects.ProjectReports>().MileageLogAsync(p.GetYear("year") ?? today.Year, ct),
             "channel-sales" => await Get<Channels.ChannelSalesReport>().TableAsync(from, range.To, ct),

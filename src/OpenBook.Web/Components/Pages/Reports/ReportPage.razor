@@ -61,6 +61,27 @@
                     </select>
                 </div>
             }
+            @if (Has(ReportInputs.TimeGrouping))
+            {
+                var timeGroup = OpenBook.Application.Projects.ProjectReports.TimeGroupFrom(_parameters.Get("groupBy"));
+                <div class="field">
+                    <label for="group-by">Group by</label>
+                    <select id="group-by" name="groupBy">
+                        @foreach (var (value, label) in new[] { ("customer", "Customer"), ("person", "Person"), ("service", "Service"), ("week", "Week") })
+                        {
+                            <option value="@value" selected="@(timeGroup.ToString().Equals(value, StringComparison.OrdinalIgnoreCase))">@label</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="billable">Time</label>
+                    <select id="billable" name="billable">
+                        <option value="">All</option>
+                        <option value="true" selected="@(_parameters.Get("billable") == "true")">Billable only</option>
+                        <option value="false" selected="@(_parameters.Get("billable") == "false")">Not billable only</option>
+                    </select>
+                </div>
+            }
             @if (Has(ReportInputs.Responsible) && _people.Count > 0)
             {
                 <div class="field">

@@ -104,4 +104,5 @@ In the **Projects and time** group:
 - **Unbilled work**: time, mileage and expenses not yet on an invoice, per client, with the oldest work.
 - **Unbilled work by age**: the same work per client, by how long ago it was done (0-30, 31-60, 61-90 and over 90 days).
 - **Utilization**: per person, available hours, hours worked, the billable share, billable value and what was invoiced.
-- **Time by customer** (one **Person**'s time, or the clients one person is **Responsible** for) and **Mileage log**.
+- **Time by customer** (one **Person**'s time, or the clients one person is **Responsible** for). **Group by** **Customer**, **Person**, **Service** or **Week** (each with a total; weeks start on Monday) turns it into time by person, by service or by week, and **Time** shows **All**, **Billable only** or **Not billable only**. Save it as a report for a month-end view you use often.
+- **Mileage log**.
