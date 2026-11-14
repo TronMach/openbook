@@ -227,7 +227,8 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
         {
             if (PostgresTemplates.TryGetValue(withCompany, out var existing))
                 return existing;
-            if (PostgresTemplates.Count == 0)
+            // Not when several test processes share the login at once (OPENBOOK_TEST_KEEP_LEFTOVERS=1): each would drop the others'.
+            if (PostgresTemplates.Count == 0 && Environment.GetEnvironmentVariable("OPENBOOK_TEST_KEEP_LEFTOVERS") != "1")
                 await DropLeftoversAsync();
             var name = $"openbook_test_template_{Guid.NewGuid():N}";
             await CreatePostgresDatabaseAsync(name, template: null);
@@ -272,12 +273,25 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     private static string AdminConnection() =>
         new Npgsql.NpgsqlConnectionStringBuilder(PostgresFactAttribute.ConnectionString) { Timeout = 120, CommandTimeout = 120 }.ToString();
 
+    /// <summary>
+    /// How PostgreSQL copies the template, from <c>OPENBOOK_TEST_PG_COPY</c> (<c>FILE_COPY</c> or <c>WAL_LOG</c>; unset:
+    /// the server's default, WAL_LOG). FILE_COPY copies the files and forces two checkpoints, so it suits only a server
+    /// that doesn't wait for the disk (tools/pgtest.ps1, where run-tests.ps1 sets it): on an ordinary one it took 15.7 s
+    /// a copy against WAL_LOG's 4.5 s.
+    /// </summary>
+    private static string CopyStrategy => Environment.GetEnvironmentVariable("OPENBOOK_TEST_PG_COPY")?.ToUpperInvariant() switch
+    {
+        "FILE_COPY" => " STRATEGY FILE_COPY",
+        "WAL_LOG" => " STRATEGY WAL_LOG",
+        _ => "",
+    };
+
     /// <summary>Creates an empty database, or a copy of <paramref name="template"/>; retried while something still holds the template.</summary>
     private static async Task CreatePostgresDatabaseAsync(string database, string? template)
     {
         await using var admin = new Npgsql.NpgsqlConnection(AdminConnection());
         await admin.OpenAsync();
-        var sql = template is null ? $"""CREATE DATABASE "{database}";""" : $"""CREATE DATABASE "{database}" TEMPLATE "{template}";""";
+        var sql = template is null ? $"""CREATE DATABASE "{database}";""" : $"""CREATE DATABASE "{database}" TEMPLATE "{template}"{CopyStrategy};""";
         for (var attempt = 1; ; attempt++)
         {
             try

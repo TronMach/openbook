@@ -1,6 +1,7 @@
 # Builds OpenBook and runs the test suites on every push to master and every pull request: the whole suite on SQLite,
-# and the integration suite on PostgreSQL (the server that comes installed on GitHub's Windows runners, reached as a
-# login that may create databases but isn't a superuser, as locally). Windows, like the release workflow, whose test
+# and the integration suite on PostgreSQL (a test-only server set up by tools/pgtest.ps1 from the PostgreSQL programs
+# installed on GitHub's Windows runners, with nothing waiting for the disk, reached as a login that may create
+# databases but isn't a superuser, as locally). Windows, like the release workflow, whose test
 # step has passed there on every release. Failed tests are listed on the run's summary page and their trx files kept.
 # The SQLite job also checks every package's licence (tools/check-licences.ps1), so a Dependabot update can't bring in
 # one OpenBook can't use.
@@ -66,24 +67,16 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # The runner image installs PostgreSQL stopped, with PGBIN, PGUSER (postgres) and PGPASSWORD set.
-      - name: Start PostgreSQL
+      # The runner image installs PostgreSQL (stopped, PGBIN set). Its programs set up a test-only server on port 5433
+      # in artifacts/pgtest, which run-tests.ps1 would also start; started here so its own step shows the version.
+      - name: Start the test PostgreSQL server
         shell: pwsh
         run: |
-          $service = Get-Service -Name 'postgresql*' | Select-Object -First 1
-          if (-not $service) { throw 'No PostgreSQL service on this runner.' }
-          Set-Service -Name $service.Name -StartupType Manual
-          Start-Service -Name $service.Name
-          $psql = Join-Path $env:PGBIN 'psql.exe'
-          & $psql -h localhost -tAc 'SELECT version()'
-          & $psql -h localhost -c "CREATE ROLE openbook_test LOGIN CREATEDB PASSWORD 'openbook-ci'"
-          if ($LASTEXITCODE -ne 0) { throw 'Creating the test login failed.' }
+          & (Join-Path $env:PGBIN 'postgres.exe') --version
+          ./tools/pgtest.ps1 start
 
       - name: Test
         shell: pwsh
-        env:
-          # A throwaway login on the runner's own server, which is gone when the job ends.
-          OPENBOOK_TEST_POSTGRES: Host=localhost;Username=openbook_test;Password=openbook-ci;Database=postgres
         run: ./tools/run-tests.ps1 -Postgres -Results "$env:RUNNER_TEMP/test-results"
 
       - name: Keep the results of a failed run

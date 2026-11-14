@@ -13,15 +13,22 @@
     The whole run (the build, the test host and what it starts, such as the headless browser) is also kept to
     -CpuPercent of the processors (default 85, so 20 of 24 threads stay busy at most and the last cores are left
     alone), and the default caps above are lowered by the same share (decided 2026-11-13, after a blue screen at the
-    end of a full run). Two runs at once share the same processors, so together they stay within it too. The
-    PostgreSQL server is a separate service and isn't limited.
+    end of a full run). Two runs at once share the same processors, so together they stay within it too.
+
+    -Postgres runs on the test-only server of tools/pgtest.ps1 (-Server Fast, the default since 2026-11-13: port
+    5433, nothing waits for the disk, started here within the same processors and priority, and left running for
+    the next run). Copying and dropping a database per test on an ordinary server, which flushes every write, took
+    most of a full run's 45 minutes. -Server Env uses OPENBOOK_TEST_POSTGRES from .env or the environment instead.
+
+    After each run the time each test class took goes in artifacts\test-times\<suite>.json, and the next run starts
+    the slowest classes first (OPENBOOK_TEST_TIMES, read by SlowestFirst in the integration tests); without that file
+    it uses tools\test-times.json, kept in the repository for CI.
 
 .EXAMPLE
     powershell -File tools/run-tests.ps1                      # SQLite: every test project
     powershell -File tools/run-tests.ps1 -Postgres            # the integration suite on PostgreSQL (.env loaded)
     powershell -File tools/run-tests.ps1 -Postgres -EnvFile ..\..\..\.env    # from a worktree
-    powershell -File tools/run-tests.ps1 -Filter "FullyQualifiedName~InviteTests" -Threads 2
-    dotnet build; then both suites at once, neither building (two builds at once lock each other's files):
+    powershell -File tools/run-tests.ps1 -Filter "FullyQualifiedName~InviteTests" -Threads 2    dotnet build; then both suites at once, neither building (two builds at once lock each other's files):
     powershell -File tools/run-tests.ps1 -NoBuild    and, in a second window,    powershell -File tools/run-tests.ps1 -Postgres -NoBuild
 #>
 param(
@@ -30,6 +37,7 @@ param(
     [int]$Threads = 0,
     [string]$Filter,
     [string]$EnvFile,
+    [ValidateSet('Fast', 'Env')][string]$Server = 'Fast',
     [ValidateRange(10, 100)][int]$CpuPercent = 85,
     [string]$Results = (Join-Path ([IO.Path]::GetTempPath()) 'openbook-test-results')
 )
@@ -45,6 +53,11 @@ if ($Threads -le 0) {
     $full = if ($Postgres) { [Math]::Min(12, $cores) } else { [Math]::Max(2, [int]($cores / 4)) }
     $Threads = [Math]::Max(2, [int][Math]::Floor($full * $share))
 }
+# Set on this process first: what it starts (the build, the test host, the test server) inherits both.
+$self = [System.Diagnostics.Process]::GetCurrentProcess()
+if ($usable -lt $cores) { $self.ProcessorAffinity = [IntPtr]([long][Math]::Pow(2, $usable) - 1) }
+$self.PriorityClass = 'BelowNormal'
+
 $arguments = @('test')
 if ($Postgres) {
     $arguments += 'tests/OpenBook.Integration.Tests'
@@ -53,7 +66,7 @@ if ($Postgres) {
     $envFile = if ($EnvFile) { $EnvFile } else { Join-Path $root '.env' }
     $lines = @()
     if (Test-Path $envFile) { $lines = Get-Content $envFile }
-    elseif (-not $env:OPENBOOK_TEST_POSTGRES) { throw "No .env beside the solution and OPENBOOK_TEST_POSTGRES isn't set: PostgreSQL tests need it." }
+    elseif ($Server -eq 'Env' -and -not $env:OPENBOOK_TEST_POSTGRES) { throw "No .env beside the solution and OPENBOOK_TEST_POSTGRES isn't set: -Server Env needs it." }
     foreach ($line in $lines) {
         # Values may be in single or double quotes (they hold ';'), as a shell's ". ./.env" reads them.
         if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') {
@@ -62,8 +75,19 @@ if ($Postgres) {
             [Environment]::SetEnvironmentVariable($Matches[1], $value, 'Process')
         }
     }
+    if ($Server -eq 'Fast') {
+        & (Join-Path $PSScriptRoot 'pgtest.ps1') start -CpuPercent $CpuPercent | Write-Host
+        $env:OPENBOOK_TEST_POSTGRES = (Get-Content (Join-Path $root 'artifacts\pgtest\connection.txt') -Raw).Trim()
+        # Copying the template's files beats writing every block to the log (0.46 s a copy against 1.23 s) once
+        # checkpoints cost nothing; on an ordinary server it's the other way round (LedgerDatabase.CopyStrategy).
+        $env:OPENBOOK_TEST_PG_COPY = 'FILE_COPY'
+    }
     $env:OPENBOOK_TEST_ALL_ON_POSTGRES = '1'
 }
+
+# Slowest classes first: this computer's times from earlier runs, else the repository's.
+$timesFile = Join-Path $root "artifacts\test-times\$name.json"
+$env:OPENBOOK_TEST_TIMES = if (Test-Path $timesFile) { $timesFile } else { Join-Path $PSScriptRoot 'test-times.json' }
 if ($Filter) { $arguments += @('--filter', $Filter) }
 if ($NoBuild) { $arguments += '--no-build' }
 # A build server started earlier (by another build) wouldn't keep to the processors below, so this run's build uses none.
@@ -74,11 +98,7 @@ Write-Host "Running the $name tests, at most $Threads at once, on $usable of $co
 # Windows PowerShell joins the arguments with spaces, so quote any that contain one.
 $quoted = $arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }
 $started = Get-Date
-# Set on this process first: what it starts inherits both, before it can start anything of its own.
-$self = [System.Diagnostics.Process]::GetCurrentProcess()
-if ($usable -lt $cores) { $self.ProcessorAffinity = [IntPtr]([long][Math]::Pow(2, $usable) - 1) }
-$self.PriorityClass = 'BelowNormal'
-$process = Start-Process -FilePath 'dotnet' -ArgumentList $quoted -WorkingDirectory $root -NoNewWindow -PassThru
+$process =Start-Process -FilePath 'dotnet' -ArgumentList $quoted -WorkingDirectory $root -NoNewWindow -PassThru
 # Windows PowerShell only gives a -PassThru process an ExitCode if its handle was asked for while it ran.
 $null = $process.Handle
 $process.PriorityClass = 'BelowNormal'
@@ -114,6 +134,7 @@ $code = $process.ExitCode
 $failed = 0
 $ran = 0
 $failures = @()
+$classTimes = @{}
 $files = @(Get-ChildItem -Path $Results -Filter "${name}_*.trx" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $started })
 foreach ($file in $files) {
     $document = New-Object System.Xml.XmlDocument
@@ -121,7 +142,13 @@ foreach ($file in $files) {
     $counters = $document.DocumentElement.ResultSummary.Counters
     $failed += [int]$counters.failed + [int]$counters.error + [int]$counters.timeout + [int]$counters.aborted
     $ran += [int]$counters.total
+    $classOf = @{}
+    foreach ($test in $document.GetElementsByTagName('UnitTest')) { $classOf[$test.id] = $test.TestMethod.className }
     foreach ($result in $document.GetElementsByTagName('UnitTestResult')) {
+        # From start to end, which includes each test's own database and app, not just its body.
+        if ($result.startTime -and $result.endTime -and $classOf[$result.testId]) {
+            $classTimes[$classOf[$result.testId]] += ([DateTimeOffset]::Parse($result.endTime) - [DateTimeOffset]::Parse($result.startTime)).TotalSeconds
+        }
         if ($result.outcome -ne 'Passed' -and $result.outcome -ne 'NotExecuted') {
             $message = $result.GetElementsByTagName('Message') | Select-Object -First 1
             $first = if ($message) { ($message.InnerText -split "`r?`n")[0] } else { $result.outcome }
@@ -129,6 +156,22 @@ foreach ($file in $files) {
             $failures += [pscustomobject]@{ Name = $result.testName; Message = $first }
         }
     }
+}
+
+# This run's class times replace those of the same classes from earlier runs (a filtered run keeps the rest).
+if ($classTimes.Count -gt 0) {
+    try {
+        $times = [ordered]@{}
+        if (Test-Path $timesFile) {
+            (Get-Content $timesFile -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $times[$_.Name] = [double]$_.Value }
+        }
+        foreach ($key in $classTimes.Keys) { $times[$key] = [Math]::Round($classTimes[$key], 1) }
+        $sorted = [ordered]@{}
+        foreach ($key in ($times.Keys | Sort-Object)) { $sorted[$key] = $times[$key] }
+        $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $timesFile)
+        Set-Content -Path $timesFile -Value ($sorted | ConvertTo-Json) -Encoding utf8
+    }
+    catch { Write-Host "Couldn't save the class times ($timesFile): $($_.Exception.Message)" }
 }
 if ($failed -gt 0) {
     Write-Host "$failed test(s) failed:"

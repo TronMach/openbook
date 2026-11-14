@@ -36,7 +36,7 @@ dotnet build
 powershell -File tools/run-tests.ps1
 ```
 
-`tools/run-tests.ps1 -Postgres` runs the integration tests on PostgreSQL too (needs `OPENBOOK_TEST_POSTGRES`; see CLAUDE.md). `tools/package-desktop.ps1 -Version x.y.z` builds the Windows installer (needs Inno Setup 6).
+`tools/run-tests.ps1 -Postgres` runs the integration tests on PostgreSQL too, on a test-only server it sets up from an installed PostgreSQL (`tools/pgtest.ps1`; see CLAUDE.md). `tools/package-desktop.ps1 -Version x.y.z` builds the Windows installer (needs Inno Setup 6).
 
 ## Licence
 
