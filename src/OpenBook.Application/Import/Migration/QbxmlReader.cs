@@ -44,8 +44,10 @@ internal static class QbxmlReader
         foreach (var c in document.Named("CustomerRet"))
         {
             var job = int.TryParse(c.Text("Sublevel"), out var level) && level > 0;
-            var details = new CustomerDetails(c.Text("Name") ?? "", c.Text("CompanyName"), c.Text("Email"), c.Text("Phone"),
-                Address(c.Child("BillAddress")), Address(c.Child("ShipAddress")), PaymentTermsDays: MigrationReaders.TermsDays(c.Child("TermsRef").Text("FullName")));
+            var taxCode = c.Child("SalesTaxCodeRef").Text("FullName");
+            var details = MigrationReaders.WithTaxStatus(new CustomerDetails(c.Text("Name") ?? "", c.Text("CompanyName"), c.Text("Email"), c.Text("Phone"),
+                Address(c.Child("BillAddress")), Address(c.Child("ShipAddress")), PaymentTermsDays: MigrationReaders.TermsDays(c.Child("TermsRef").Text("FullName"))),
+                taxCode is { Length: > 0 } ? !string.Equals(taxCode, "Non", StringComparison.OrdinalIgnoreCase) : null, c.Text("ResaleNumber"));
             var full = c.Text("FullName") ?? details.DisplayName;
             var cut = full.LastIndexOf(':');
             data.Customers.Add(new SourceCustomer(MigrationReaders.LineOf(c), details, Parent: job && cut > 0 ? full[..cut] : null, Inactive: Inactive(c)));

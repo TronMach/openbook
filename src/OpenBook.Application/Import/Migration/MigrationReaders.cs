@@ -60,6 +60,25 @@ public static class MigrationReaders
     /// <summary>"Y", "Yes", "True" or "1"; anything else is no.</summary>
     internal static bool Yes(string? text) => text?.Trim().ToUpperInvariant() is "Y" or "YES" or "TRUE" or "1";
 
+    /// <summary>Written as the exemption of a customer the old program didn't charge tax, when it gives no resale number.</summary>
+    public const string NotTaxableNote = "Not taxable (from the old program)";
+
+    /// <summary>
+    /// A customer the old program didn't charge sales tax (C628): an exemption, with the resale number as its certificate
+    /// (reason resale) when there is one, else <see cref="NotTaxableNote"/> (reason other). Taxable or unknown: as it was.
+    /// </summary>
+    internal static Domain.Sales.CustomerDetails WithTaxStatus(Domain.Sales.CustomerDetails details, bool? taxable, string? resaleNumber)
+    {
+        var resale = string.IsNullOrWhiteSpace(resaleNumber) ? null : resaleNumber.Trim();
+        if (taxable != false && resale is null)
+            return details;
+        return details with
+        {
+            ExemptionCertificate = resale is null ? NotTaxableNote : resale[..Math.Min(resale.Length, 50)],
+            ExemptionReason = resale is null ? Domain.Sales.ExemptionReason.Other : Domain.Sales.ExemptionReason.Resale,
+        };
+    }
+
     /// <summary>The due days of terms such as "Net 30" or "Due on receipt"; the usual 30 when there are none or they can't be read.</summary>
     internal static int TermsDays(string? terms)
     {

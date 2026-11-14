@@ -52,8 +52,9 @@ public sealed class IifImportService(MigrationImportService migration)
             // A job is written "Customer:Job".
             var full = r.Get("NAME") ?? string.Empty;
             var cut = full.LastIndexOf(':');
-            data.Customers.Add(new SourceCustomer(r.Line, new CustomerDetails(full[(cut + 1)..], r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("BADDR"), r.Address("SADDR"),
-                    PaymentTermsDays: MigrationReaders.TermsDays(r.Get("TERMS"))), Parent: cut < 0 ? null : full[..cut], Inactive: MigrationReaders.Yes(r.Get("HIDDEN"))));
+            var taxable = r.Get("TAXABLE") is { Length: > 0 } t ? MigrationReaders.Yes(t) : (bool?)null;
+            data.Customers.Add(new SourceCustomer(r.Line, MigrationReaders.WithTaxStatus(new CustomerDetails(full[(cut + 1)..], r.Get("COMPANYNAME"), r.Get("EMAIL"), r.Get("PHONE1"), r.Address("BADDR"), r.Address("SADDR"),
+                    PaymentTermsDays: MigrationReaders.TermsDays(r.Get("TERMS"))), taxable, r.Get("RESALENUM")), Parent: cut < 0 ? null : full[..cut], Inactive: MigrationReaders.Yes(r.Get("HIDDEN"))));
         }
 
         foreach (var r in records.Where(r => r.Type == "VEND"))

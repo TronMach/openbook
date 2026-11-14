@@ -100,6 +100,21 @@ public sealed class MoveInDepthTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_customer_quickbooks_didnt_charge_tax_comes_over_exempt()
+    {
+        await MoveIn(Iif(
+            "!CUST\tNAME\tTAXABLE\tRESALENUM", "CUST\tShop Co\tN\tR-12345", "CUST\tCharity\tN\t", "CUST\tAcme\tY\t", "CUST\tUnknown\t\t"));
+
+        var customers = (await Customers()).ToDictionary(c => c.DisplayName);
+        Assert.Equal(("R-12345", (OpenBook.Domain.Sales.ExemptionReason?)OpenBook.Domain.Sales.ExemptionReason.Resale),
+            (customers["Shop Co"].ExemptionCertificate, customers["Shop Co"].ExemptionReason));
+        Assert.Equal((OpenBook.Application.Import.Migration.MigrationReaders.NotTaxableNote, (OpenBook.Domain.Sales.ExemptionReason?)OpenBook.Domain.Sales.ExemptionReason.Other),
+            (customers["Charity"].ExemptionCertificate, customers["Charity"].ExemptionReason));
+        Assert.Null(customers["Acme"].ExemptionCertificate);
+        Assert.Null(customers["Unknown"].ExemptionCertificate);
+    }
+
+    [Fact]
     public async Task Classes_on_quickbooks_transactions_come_over_and_are_created()
     {
         var tab = "\t";

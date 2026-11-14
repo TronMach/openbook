@@ -55,8 +55,10 @@ internal static class QuickBooksOnlineReader
 
             foreach (var c in Get(lists, "Customer"))
             {
-                var details = new CustomerDetails(Str(c, "DisplayName") ?? "", Str(c, "CompanyName"), Str(c, "PrimaryEmailAddr", "Address"),
-                    Str(c, "PrimaryPhone", "FreeFormNumber"), Address(c, "BillAddr"), Address(c, "ShipAddr"));
+                var details = MigrationReaders.WithTaxStatus(new CustomerDetails(Str(c, "DisplayName") ?? "", Str(c, "CompanyName"), Str(c, "PrimaryEmailAddr", "Address"),
+                    Str(c, "PrimaryPhone", "FreeFormNumber"), Address(c, "BillAddr"), Address(c, "ShipAddr")),
+                    c.TryGetProperty("Taxable", out var taxable) && taxable.ValueKind is JsonValueKind.True or JsonValueKind.False ? taxable.ValueKind == JsonValueKind.True : null,
+                    Str(c, "ResaleNum"));
                 var job = c.TryGetProperty("Job", out var j) && j.ValueKind == JsonValueKind.True;
                 var full = Str(c, "FullyQualifiedName") ?? details.DisplayName;
                 var cut = full.LastIndexOf(':');
