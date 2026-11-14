@@ -165,13 +165,24 @@ public class BrowserApp : IAsyncLifetime
 
 /// <summary>
 /// The browser app with a year of everyday work in its company (<c>make-demo</c>'s generator, at eight invoices a
-/// month), so lists have rows and every kind of record it makes has a page to open.
+/// month) and one record of every other kind (<see cref="EveryRecordKind"/>), so lists have rows and every kind of
+/// record page has one to open.
 /// </summary>
 public sealed class DemoBrowserApp : BrowserApp
 {
     protected override BusinessType Business => BusinessType.SoleProprietorship;
 
-    protected override Task SeedAsync(IServiceProvider services) => OpenBook.Web.Cli.DemoCompanyCommand.FillAsync(services, years: 1, perMonth: 8);
+    /// <summary>Pages for someone not signed in that only a token reaches (an invitation, a customer's portal).</summary>
+    public IReadOnlyList<string> TokenPages { get; private set; } = [];
+
+    /// <summary>Signed-in pages no link leads to (<see cref="EveryRecordKind.AddAsync"/>).</summary>
+    public IReadOnlyList<string> UnlinkedPages { get; private set; } = [];
+
+    protected override async Task SeedAsync(IServiceProvider services)
+    {
+        await OpenBook.Web.Cli.DemoCompanyCommand.FillAsync(services, years: 1, perMonth: 8);
+        (TokenPages, UnlinkedPages) = await EveryRecordKind.AddAsync(services);
+    }
 }
 
 /// <summary>

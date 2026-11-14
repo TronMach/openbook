@@ -33,9 +33,9 @@ public sealed partial class AccessibilityTests(DemoBrowserApp app)
             .Select(r => (Route: r, Pattern: new Regex("^" + RouteParameter().Replace(Regex.Escape(r).Replace(@"\{", "{", StringComparison.Ordinal), m =>
                 m.Value.EndsWith(":guid}", StringComparison.Ordinal) ? "[0-9a-fA-F-]{36}" : m.Value.EndsWith(":int}", StringComparison.Ordinal) ? "[0-9]+" : "[^/?#]+") + "$")))
             .ToList();
-        var queue = new Queue<string>(routes.Where(r => !r.Contains('{', StringComparison.Ordinal) && !SignedOutOnly.Contains(r)));
+        var queue = new Queue<string>(routes.Where(r => !r.Contains('{', StringComparison.Ordinal) && !SignedOutOnly.Contains(r)).Concat(app.UnlinkedPages));
         var seen = new HashSet<string>(queue, StringComparer.Ordinal);
-        var reached = new HashSet<string>(StringComparer.Ordinal);
+        var reached = new HashSet<string>(app.UnlinkedPages.Select(path => templates.First(t => t.Pattern.IsMatch(path)).Route), StringComparer.Ordinal);
         var findings = new Findings();
 
         var folder = Path.Combine(Root(), "artifacts", "a11y");
@@ -50,6 +50,14 @@ public sealed partial class AccessibilityTests(DemoBrowserApp app)
             await CheckAsync(p, path, findings);
             foreach (var link in await LinksAsync(p))
             {
+                // A list's tabs (?show=…) draw other rows, and link to records the plain list doesn't.
+                if (link.Contains('?', StringComparison.Ordinal))
+                {
+                    if (routes.Contains(link.Split('?')[0]) && seen.Add(link))
+                        queue.Enqueue(link);
+                    continue;
+                }
+
                 var template = templates.FirstOrDefault(t => t.Pattern.IsMatch(link));
                 // One page of each kind, but every report: they're drawn by different code.
                 if (template.Route is null || (!reached.Add(template.Route) && template.Route != "/reports/{Key}") || !seen.Add(link))
@@ -58,11 +66,17 @@ public sealed partial class AccessibilityTests(DemoBrowserApp app)
             }
         }
 
+        // Signed out: the sign-in page, and the pages only a token reaches (an invitation, a customer's portal).
+        string[] signedOutPages = [.. SignedOutOnly, .. app.TokenPages];
         await using (var signedOut = await app.OpenAsync())
-            foreach (var path in SignedOutOnly)
+            foreach (var path in signedOutPages)
+            {
                 await CheckAsync(signedOut.Page, path, findings);
+                if (templates.FirstOrDefault(t => t.Pattern.IsMatch(path)).Route is { } route)
+                    reached.Add(route);
+            }
 
-        var report = findings.Report(seen.Count + SignedOutOnly.Length, templates.Select(t => t.Route).Except(reached).Order(StringComparer.Ordinal));
+        var report = findings.Report(seen.Count + signedOutPages.Length, templates.Select(t => t.Route).Except(reached).Order(StringComparer.Ordinal));
         await File.WriteAllTextAsync(Path.Combine(folder, "report.txt"), report);
         Assert.True(findings.Count == 0, report);
     }
@@ -156,7 +170,7 @@ public sealed partial class AccessibilityTests(DemoBrowserApp app)
             () => [...document.querySelectorAll('a[href]')]
                 .map(a => new URL(a.getAttribute('href'), location.href))
                 .filter(u => u.origin === location.origin && !u.pathname.startsWith('/api/') && !/\.[a-z0-9]{2,4}$/i.test(u.pathname))
-                .map(u => u.pathname)
+                .map(u => u.searchParams.has('show') ? `${u.pathname}?show=${encodeURIComponent(u.searchParams.get('show'))}` : u.pathname)
             """);
 
     private static List<string> Routes() =>

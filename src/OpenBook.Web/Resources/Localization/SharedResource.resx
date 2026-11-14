@@ -1799,6 +1799,9 @@
   <data name="Orders" xml:space="preserve">
     <value>Orders</value>
   </data>
+  <data name="Orders report" xml:space="preserve">
+    <value>Orders report</value>
+  </data>
   <data name="Other" xml:space="preserve">
     <value>Other</value>
   </data>
@@ -1879,6 +1882,9 @@
   </data>
   <data name="Payout" xml:space="preserve">
     <value>Payout</value>
+  </data>
+  <data name="Payout report" xml:space="preserve">
+    <value>Payout report</value>
   </data>
   <data name="Payouts" xml:space="preserve">
     <value>Payouts</value>

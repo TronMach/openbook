@@ -104,7 +104,8 @@
             <PostForm Action="@($"/sales/channels/{_channel.Id}/import")" enctype="multipart/form-data" data-enhance="false">
                 <AntiforgeryToken />
                 <div class="field">
-                    <input type="file" name="file" accept=".csv,.txt,.tsv" required />
+                    <label for="payout-file">@L["Payout report"]</label>
+                    <input id="payout-file" type="file" name="file" accept=".csv,.txt,.tsv" required />
                 </div>
                 <div class="actions"><button type="submit" disabled="@(!_channel.IsActive)">@L["Import"]</button></div>
             </PostForm>
@@ -130,7 +131,7 @@
             }
             <PostForm Action="@($"/sales/channels/{_channel.Id}/orders")" enctype="multipart/form-data" data-enhance="false">
                 <AntiforgeryToken />
-                <div class="field"><input type="file" name="file" accept=".csv,.txt,.tsv" required /></div>
+                <div class="field"><label for="orders-file">@L["Orders report"]</label><input id="orders-file" type="file" name="file" accept=".csv,.txt,.tsv" required /></div>
                 <div class="actions"><button type="submit" class="secondary" disabled="@(!_channel.IsActive)">@L["Import orders"]</button></div>
             </PostForm>
             @if (_batches.Any(b => b.Status == PayoutStatus.Posted))
@@ -143,7 +144,7 @@
                 }
                 <PostForm Action="@($"/sales/channels/{_channel.Id}/returns/import")" enctype="multipart/form-data" data-enhance="false">
                     <AntiforgeryToken />
-                    <div class="field"><input type="file" name="file" accept=".csv,.txt,.tsv" required /></div>
+                    <div class="field"><label for="returns-file">@L["Returns report"]</label><input id="returns-file" type="file" name="file" accept=".csv,.txt,.tsv" required /></div>
                     <div class="actions"><button type="submit" class="secondary" disabled="@(!_channel.IsActive)">@L["Import returns"]</button></div>
                 </PostForm>
             }
