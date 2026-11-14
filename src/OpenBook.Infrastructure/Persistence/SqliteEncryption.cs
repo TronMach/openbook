@@ -45,6 +45,24 @@ public static class SqliteEncryption
         return ConvertAsync(path, sourceKey: key, targetKey: string.Empty, "encrypted", ct);
     }
 
+    /// <summary>
+    /// Changes an encrypted company file's key in place: <paramref name="key"/> opens it, <paramref name="newKey"/>
+    /// encrypts the copy that replaces it. For a key that may have been seen by someone it shouldn't have.
+    /// </summary>
+    /// <returns>Where the original file, still under the old key, was kept.</returns>
+    public static Task<string> RekeyAsync(string path, string key, string newKey, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(key))
+            throw new DomainException("encryption.key_required", "Set OpenBook:EncryptionKey to the file's current key.");
+        if (string.IsNullOrEmpty(newKey))
+            throw new DomainException("encryption.new_key_required", "Give the new key.");
+        if (string.Equals(key, newKey, StringComparison.Ordinal))
+            throw new DomainException("encryption.same_key", "The new key is the same as the current one.");
+        if (IsPlain(path))
+            throw new DomainException("encryption.not_encrypted", "That file isn't encrypted: use encrypt-database instead.");
+        return ConvertAsync(path, sourceKey: key, targetKey: newKey, "old-key", ct);
+    }
+
     private static async Task<string> ConvertAsync(string path, string? sourceKey, string targetKey, string keptAs, CancellationToken ct)
     {
         var full = Path.GetFullPath(path);

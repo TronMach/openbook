@@ -70,7 +70,7 @@ public static class ResetPasswordCommand
         }
     }
 
-    private static string ReadSecret(string prompt)
+    internal static string ReadSecret(string prompt)
     {
         Console.Write(prompt);
         if (Console.IsInputRedirected)

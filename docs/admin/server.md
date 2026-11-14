@@ -60,6 +60,12 @@ OpenBook encrypts with ASP.NET Data Protection keys kept in `/data/keys` (the `O
 
 If the keys are lost, the database alone can't read those secrets: everyone with two-factor sign-in needs it reset (`reset-password <user> --clear-two-factor`, below) and the connections and passwords must be entered again. So back up `/data/keys` together with the database, and keep the backups as private as the keys themselves: anyone with both can read the secrets.
 
+### If the keys may have been copied
+
+Stop OpenBook (every container using the keys folder), then run `OpenBook.Web rekey-secrets` in a one-off app container with the same volumes, for example `docker compose run --rm openbook rekey-secrets`. It checks that every stored secret can be read, makes a new key, revokes the old ones and writes every secret again with the new key, recording it in the audit log. Start OpenBook again: everyone signs in again, and two-factor "remember this computer" asks again. A copy of the old keys folder can't read the secrets as they are now, but it still reads backups made before, so treat those as exposed too.
+
+If a secret can't be read, nothing is changed and the message names it: enter that setting again in OpenBook, then run the command again. If something fails after the old keys are revoked, running it again finishes the job.
+
 ## Backups with pg_dump
 
 The in-app backup buttons are for the single SQLite company file; with PostgreSQL the Backup page shows these commands instead. A backup is a `pg_dump` custom-format file plus a copy of the keys:
@@ -169,3 +175,5 @@ Only for the SQLite image; PostgreSQL has its own disk encryption.
 Backups and `pre-restore-` copies made before encrypting stay unencrypted, so keep them safe or delete them. They can't be restored into the encrypted company until it's decrypted again.
 
 The command takes the file for itself while it copies, and stops if something has it open. On Linux a server that's idle can't be noticed, so stopping it first is what keeps the copy whole.
+
+To change the key (one that may have been seen), stop OpenBook and run `OpenBook.Web rekey-database` with `OpenBook__EncryptionKey` set to the current key and `OPENBOOK_NEW_ENCRYPTION_KEY` to the new one (or leave it out to type the new key twice). Then set `OpenBook__EncryptionKey` to the new key and start OpenBook. The file under the old key stays beside it as a `.bak`; backups made before still need the old key to restore, so keep it with them or make a fresh backup and delete them.
