@@ -155,6 +155,9 @@
   <data name="ACH payments" xml:space="preserve">
     <value>ACH payments</value>
   </data>
+  <data name="Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
   <data name="Active" xml:space="preserve">
     <value>Active</value>
   </data>
@@ -556,6 +559,9 @@
   </data>
   <data name="check the books against a bank statement" xml:space="preserve">
     <value>check the books against a bank statement</value>
+  </data>
+  <data name="Choose" xml:space="preserve">
+    <value>Choose</value>
   </data>
   <data name="Choose what the dashboard shows" xml:space="preserve">
     <value>Choose what the dashboard shows</value>
@@ -977,11 +983,20 @@
   <data name="Figures in the books that don't agree" xml:space="preserve">
     <value>Figures in the books that don't agree</value>
   </data>
+  <data name="Find a customer" xml:space="preserve">
+    <value>Find a customer</value>
+  </data>
   <data name="Find a setting" xml:space="preserve">
     <value>Find a setting</value>
   </data>
   <data name="Find a setting (for example: email, tax, backup)" xml:space="preserve">
     <value>Find a setting (for example: email, tax, backup)</value>
+  </data>
+  <data name="Find a vendor" xml:space="preserve">
+    <value>Find a vendor</value>
+  </data>
+  <data name="Find an item" xml:space="preserve">
+    <value>Find an item</value>
   </data>
   <data name="Find by name" xml:space="preserve">
     <value>Find by name</value>
@@ -1085,6 +1100,9 @@
   <data name="Go back" xml:space="preserve">
     <value>Go back</value>
   </data>
+  <data name="Go to Home" xml:space="preserve">
+    <value>Go to Home</value>
+  </data>
   <data name="Go to Replenish" xml:space="preserve">
     <value>Go to Replenish</value>
   </data>
@@ -1108,6 +1126,9 @@
   </data>
   <data name="Gross margin" xml:space="preserve">
     <value>Gross margin</value>
+  </data>
+  <data name="Guide chapters" xml:space="preserve">
+    <value>Guide chapters</value>
   </data>
   <data name="Help" xml:space="preserve">
     <value>Help</value>
@@ -1337,6 +1358,9 @@
   <data name="Level" xml:space="preserve">
     <value>Level</value>
   </data>
+  <data name="Line" xml:space="preserve">
+    <value>Line</value>
+  </data>
   <data name="Lines from the estimate" xml:space="preserve">
     <value>Lines from the estimate</value>
   </data>
@@ -1364,8 +1388,14 @@
   <data name="Locks the books up to a date so nobody changes a period you've finished, with an optional password; also the year-end close." xml:space="preserve">
     <value>Locks the books up to a date so nobody changes a period you've finished, with an optional password; also the year-end close.</value>
   </data>
+  <data name="Logo image" xml:space="preserve">
+    <value>Logo image</value>
+  </data>
   <data name="Made" xml:space="preserve">
     <value>Made</value>
+  </data>
+  <data name="Main menu" xml:space="preserve">
+    <value>Main menu</value>
   </data>
   <data name="Make a deposit" xml:space="preserve">
     <value>Make a deposit</value>
@@ -1607,9 +1637,6 @@
   <data name="Not closed: every date is open" xml:space="preserve">
     <value>Not closed: every date is open</value>
   </data>
-  <data name="Not Found" xml:space="preserve">
-    <value>Not Found</value>
-  </data>
   <data name="Not in the menu for this edition:" xml:space="preserve">
     <value>Not in the menu for this edition:</value>
   </data>
@@ -1792,6 +1819,9 @@
   </data>
   <data name="Owed to you" xml:space="preserve">
     <value>Owed to you</value>
+  </data>
+  <data name="Page not found" xml:space="preserve">
+    <value>Page not found</value>
   </data>
   <data name="Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open." xml:space="preserve">
     <value>Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open.</value>
@@ -2111,6 +2141,9 @@
   <data name="Record what was spent from the box as spending from its account (keep the receipts)." xml:space="preserve">
     <value>Record what was spent from the box as spending from its account (keep the receipts).</value>
   </data>
+  <data name="Records" xml:space="preserve">
+    <value>Records</value>
+  </data>
   <data name="Recovery codes left: {0}." xml:space="preserve">
     <value>Recovery codes left: {0}.</value>
   </data>
@@ -2360,6 +2393,9 @@
   <data name="Search" xml:space="preserve">
     <value>Search</value>
   </data>
+  <data name="Search the books" xml:space="preserve">
+    <value>Search the books</value>
+  </data>
   <data name="Search the guide" xml:space="preserve">
     <value>Search the guide</value>
   </data>
@@ -2489,8 +2525,8 @@
   <data name="Something went wrong" xml:space="preserve">
     <value>Something went wrong</value>
   </data>
-  <data name="Sorry, the content you are looking for does not exist." xml:space="preserve">
-    <value>Sorry, the content you are looking for does not exist.</value>
+  <data name="Sorry, there is no page at this address." xml:space="preserve">
+    <value>Sorry, there is no page at this address.</value>
   </data>
   <data name="Spending recorded. Record the next receipt, or count the cash once they're all in." xml:space="preserve">
     <value>Spending recorded. Record the next receipt, or count the cash once they're all in.</value>

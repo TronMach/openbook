@@ -48,7 +48,7 @@
                 <input type="hidden" name="returnUrl" value="/print" />
                 <div class="table-wrap">
                     <table class="data">
-                        <thead><tr><th class="check"><span class="sr-only">Print</span></th><th>Document</th><th>For</th><th>Date</th><th class="num">Total</th><th>Added</th><th></th></tr></thead>
+                        <thead><tr><th class="check"><span class="sr-only">Print</span></th><th>Document</th><th>For</th><th>Date</th><th class="num">Total</th><th>Added</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                         <tbody>
                             @foreach (var entry in _queue)
                             {
@@ -170,7 +170,7 @@
             <h2>Printed recently</h2>
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Document</th><th>For</th><th>Printed</th><th></th></tr></thead>
+                    <thead><tr><th>Document</th><th>For</th><th>Printed</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var entry in _printed)
                         {

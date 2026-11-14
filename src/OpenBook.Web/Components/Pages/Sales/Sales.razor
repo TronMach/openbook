@@ -82,7 +82,7 @@
             break;
         case "credits":
             <table class="data">
-                <thead><tr><th>Date</th><th>Credit memo</th><th>Customer</th><th class="num">Total</th><th class="num">Available</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Credit memo</th><th>Customer</th><th class="num">Total</th><th class="num">Available</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var c in _creditMemos)
                     {
@@ -106,7 +106,7 @@
             {
                 <h2>Refunds</h2>
                 <table class="data">
-                    <thead><tr><th>Date</th><th>Customer</th><th>Ref</th><th class="num">Amount</th><th></th></tr></thead>
+                    <thead><tr><th>Date</th><th>Customer</th><th>Ref</th><th class="num">Amount</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var r in _refunds)
                         {
@@ -125,7 +125,7 @@
             break;
         case "payments":
             <table class="data">
-                <thead><tr><th>Date</th><th>Customer</th><th>Ref</th><th class="num">Invoices</th><th class="num">Amount</th><th class="num">Unapplied</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Customer</th><th>Ref</th><th class="num">Invoices</th><th class="num">Amount</th><th class="num">Unapplied</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var p in _payments)
                     {
@@ -145,7 +145,7 @@
             break;
         case "receipts":
             <table class="data">
-                <thead><tr><th>Date</th><th>No.</th><th>Customer</th><th class="num">Total</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>No.</th><th>Customer</th><th class="num">Total</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var r in _receipts)
                     {

@@ -31,7 +31,7 @@
     @if (_rates.Count > 0)
     {
         <table class="data">
-            <thead><tr><th>@L["Client"]</th><th>@L["For"]</th><th class="num">@L["Rate"]</th><th>@L["Starts"]</th><th></th></tr></thead>
+            <thead><tr><th>@L["Client"]</th><th>@L["For"]</th><th class="num">@L["Rate"]</th><th>@L["Starts"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var r in _rates)
                 {

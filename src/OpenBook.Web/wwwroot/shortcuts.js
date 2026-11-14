@@ -279,10 +279,49 @@ window.obDrafts = {
     if ('serviceWorker' in navigator && window.isSecureContext)
         navigator.serviceWorker.register('/sw.js').catch(() => { });
 
+    // A wide table scrolls inside its box (.table-wrap): while it does, the box takes keyboard focus, so the arrow keys
+    // scroll it, and is named after the heading above it. A box that fits the screen stays out of the tab order.
+    const headingBefore = el => {
+        for (let node = el; node && node !== document.body; node = node.parentElement) {
+            for (let prev = node.previousElementSibling; prev; prev = prev.previousElementSibling) {
+                const heading = /^H[1-6]$/.test(prev.tagName) ? prev : prev.querySelector?.('h1, h2, h3, h4, h5, h6');
+                if (heading && heading.textContent.trim()) return heading.textContent.trim();
+            }
+        }
+        return document.querySelector('h1')?.textContent.trim() || document.title;
+    };
+    const reachScrolling = () => {
+        for (const wrap of document.querySelectorAll('.table-wrap')) {
+            const scrolls = wrap.scrollWidth > wrap.clientWidth + 1;
+            if (scrolls && !wrap.hasAttribute('tabindex')) {
+                wrap.setAttribute('tabindex', '0');
+                wrap.setAttribute('role', 'region');
+                wrap.setAttribute('aria-label', wrap.querySelector('caption')?.textContent.trim() || headingBefore(wrap));
+                wrap.dataset.scrollFocus = '';
+            } else if (!scrolls && 'scrollFocus' in wrap.dataset) {
+                wrap.removeAttribute('tabindex');
+                wrap.removeAttribute('role');
+                wrap.removeAttribute('aria-label');
+                delete wrap.dataset.scrollFocus;
+            }
+        }
+    };
+    let reachPending = false;
+    const reachSoon = () => {
+        if (reachPending) return;
+        reachPending = true;
+        requestAnimationFrame(() => { reachPending = false; reachScrolling(); });
+    };
+    window.addEventListener('resize', reachSoon);
+    // Interactive pages draw their tables after loading.
+    new MutationObserver(reachSoon).observe(document.body, { childList: true, subtree: true });
+
     applyTheme();
     showChosen();
+    reachScrolling();
     if (window.Blazor && typeof window.Blazor.addEventListener === 'function') {
         window.Blazor.addEventListener('enhancedload', applyTheme);
         window.Blazor.addEventListener('enhancedload', showChosen);
+        window.Blazor.addEventListener('enhancedload', reachScrolling);
     }
 })();

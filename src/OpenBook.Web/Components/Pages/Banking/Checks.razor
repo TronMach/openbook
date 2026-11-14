@@ -53,7 +53,7 @@
             <AntiforgeryToken />
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th class="check"></th><th>Date</th><th>No.</th><th>Payee</th><th>Account</th><th class="num">Amount</th><th>Printed</th></tr></thead>
+                    <thead><tr><th class="check"><span class="visually-hidden">@L["Choose"]</span></th><th>Date</th><th>No.</th><th>Payee</th><th>Account</th><th class="num">Amount</th><th>Printed</th></tr></thead>
                     <tbody>
                         @foreach (var c in _checks)
                         {

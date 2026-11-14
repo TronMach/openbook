@@ -81,7 +81,7 @@
                 @if (_rate.Changes.Count > 0)
                 {
                     <table class="data">
-                        <thead><tr><th>From</th><th class="num">Rate</th><th></th></tr></thead>
+                        <thead><tr><th>From</th><th class="num">Rate</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                         <tbody>
                             @foreach (var c in _rate.Changes)
                             {

@@ -65,7 +65,7 @@
             else
             {
                 <table class="data">
-                    <thead><tr><th>Date</th><th>Vendor</th><th>Credit no.</th><th class="num">Total</th><th class="num">Available</th><th></th></tr></thead>
+                    <thead><tr><th>Date</th><th>Vendor</th><th>Credit no.</th><th class="num">Total</th><th class="num">Available</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var c in _credits)
                         {
@@ -85,7 +85,7 @@
             break;
         case "payments":
             <table class="data">
-                <thead><tr><th>Date</th><th>Vendor</th><th>Ref</th><th class="num">Bills</th><th class="num">Amount</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Vendor</th><th>Ref</th><th class="num">Bills</th><th class="num">Amount</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var p in _payments)
                     {
@@ -104,7 +104,7 @@
             break;
         case "expenses":
             <table class="data">
-                <thead><tr><th>Date</th><th>Payee</th><th>Ref</th><th class="num">Amount</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Payee</th><th>Ref</th><th class="num">Amount</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var e in _expenses)
                     {

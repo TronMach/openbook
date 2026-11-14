@@ -51,7 +51,7 @@
             <div class="alert notice" role="status">@warning</div>
         }
         <table class="data">
-            <thead><tr><th></th><th class="num">Actual</th><th class="num">Budget</th><th class="num">Left</th></tr></thead>
+            <thead><tr><th><span class="visually-hidden">@L["Line"]</span></th><th class="num">Actual</th><th class="num">Budget</th><th class="num">Left</th></tr></thead>
             <tbody>
                 <tr><td>Income</td><td class="num">@Labels.Amount(_figures.Income)</td>@Budget(p.BudgetRevenue, _figures.Income)</tr>
                 <tr><td class="indent">Expenses</td><td class="num">@Labels.Amount(_figures.ExpenseCost)</td><td></td><td></td></tr>
@@ -81,7 +81,7 @@
         else
         {
             <table class="data">
-                <thead><tr><th>Date</th><th>Person</th><th>Notes</th><th class="num">Hours</th><th class="num">Cost</th><th class="num">Billable</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Person</th><th>Notes</th><th class="num">Hours</th><th class="num">Cost</th><th class="num">Billable</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var t in _time)
                     {
@@ -107,7 +107,7 @@
         else
         {
             <table class="data">
-                <thead><tr><th>Date</th><th>Cost</th><th class="num">Cost</th><th class="num">To bill</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Cost</th><th class="num">Cost</th><th class="num">To bill</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var e in _expenses)
                     {
@@ -127,7 +127,7 @@
         {
             <h2>Mileage</h2>
             <table class="data">
-                <thead><tr><th>Date</th><th>Purpose</th><th class="num">Miles</th><th class="num">Billable</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th>Purpose</th><th class="num">Miles</th><th class="num">Billable</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var trip in _trips)
                     {

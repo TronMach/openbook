@@ -24,9 +24,12 @@ public sealed class BrowserFactAttribute : FactAttribute
     }
 }
 
-/// <summary>Browser tests share one app and one browser, one test at a time: each browser is a heavy process.</summary>
+/// <summary>
+/// Browser tests share their apps and browsers, one test at a time: each browser is a heavy process. The accessibility
+/// checks use a second app whose company has a year of made-up history (<see cref="DemoBrowserApp"/>).
+/// </summary>
 [CollectionDefinition(Name)]
-public sealed class BrowserGroup : ICollectionFixture<BrowserApp>
+public sealed class BrowserGroup : ICollectionFixture<BrowserApp>, ICollectionFixture<DemoBrowserApp>
 {
     public const string Name = "Browser";
 }
@@ -36,7 +39,7 @@ public sealed class BrowserGroup : ICollectionFixture<BrowserApp>
 /// headless browser. Each test opens its own context (cookies, storage), signs in through the real page and watches
 /// for script errors and failed requests (<see cref="BrowserPage"/>). On PostgreSQL too, like the other web tests.
 /// </summary>
-public sealed class BrowserApp : IAsyncLifetime
+public class BrowserApp : IAsyncLifetime
 {
     public const string Username = "owner";
     public const string Password = "correct horse battery";
@@ -78,11 +81,18 @@ public sealed class BrowserApp : IAsyncLifetime
 
         await using (var scope = _app.Services.CreateAsyncScope())
             await scope.ServiceProvider.GetRequiredService<CompanySetupService>().SetUpAsync(
-                new SetUpCompanyCommand("Browser Test Co", BusinessType.SingleMemberLlc, "USD", 1, Username, Password));
+                new SetUpCompanyCommand("Browser Test Co", Business, "USD", 1, Username, Password));
+        await SeedAsync(_app.Services);
 
         _playwright = await Playwright.CreateAsync();
         _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Channel = Channel, Headless = true });
     }
+
+    /// <summary>The company's business type.</summary>
+    protected virtual BusinessType Business => BusinessType.SingleMemberLlc;
+
+    /// <summary>What the company holds besides its owner, made once the company is set up.</summary>
+    protected virtual Task SeedAsync(IServiceProvider services) => Task.CompletedTask;
 
     public async Task DisposeAsync()
     {
@@ -151,6 +161,17 @@ public sealed class BrowserApp : IAsyncLifetime
         ];
         return edge.Any(File.Exists) ? "msedge" : chrome.Any(File.Exists) ? "chrome" : null;
     }
+}
+
+/// <summary>
+/// The browser app with a year of everyday work in its company (<c>make-demo</c>'s generator, at eight invoices a
+/// month), so lists have rows and every kind of record it makes has a page to open.
+/// </summary>
+public sealed class DemoBrowserApp : BrowserApp
+{
+    protected override BusinessType Business => BusinessType.SoleProprietorship;
+
+    protected override Task SeedAsync(IServiceProvider services) => OpenBook.Web.Cli.DemoCompanyCommand.FillAsync(services, years: 1, perMonth: 8);
 }
 
 /// <summary>

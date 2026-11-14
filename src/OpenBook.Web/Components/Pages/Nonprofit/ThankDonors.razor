@@ -32,7 +32,7 @@
             <AntiforgeryToken />
             <input type="hidden" name="back" value="/nonprofit/thanks" />
             <table class="data">
-                <thead><tr><th></th><th>Gift</th><th>Date</th><th>Donor</th><th class="num">Amount</th><th>Letter</th></tr></thead>
+                <thead><tr><th><span class="visually-hidden">@L["Choose"]</span></th><th>Gift</th><th>Date</th><th>Donor</th><th class="num">Amount</th><th>Letter</th></tr></thead>
                 <tbody>
                     @foreach (var g in _unthanked)
                     {

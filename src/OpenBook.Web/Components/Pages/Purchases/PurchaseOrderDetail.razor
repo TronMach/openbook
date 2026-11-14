@@ -78,7 +78,7 @@
     {
         <h2>Received</h2>
         <table class="data">
-            <thead><tr><th>Receipt</th><th>Date</th><th>What</th><th>Note</th><th></th></tr></thead>
+            <thead><tr><th>Receipt</th><th>Date</th><th>What</th><th>Note</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var group in _order.Receipts.GroupBy(r => r.ReceiptNumber).OrderBy(g => g.Key))
                 {

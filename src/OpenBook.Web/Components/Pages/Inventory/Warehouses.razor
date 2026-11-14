@@ -50,7 +50,7 @@
             @if (bins.Count > 0)
             {
                 <table class="data">
-                    <thead><tr><th>Bin</th><th class="num">Units on hand</th><th></th></tr></thead>
+                    <thead><tr><th>Bin</th><th class="num">Units on hand</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var b in bins)
                         {

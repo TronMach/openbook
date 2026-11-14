@@ -29,7 +29,10 @@
             <span>My books already hold this stock's value (Inventory Asset came in with opening balances or imported history)</span>
         </label>
         <p class="hint">Tick it, or the value counts twice. Left unticked, the stock's value goes to Inventory Asset against Opening Balance Equity, so leave Inventory Asset out of your opening balances.</p>
-        <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+        <div class="field">
+            <label for="file">@L["CSV file"]</label>
+            <InputFile id="file" accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+        </div>
     </div>
 
     @if (_error is not null)

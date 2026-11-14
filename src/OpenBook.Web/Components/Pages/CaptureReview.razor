@@ -26,7 +26,7 @@
     else
     {
         <table class="data">
-            <thead><tr><th>@L["Captured"]</th><th>@L["What"]</th><th>@L["Device"]</th><th>@L["Why it wasn't entered"]</th><th></th></tr></thead>
+            <thead><tr><th>@L["Captured"]</th><th>@L["What"]</th><th>@L["Device"]</th><th>@L["Why it wasn't entered"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var (draft, device) in _waiting)
                 {
@@ -56,7 +56,7 @@
     {
         <h2>@L["Entered, with a note"]</h2>
         <table class="data">
-            <thead><tr><th>@L["Captured"]</th><th>@L["What"]</th><th>@L["Device"]</th><th>@L["Note"]</th><th></th></tr></thead>
+            <thead><tr><th>@L["Captured"]</th><th>@L["What"]</th><th>@L["Device"]</th><th>@L["Note"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var (draft, device) in _noted)
                 {
@@ -97,7 +97,7 @@
     else
     {
         <table class="data">
-            <thead><tr><th>@L["Device"]</th><th>@L["Since"]</th><th>@L["Last sent"]</th><th></th></tr></thead>
+            <thead><tr><th>@L["Device"]</th><th>@L["Since"]</th><th>@L["Last sent"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var d in _devices)
                 {

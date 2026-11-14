@@ -57,7 +57,7 @@
             <div class="alert notice" role="status">@(low == 1 ? "1 item is" : $"{low} items are") at or below the reorder point. <ActionLink Href="/purchases/reorder">Reorder stock</ActionLink></div>
         }
         <table class="data">
-            <thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder point</th><th class="num">Average cost</th><th class="num">Asset value</th><th></th></tr></thead>
+            <thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder point</th><th class="num">Average cost</th><th class="num">Asset value</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var s in _stock)
                 {
@@ -208,7 +208,7 @@
     else
     {
         <table class="data">
-            <thead><tr><th>Saved</th><th>Assembly</th><th class="num">Quantity</th><th>Components today</th><th></th></tr></thead>
+            <thead><tr><th>Saved</th><th>Assembly</th><th class="num">Quantity</th><th>Components today</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var (pending, assembly, preview) in _pending)
                 {

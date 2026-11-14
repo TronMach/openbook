@@ -23,7 +23,7 @@
     @if (_links.Count > 0)
     {
         <table class="data">
-            <thead><tr><th>Link</th><th>Made</th><th>Last opened</th><th></th></tr></thead>
+            <thead><tr><th>Link</th><th>Made</th><th>Last opened</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var link in _links)
                 {

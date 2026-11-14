@@ -57,7 +57,7 @@
             @if (s.Items.Count > 0)
             {
                 <table class="data">
-                    <thead><tr><th>Item</th><th class="num">Amount</th><th>From</th><th>How often</th><th>Until</th><th></th></tr></thead>
+                    <thead><tr><th>Item</th><th class="num">Amount</th><th>From</th><th>How often</th><th>Until</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var i in s.Items)
                         {

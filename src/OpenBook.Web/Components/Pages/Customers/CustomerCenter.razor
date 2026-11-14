@@ -16,7 +16,7 @@
             <h1>@Title</h1>
             <ActionLink Class="button" Href="/customers/new">@L["New"]</ActionLink>
         </div>
-        <form method="get" action="/customers/center" class="center-search" role="search" data-enhance="false">
+        <form method="get" action="/customers/center" class="center-search" role="search" aria-label="@L["Find a customer"]" data-enhance="false">
             @if (_selected is not null)
             {
                 <input type="hidden" name="id" value="@_selected.Customer.Id" />

@@ -31,7 +31,7 @@
         {
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Person</th><th>Week of</th><th class="num">Hours</th><th>Handed in</th><th></th></tr></thead>
+                    <thead><tr><th>Person</th><th>Week of</th><th class="num">Hours</th><th>Handed in</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var s in _waiting)
                         {
@@ -65,7 +65,7 @@
             <h2>Reviewed in the last 60 days</h2>
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Person</th><th>Week of</th><th class="num">Hours</th><th>Status</th><th>Note</th><th></th></tr></thead>
+                    <thead><tr><th>Person</th><th>Week of</th><th class="num">Hours</th><th>Status</th><th>Note</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var s in _recent)
                         {

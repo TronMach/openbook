@@ -175,6 +175,7 @@
 
     @if (_error is not null)
     {
+        <h1>@_definition.Title</h1>
         <div class="alert error" role="alert">@_error</div>
         @if (Has(ReportInputs.Budget) && _budgets.Count == 0)
         {

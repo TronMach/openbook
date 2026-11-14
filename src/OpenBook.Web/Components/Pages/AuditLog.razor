@@ -78,7 +78,7 @@
                             <td class="nowrap">@record.OccurredAt.InCompanyTime().ToString("g")</td>
                             <td>@record.Actor</td>
                             <td>@ActionName(record.Action)</td>
-                            <td>
+                            <td class="nowrap">
                                 @if (link is not null)
                                 {
                                     <a href="@link">@TypeName(record.EntityType)</a>
@@ -89,7 +89,7 @@
                                 }
                                 @if (EntityId is null && record.EntityType is not ("company" or "closing_date"))
                                 {
-                                    <ActionLink Class="muted" Href="@($"/audit?entityId={record.EntityId}")" Title="History of this record"> · history</ActionLink>
+                                    <span class="muted"> · </span><ActionLink Class="muted" Href="@($"/audit?entityId={record.EntityId}")" Title="History of this record">history</ActionLink>
                                 }
                             </td>
                             <td>

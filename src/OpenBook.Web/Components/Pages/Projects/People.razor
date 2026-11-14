@@ -27,7 +27,7 @@
     @if (_workers.Count > 0)
     {
         <table class="data">
-            <thead><tr><th>Name</th><th>Role</th>@if (_seesCosts) { <th class="num">Cost rate</th> }<th class="num">Bill rate</th><th class="num">Hours a week</th><th>User</th><th>Vendor</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Role</th>@if (_seesCosts) { <th class="num">Cost rate</th> }<th class="num">Bill rate</th><th class="num">Hours a week</th><th>User</th><th>Vendor</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var w in _workers)
                 {

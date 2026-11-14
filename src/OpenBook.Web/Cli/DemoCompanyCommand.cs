@@ -56,18 +56,30 @@ public static class DemoCompanyCommand
         var watch = Stopwatch.StartNew();
         await InScope(services, sp => sp.GetRequiredService<CompanySetupService>().SetUpAsync(new SetUpCompanyCommand(
             "Demo Trading Co", BusinessType.SoleProprietorship, "USD", 1, Owner, password, Email: "books@demo.test")));
+        var counts = await FillAsync(services, years, perMonth, Console.Out);
+
+        Console.WriteLine($"Made a demo company with {years} year(s) of activity in {watch.Elapsed:mm\\:ss}: {counts}.");
+        Console.WriteLine($"Sign in as '{Owner}' with password: {password}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Fills the company just set up (its owner named <c>owner</c>) with <paramref name="years"/> of everyday work, as
+    /// <c>make-demo</c> does; the accessibility checks use it so lists and record pages have something to draw. Returns
+    /// what it made, and writes each month's counts to <paramref name="progress"/> when given.
+    /// </summary>
+    public static async Task<string> FillAsync(IServiceProvider services, int years, int perMonth, TextWriter? progress = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
         await InScope(services, async sp =>
         {
             CompanyTime.Use(await sp.GetRequiredService<ICompanyStore>().GetCompanyAsync(default));
             return await sp.GetRequiredService<ChartTemplates>().ApplyAsync("sole-proprietor");
         });
 
-        var generator = new Generator(services, new Random(20261102), years, perMonth);
+        var generator = new Generator(services, new Random(20261102), years, perMonth, progress);
         await generator.RunAsync();
-
-        Console.WriteLine($"Made a demo company with {years} year(s) of activity in {watch.Elapsed:mm\\:ss}: {generator.Counts}.");
-        Console.WriteLine($"Sign in as '{Owner}' with password: {password}");
-        return 0;
+        return generator.Counts;
     }
 
     private static int Option(string[] args, string name, int fallback) =>
@@ -86,7 +98,7 @@ public static class DemoCompanyCommand
         return await work(scope.ServiceProvider);
     }
 
-    private sealed class Generator(IServiceProvider services, Random random, int years, int perMonth)
+    private sealed class Generator(IServiceProvider services, Random random, int years, int perMonth, TextWriter? progress)
     {
         private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
         private readonly List<Guid> _customers = [];
@@ -179,7 +191,7 @@ public static class DemoCompanyCommand
                     await Try("credit memos", () => In<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(new CreateCreditMemoCommand(
                         Pick(_customers), Day(), [new SalesLineDraft(Pick(_services), null, 1m, 0m, AutoPrice: true)]))));
 
-                Console.WriteLine($"{month:MMM yyyy}: {Counts}");
+                progress?.WriteLine($"{month:MMM yyyy}: {Counts}");
             }
         }
 

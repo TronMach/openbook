@@ -115,7 +115,7 @@
         <section class="card">
             <h2>Rules</h2>
             <table class="data">
-                <thead><tr><th>Rule</th><th>Account</th><th>Shares</th><th></th></tr></thead>
+                <thead><tr><th>Rule</th><th>Account</th><th>Shares</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var r in _rules)
                     {
@@ -142,7 +142,7 @@
         <section class="card">
             <h2>Runs</h2>
             <table class="data">
-                <thead><tr><th>Period</th><th>Rule</th><th class="num">Amount</th><th></th><th></th></tr></thead>
+                <thead><tr><th>Period</th><th>Rule</th><th class="num">Amount</th><th><span class="visually-hidden">@L["Actions"]</span></th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var run in _runs.OrderByDescending(r => r.To).ThenByDescending(r => r.CreatedAt))
                     {

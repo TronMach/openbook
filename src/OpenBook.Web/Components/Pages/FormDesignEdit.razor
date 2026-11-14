@@ -270,7 +270,7 @@
                     }
                     <PostForm Action="@($"/settings/forms/{_design.Id}/logo")" enctype="multipart/form-data" data-enhance="false" class="inline-actions">
                         <AntiforgeryToken />
-                        <input type="file" name="logo" accept="image/png,image/jpeg" required />
+                        <input type="file" name="logo" accept="image/png,image/jpeg" required aria-label="@L["Logo image"]" />
                         <button type="submit" class="secondary">Upload</button>
                     </PostForm>
                     @if (_design.Logo is not null)

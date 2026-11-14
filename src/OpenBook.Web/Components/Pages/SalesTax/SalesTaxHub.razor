@@ -43,7 +43,7 @@
         {
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Agency</th><th>Files</th><th>Period to file</th><th class="num">Owed today</th><th></th></tr></thead>
+                    <thead><tr><th>Agency</th><th>Files</th><th>Period to file</th><th class="num">Owed today</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var a in _agencies)
                         {
@@ -91,7 +91,7 @@
             <h2>Returns filed</h2>
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Agency</th><th>Period</th><th>Filed on</th><th class="num">Tax reported</th><th>Confirmation</th><th></th></tr></thead>
+                    <thead><tr><th>Agency</th><th>Period</th><th>Filed on</th><th class="num">Tax reported</th><th>Confirmation</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var f in _filings.Take(24))
                         {

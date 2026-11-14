@@ -27,7 +27,7 @@
     @if (_subscriptions.Count > 0)
     {
         <table class="data">
-            <thead><tr><th>Report</th><th>To</th><th>When</th><th>Format</th><th>Last sent</th><th></th></tr></thead>
+            <thead><tr><th>Report</th><th>To</th><th>When</th><th>Format</th><th>Last sent</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var s in _subscriptions)
                 {

@@ -38,7 +38,7 @@
             <input type="hidden" name="through" value="@_through.ToString("yyyy-MM-dd")" />
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th></th><th>Client</th><th class="num">Hours</th><th class="num">Time</th><th class="num">Mileage</th><th class="num">Expenses</th><th class="num">Total</th><th>Oldest</th></tr></thead>
+                    <thead><tr><th><span class="visually-hidden">@L["Choose"]</span></th><th>Client</th><th class="num">Hours</th><th class="num">Time</th><th class="num">Mileage</th><th class="num">Expenses</th><th class="num">Total</th><th>Oldest</th></tr></thead>
                     <tbody>
                         @foreach (var row in _rows)
                         {
@@ -74,7 +74,7 @@
             <AntiforgeryToken />
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th></th><th>Client</th><th>Through</th><th class="num">Worked</th><th class="num">To bill</th><th>Made by</th></tr></thead>
+                    <thead><tr><th><span class="visually-hidden">@L["Choose"]</span></th><th>Client</th><th>Through</th><th class="num">Worked</th><th class="num">To bill</th><th>Made by</th></tr></thead>
                     <tbody>
                         @foreach (var draft in _drafts)
                         {

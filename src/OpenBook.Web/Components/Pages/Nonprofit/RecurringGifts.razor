@@ -38,7 +38,7 @@
     @if (_templates.Count > 0)
     {
         <table class="data">
-            <thead><tr><th>Donor</th><th class="num">Amount</th><th>Every</th><th>Next</th><th>Recorded</th><th>Automatic</th><th></th></tr></thead>
+            <thead><tr><th>Donor</th><th class="num">Amount</th><th>Every</th><th>Next</th><th>Recorded</th><th>Automatic</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var t in _templates)
                 {

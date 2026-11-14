@@ -9,7 +9,7 @@
     <Authorized>
         <header class="topbar">
             <a class="brand" href="/">OpenBook</a>
-            <nav>
+            <nav aria-label="@L["Main menu"]">
                 @* The simple view's menus are in the bar below; here the nav only keeps the space. *@
                 @if (!_simple && _menu == MenuStyle.DropDowns)
                 {
@@ -27,7 +27,7 @@
                     <NavLink href="/settings">@L["Settings"]</NavLink>
                 }
             </nav>
-            <form class="search" method="get" action="/search" data-enhance="false" role="search">
+            <form class="search" method="get" action="/search" data-enhance="false" role="search" aria-label="@L["Search the books"]">
                 <input name="q" type="search" placeholder="@L["Search…"]" aria-label="@L["Search"]" />
             </form>
             <a class="help-topic" href="/help/@OpenBook.Web.Help.HelpTopics.For(ReturnUrl)" title="@L["The user guide's chapter about this page"]">@L["Help"]</a>

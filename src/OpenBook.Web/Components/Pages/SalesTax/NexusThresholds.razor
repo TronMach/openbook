@@ -24,7 +24,7 @@
     @if (_thresholds.Count > 0)
     {
         <table class="data">
-            <thead><tr><th>@L["State"]</th><th class="num">@L["Sales"]</th><th class="num">@L["Transactions"]</th><th></th></tr></thead>
+            <thead><tr><th>@L["State"]</th><th class="num">@L["Sales"]</th><th class="num">@L["Transactions"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
             <tbody>
                 @foreach (var t in _thresholds)
                 {

@@ -17,7 +17,10 @@
             ("Net 30", "Due on receipt") and notes are used when present, and so is a column named after one of your custom fields. A QuickBooks customer export works as-is.
             Customers already in OpenBook are skipped; nothing is imported unless every row is valid.
         </p>
-        <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+        <div class="field">
+            <label for="file">@L["CSV file"]</label>
+            <InputFile id="file" accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+        </div>
     </div>
 
     @if (_error is not null)

@@ -53,7 +53,7 @@
                 <AntiforgeryToken />
                 <div class="table-wrap">
                     <table class="data">
-                        <thead><tr><th class="check"></th><th>Invoice</th><th>Customer</th><th>To</th><th>Due</th><th>Reminder</th><th class="num">Balance</th></tr></thead>
+                        <thead><tr><th class="check"><span class="visually-hidden">@L["Choose"]</span></th><th>Invoice</th><th>Customer</th><th>To</th><th>Due</th><th>Reminder</th><th class="num">Balance</th></tr></thead>
                         <tbody>
                             @foreach (var r in _reminders)
                             {
@@ -97,7 +97,7 @@
                 <input type="hidden" name="date" value="@_today.ToString("yyyy-MM-dd")" />
                 <div class="table-wrap">
                     <table class="data">
-                        <thead><tr><th class="check"></th><th>Invoice</th><th>Customer</th><th>Due</th><th class="num">Days late</th><th>Last fee</th><th class="num">Balance</th><th class="num">Fee</th></tr></thead>
+                        <thead><tr><th class="check"><span class="visually-hidden">@L["Choose"]</span></th><th>Invoice</th><th>Customer</th><th>Due</th><th class="num">Days late</th><th>Last fee</th><th class="num">Balance</th><th class="num">Fee</th></tr></thead>
                         <tbody>
                             @foreach (var f in _fees)
                             {

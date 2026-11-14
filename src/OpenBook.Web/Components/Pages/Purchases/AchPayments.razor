@@ -81,7 +81,7 @@
                 <AntiforgeryToken />
                 <input type="hidden" name="accountId" value="@_accountId" />
                 <table class="data">
-                    <thead><tr><th class="check"></th><th>Date</th><th>Vendor</th><th>Reference</th><th>To</th><th class="num">Amount</th></tr></thead>
+                    <thead><tr><th class="check"><span class="visually-hidden">@L["Choose"]</span></th><th>Date</th><th>Vendor</th><th>Reference</th><th>To</th><th class="num">Amount</th></tr></thead>
                     <tbody>
                         @foreach (var c in _candidates)
                         {
@@ -111,7 +111,7 @@
         {
             <h2>Files made</h2>
             <table class="data">
-                <thead><tr><th>Made</th><th>Effective</th><th class="num">Payments</th><th class="num">Total</th><th></th><th></th></tr></thead>
+                <thead><tr><th>Made</th><th>Effective</th><th class="num">Payments</th><th class="num">Total</th><th><span class="visually-hidden">@L["Actions"]</span></th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var (b, voided) in _batches)
                     {

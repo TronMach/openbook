@@ -8,7 +8,9 @@
     --include-transitive, so restore first) and the licence expression in each package's .nuspec. A package that gives
     its licence only as a file or a link can't be read automatically: it passes only once someone has read the licence
     and listed it in $Reviewed below, with what it is. PDFsharp-MigraDoc must stay at 6.2.4, its last MIT release (later
-    ones are AGPL or commercial). Exits 1 when something fails, so the CI workflow stops.
+    ones are AGPL or commercial). A package in $TestsOnly may have the licence written there, but only while nothing outside
+    tests/ uses it, directly or through another package: it never ships. Exits 1 when something fails, so the CI
+    workflow stops.
 
 .EXAMPLE
     powershell -File tools/check-licences.ps1
@@ -27,6 +29,12 @@ $Allowed = @(
 # Packages whose .nuspec has no licence expression, read by hand: id → what the licence is and when it was checked.
 $Reviewed = @{
     'xunit.abstractions' = 'Apache-2.0 (license.txt in the xunit repository; tests only), read 2026-11-11'
+}
+
+# Packages only the tests may use, with a licence outside $Allowed: id → the licence allowed and why. Decided by the
+# project owner, one package at a time; nothing under src/ may come to depend on them.
+$TestsOnly = @{
+    'Deque.AxeCore.Commons' = @{ License = 'MPL-2.0'; Why = 'axe-core, the accessibility checker the browser tests run (decided 2026-11-13)' }
 }
 
 # Pins that must hold whatever a licence says.
@@ -61,10 +69,16 @@ try {
     }
 
     $packages = @{}
+    $usedBy = @{}
     foreach ($project in $listing.projects) {
+        # The project's path from the checkout's root, with forward slashes (Windows PowerShell 5.1 has no GetRelativePath).
+        $relative = ($project.path.Substring($root.Length) -replace '\\', '/').TrimStart('/')
         foreach ($framework in @($project.frameworks)) {
             foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
-                if ($package) { $packages["$($package.id)|$($package.resolvedVersion)"] = $package }
+                if (-not $package) { continue }
+                $packages["$($package.id)|$($package.resolvedVersion)"] = $package
+                if (-not $usedBy.ContainsKey($package.id)) { $usedBy[$package.id] = @() }
+                $usedBy[$package.id] += $relative
             }
         }
     }
@@ -84,7 +98,12 @@ try {
         $license = $document.GetElementsByTagName('license') | Select-Object -First 1
         $expression = if ($license -and $license.GetAttribute('type') -eq 'expression') { $license.InnerText.Trim() } else { $null }
 
-        if ($expression) {
+        if ($expression -and $TestsOnly.ContainsKey($id) -and $expression -eq $TestsOnly[$id].License) {
+            $outside = @($usedBy[$id] | Where-Object { -not $_.StartsWith('tests/') } | Sort-Object -Unique)
+            if ($outside.Count -eq 0) { $counts["$expression (tests only)"] = 1 + [int]$counts["$expression (tests only)"] }
+            else { $failures += "$id $version`: $expression is allowed for the tests only, but $($outside -join ', ') uses it." }
+        }
+        elseif ($expression) {
             if (Test-Expression $expression) { $counts[$expression] = 1 + [int]$counts[$expression] }
             else { $failures += "$id $version`: $expression isn't on the list of licences OpenBook can use." }
         }

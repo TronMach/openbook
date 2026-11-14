@@ -42,7 +42,7 @@
     }
 
     <table class="data">
-        <thead><tr><th>User</th><th>Role</th><th>Last sign-in</th><th>Two-factor</th><th></th><th></th></tr></thead>
+        <thead><tr><th>User</th><th>Role</th><th>Last sign-in</th><th>Two-factor</th><th><span class="visually-hidden">@L["Actions"]</span></th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
         <tbody>
             @foreach (var user in _users)
             {
@@ -173,7 +173,7 @@
         {
             <h3>Invitations</h3>
             <table class="data">
-                <thead><tr><th>Email</th><th>Role</th><th>Invited</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Email</th><th>Role</th><th>Invited</th><th>Status</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var invite in _invites)
                     {

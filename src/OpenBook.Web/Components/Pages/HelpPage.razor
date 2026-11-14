@@ -7,11 +7,11 @@
 
 <div class="wide help-page">
     <aside class="help-contents" aria-label="@L["Chapters"]">
-        <form method="get" action="/help" role="search" data-enhance="false">
+        <form method="get" action="/help" role="search" aria-label="@L["Search the guide"]" data-enhance="false">
             <label for="help-q" class="visually-hidden">@L["Search the guide"]</label>
             <input id="help-q" name="q" type="search" value="@Q" placeholder="@L["Search the guide"]" />
         </form>
-        <nav>
+        <nav aria-label="@L["Guide chapters"]">
             <a href="/help" class="@(Chapter is null && Q is null ? "active" : null)">@L["Contents"]</a>
             @foreach (var c in Guide.Chapters)
             {

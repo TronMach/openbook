@@ -107,7 +107,7 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
                 continue;
             }
 
-            Assert.Contains("Not Found", page, StringComparison.Ordinal);
+            Assert.Contains("Page not found", page, StringComparison.Ordinal);
             Assert.Contains("href=\"/sales\"", page, StringComparison.Ordinal); // the menu, for someone signed in
         }
     }

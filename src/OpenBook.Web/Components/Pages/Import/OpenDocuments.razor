@@ -38,7 +38,10 @@
                 <span class="hint">Date them before your start date, so this year's income and expenses aren't changed.</span>
             </div>
         </div>
-        <InputFile accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+        <div class="field">
+            <label for="file">@L["CSV file"]</label>
+            <InputFile id="file" accept=".csv,text/csv" OnChange="LoadAsync" disabled="@_busy" />
+        </div>
     </div>
 
     @if (_error is not null)

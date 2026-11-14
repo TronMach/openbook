@@ -72,7 +72,7 @@
                 <div class="alert notice" role="status">@warning</div>
             }
             <table class="data">
-                <thead><tr><th></th><th class="num">New</th><th class="num">Already in OpenBook</th><th class="num">Skipped</th><th class="num">Errors</th></tr></thead>
+                <thead><tr><th><span class="visually-hidden">@L["Records"]</span></th><th class="num">New</th><th class="num">Already in OpenBook</th><th class="num">Skipped</th><th class="num">Errors</th></tr></thead>
                 <tbody>
                     @foreach (var kind in Enum.GetValues<MigrationKind>())
                     {

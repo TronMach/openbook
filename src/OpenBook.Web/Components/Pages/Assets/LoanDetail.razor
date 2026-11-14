@@ -85,7 +85,7 @@
                 @if (_loan.Draws.Count > 0)
                 {
                     <table class="data" style="margin-top: 1rem">
-                        <thead><tr><th>Drawn</th><th class="num">Amount</th><th></th></tr></thead>
+                        <thead><tr><th>Drawn</th><th class="num">Amount</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                         <tbody>
                             @foreach (var d in _loan.Draws)
                             {
@@ -109,7 +109,7 @@
         {
             <h2>Payments</h2>
             <table class="data">
-                <thead><tr><th>Date</th><th class="num">Amount</th><th class="num">Interest</th><th class="num">Principal</th><th></th></tr></thead>
+                <thead><tr><th>Date</th><th class="num">Amount</th><th class="num">Interest</th><th class="num">Principal</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var p in _loan.PaymentsMade.OrderBy(p => p.Date))
                     {
@@ -171,7 +171,7 @@
                     @if (_loan.RateChanges.Count > 0)
                     {
                         <table class="data">
-                            <thead><tr><th>From</th><th class="num">Rate</th><th class="num">Payment</th><th></th></tr></thead>
+                            <thead><tr><th>From</th><th class="num">Rate</th><th class="num">Payment</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                             <tbody>
                                 @foreach (var c in _loan.RateChanges)
                                 {

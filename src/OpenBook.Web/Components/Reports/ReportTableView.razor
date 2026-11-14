@@ -16,7 +16,15 @@
             <tr>
                 @foreach (var column in Table.Columns)
                 {
-                    <th class="@(column.IsNumeric || column.Format == ColumnFormat.Date ? "num" : null)">@column.Header</th>
+                    @* A column without a heading (a statement's line names) still has one for screen readers. *@
+                    <th class="@(column.IsNumeric || column.Format == ColumnFormat.Date ? "num" : null)">@if (string.IsNullOrWhiteSpace(column.Header))
+                        {
+                            <span class="visually-hidden">@L["Line"]</span>
+                        }
+                        else
+                        {
+                            @column.Header
+                        }</th>
                 }
             </tr>
         </thead>

@@ -21,7 +21,7 @@
         @if (_partners.Count > 0)
         {
             <table class="data entry">
-                <thead><tr><th>Name</th><th class="num">Share (%)</th><th>Capital account</th><th>Active</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th class="num">Share (%)</th><th>Capital account</th><th>Active</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                 <tbody>
                     @foreach (var p in _partners)
                     {
@@ -83,7 +83,7 @@
             @if (_allocations.Count > 0)
             {
                 <table class="data" style="margin-top: 1rem">
-                    <thead><tr><th>Year ending</th><th class="num">Net income</th><th>Entry</th><th></th></tr></thead>
+                    <thead><tr><th>Year ending</th><th class="num">Net income</th><th>Entry</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @foreach (var a in _allocations)
                         {

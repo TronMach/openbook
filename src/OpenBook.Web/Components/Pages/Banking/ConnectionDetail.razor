@@ -65,7 +65,7 @@
             </p>
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>At the bank</th><th class="num">Bank balance</th><th>Goes to</th><th>Fetch from</th><th>Fetched through</th><th></th></tr></thead>
+                    <thead><tr><th>At the bank</th><th class="num">Bank balance</th><th>Goes to</th><th>Fetch from</th><th>Fetched through</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
                     <tbody>
                         @{ var row = 0; }
                         @foreach (var remote in _connection.Accounts.OrderBy(a => a.Institution).ThenBy(a => a.Name))
