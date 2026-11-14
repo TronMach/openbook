@@ -51,7 +51,7 @@
         @if (_view.Bill is { } bill)
         {
             <dt>@L["Bill"]</dt>
-            <dd><a href="/purchases/bills/@bill.Id">@(bill.Reference ?? L["Bill"])</a>@(_view.BillVoided ? $" ({L["voided"]})" : "")</dd>
+            <dd><a href="/purchases/bills/@bill.Id">@(bill.Reference ?? L["Bill"])</a>@(_view.BillVoided ? $" ({L["Voided"]})" : "")</dd>
         }
     </dl>
 

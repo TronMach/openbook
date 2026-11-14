@@ -3227,9 +3227,6 @@
   <data name="Voided" xml:space="preserve">
     <value>Voided</value>
   </data>
-  <data name="voided" xml:space="preserve">
-    <value>voided</value>
-  </data>
   <data name="Waiting for approval" xml:space="preserve">
     <value>Waiting for approval</value>
   </data>
