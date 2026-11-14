@@ -79,6 +79,30 @@ public sealed class AdminAlerts(IConfiguration configuration)
             """, report.RanAt);
     }
 
+    /// <summary>
+    /// Grant reports not yet marked sent (C322): an alert a week before the due date, on the day, and each week while
+    /// late. The hourly job calls this every hour; each report's alert goes out at most once that day.
+    /// </summary>
+    public void GrantReportsDue(IEnumerable<(OpenBook.Domain.Nonprofit.Grant Grant, OpenBook.Domain.Nonprofit.GrantReportDue Report)> reports, DateOnly today, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(reports);
+        foreach (var (grant, report) in reports)
+        {
+            if (report.SentOn is not null)
+                continue;
+            var days = report.DueOn.DayNumber - today.DayNumber;
+            if (days is not (7 or 0) && !(days < 0 && -days % 7 == 0))
+                continue;
+            var when = days switch { 7 => "is due in a week", 0 => "is due today", _ => $"was due {-days} days ago" };
+            Raise($"grant-report:{grant.Id}:{report.DueOn:yyyy-MM-dd}:{report.Title}", $"OpenBook: the {report.Title} report for {grant.Name} {when}",
+                $"""
+                The {report.Title} report for the grant "{grant.Name}" {when} ({report.DueOn:d}).
+
+                Once it's sent, mark it sent on the grant's page (Nonprofit > Grants) and these reminders stop.
+                """, now);
+        }
+    }
+
     /// <summary>Queues an alert unless the same one was raised within <see cref="Quiet"/>.</summary>
     public void Raise(string key, string subject, string body, DateTimeOffset now)
     {

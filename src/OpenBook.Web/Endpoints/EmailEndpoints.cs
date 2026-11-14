@@ -20,6 +20,7 @@ public static class EmailEndpoints
         Compose(app, "/sales/email/{kind}/{id:guid}", r => SalesSource(r));
         Compose(app, "/purchases/orders/{id:guid}/email", r => new EmailSource(EmailKind.PurchaseOrder, Route(r, "id")));
         Compose(app, "/nonprofit/gifts/{id:guid}/email", r => new EmailSource(EmailKind.GiftAcknowledgment, Route(r, "id")));
+        Compose(app, "/nonprofit/pledges/{id:guid}/email", r => new EmailSource(EmailKind.PledgeReminder, Route(r, "id")));
         Compose(app, "/nonprofit/statements/{year:int}/{id:guid}/email",
             r => new EmailSource(EmailKind.GivingStatement, Route(r, "id"), Year: int.Parse(r.RouteValues["year"]!.ToString()!, System.Globalization.CultureInfo.InvariantCulture)));
 

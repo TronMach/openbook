@@ -95,6 +95,22 @@ public sealed class AdminAlertTests : IAsyncLifetime
         Assert.Equal(0, off.Pending);
     }
 
+    [Fact]
+    public void Grant_reports_alert_a_week_before_on_the_day_and_weekly_while_late()
+    {
+        var today = new DateOnly(2026, 11, 14);
+        var grant = OpenBook.Domain.Nonprofit.Grant.Create(Guid.NewGuid(), "Roof repair", Guid.NewGuid(), null, 1000m, today.AddMonths(-6), today.AddMonths(-6),
+            today.AddMonths(6), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), false, null, null, Now);
+        var due = new[] { 7, 3, 0, -10, -14 }.Select(days => (grant, grant.AddReportDue(today.AddDays(days), $"Report {days}"))).ToList();
+        var alerts = Alerts();
+
+        alerts.GrantReportsDue(due, today, Now);
+        Assert.Equal(3, alerts.Pending);
+        // The hourly job asks again within the day: nothing more.
+        alerts.GrantReportsDue(due, today, Now.AddHours(1));
+        Assert.Equal(3, alerts.Pending);
+    }
+
     [Theory]
     [InlineData("/customers/01a1d755-3ac7-7814-a602-753a81cdd3a7", "/customers/{id}")]
     [InlineData("/portal/obp_8f3kQz2LmN0pWx7Y", "/portal/{id}")]

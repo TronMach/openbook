@@ -27,6 +27,9 @@ public enum EmailKind
     PaymentReceipt,
     Form1099Copy,
     W9Request,
+
+    /// <summary>To a donor whose pledge has money due: what's due and the pledge statement (C337, 2026-11-14).</summary>
+    PledgeReminder,
 }
 
 /// <summary>How a customer gets their documents by email.</summary>
@@ -85,6 +88,7 @@ public static partial class EmailTemplates
         EmailKind.PaymentReceipt => "Payment receipt",
         EmailKind.Form1099Copy => "1099 copy",
         EmailKind.W9Request => "W-9 request",
+        EmailKind.PledgeReminder => "Pledge reminder",
         _ => kind.ToString(),
     };
 
@@ -99,6 +103,7 @@ public static partial class EmailTemplates
         EmailKind.PaymentReceipt => "payment-receipt",
         EmailKind.Form1099Copy => "1099-copy",
         EmailKind.W9Request => "w9-request",
+        EmailKind.PledgeReminder => "pledge-reminder",
         _ => kind.ToString().ToLowerInvariant(),
     };
 
@@ -127,6 +132,9 @@ public static partial class EmailTemplates
         ],
         EmailKind.GiftAcknowledgment => [new("donor", "The donor's name", "Pat Lee"), Number, Date, new("amount", "The gift's amount", "250.00"), Company],
         EmailKind.GivingStatement => [new("donor", "The donor's name", "Pat Lee"), new("year", "The year", "2026"), new("total", "The year's gifts", "1,200.00"), Company],
+        EmailKind.PledgeReminder => [new("donor", "The donor's name", "Pat Lee"), new("pledged", "What was pledged", "1,200.00"), new("paid", "Paid so far", "400.00"),
+            new("due_now", "What's due by today and not paid yet", "200.00"), new("next_due", "The next date a payment is due (blank when none)", Sample(new DateOnly(2026, 6, 1))),
+            new("balance", "What's left of the pledge", "800.00"), Company],
         EmailKind.Reminder =>
         [
             Customer, new("invoice", "The invoice's number", "1001"), new("balance", "What's still owed", "1,250.00"),
@@ -180,6 +188,8 @@ public static partial class EmailTemplates
         EmailKind.GivingStatement => ("Your {year} giving statement from {company}",
             "Dear {donor},\n\nThank you for your support in {year}. Your giving statement is attached; please keep it for your tax records.\n\nWith gratitude,\n{company}"),
         EmailKind.Reminder => (Sales.CollectionSettings.DefaultSubject, Sales.CollectionSettings.DefaultBody),
+        EmailKind.PledgeReminder => ("A reminder about your pledge to {company}",
+            "Dear {donor},\n\nThank you again for your pledge of {pledged}. So far we've received {paid}; {due_now} of it is now due.\nThe next payment is due on {next_due}.\n\nYour pledge statement is attached. If you've already sent a payment, thank you, and please disregard this note.\n\nWith gratitude,\n{company}"),
         EmailKind.Form1099Copy => ("Your {year} 1099 from {company}",
             "Hello,\n\nYour 1099 for {year} is attached. Keep it with your tax records.\n\nThank you,\n{company}"),
         EmailKind.W9Request => ("Please send us a W-9: {company}",

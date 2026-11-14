@@ -1,6 +1,7 @@
 @page "/sales/email/{Kind}/{Id:guid}"
 @page "/purchases/orders/{Id:guid}/email"
 @page "/nonprofit/gifts/{Id:guid}/email"
+@page "/nonprofit/pledges/{Id:guid}/email"
 @page "/nonprofit/statements/{Year:int}/{Id:guid}/email"
 @using System.ComponentModel.DataAnnotations
 @inject EmailService Email
@@ -198,6 +199,13 @@
         {
             (_source, _what, _recipient, _backLink, _pdfLink) = (new EmailSource(EmailKind.PurchaseOrder, id), "purchase order", "the vendor",
                 $"/purchases/orders/{id}", $"/purchases/orders/{id}/pdf");
+            return true;
+        }
+
+        if (path.StartsWith("/nonprofit/pledges/", StringComparison.OrdinalIgnoreCase))
+        {
+            (_source, _what, _recipient, _backLink, _pdfLink) = (new EmailSource(EmailKind.PledgeReminder, id), "pledge reminder", "the donor",
+                $"/nonprofit/pledges/{id}", $"/nonprofit/pledges/{id}/statement");
             return true;
         }
 

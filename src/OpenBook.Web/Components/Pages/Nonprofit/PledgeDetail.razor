@@ -26,6 +26,7 @@
             else if (_pledge.Balance > 0m)
             {
                 <ActionLink Class="button" Href="@($"/nonprofit/gifts/new?pledge={p.Id}")">Record a payment</ActionLink>
+                <ActionLink Class="button secondary" Href="@($"/nonprofit/pledges/{p.Id}/email")">@L["Email a reminder"]</ActionLink>
             }
             @if (p.Status == DocumentStatus.Posted)
             {

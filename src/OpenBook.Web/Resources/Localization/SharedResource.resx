@@ -848,6 +848,9 @@
   <data name="Email" xml:space="preserve">
     <value>Email</value>
   </data>
+  <data name="Email a reminder" xml:space="preserve">
+    <value>Email a reminder</value>
+  </data>
   <data name="Email each invoice to the customer when it's created" xml:space="preserve">
     <value>Email each invoice to the customer when it's created</value>
   </data>

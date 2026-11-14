@@ -168,6 +168,14 @@ internal sealed partial class RecurringPostingService(
             return true;
         }, ct);
 
+        // Grant reports not yet sent (C322): an alert to the admins a week before, on the day, and each week while late.
+        await StepAsync("Grant reports", async services =>
+        {
+            var reminders = await services.GetRequiredService<OpenBook.Application.Nonprofit.GrantService>().RemindersAsync(today, days: 7, ct);
+            services.GetRequiredService<Diagnostics.AdminAlerts>().GrantReportsDue(reminders.Reports, today, DateTimeOffset.UtcNow);
+            return true;
+        }, ct);
+
         await StepAsync("Idempotency keys", async services =>
         {
             await services.GetRequiredService<OpenBook.Application.IIdempotencyStore>().PurgeAsync(ct);

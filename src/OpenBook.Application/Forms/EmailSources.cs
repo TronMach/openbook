@@ -215,14 +215,33 @@ internal sealed class PurchaseOrderEmailSource(IPurchasesStore store, ICompanySt
     public Task<AuditRecord?> SentAsync(EmailSource source, string recipients, string title, CancellationToken ct) => Task.FromResult<AuditRecord?>(null);
 }
 
-/// <summary>Gift acknowledgments and giving statements, to the donor.</summary>
+/// <summary>Gift acknowledgments, giving statements and pledge reminders, to the donor.</summary>
 internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, ICompanyStore companies, GiftService gifts) : IEmailSource
 {
-    public IReadOnlyCollection<EmailKind> Kinds { get; } = [EmailKind.GiftAcknowledgment, EmailKind.GivingStatement];
+    public IReadOnlyCollection<EmailKind> Kinds { get; } = [EmailKind.GiftAcknowledgment, EmailKind.GivingStatement, EmailKind.PledgeReminder];
 
     public async Task<EmailContext> ContextAsync(EmailSource source, CancellationToken ct)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
+        if (source.Kind == EmailKind.PledgeReminder)
+        {
+            var balance = await gifts.GetPledgeAsync(source.Id, ct) ?? throw new EntityNotFoundException(GiftService.PledgeEntity, source.Id);
+            var pledge = balance.Pledge;
+            var donor = await DonorAsync(pledge.DonorId, ct);
+            var today = CompanyTime.Today;
+            var number = pledge.Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var dueNow = Math.Max(0m, Math.Min(balance.Balance, pledge.DueBy(today) - balance.Paid));
+            return new EmailContext(GiftService.PledgeEntity, pledge.Id, donor.DisplayName, $"Pledge reminder {number}",
+                FormService.FileName(company, "Pledge statement", number), donor.Email, new Dictionary<string, string>
+                {
+                    ["donor"] = donor.DisplayName, ["pledged"] = M(pledge.Amount), ["paid"] = M(balance.Paid), ["due_now"] = M(dueNow),
+                    // The line with the next date drops out when there's none.
+                    ["next_due"] = pledge.NextDueAfter(today) is { } next ? D(next) : "", ["balance"] = M(balance.Balance), ["company"] = company.Name,
+                }, Customer: donor,
+                Refusal: pledge.Status != DocumentStatus.Posted ? ("pledge.voided", "This pledge is voided.")
+                    : balance.Balance <= 0m ? ("pledge.paid", "Nothing is left to pay on this pledge.") : null);
+        }
+
         if (source.Kind == EmailKind.GiftAcknowledgment)
         {
             var gift = await store.GetDonationAsync(source.Id, ct) ?? throw new EntityNotFoundException(GiftService.DonationEntity, source.Id);
@@ -248,8 +267,12 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
             }, Customer: giver);
     }
 
-    public Task<RenderedForm> RenderAsync(EmailSource source, Guid? designId, CancellationToken ct) =>
-        source.Kind == EmailKind.GiftAcknowledgment ? gifts.AcknowledgmentAsync(source.Id, ct) : gifts.YearStatementAsync(source.Id, source.Year!.Value, ct);
+    public Task<RenderedForm> RenderAsync(EmailSource source, Guid? designId, CancellationToken ct) => source.Kind switch
+    {
+        EmailKind.GiftAcknowledgment => gifts.AcknowledgmentAsync(source.Id, ct),
+        EmailKind.PledgeReminder => gifts.PledgeStatementAsync(source.Id, CompanyTime.Today, ct),
+        _ => gifts.YearStatementAsync(source.Id, source.Year!.Value, ct),
+    };
 
     public Task<string?> PayLinkAsync(EmailSource source, CancellationToken ct) => Task.FromResult<string?>(null);
 

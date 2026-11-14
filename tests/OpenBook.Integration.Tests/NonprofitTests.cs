@@ -139,6 +139,34 @@ public sealed class NonprofitTests : IAsyncLifetime
 
     // ---- Gifts and pledges (slice 2) ----
 
+    [Fact]
+    public async Task A_pledge_reminder_says_whats_due_now_and_comes_with_the_statement()
+    {
+        var today = Application.CompanyTime.Today;
+        var sam = await Donor("Sam Pledger", "sam@example.test");
+        var pledge = await In<GiftService, Pledge>(s => s.PledgeAsync(new PledgeCommand(sam.Id, today.AddDays(-90), 1200m, Account("Contributions:Unrestricted"))));
+        await In<GiftService, Pledge>(s => s.SetInstallmentsAsync(pledge.Id, [(today.AddDays(-60), 300m), (today.AddDays(-10), 300m), (today.AddDays(30), 600m)]));
+        await Give(new RecordGiftCommand(sam.Id, today.AddDays(-50), 400m, Account("Checking"), PledgeId: pledge.Id));
+        await _db.InScope(sp => sp.GetRequiredService<Application.Forms.EmailService>().SaveSettingsAsync(new Application.Forms.EmailSettingsCommand(
+            Domain.Companies.EmailDelivery.Smtp, "smtp.test", 587, Domain.Companies.SmtpSecurity.Auto, "books", "s3cret", false, "books@charity.test", "Charity", null)));
+
+        var reminder = new Application.Forms.EmailSource(Domain.Email.EmailKind.PledgeReminder, pledge.Id);
+        var draft = await In<Application.Forms.EmailService, Application.Forms.EmailDraft>(s => s.DraftAsync(reminder));
+        await In<Application.Forms.EmailService, Domain.Email.SentEmail>(s => s.SendAsync(reminder, draft));
+
+        var sent = Assert.Single(_db.Mail.Sent).Message;
+        Assert.Equal("sam@example.test", sent.To);
+        // 600.00 due by now, 400.00 paid: 200.00 due, and the next payment's date.
+        Assert.Contains("So far we've received 400.00; 200.00 of it is now due.", sent.Body, StringComparison.Ordinal);
+        Assert.Contains(today.AddDays(30).ToString("d", System.Globalization.CultureInfo.CurrentCulture), sent.Body, StringComparison.Ordinal);
+        Assert.Equal("%PDF"u8.ToArray(), Assert.Single(sent.Attachments).Content[..4]);
+
+        // A pledge paid in full has nothing to remind about.
+        await Give(new RecordGiftCommand(sam.Id, today, 800m, Account("Checking"), PledgeId: pledge.Id));
+        Assert.Equal("pledge.paid", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<Application.Forms.EmailService, Domain.Email.SentEmail>(s => s.SendAsync(reminder, draft)))).Code);
+    }
+
     private Task<Customer> Donor(string name, string? email = null) =>
         In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails(name, Email: email)));
 
