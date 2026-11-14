@@ -174,6 +174,25 @@ public sealed class MoveInDepthTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Unpaid_invoices_are_refused_while_receivables_hold_money_no_invoice_explains()
+    {
+        // Imported history left 150.00 in accounts receivable with no invoices behind it.
+        var receivable = await _db.CreateAccount("Accounts Receivable", AccountType.AccountsReceivable, "1200");
+        var equity = await _db.CreateAccount("Opening Balance Equity", AccountType.Equity, "3000");
+        await In<OpenBook.Application.Ledger.PostingEngine, OpenBook.Domain.Ledger.JournalEntry>(s => s.PostAsync(new OpenBook.Application.Ledger.PostJournalEntryCommand(
+            new DateOnly(2026, 1, 31), [OpenBook.Domain.Ledger.JournalLineDraft.Dr(receivable.Id, 150m), OpenBook.Domain.Ledger.JournalLineDraft.Cr(equity.Id, 150m)], "History")));
+        const string csv = "Customer,Number,Date,Open balance\nAcme,501,2026-02-01,150.00\n";
+
+        Assert.Equal(150m, (await In<OpenDocumentImportService, OpenDocumentPlan>(s => s.PreviewAsync(OpenDocumentKind.Invoices, csv))).Unexplained);
+        Assert.Equal("opendocs.balance_unexplained", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<OpenDocumentImportService, OpenDocumentPlan>(s => s.ImportAsync(OpenDocumentKind.Invoices, csv, _income.Id)))).Code);
+        Assert.Empty(await Customers());
+
+        // Checked and confirmed: it imports.
+        Assert.Equal(1, (await In<OpenDocumentImportService, OpenDocumentPlan>(s => s.ImportAsync(OpenDocumentKind.Invoices, csv, _income.Id, acceptUnexplained: true))).NewCount);
+    }
+
+    [Fact]
     public async Task Unpaid_bills_become_real_bills()
     {
         await In<OpenDocumentImportService, OpenDocumentPlan>(s => s.ImportAsync(OpenDocumentKind.Bills, "Vendor,Date,Amount,Number\nLandlord,2026-02-01,800,R-1\n", _rent.Id));

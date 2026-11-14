@@ -18,7 +18,8 @@ public enum OpenDocumentKind
 /// <summary>An unpaid invoice or bill in a file.</summary>
 public sealed record OpenDocumentRow(int Line, string? Party, bool NewParty, string? Number, DateOnly? Date, DateOnly? DueDate, decimal Amount, ImportRowStatus Status, string? Message);
 
-public sealed record OpenDocumentPlan(IReadOnlyList<OpenDocumentRow> Rows, int NewCount, int ExistingCount, int ErrorCount, decimal Total, int NewParties, decimal BalanceInBooks, IReadOnlyList<string> Warnings)
+public sealed record OpenDocumentPlan(IReadOnlyList<OpenDocumentRow> Rows, int NewCount, int ExistingCount, int ErrorCount, decimal Total, int NewParties, decimal BalanceInBooks, IReadOnlyList<string> Warnings,
+    decimal Unexplained = 0m)
 {
     public bool CanImport => ErrorCount == 0 && NewCount > 0;
 }
@@ -49,11 +50,18 @@ public sealed class OpenDocumentImportService(
     /// <param name="kind">Unpaid invoices or unpaid bills.</param>
     /// <param name="csv">The file.</param>
     /// <param name="accountId">The income account for invoices, the category for bills.</param>
+    /// <param name="acceptUnexplained">
+    /// The receivables or payables accounts hold money no open invoice or bill explains (imported history, a journal
+    /// entry): importing would count it twice, so the import is refused unless this says it's been checked (C050).
+    /// </param>
     /// <param name="ct">Cancels the import.</param>
-    public async Task<OpenDocumentPlan> ImportAsync(OpenDocumentKind kind, string csv, Guid accountId, CancellationToken ct = default)
+    public async Task<OpenDocumentPlan> ImportAsync(OpenDocumentKind kind, string csv, Guid accountId, bool acceptUnexplained = false, CancellationToken ct = default)
     {
         var plan = await PlanAsync(kind, csv, ct);
         SalesImport.EnsureImportable(plan.ErrorCount, plan.NewCount);
+        if (plan.Unexplained != 0m && !acceptUnexplained)
+            throw new DomainException("opendocs.balance_unexplained",
+                $"The {(kind == OpenDocumentKind.Invoices ? "receivables" : "payables")} accounts already hold {Math.Abs(plan.Unexplained):N2} that no {(kind == OpenDocumentKind.Invoices ? "invoice" : "bill")} explains. Importing would count it twice. Check where it came from (imported history or a journal entry) and, if these documents are still right, confirm and import again.");
         await using var transaction = await unitOfWork.BeginAsync(ct);
         var rows = plan.Rows.Where(r => r.Status == ImportRowStatus.New).ToList();
         if (kind == OpenDocumentKind.Invoices)
@@ -172,6 +180,6 @@ public sealed class OpenDocumentImportService(
             warnings.Add($"The {(isInvoice ? "receivables" : "payables")} accounts hold {Math.Abs(balance - inDocuments):N2} that no {(isInvoice ? "invoice" : "bill")} explains, from imported history or a journal entry. Importing these adds to that, so check it first.");
         var added = rows.Where(r => r.Status == ImportRowStatus.New).ToList();
         return new OpenDocumentPlan(rows, added.Count, rows.Count(r => r.Status == ImportRowStatus.Exists), rows.Count(r => r.Status == ImportRowStatus.Error),
-            added.Sum(r => r.Amount), newParties.Count, balance, warnings);
+            added.Sum(r => r.Amount), newParties.Count, balance, warnings, balance - inDocuments);
     }
 }

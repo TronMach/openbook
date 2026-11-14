@@ -1181,6 +1181,9 @@
   <data name="How the document inbox reads scanned bills and orders: on this server, or by Claude for better results." xml:space="preserve">
     <value>How the document inbox reads scanned bills and orders: on this server, or by Claude for better results.</value>
   </data>
+  <data name="I've checked: these documents are still right, import them anyway" xml:space="preserve">
+    <value>I've checked: these documents are still right, import them anyway</value>
+  </data>
   <data name="I've saved them" xml:space="preserve">
     <value>I've saved them</value>
   </data>

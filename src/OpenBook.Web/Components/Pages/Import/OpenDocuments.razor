@@ -86,13 +86,18 @@
             </table>
         </div>
         <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+        @if (_preview.Unexplained != 0m)
+        {
+            <label class="check"><input type="checkbox" @bind="_acceptUnexplained" /> <span>@L["I've checked: these documents are still right, import them anyway"]</span></label>
+        }
         <div class="actions">
-            <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _accountId == Guid.Empty || _busy)">Import @_preview.NewCount</button>
+            <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _accountId == Guid.Empty || _busy || (_preview.Unexplained != 0m && !_acceptUnexplained))">Import @_preview.NewCount</button>
         </div>
     }
 </div>
 
 @code {
+    private bool _acceptUnexplained;
     private OpenDocumentKind _kind = OpenDocumentKind.Invoices;
     private string? _csv;
     private OpenDocumentPlan? _preview;
@@ -172,7 +177,8 @@
         try
         {
             var (kind, account) = (_kind, _accountId);
-            _imported = await Ops.RunAsync<OpenDocumentImportService, OpenDocumentPlan>(s => s.ImportAsync(kind, _csv, account), _closingPassword);
+            var accept = _acceptUnexplained;
+            _imported = await Ops.RunAsync<OpenDocumentImportService, OpenDocumentPlan>(s => s.ImportAsync(kind, _csv, account, accept), _closingPassword);
         }
         catch (DomainException ex)
         {

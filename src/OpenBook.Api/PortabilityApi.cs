@@ -49,10 +49,10 @@ internal static class PortabilityApi
         }).Accepts<string>("text/plain");
 
         // Unpaid invoices or bills when starting fresh, as a CSV body. account is the income account or category.
-        import.MapPost("/open-documents/{kind}", async (Application.Import.OpenDocumentKind kind, HttpRequest request, Guid accountId, bool? dryRun, Application.Import.OpenDocumentImportService s, CancellationToken ct) =>
+        import.MapPost("/open-documents/{kind}", async (Application.Import.OpenDocumentKind kind, HttpRequest request, Guid accountId, bool? dryRun, bool? acceptUnexplained, Application.Import.OpenDocumentImportService s, CancellationToken ct) =>
         {
             var text = await ReadAsync(request, ct);
-            return dryRun == true ? await s.PreviewAsync(kind, text, ct) : await s.ImportAsync(kind, text, accountId, ct);
+            return dryRun == true ? await s.PreviewAsync(kind, text, ct) : await s.ImportAsync(kind, text, accountId, acceptUnexplained == true, ct);
         }).Accepts<string>("text/csv");
         import.MapPost("/opening-stock", async (HttpRequest request, DateOnly? date, bool? alreadyInBooks, bool? dryRun, Application.Inventory.OpeningStockImportService s, CancellationToken ct) =>
         {
