@@ -53,7 +53,7 @@ Reports go out in the background within the hour. If OpenBook was off at the tim
 
 ## Cash-flow forecast
 
-**Reports → Cash-flow forecast** looks ahead week by week: starting from today's bank balances, it adds open invoices on their due dates, subtracts open bills on theirs, and subtracts loan payments. Choose the start date (**from**) and how many **weeks** (up to 52), then **Run**.
+**Reports → Cash-flow forecast** looks ahead week by week: starting from today's bank balances, it adds open invoices on their due dates, subtracts open bills on theirs, and subtracts loan payments. Choose the start date (**from**) and how many **weeks** (up to 52), then **Run**. Tick **Expect last year's takings again** for a business that's paid at the till or online rather than by invoice: each week then also expects what came in the same week a year before from sales receipts, gifts of money and sales channel payouts, shown as **Same weeks last year**.
 
 **Scenarios** test "what if": a scenario can assume **customers pay** some days late and **bills are paid** some days late, and add items of your own, once, weekly or monthly, such as a new hire's salary or an equipment purchase. Pick a scenario in the forecast to see its effect. Scenarios post nothing.
 

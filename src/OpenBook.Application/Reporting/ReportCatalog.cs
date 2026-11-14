@@ -370,7 +370,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "budget-vs-actual" => await BudgetVsActualAsync(p, basis, ct),
             "builder" => await Get<ReportBuilder>().RunAsync(from, range.To, basis, segments, BuilderOptions.Parse(p), ct),
             "kpis" => await Get<KpiService>().TableAsync(asOf, ct),
-            "cash-forecast" => await Get<ForecastService>().TableAsync(p.GetDate("asOf") ?? today, p.GetNumber("weeks") ?? 13, p.GetId("scenarioId"), ct),
+            "cash-forecast" => await Get<ForecastService>().TableAsync(p.GetDate("asOf") ?? today, p.GetNumber("weeks") ?? 13, p.GetId("scenarioId"), p.GetFlag("lastYear"), ct),
             "trial-balance-worksheet" => await Get<AdjustingEntryService>().WorksheetTableAsync(asOf, basis, ct),
             "adjusting-entries" => await Get<AdjustingEntryService>().EntriesTableAsync(range.From, range.To, ct),
             "fixed-assets" => await Get<Assets.AssetReports>().RegisterAsync(asOf, ct),

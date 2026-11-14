@@ -965,6 +965,9 @@
   <data name="Everything you can set up, grouped by what it's for. Each line says what the setting does and how it's set now. Greyed-out ones need more access: the line says whom to ask." xml:space="preserve">
     <value>Everything you can set up, grouped by what it's for. Each line says what the setting does and how it's set now. Greyed-out ones need more access: the line says whom to ask.</value>
   </data>
+  <data name="Expect last year's takings again" xml:space="preserve">
+    <value>Expect last year's takings again</value>
+  </data>
   <data name="Export" xml:space="preserve">
     <value>Export</value>
   </data>

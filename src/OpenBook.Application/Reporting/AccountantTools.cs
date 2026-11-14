@@ -18,9 +18,10 @@ using OpenBook.Domain.Reporting;
 namespace OpenBook.Application.Reporting;
 
 /// <summary>One week of the cash-flow forecast. Money in is positive, money out negative.</summary>
-public sealed record ForecastWeek(DateOnly Start, DateOnly End, decimal Opening, decimal Collections, decimal Bills, decimal Loans, decimal Other)
+public sealed record ForecastWeek(DateOnly Start, DateOnly End, decimal Opening, decimal Collections, decimal Bills, decimal Loans, decimal Other,
+    decimal LastYear = 0m)
 {
-    public decimal Closing => Opening + Collections + Bills + Loans + Other;
+    public decimal Closing => Opening + Collections + Bills + Loans + Other + LastYear;
 }
 
 public sealed record CashForecast(DateOnly AsOf, decimal Opening, ForecastScenario? Scenario, IReadOnlyList<ForecastWeek> Weeks)
@@ -35,7 +36,8 @@ public sealed record CashForecast(DateOnly AsOf, decimal Opening, ForecastScenar
 public sealed class ForecastService(
     IReportingStore store, ReportLedger ledger, AccountService accounts, ReceivablesService receivables, PayablesService payables,
     LoanService loans, ICompanyStore companies, IClock clock, ICurrentUser user,
-    Purchases.IPurchasesStore purchases, Purchases.PurchaseOrderService orders, Channels.IChannelStore channels)
+    Purchases.IPurchasesStore purchases, Purchases.PurchaseOrderService orders, Channels.IChannelStore channels,
+    Sales.ISalesStore sales, Nonprofit.INonprofitStore nonprofit)
 {
     public const string EntityType = "forecast_scenario";
     public const int MaxWeeks = 52;
@@ -92,7 +94,11 @@ public sealed class ForecastService(
         await store.SaveChangesAsync(ct);
     }
 
-    public async Task<CashForecast> ForecastAsync(DateOnly asOf, int weeks, Guid? scenarioId = null, CancellationToken ct = default)
+    /// <param name="lastYear">
+    /// Also expect, each week, the money that came in the same week a year before without an invoice: sales receipts,
+    /// gifts of money and posted sales channel payouts (C349). Open invoices are collected on their due dates already.
+    /// </param>
+    public async Task<CashForecast> ForecastAsync(DateOnly asOf, int weeks, Guid? scenarioId = null, bool lastYear = false, CancellationToken ct = default)
     {
         weeks = Math.Clamp(weeks, 1, MaxWeeks);
         var scenario = scenarioId is { } id ? await store.GetScenarioAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id) : null;
@@ -106,6 +112,7 @@ public sealed class ForecastService(
         var bills = new decimal[weeks];
         var loanPayments = new decimal[weeks];
         var other = new decimal[weeks];
+        var repeated = new decimal[weeks];
 
         foreach (var invoice in (await receivables.AgingAsync(asOf, ct)).Customers.SelectMany(c => c.Invoices))
         {
@@ -146,11 +153,25 @@ public sealed class ForecastService(
                 other[WeekOf(date)] += item.Amount;
         }
 
+        if (lastYear)
+        {
+            // 52 weeks back, so each day lands on the same weekday as a year ago.
+            const int Back = 364;
+            var (from, to) = (asOf.AddDays(1 - Back), end.AddDays(-Back));
+            foreach (var receipt in await sales.ListReceiptsDatedAsync(from, to, ct))
+                if (receipt.Status == DocumentStatus.Posted)
+                    repeated[WeekOf(receipt.Date.AddDays(Back))] += receipt.Total;
+            foreach (var gift in await nonprofit.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Kind == Domain.Nonprofit.GiftKind.Cash && d.Date >= from && d.Date <= to, ct))
+                repeated[WeekOf(gift.Date.AddDays(Back))] += gift.Amount;
+            foreach (var payout in (await channels.ListPayoutsAsync(null, ct)).Where(p => p.Status == Domain.Channels.PayoutStatus.Posted && p.Date >= from && p.Date <= to))
+                repeated[WeekOf(payout.Date.AddDays(Back))] += payout.Net;
+        }
+
         var result = new List<ForecastWeek>();
         var balance = opening;
         for (var w = 0; w < weeks; w++)
         {
-            var week = new ForecastWeek(asOf.AddDays(7 * w + 1), asOf.AddDays(7 * (w + 1)), balance, collections[w], bills[w], loanPayments[w], other[w]);
+            var week = new ForecastWeek(asOf.AddDays(7 * w + 1), asOf.AddDays(7 * (w + 1)), balance, collections[w], bills[w], loanPayments[w], other[w], repeated[w]);
             result.Add(week);
             balance = week.Closing;
         }
@@ -158,26 +179,28 @@ public sealed class ForecastService(
         return new CashForecast(asOf, opening, scenario, result);
     }
 
-    public async Task<ReportTable> TableAsync(DateOnly asOf, int weeks, Guid? scenarioId, CancellationToken ct = default)
+    public async Task<ReportTable> TableAsync(DateOnly asOf, int weeks, Guid? scenarioId, bool lastYear = false, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
-        var f = await ForecastAsync(asOf, weeks, scenarioId, ct);
+        var f = await ForecastAsync(asOf, weeks, scenarioId, lastYear, ct);
         var rows = f.Weeks.Select(w => new ReportTableRow(
         [
-            new ReportCell(w.Start), w.Opening, w.Collections, w.Bills, w.Loans, w.Other, w.Closing,
+            new ReportCell(w.Start), w.Opening, w.Collections, .. lastYear ? new ReportCell[] { w.LastYear } : [], w.Bills, w.Loans, w.Other, w.Closing,
         ])).ToList();
         rows.Add(new ReportTableRow(
-            ["Total", f.Opening, f.Weeks.Sum(w => w.Collections), f.Weeks.Sum(w => w.Bills), f.Weeks.Sum(w => w.Loans), f.Weeks.Sum(w => w.Other),
-                f.Weeks.Count > 0 ? f.Weeks[^1].Closing : f.Opening], 0, ReportRowStyle.Total));
+            ["Total", f.Opening, f.Weeks.Sum(w => w.Collections), .. lastYear ? new ReportCell[] { f.Weeks.Sum(w => w.LastYear) } : [], f.Weeks.Sum(w => w.Bills),
+                f.Weeks.Sum(w => w.Loans), f.Weeks.Sum(w => w.Other), f.Weeks.Count > 0 ? f.Weeks[^1].Closing : f.Opening], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Cash-flow forecast",
             [company.Name, $"{f.Weeks.Count} weeks from {asOf:MMM d, yyyy}" + (f.Scenario is { } s ? $" · scenario: {s.Name}" : "")],
             [
                 new("Week starting", ColumnFormat.Date), new("Opening", ColumnFormat.Money), new("Customers pay", ColumnFormat.Money),
+                .. lastYear ? new ReportColumn[] { new("Same weeks last year", ColumnFormat.Money) } : [],
                 new("Bills", ColumnFormat.Money), new("Loans", ColumnFormat.Money), new("Scenario", ColumnFormat.Money), new("Closing", ColumnFormat.Money),
             ],
             rows,
-            Note: "Open invoices are collected on their due dates and open bills paid on theirs (overdue ones in the first week), shifted by the scenario's delays. What open purchase orders still have to be billed for counts with the bills, on the order's expected date; sales channel payouts waiting to be posted count with the collections. Recurring templates aren't included; add them to a scenario.");
+            Note: "Open invoices are collected on their due dates and open bills paid on theirs (overdue ones in the first week), shifted by the scenario's delays. What open purchase orders still have to be billed for counts with the bills, on the order's expected date; sales channel payouts waiting to be posted count with the collections. Recurring templates aren't included; add them to a scenario."
+                + (lastYear ? " Same weeks last year: sales receipts, gifts of money and posted channel payouts dated 52 weeks before each week." : ""));
     }
 
     private AuditRecord Audit(AuditAction action, ForecastScenario s, string? before) =>

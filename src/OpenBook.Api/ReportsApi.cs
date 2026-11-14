@@ -124,8 +124,8 @@ internal static class ReportsApi
 
         var accountant = api.MapGroup("/accountant");
         accountant.MapGet("/check", async (BooksCheckService s, CancellationToken ct) => await s.RunAsync(ct));
-        accountant.MapGet("/forecast", async (DateOnly? asOf, int? weeks, Guid? scenarioId, ForecastService s, CancellationToken ct) =>
-            await s.ForecastAsync(asOf ?? CompanyTime.Today, weeks ?? 13, scenarioId, ct));
+        accountant.MapGet("/forecast", async (DateOnly? asOf, int? weeks, Guid? scenarioId, bool? lastYear, ForecastService s, CancellationToken ct) =>
+            await s.ForecastAsync(asOf ?? CompanyTime.Today, weeks ?? 13, scenarioId, lastYear == true, ct));
         accountant.MapGet("/scenarios", async (ForecastService s, CancellationToken ct) => await s.ListScenariosAsync(ct));
         accountant.MapPost("/scenarios", async (ForecastScenarioDetails r, ForecastService s, CancellationToken ct) =>
         {

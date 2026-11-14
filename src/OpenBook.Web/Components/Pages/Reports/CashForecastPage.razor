@@ -28,6 +28,7 @@
                 <option value="@s.Id" selected="@(s.Id == ScenarioId)">@s.Name</option>
             }
         </select>
+        <label class="check"><input type="checkbox" name="lastYear" value="true" checked="@LastYear" /> <span>@L["Expect last year's takings again"]</span></label>
         <button type="submit" class="secondary">Run</button>
     </form>
 
@@ -114,6 +115,7 @@
     [SupplyParameterFromQuery] private string? AsOf { get; set; }
     [SupplyParameterFromQuery] private int? Weeks { get; set; }
     [SupplyParameterFromQuery] private Guid? ScenarioId { get; set; }
+    [SupplyParameterFromQuery] private bool LastYear { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
 
     protected override async Task OnInitializedAsync()
@@ -122,7 +124,7 @@
         _weeks = Math.Clamp(Weeks ?? 13, 1, ForecastService.MaxWeeks);
         _scenarios = await Forecasts.ListScenariosAsync();
         var scenario = _scenarios.Any(s => s.Id == ScenarioId) ? ScenarioId : null;
-        _forecast = await Forecasts.ForecastAsync(_asOf, _weeks, scenario);
+        _forecast = await Forecasts.ForecastAsync(_asOf, _weeks, scenario, LastYear);
         _table = await Catalog.RunAsync("cash-forecast", ReportParameters.Parse(new Uri(Navigation.Uri).Query));
     }
 }

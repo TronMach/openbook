@@ -48,6 +48,28 @@ public sealed class AccountantToolsTests : IAsyncLifetime
         In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(date, [JournalLineDraft.Dr(debit.Id, amount), JournalLineDraft.Cr(credit.Id, amount)], memo)));
 
     [Fact]
+    public async Task The_forecast_can_expect_last_years_takings_in_the_same_weeks()
+    {
+        // A year (52 weeks) before the forecast's second week, a cash sale; and one in the first week, voided.
+        var service = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Repair", ItemType.Service, _fees.Id, 0m)));
+        var asOf = new DateOnly(2027, 3, 1);
+        await In<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(new CreateSalesReceiptCommand(null, asOf.AddDays(10 - 364), _checking.Id,
+            [new SalesLineDraft(service.Id, null, 1m, 250m)])));
+        var voided = await In<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(new CreateSalesReceiptCommand(null, asOf.AddDays(3 - 364), _checking.Id,
+            [new SalesLineDraft(service.Id, null, 1m, 99m)])));
+        await In<SalesReceiptService, SalesReceipt>(s => s.VoidAsync(voided.Id, "Wrong"));
+
+        var plain = await In<ForecastService, CashForecast>(s => s.ForecastAsync(asOf, 4));
+        var repeated = await In<ForecastService, CashForecast>(s => s.ForecastAsync(asOf, 4, lastYear: true));
+
+        Assert.All(plain.Weeks, w => Assert.Equal(0m, w.LastYear));
+        Assert.Equal([0m, 250m, 0m, 0m], repeated.Weeks.Select(w => w.LastYear));
+        Assert.Equal(plain.Weeks[^1].Closing + 250m, repeated.Weeks[^1].Closing);
+        var table = await In<ForecastService, ReportTable>(s => s.TableAsync(asOf, 4, null, lastYear: true));
+        Assert.Contains(table.Columns, c => c.Header == "Same weeks last year");
+    }
+
+    [Fact]
     public async Task The_forecast_pays_open_purchase_orders_on_their_expected_date()
     {
         var vendor = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Mill")));
