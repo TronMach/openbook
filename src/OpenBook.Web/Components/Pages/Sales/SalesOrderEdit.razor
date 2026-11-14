@@ -23,6 +23,10 @@
     }
     else if (_loaded)
     {
+        @if (Id is null)
+        {
+            <FormDraft @ref="_draft" T="Draft" Key="sales-order-new" Snapshot="TakeDraft" OnRestore="Restore" />
+        }
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -88,6 +92,25 @@
     private Guid? _warehouseId;
     private Guid? _locationId;
     private List<SalesLineModel> _lines = [new()];
+
+    /// <summary>A new order as it's typed, kept in the tab in case the connection drops (C302).</summary>
+    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, DateOnly? ExpectedDate, string? CustomerReference, string? Memo,
+        Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => Id is not null || (_customerId is null && _lines.All(l => l.IsBlank)) ? null
+        : new Draft(_customerId, _number, _date, _expectedDate, _customerReference, _memo, _taxCodeId, _locationId, _warehouseId, _lines);
+
+    private void Restore(Draft draft)
+    {
+        _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
+        (_number, _date, _expectedDate, _customerReference, _memo, _locationId, _warehouseId) =
+            (draft.Number, draft.Date, draft.ExpectedDate, draft.CustomerReference, draft.Memo, draft.LocationId, draft.WarehouseId);
+        _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+    }
+
     private bool _loaded;
     private bool _notEditable;
     private bool _busy;
@@ -192,6 +215,8 @@
             var command = new SaveSalesOrderCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expectedDate, _number, _customerReference, _memo,
                 _taxCodeId ?? Guid.Empty, _locationId, _warehouseId);
             var order = await Ops.ChangeAsync<SalesOrder, SalesOrderService, SalesOrder>(Id ?? Guid.Empty, _version, s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            if (_draft is not null)
+                await _draft.ClearAsync();
             Navigation.NavigateTo($"/sales/orders/{order.Id}");
         }
         catch (DomainException ex)

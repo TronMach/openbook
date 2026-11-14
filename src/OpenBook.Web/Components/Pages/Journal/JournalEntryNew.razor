@@ -23,6 +23,10 @@
     }
     else
     {
+        @if (_loaded && Change is null)
+        {
+            <FormDraft @ref="_draft" T="Draft" Key="journal-new" Snapshot="TakeDraft" OnRestore="Restore" />
+        }
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -95,6 +99,25 @@
     private bool _needsClosingPassword;
     private string? _closingPassword;
     private List<JournalLineModel> _lines = [new(), new()];
+
+    /// <summary>What a new entry holds while it's typed, kept in the tab in case the connection drops (C302).</summary>
+    internal sealed record Draft(DateOnly Date, EntryBasis Basis, string? Memo, DateOnly? ReverseOn, Guid? LocationId, List<Guid> TagIds, List<JournalLineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => string.IsNullOrWhiteSpace(_memo) && _lines.All(l => l.AccountId is null && l.Debit is null && l.Credit is null && string.IsNullOrWhiteSpace(l.Memo))
+        ? null
+        : new Draft(_date, _basis, _memo, _reverseOn, _locationId, [.. _tagIds], _lines);
+
+    private void Restore(Draft draft)
+    {
+        (_date, _basis, _memo, _reverseOn, _locationId, _tagIds) = (draft.Date, draft.Basis, draft.Memo, draft.ReverseOn, draft.LocationId, draft.TagIds);
+        _lines = draft.Lines.Count >= 2 ? draft.Lines : [.. draft.Lines, .. Enumerable.Range(0, 2 - draft.Lines.Count).Select(_ => new JournalLineModel())];
+        // An account the draft used may since have been made inactive: keep it on offer.
+        foreach (var used in _lines.Select(l => l.AccountId).OfType<Guid>().Where(a => _accounts.All(c => c.Id != a)).Distinct().ToList())
+            if (_chart.Find(used) is { } account)
+                _accounts.Add(account);
+    }
 
     private bool CanPost => JournalLines.IsComplete(_lines);
 
@@ -179,6 +202,8 @@
                 ? e.ChangeAsync(changeId, new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, LocationId: _locationId, TagIds: _tagIds), _reason ?? "", _adjusting)
                 : e.PostAsync(new PostJournalEntryCommand(_date, drafts, _memo, Basis: _basis, ReverseOn: _reverseOn, LocationId: _locationId, TagIds: _tagIds), _adjusting),
                 _closingPassword);
+            if (_draft is not null)
+                await _draft.ClearAsync();
             Navigation.NavigateTo($"/journal/{entry.Id}");
         }
         catch (DomainException ex)

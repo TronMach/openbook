@@ -269,6 +269,31 @@ public sealed class FormFlowTests(BrowserApp app)
         await page.AssertCleanAsync();
     }
 
+    [BrowserFact]
+    public async Task A_half_typed_journal_entry_comes_back_after_the_page_reloads()
+    {
+        var tag = Tag();
+        await NewAccount($"Supplies {tag}", AccountType.Expense);
+
+        await using var page = await app.SignedInAsync();
+        var p = page.Page;
+        await p.GotoAsync("/journal/new");
+        await PickAsync(p, p.Locator("input[aria-label='Account']").First, $"supplies {tag}", $"Supplies {tag}");
+        var debit = p.Locator("input[aria-label='Debit']").First;
+        await debit.FillAsync("42");
+        await debit.PressAsync("Tab");
+        // Kept every two seconds while the page is connected.
+        await p.WaitForTimeoutAsync(3000);
+
+        // A dropped connection reloads the page empty; the tab still has the typing.
+        await p.ReloadAsync();
+        var bringBack = p.GetByRole(AriaRole.Button, new() { Name = "Bring it back" });
+        await Assertions.Expect(bringBack).ToBeVisibleAsync(new() { Timeout = Slow });
+        await ClickUntilAsync(bringBack, p.Locator("input[aria-label='Debit']").First, new Regex("^42(\\.00)?$"));
+        await Assertions.Expect(p.Locator("input[aria-label='Account']").First).ToHaveValueAsync($"Supplies {tag}");
+        await page.AssertCleanAsync();
+    }
+
     /// <summary>Types into a box until the button it unlocks is enabled: the first typing may come before the circuit is up.</summary>
     private static async Task FillUntilAsync(ILocator input, string value, ILocator unlocks)
     {

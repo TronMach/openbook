@@ -23,6 +23,10 @@
     }
     else if (_loaded)
     {
+        @if (Id is null)
+        {
+            <FormDraft @ref="_draft" T="Draft" Key="purchase-order-new" Snapshot="TakeDraft" OnRestore="Restore" />
+        }
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -128,6 +132,23 @@
     private Guid? _warehouseId;
     private Guid? _locationId;
     private List<LineModel> _lines = [new()];
+
+    /// <summary>A new order as it's typed, kept in the tab in case the connection drops (C302).</summary>
+    internal sealed record Draft(Guid? VendorId, string? Number, DateOnly Date, DateOnly? ExpectedDate, string? Memo, Guid? WarehouseId, Guid? LocationId, List<LineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => Id is not null || (_vendorId is null && _lines.All(l => l.ItemId is null && l.AccountId is null && (l.UnitCost ?? 0m) == 0m && string.IsNullOrWhiteSpace(l.Description)))
+        ? null
+        : new Draft(_vendorId, _number, _date, _expectedDate, _memo, _warehouseId, _locationId, _lines);
+
+    private void Restore(Draft draft)
+    {
+        _vendorId = _vendors.Any(v => v.Id == draft.VendorId) ? draft.VendorId : null;
+        (_number, _date, _expectedDate, _memo, _warehouseId, _locationId) = (draft.Number, draft.Date, draft.ExpectedDate, draft.Memo, draft.WarehouseId, draft.LocationId);
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+    }
+
     private bool _loaded;
     private bool _notEditable;
     private bool _busy;
@@ -235,6 +256,8 @@
                 .ToList();
             var command = new SavePurchaseOrderCommand(_vendorId!.Value, _date, drafts, _expectedDate, _number, _memo, _warehouseId, _locationId);
             var order = await Ops.ChangeAsync<PurchaseOrder, PurchaseOrderService, PurchaseOrder>(Id ?? Guid.Empty, _version, s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            if (_draft is not null)
+                await _draft.ClearAsync();
             Navigation.NavigateTo($"/purchases/orders/{order.Id}");
         }
         catch (DomainException ex)
@@ -247,7 +270,7 @@
         }
     }
 
-    private sealed class LineModel
+    internal sealed class LineModel
     {
         public Guid? ItemId { get; set; }
         public Guid? AccountId { get; set; }

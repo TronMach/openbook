@@ -18,6 +18,7 @@
 
     @if (_account is not null)
     {
+        <FormDraft @ref="_draft" T="Draft" Key="@($"bank-{KindName.ToLowerInvariant()}-{AccountId}")" Snapshot="TakeDraft" OnRestore="Restore" />
         <div class="card">
             @if (_ownMoney)
             {
@@ -160,6 +161,21 @@
     private string? _memo;
     private List<LineModel> _lines = [new()];
 
+    /// <summary>What's typed, kept in the tab in case the connection drops (C302); one per account and kind.</summary>
+    internal sealed record Draft(DateOnly Date, string? Payee, Guid? VendorId, string? Reference, string? Memo, Guid? BillTo, decimal? BillMarkup, List<LineModel> Lines);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => _vendorId is null && string.IsNullOrWhiteSpace(_payee) && !Filled.Any() ? null
+        : new Draft(_date, _payee, _vendorId, _reference, _memo, _billTo, _billMarkup, _lines);
+
+    private void Restore(Draft draft)
+    {
+        (_date, _payee, _reference, _memo, _billTo, _billMarkup) = (draft.Date, draft.Payee, draft.Reference, draft.Memo, draft.BillTo, draft.BillMarkup);
+        _vendorId = _vendors.Any(v => v.Id == draft.VendorId) ? draft.VendorId : null;
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+    }
+
     [Parameter]
     public Guid AccountId { get; set; }
 
@@ -275,6 +291,8 @@
                 await tx.CommitAsync(default);
                 return recorded;
             }, _closingPassword);
+            if (_draft is not null)
+                await _draft.ClearAsync();
             Navigation.NavigateTo(BackPath ?? $"/banking/transactions/{saved.Id}");
         }
         catch (DomainException ex)
@@ -299,7 +317,7 @@
             _lines[0].AccountId = category;
     }
 
-    private sealed class LineModel
+    internal sealed class LineModel
     {
         public Guid? AccountId { get; set; }
         public decimal? Amount { get; set; }

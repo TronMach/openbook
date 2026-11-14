@@ -18,6 +18,7 @@
 
     @if (_loaded)
     {
+        <FormDraft @ref="_draft" T="Draft" Key="payment-new" Snapshot="TakeDraft" OnRestore="RestoreAsync" />
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -144,6 +145,35 @@
     private PaymentMethod? _method;
     private string? _memo;
     private List<RowModel> _rows = [];
+
+    /// <summary>A payment as it's typed, kept in the tab in case the connection drops (C302): what's applied, by invoice.</summary>
+    internal sealed record Draft(Guid? CustomerId, Guid DepositAccountId, DateOnly Date, decimal? Amount, string? Reference, PaymentMethod? Method, string? Memo,
+        Dictionary<Guid, decimal?> Applied, Dictionary<Guid, decimal?> Discounts);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => _customerId is null ? null
+        : new Draft(_customerId, _depositAccountId, _date, _amount, _reference, _method, _memo,
+            _rows.Where(r => r.Amount is not null).ToDictionary(r => r.Invoice.Id, r => r.Amount),
+            _rows.Where(r => r.Discount is not null).ToDictionary(r => r.Invoice.Id, r => r.Discount));
+
+    private async Task RestoreAsync(Draft draft)
+    {
+        if (draft.CustomerId is not { } customer || _customers.All(c => c.Customer.Id != customer))
+            return;
+        await LoadInvoicesAsync(customer);
+        // Invoices paid meanwhile are no longer listed; the rest get what was typed.
+        foreach (var row in _rows)
+        {
+            row.Amount = draft.Applied.GetValueOrDefault(row.Invoice.Id);
+            row.Discount = draft.Discounts.GetValueOrDefault(row.Invoice.Id);
+        }
+
+        if (_depositAccounts.Any(a => a.Id == draft.DepositAccountId))
+            _depositAccountId = draft.DepositAccountId;
+        (_date, _amount, _reference, _method, _memo) = (draft.Date, draft.Amount, draft.Reference, draft.Method, draft.Memo);
+    }
+
     private bool _loaded;
     private bool _busy;
     private string? _error;
@@ -268,6 +298,8 @@
                     .Select(r => new ApplyToInvoice(r.Invoice.Id, r.Amount ?? 0m, r.Discount ?? 0m)).ToList(),
                 _reference, _memo, Received, _method);
             var payment = await Ops.RunAsync<PaymentService, CustomerPayment>(s => s.ReceiveAsync(command), _closingPassword);
+            if (_draft is not null)
+                await _draft.ClearAsync();
             Navigation.NavigateTo($"/sales/payments/{payment.Id}");
         }
         catch (DomainException ex)

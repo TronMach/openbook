@@ -26,6 +26,10 @@
     }
     else if (_loaded)
     {
+        @if (Change is null)
+        {
+            <FormDraft @ref="_draft" T="Draft" Key="deposit-new" Snapshot="TakeDraft" OnRestore="Restore" />
+        }
         <div class="card">
             <div class="row">
                 <div class="field">
@@ -166,6 +170,25 @@
     private List<ExtraRow> _extras = [];
     private List<Account> _extraAccounts = [];
 
+    /// <summary>A new deposit as it's put together, kept in the tab in case the connection drops (C302): the ticked items by id.</summary>
+    internal sealed record Draft(Guid BankAccountId, DateOnly Date, string? Memo, List<Guid> Ticked, List<ExtraRow> Extras);
+
+    private FormDraft<Draft>? _draft;
+
+    private Draft? TakeDraft() => Change is not null || (!_items.Any(i => i.Selected) && _extras.Count == 0) ? null
+        : new Draft(_bankAccountId, _date, _memo, [.. _items.Where(i => i.Selected).Select(i => i.Item.Id)], _extras);
+
+    private void Restore(Draft draft)
+    {
+        if (_banks.Any(b => b.Id == draft.BankAccountId))
+            _bankAccountId = draft.BankAccountId;
+        (_date, _memo) = (draft.Date, draft.Memo);
+        // Items deposited meanwhile are no longer waiting; the rest come back ticked.
+        foreach (var row in _items)
+            row.Selected = draft.Ticked.Contains(row.Item.Id);
+        _extras = [.. draft.Extras.Where(e => _extraAccounts.Any(a => a.Id == e.AccountId))];
+    }
+
     private decimal ItemsTotal => _items.Where(i => i.Selected).Sum(i => i.Item.Amount);
 
     private decimal ExtrasTotal => _extras.Sum(e => e.Signed);
@@ -252,6 +275,8 @@
             var command = new MakeDepositCommand(_bankAccountId, _date, _items.Where(i => i.Selected).Select(i => (i.Item.Kind, i.Item.Id)).ToList(), _memo,
                 [.. _extras.Select(e => new DepositExtraDraft(e.AccountId, e.Signed, e.Memo))]);
             var deposit = await Ops.ChangeAsync<BankDeposit, DepositService, BankDeposit>(Change ?? Guid.Empty, _version, s => Change is { } id ? s.ChangeAsync(id, command, _reason ?? "") : s.DepositAsync(command), _closingPassword);
+            if (_draft is not null)
+                await _draft.ClearAsync();
             Navigation.NavigateTo($"/banking/deposits/{deposit.Id}");
         }
         catch (DomainException ex)
@@ -265,7 +290,7 @@
         }
     }
 
-    private sealed class ExtraRow
+    internal sealed class ExtraRow
     {
         public bool TakeOff { get; set; } = true;
 
