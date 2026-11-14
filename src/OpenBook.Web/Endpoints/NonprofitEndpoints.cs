@@ -351,9 +351,10 @@ public static class NonprofitEndpoints
         app.MapPost("/nonprofit/grants/{id:guid}/budget", async (Guid id, IFormCollection form, GrantService grants, CancellationToken ct) =>
         {
             var lines = form.Keys.Where(k => k.StartsWith("account:", StringComparison.Ordinal))
-                .Select(k => (Account: Id(form[k]), Amount: Number(form["amount:" + k["account:".Length..]]) ?? 0m))
-                .Where(l => l.Account is not null && l.Amount != 0m)
-                .Select(l => (l.Account!.Value, l.Amount)).ToList();
+                .Select(k => (Account: Id(form[k]), Amount: Number(form["amount:" + k["account:".Length..]]) ?? 0m,
+                    Category: form["category:" + k["account:".Length..]].ToString() is { Length: > 0 } c ? c : null))
+                .Where(l => l.Account is not null && (l.Amount != 0m || l.Category is not null))
+                .Select(l => new GrantBudgetDraft(l.Account!.Value, l.Amount, l.Category)).ToList();
             return await Back($"/nonprofit/grants/{id}", () => grants.SetBudgetAsync(id, lines, ct));
         }).RequireAuthorization();
 

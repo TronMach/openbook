@@ -9109,6 +9109,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasColumnType("INTEGER")
                                 .HasColumnName("AmountMinor");
 
+                            b1.Property<string>("Category")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT");
+
                             b1.HasKey("GrantId", "LineNumber");
 
                             b1.HasIndex("AccountId");

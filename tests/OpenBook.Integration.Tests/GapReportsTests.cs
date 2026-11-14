@@ -142,7 +142,7 @@ public sealed class GapReportsTests : IAsyncLifetime
     private async Task<Grant> GrantWithSpending()
     {
         var grant = await In<GrantService, Grant>(s => s.CreateAsync(new GrantCommand("Library", _acme.Id, 1000m, Jan5, Jan5, new DateOnly(2026, 12, 31), Conditional: true)));
-        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [(_rent.Id, 600m)]));
+        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [new(_rent.Id, 600m)]));
         await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(new DateOnly(2026, 2, 1),
             [JournalLineDraft.Dr(_rent.Id, 200m, null, grant.ClassId), JournalLineDraft.Cr(_checking.Id, 200m)])));
         await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(new DateOnly(2026, 3, 1),
@@ -285,7 +285,7 @@ public sealed class GapReportsTests : IAsyncLifetime
         var hall = await In<OpenBook.Application.Accounts.AccountService, Account>(s => s.CreateAsync(new OpenBook.Application.Accounts.CreateAccountCommand("Hall", AccountType.Expense, "6010", _rent.Id)));
         await In<PostingEngine, JournalEntry>(s => s.PostAsync(new PostJournalEntryCommand(Mar31,
             [JournalLineDraft.Dr(hall.Id, 40m, null, grant.ClassId), JournalLineDraft.Cr(_checking.Id, 40m)])));
-        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [(_rent.Id, 500m)]));
+        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [new(_rent.Id, 500m)]));
         var position = (await In<GrantService, GrantPosition?>(s => s.PositionAsync(grant.Id, Mar31)))!;
         var row = Assert.Single(position.Rows);
         Assert.Equal((_rent.Id, 500m, 290m), (row.AccountId, row.Budget, row.Spent));

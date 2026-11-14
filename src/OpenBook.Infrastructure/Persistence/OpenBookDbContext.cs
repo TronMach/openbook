@@ -1341,6 +1341,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.WithOwner().HasForeignKey("GrantId");
                 l.HasKey("GrantId", nameof(OpenBook.Domain.Nonprofit.GrantBudgetLine.LineNumber));
                 l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Category).HasMaxLength(OpenBook.Domain.Nonprofit.GrantBudgetLine.MaxCategoryLength);
                 l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             });
             b.OwnsMany(g => g.Receipts, l =>

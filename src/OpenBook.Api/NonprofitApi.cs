@@ -41,7 +41,7 @@ public sealed record AcknowledgedRequest(IReadOnlyList<Guid> Ids);
 
 public sealed record PledgeCancelRequest(DateOnly Date);
 
-public sealed record GrantBudgetRequest(Guid AccountId, decimal Amount);
+public sealed record GrantBudgetRequest(Guid AccountId, decimal Amount, string? Category = null);
 
 public sealed record GrantReceiptRequest(DateOnly Date, decimal Amount, Guid BankAccountId);
 
@@ -199,7 +199,7 @@ internal static class NonprofitApi
         });
         nonprofit.MapPut("/grants/{id:guid}/budget", async (Guid id, IReadOnlyList<GrantBudgetRequest> r, GrantService s, CancellationToken ct) =>
         {
-            await s.SetBudgetAsync(id, r.Select(l => (l.AccountId, l.Amount)).ToList(), ct);
+            await s.SetBudgetAsync(id, [.. r.Select(l => new GrantBudgetDraft(l.AccountId, l.Amount, l.Category))], ct);
             return await Position(s, id, ct);
         });
         nonprofit.MapPost("/grants/{id:guid}/receipts", async (Guid id, GrantReceiptRequest r, GrantService s, CancellationToken ct) =>

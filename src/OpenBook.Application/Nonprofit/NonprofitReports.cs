@@ -196,8 +196,19 @@ public sealed class NonprofitReports(
         var atStart = await grants.PositionAsync(grant.Id, from.AddDays(-1), ct);
         var atEnd = await grants.PositionAsync(grant.Id, to, ct);
         var before = atStart!.Rows.ToDictionary(r => r.AccountId, r => r.Spent);
-        var rows = atEnd!.Rows.Select(r => new ReportTableRow(
-            [r.Account, r.Budget, r.Spent - before.GetValueOrDefault(r.AccountId), r.Spent, r.Budget - r.Spent])).ToList();
+        ReportTableRow Line(GrantBudgetRow r, int level) => new([r.Account, r.Budget, r.Spent - before.GetValueOrDefault(r.AccountId), r.Spent, r.Budget - r.Spent], level);
+        var rows = new List<ReportTableRow>();
+        if (atEnd!.Categories.Count == 0)
+            rows.AddRange(atEnd.Rows.Select(r => Line(r, 0)));
+        // By the funder's categories (C320): each with its accounts and a total.
+        foreach (var category in atEnd.Categories)
+        {
+            rows.Add(new ReportTableRow([category.Category, null, null, null, null], 0, ReportRowStyle.Section));
+            rows.AddRange(category.Lines.Select(r => Line(r, 1)));
+            var period = category.Lines.Sum(r => r.Spent - before.GetValueOrDefault(r.AccountId));
+            rows.Add(new ReportTableRow([$"Total {category.Category}", category.Budget, period, category.Spent, category.Left], 1, ReportRowStyle.Subtotal));
+        }
+
         var budget = atEnd.Rows.Sum(r => r.Budget);
         rows.Add(new ReportTableRow(["Total", budget, atEnd.Spent - atStart.Spent, atEnd.Spent, budget - atEnd.Spent], 0, ReportRowStyle.Total));
         return new ReportTable(

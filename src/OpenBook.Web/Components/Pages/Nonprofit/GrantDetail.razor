@@ -60,6 +60,26 @@
         </dl>
 
         <h2>Budget and spending</h2>
+        @if (_position.Categories.Count > 0)
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Funder's category</th><th class="num">Budget</th><th class="num">Spent</th><th class="num">Left</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _position.Categories)
+                        {
+                            <tr>
+                                <td>@c.Category <span class="muted">(@string.Join(", ", c.Lines.Select(l => l.Account)))</span></td>
+                                <td class="num">@(c.Budget == 0m ? "" : Labels.Amount(c.Budget))</td>
+                                <td class="num">@Labels.Amount(c.Spent)</td>
+                                <td class="num @(c.Left < 0m ? "negative" : "")">@Labels.Amount(c.Left)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <h3>By account</h3>
+        }
         <table class="data">
             <thead><tr><th>Expense account</th><th class="num">Budget</th><th class="num">Spent</th><th class="num">Left</th></tr></thead>
             <tbody>
@@ -172,10 +192,18 @@
 
             <div class="card" style="margin-top: 1.5rem">
                 <h2>Budget</h2>
+                <p class="muted">An amount per expense account. When the funder budgets by its own categories ("Personnel", "Travel"), give each line its category: several accounts can share one, and an account with no amount but a category puts its spending there.</p>
                 <PostForm Action="@($"/nonprofit/grants/{g.Id}/budget")" data-enhance="false">
                     <AntiforgeryToken />
+                    <datalist id="grant-categories">
+                        @foreach (var c in g.Budget.Select(b => b.Category).OfType<string>().Distinct(StringComparer.CurrentCultureIgnoreCase))
+                        {
+                            <option value="@c"></option>
+                        }
+                    </datalist>
+                    <div class="table-wrap">
                     <table class="data">
-                        <thead><tr><th>Expense account</th><th class="num">Amount</th></tr></thead>
+                        <thead><tr><th>Expense account</th><th>Funder's category</th><th class="num">Amount</th></tr></thead>
                         <tbody>
                             @for (var i = 0; i < g.Budget.Count + 5; i++)
                             {
@@ -190,11 +218,13 @@
                                             }
                                         </select>
                                     </td>
+                                    <td><input name="category:@i" list="grant-categories" maxlength="@GrantBudgetLine.MaxCategoryLength" value="@line?.Category" aria-label="Funder's category @(i + 1)" /></td>
                                     <td class="num"><input name="amount:@i" class="amount" inputmode="decimal" value="@(line?.Amount.ToString("0.00", CultureInfo.InvariantCulture))" aria-label="Amount @(i + 1)" /></td>
                                 </tr>
                             }
                         </tbody>
                     </table>
+                    </div>
                     <div class="actions"><button type="submit" class="secondary">Save budget</button></div>
                 </PostForm>
             </div>

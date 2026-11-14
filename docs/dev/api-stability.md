@@ -101,6 +101,7 @@ Contributors: a change to anything under "What's covered" that isn't additive ne
 
 ## Change log
 
+- **2026-11-14**: `PUT /api/nonprofit/grants/{id}/budget` lines take optional `category`; a line with a category may have amount 0. The grant's budget rows carry `category`. Additive.
 - **2026-11-14**: `POST /api/sales/estimates/{id}/progress-invoice` takes optional `retainagePercent`. Additive.
 - **2026-11-14**: `POST /api/import/open-documents/{kind}` refuses (400 `opendocs.balance_unexplained`) when receivables or payables hold money no open document explains, unless `acceptUnexplained=true`; the plan has `unexplained`. A behaviour change for a case that used to import with a warning.
 - **2026-11-14**: `GET /api/accountant/forecast` takes optional `lastYear=true`; each week then has `lastYear`, included in `closing`. Additive.

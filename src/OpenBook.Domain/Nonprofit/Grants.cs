@@ -260,15 +260,23 @@ public sealed class Grant
     }
 
     /// <summary>Replaces the budget: one amount per expense account (zero lines dropped).</summary>
-    public void SetBudget(IReadOnlyList<(Guid AccountId, decimal Amount)> lines)
+    /// <summary>
+    /// Replaces the budget. A line with no amount is kept only when it has a funder's category, to put the account's
+    /// spending in that category (C320).
+    /// </summary>
+    public void SetBudget(IReadOnlyList<GrantBudgetDraft> lines)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        if (lines.Any(l => l.Amount < 0m || decimal.Round(l.Amount, 2) != l.Amount))
+        if (lines.Any(l => l.Amount < 0m || l.Amount > Money.MaxAmount || decimal.Round(l.Amount, 2) != l.Amount))
             throw new DomainException("grant.budget_amount", "Budget amounts are zero or more, in cents.");
-        if (lines.Where(l => l.Amount != 0m).GroupBy(l => l.AccountId).Any(g => g.Count() > 1))
+        var kept = lines.Select(l => l with { Category = Text.Optional(l.Category, GrantBudgetLine.MaxCategoryLength, "grant.budget_category_too_long", "A category") })
+            .Where(l => l.Amount != 0m || l.Category is not null).ToList();
+        if (kept.GroupBy(l => l.AccountId).Any(g => g.Count() > 1))
             throw new DomainException("grant.budget_duplicate", "Each account can appear once in the budget.");
+        if (kept.Count > 500)
+            throw new DomainException("grant.budget_too_long", "A budget can have at most 500 lines.");
         _budget.Clear();
-        _budget.AddRange(lines.Where(l => l.Amount != 0m).Select((l, i) => new GrantBudgetLine(i + 1, l.AccountId, l.Amount)));
+        _budget.AddRange(kept.Select((l, i) => new GrantBudgetLine(i + 1, l.AccountId, l.Amount, l.Category)));
     }
 
     /// <summary>Refuses a payment that isn't whole cents above zero or would pay more than the award.</summary>
@@ -428,22 +436,31 @@ public sealed class Grant
     }
 }
 
+/// <param name="Category">The funder's budget category the account's spending counts in ("Personnel", "Travel"): several accounts may share one.</param>
+public sealed record GrantBudgetDraft(Guid AccountId, decimal Amount, string? Category = null);
+
 public sealed class GrantBudgetLine
 {
+    public const int MaxCategoryLength = 100;
+
     private GrantBudgetLine()
     {
     }
 
-    internal GrantBudgetLine(int lineNumber, Guid accountId, decimal amount)
+    internal GrantBudgetLine(int lineNumber, Guid accountId, decimal amount, string? category = null)
     {
         LineNumber = lineNumber;
         AccountId = accountId;
         Amount = amount;
+        Category = category;
     }
 
     public int LineNumber { get; private set; }
     public Guid AccountId { get; private set; }
     public decimal Amount { get; private set; }
+
+    /// <summary>The funder's category it belongs to (C320); null when the budget is by account only.</summary>
+    public string? Category { get; private set; }
 }
 
 /// <summary>A reimbursement request sent to the funder: posts nothing, and is paid by a <see cref="GrantReceipt"/>.</summary>

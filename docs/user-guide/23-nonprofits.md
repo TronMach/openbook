@@ -113,7 +113,7 @@ An unconditional grant is recorded as income and receivable when awarded. A cond
 
 On the grant's page:
 
-- **Budget and spending**: enter a budget by account (**Save budget**) and compare spending against it.
+- **Budget and spending**: enter a budget by account (**Save budget**) and compare spending against it. When the funder budgets by its own categories ("Personnel", "Travel"), give each line a **Funder's category**: several accounts can share one, and an account with a category but no amount puts its spending in that category. The page then shows the categories first, each with its accounts, and **Grant budget vs. actual** groups its lines under them with a total for each; lines without a category come last, under **Not in a category**.
 - **Money from the funder**: record each payment (**Record payment**), into a bank account or into Undeposited Funds to go into a deposit with other checks (**Banking → Make deposit** lists it; voiding the deposit puts it back, and a deposited payment can't be voided until then). On a conditional grant, money received before it's earned is held as a refundable advance until spending catches up.
 - **Change the grant**: correct its name, award number, period or terms, or **Amend the award** when the funder adds money (an unconditional grant's extra is income and receivable on the date; a conditional one can then recognize more).
 - **Matching grants** (conditional only): under **Change the grant**, **Funder pays (% of spending)** says what share of the spending on the grant's class the funder covers. Recognition then counts only that share as grant income, and the grant page shows your match so far. 100% unless you change it.

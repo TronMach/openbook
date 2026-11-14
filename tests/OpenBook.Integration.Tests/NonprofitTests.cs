@@ -385,7 +385,7 @@ public sealed class NonprofitTests : IAsyncLifetime
         var created = (await In<SegmentService, IReadOnlyList<SegmentChoice>>(s => s.ListAsync(SegmentKind.Class))).Single(c => c.Segment.Id == grant.ClassId);
         Assert.Equal(("Literacy 2026", FunctionalArea.Program), (created.FullName, created.Segment.FunctionalArea));
 
-        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [(Account("Program Supplies"), 4000m), (Account("Salaries and Wages"), 6000m)]));
+        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [new(Account("Program Supplies"), 4000m), new(Account("Salaries and Wages"), 6000m)]));
         var checking = Account("Checking");
         await Post(new DateOnly(2026, 2, 1), Dr(Account("Program Supplies"), 1500m, classId: grant.ClassId), Cr(checking, 1500m));
         await Post(new DateOnly(2026, 2, 1), Dr(Account("Travel and Meetings"), 200m, classId: grant.ClassId), Cr(checking, 200m));
@@ -396,7 +396,7 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Equal(2500m, position.Rows.Single(r => r.Account == "Program Supplies").Left);
         Assert.Equal((0m, 200m), (position.Rows.Single(r => r.Account == "Travel and Meetings").Budget, position.Rows.Single(r => r.Account == "Travel and Meetings").Spent));
         Assert.Equal("grant.budget_account", (await Assert.ThrowsAsync<DomainException>(() =>
-            In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [(checking, 5m)])))).Code);
+            In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [new(checking, 5m)])))).Code);
 
         await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 3, 1), 6000m, checking));
         Assert.Equal(4000m, (await PositionOf(grant.Id))!.Grant.Due);
@@ -414,6 +414,43 @@ public sealed class NonprofitTests : IAsyncLifetime
         var voided = await In<GrantService, Grant>(s => s.VoidAsync(grant.Id, "Mistake"));
         Assert.Equal(GrantStatus.Voided, voided.Status);
         Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, "Grants:Restricted"));
+    }
+
+    [Fact]
+    public async Task A_grant_budget_follows_the_funders_categories_across_accounts()
+    {
+        var foundation = await Donor("Hill Foundation");
+        var grant = await NewGrant(new GrantCommand("Reading Corps", foundation.Id, 9000m, new DateOnly(2026, 1, 5), Jan1, Dec31,
+            IncomeAccountId: Account("Grants:Restricted")));
+        // "Program costs" takes two accounts, one budgeted with no amount; travel stays by account.
+        await In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id,
+        [
+            new(Account("Salaries and Wages"), 6000m, "Personnel"),
+            new(Account("Program Supplies"), 2000m, "Program costs"),
+            new(Account("Travel and Meetings"), 0m, " program COSTS "),
+            new(Account("Rent and Occupancy"), 0m),
+        ]));
+        var saved = (await PositionOf(grant.Id))!.Grant.Budget;
+        Assert.Equal(3, saved.Count);
+        Assert.Equal("program COSTS", saved[2].Category);
+
+        var checking = Account("Checking");
+        await Post(new DateOnly(2026, 2, 1), Dr(Account("Program Supplies"), 800m, classId: grant.ClassId), Cr(checking, 800m));
+        await Post(new DateOnly(2026, 2, 1), Dr(Account("Travel and Meetings"), 300m, classId: grant.ClassId), Cr(checking, 300m));
+        await Post(new DateOnly(2026, 3, 1), Dr(Account("Salaries and Wages"), 2500m, classId: grant.ClassId), Cr(checking, 2500m));
+        await Post(new DateOnly(2026, 3, 1), Dr(Account("Rent and Occupancy"), 100m, classId: grant.ClassId), Cr(checking, 100m));
+
+        var categories = (await PositionOf(grant.Id))!.Categories;
+        Assert.Equal(["Personnel", "Program costs", GrantPosition.NoCategory], categories.Select(c => c.Category));
+        Assert.Equal((2000m, 1100m, 900m), (categories[1].Budget, categories[1].Spent, categories[1].Left));
+        Assert.Equal((0m, 100m), (categories[2].Budget, categories[2].Spent));
+
+        var report = await Report("grant-budget-vs-actual", $"grantId={grant.Id}&preset=Custom&from=2026-03-01&to=2026-12-31");
+        Assert.Equal(1100m, report.Find("Total Program costs", 3));
+        Assert.Equal(0m, report.Find("Total Program costs", 2));
+        Assert.Equal(3500m, report.Find("Total Personnel", 4));
+        Assert.Equal("grant.budget_category_too_long", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.SetBudgetAsync(grant.Id, [new(Account("Program Supplies"), 1m, new string('x', 101))])))).Code);
     }
 
     [Fact]

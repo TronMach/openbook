@@ -33,7 +33,14 @@ public sealed record GrantCommand(
 public sealed record GrantDetailsCommand(string Name, string? Reference, DateOnly StartsOn, DateOnly EndsOn, string? Terms);
 
 /// <summary>One budget line against what's been spent on it; <paramref name="Budget"/> is zero for accounts spent on without a budget.</summary>
-public sealed record GrantBudgetRow(Guid AccountId, string Account, decimal Budget, decimal Spent)
+/// <param name="Category">The funder's category the line is in; null when it has none.</param>
+public sealed record GrantBudgetRow(Guid AccountId, string Account, decimal Budget, decimal Spent, string? Category = null)
+{
+    public decimal Left => Budget - Spent;
+}
+
+/// <summary>A funder's budget category (C320): the lines in it, added up.</summary>
+public sealed record GrantCategoryRow(string Category, decimal Budget, decimal Spent, IReadOnlyList<GrantBudgetRow> Lines)
 {
     public decimal Left => Budget - Spent;
 }
@@ -48,6 +55,17 @@ public sealed record GrantPosition(Grant Grant, string Funder, string ClassName,
 
     /// <summary>What the organization's own match has covered of the spending.</summary>
     public decimal Match => Spent - Grant.FunderShareOf(Spent);
+
+    public const string NoCategory = "Not in a category";
+
+    /// <summary>
+    /// The rows by the funder's categories, in the budget's order, lines outside them last (as "Not in a category");
+    /// empty when the budget has no categories.
+    /// </summary>
+    public IReadOnlyList<GrantCategoryRow> Categories => Rows.All(r => r.Category is null) ? []
+        : [.. Rows.GroupBy(r => r.Category ?? NoCategory, StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(g => g.Key == NoCategory && g.All(r => r.Category is null) ? 1 : 0)
+            .Select(g => new GrantCategoryRow(g.First().Category ?? NoCategory, g.Sum(r => r.Budget), g.Sum(r => r.Spent), [.. g]))];
 
     public decimal Unspent => Grant.NetAward - Spent;
 }
@@ -162,12 +180,12 @@ public sealed class GrantService(
     public Task<Grant> UpdateAsync(Guid id, GrantDetailsCommand command, CancellationToken ct = default) =>
         ChangeAsync(id, AuditAction.Updated, g => g.Update(command.Name, command.Reference, command.StartsOn, command.EndsOn, command.Terms), ct);
 
-    /// <summary>Replaces the budget: an amount per expense account.</summary>
-    public async Task<Grant> SetBudgetAsync(Guid id, IReadOnlyList<(Guid AccountId, decimal Amount)> lines, CancellationToken ct = default)
+    /// <summary>Replaces the budget: an amount per expense account, each optionally in one of the funder's categories.</summary>
+    public async Task<Grant> SetBudgetAsync(Guid id, IReadOnlyList<GrantBudgetDraft> lines, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var chart = await accounts.GetChartAsync(ct);
-        foreach (var (accountId, _) in lines)
+        foreach (var accountId in lines.Select(l => l.AccountId))
         {
             var account = chart.Find(accountId) ?? throw new EntityNotFoundException("account", accountId);
             if (account.Type.ClassOf() != AccountClass.Expense)
@@ -549,7 +567,7 @@ public sealed class GrantService(
 
         var spent = context.Expenses.Where(l => l.Date >= grant.StartsOn && l.Date <= grant.EndsOn && Under(l.ClassId!.Value))
             .GroupBy(l => BudgetAccount(l.AccountId)).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
-        var rows = grant.Budget.Select(b => new GrantBudgetRow(b.AccountId, context.Chart.FullName(b.AccountId), b.Amount, spent.GetValueOrDefault(b.AccountId)))
+        var rows = grant.Budget.Select(b => new GrantBudgetRow(b.AccountId, context.Chart.FullName(b.AccountId), b.Amount, spent.GetValueOrDefault(b.AccountId), b.Category))
             .Concat(spent.Where(s => grant.Budget.All(b => b.AccountId != s.Key) && s.Value != 0m)
                 .Select(s => new GrantBudgetRow(s.Key, context.Chart.FullName(s.Key), 0m, s.Value)))
             .ToList();
@@ -602,7 +620,7 @@ public sealed class GrantService(
         g.Conditional,
         g.Terms,
         Status = g.Status.ToString(),
-        Budget = g.Budget.Select(b => new { b.AccountId, b.Amount }),
+        Budget = g.Budget.Select(b => new { b.AccountId, b.Amount, b.Category }),
         Requests = g.Requests.Select(r => new { r.LineNumber, r.Date, r.Amount, r.ReceiptLine, r.IsVoided }),
         Receipts = g.Receipts.Select(r => new { r.Date, r.Amount, r.AdvancePart, r.IsVoided }),
         Recognitions = g.Recognitions.Select(r => new { r.Date, r.Amount, r.AdvancePart, r.IsVoided }),

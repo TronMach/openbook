@@ -9142,6 +9142,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasColumnType("bigint")
                                 .HasColumnName("AmountMinor");
 
+                            b1.Property<string>("Category")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
                             b1.HasKey("GrantId", "LineNumber");
 
                             b1.HasIndex("AccountId");
