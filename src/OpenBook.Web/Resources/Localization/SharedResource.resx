@@ -98,6 +98,9 @@
   <data name="a copy of your books every day, kept somewhere safe" xml:space="preserve">
     <value>a copy of your books every day, kept somewhere safe</value>
   </data>
+  <data name="A CSV with an Item (or Request) column, and Owner, Due and Notes columns if it has them. Items already on the list are skipped." xml:space="preserve">
+    <value>A CSV with an Item (or Request) column, and Owner, Due and Notes columns if it has them. Items already on the list are skipped.</value>
+  </data>
   <data name="A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick &quot;also sign out my other sessions&quot; so it can't start capturing again (this browser stays signed in)." xml:space="preserve">
     <value>A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick "also sign out my other sessions" so it can't start capturing again (this browser stays signed in).</value>
   </data>
@@ -133,6 +136,9 @@
   </data>
   <data name="Account" xml:space="preserve">
     <value>Account</value>
+  </data>
+  <data name="Accountant" xml:space="preserve">
+    <value>Accountant</value>
   </data>
   <data name="Accountant (settings and the books themselves)" xml:space="preserve">
     <value>Accountant (settings and the books themselves)</value>
@@ -184,6 +190,9 @@
   </data>
   <data name="Add a rate" xml:space="preserve">
     <value>Add a rate</value>
+  </data>
+  <data name="Add a request" xml:space="preserve">
+    <value>Add a request</value>
   </data>
   <data name="Add a vendor" xml:space="preserve">
     <value>Add a vendor</value>
@@ -322,6 +331,12 @@
   </data>
   <data name="Audit log" xml:space="preserve">
     <value>Audit log</value>
+  </data>
+  <data name="Audit requests" xml:space="preserve">
+    <value>Audit requests</value>
+  </data>
+  <data name="Audit requests for {0}" xml:space="preserve">
+    <value>Audit requests for {0}</value>
   </data>
   <data name="Automatic backups aren't working" xml:space="preserve">
     <value>Automatic backups aren't working</value>
@@ -677,11 +692,20 @@
   <data name="Contents" xml:space="preserve">
     <value>Contents</value>
   </data>
+  <data name="Copies every item, open again, with its due date moved on by the years between." xml:space="preserve">
+    <value>Copies every item, open again, with its due date moved on by the years between.</value>
+  </data>
   <data name="Copies of your company file: download one now, schedule them, or restore one." xml:space="preserve">
     <value>Copies of your company file: download one now, schedule them, or restore one.</value>
   </data>
   <data name="Copy" xml:space="preserve">
     <value>Copy</value>
+  </data>
+  <data name="Copy from" xml:space="preserve">
+    <value>Copy from</value>
+  </data>
+  <data name="Copy the list" xml:space="preserve">
+    <value>Copy the list</value>
   </data>
   <data name="Cost" xml:space="preserve">
     <value>Cost</value>
@@ -797,6 +821,9 @@
   <data name="Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
+  <data name="Delete this request?" xml:space="preserve">
+    <value>Delete this request?</value>
+  </data>
   <data name="Description" xml:space="preserve">
     <value>Description</value>
   </data>
@@ -835,6 +862,9 @@
   </data>
   <data name="Donors" xml:space="preserve">
     <value>Donors</value>
+  </data>
+  <data name="Download CSV" xml:space="preserve">
+    <value>Download CSV</value>
   </data>
   <data name="Download SKUs (CSV)" xml:space="preserve">
     <value>Download SKUs (CSV)</value>
@@ -1229,6 +1259,9 @@
   <data name="Import returns" xml:space="preserve">
     <value>Import returns</value>
   </data>
+  <data name="Import the auditor's list" xml:space="preserve">
+    <value>Import the auditor's list</value>
+  </data>
   <data name="Import transactions" xml:space="preserve">
     <value>Import transactions</value>
   </data>
@@ -1420,6 +1453,9 @@
   </data>
   <data name="Linking didn't work. Try again." xml:space="preserve">
     <value>Linking didn't work. Try again.</value>
+  </data>
+  <data name="Lists:" xml:space="preserve">
+    <value>Lists:</value>
   </data>
   <data name="Live connection" xml:space="preserve">
     <value>Live connection</value>
@@ -1634,6 +1670,9 @@
   <data name="No rates yet: time uses each person's bill rate, else the service's price." xml:space="preserve">
     <value>No rates yet: time uses each person's bill rate, else the service's price.</value>
   </data>
+  <data name="No requests for {0} yet." xml:space="preserve">
+    <value>No requests for {0} yet.</value>
+  </data>
   <data name="No rules yet" xml:space="preserve">
     <value>No rules yet</value>
   </data>
@@ -1700,6 +1739,9 @@
   <data name="Not linked. They're linked at their first single sign-on with this email, or from their own account page." xml:space="preserve">
     <value>Not linked. They're linked at their first single sign-on with this email, or from their own account page.</value>
   </data>
+  <data name="Not needed" xml:space="preserve">
+    <value>Not needed</value>
+  </data>
   <data name="Not set up" xml:space="preserve">
     <value>Not set up</value>
   </data>
@@ -1711,6 +1753,9 @@
   </data>
   <data name="Note" xml:space="preserve">
     <value>Note</value>
+  </data>
+  <data name="Notes" xml:space="preserve">
+    <value>Notes</value>
   </data>
   <data name="Nothing changed." xml:space="preserve">
     <value>Nothing changed.</value>
@@ -1811,6 +1856,9 @@
   <data name="Open your authenticator app and add an account by scanning this code." xml:space="preserve">
     <value>Open your authenticator app and add an account by scanning this code.</value>
   </data>
+  <data name="Open: {0}. Received: {1}. Not needed: {2}." xml:space="preserve">
+    <value>Open: {0}. Received: {1}. Not needed: {2}.</value>
+  </data>
   <data name="OpenBook couldn't finish that. Go back and try again; if it was a save, check whether it went through first." xml:space="preserve">
     <value>OpenBook couldn't finish that. Go back and try again; if it was a save, check whether it went through first.</value>
   </data>
@@ -1879,6 +1927,9 @@
   </data>
   <data name="Owed to you" xml:space="preserve">
     <value>Owed to you</value>
+  </data>
+  <data name="Owner" xml:space="preserve">
+    <value>Owner</value>
   </data>
   <data name="Page not found" xml:space="preserve">
     <value>Page not found</value>
@@ -2165,6 +2216,9 @@
   <data name="Receive Payments" xml:space="preserve">
     <value>Receive Payments</value>
   </data>
+  <data name="Received" xml:space="preserve">
+    <value>Received</value>
+  </data>
   <data name="Received on an order" xml:space="preserve">
     <value>Received on an order</value>
   </data>
@@ -2311,6 +2365,9 @@
   </data>
   <data name="Reprice unbilled time" xml:space="preserve">
     <value>Reprice unbilled time</value>
+  </data>
+  <data name="Requests added: {0}." xml:space="preserve">
+    <value>Requests added: {0}.</value>
   </data>
   <data name="Require it for" xml:space="preserve">
     <value>Require it for</value>
@@ -2618,6 +2675,9 @@
   <data name="Start fresh" xml:space="preserve">
     <value>Start fresh</value>
   </data>
+  <data name="Start from another year's list" xml:space="preserve">
+    <value>Start from another year's list</value>
+  </data>
   <data name="Starting balances when you move your books to OpenBook." xml:space="preserve">
     <value>Starting balances when you move your books to OpenBook.</value>
   </data>
@@ -2755,6 +2815,9 @@
   </data>
   <data name="The last good one was {0}" xml:space="preserve">
     <value>The last good one was {0}</value>
+  </data>
+  <data name="The list of schedules and documents your auditor or reviewer asks for (often called the PBC, “prepared by client”, list): who prepares each one, when it's due and when it went over. Nothing here posts to the books." xml:space="preserve">
+    <value>The list of schedules and documents your auditor or reviewer asks for (often called the PBC, “prepared by client”, list): who prepares each one, when it's due and when it went over. Nothing here posts to the books.</value>
   </data>
   <data name="The look of printed invoices, estimates, statements and purchase orders: logo, colors, fonts, columns and wording." xml:space="preserve">
     <value>The look of printed invoices, estimates, statements and purchase orders: logo, colors, fonts, columns and wording.</value>
@@ -3149,6 +3212,9 @@
   <data name="Written off" xml:space="preserve">
     <value>Written off</value>
   </data>
+  <data name="Year" xml:space="preserve">
+    <value>Year</value>
+  </data>
   <data name="You don't have access to that" xml:space="preserve">
     <value>You don't have access to that</value>
   </data>
@@ -3283,6 +3349,9 @@
   </data>
   <data name="{0} orders to receive" xml:space="preserve">
     <value>{0} orders to receive</value>
+  </data>
+  <data name="{0} overdue" xml:space="preserve">
+    <value>{0} overdue</value>
   </data>
   <data name="{0} overdue · {1} on open invoices" xml:space="preserve">
     <value>{0} overdue · {1} on open invoices</value>

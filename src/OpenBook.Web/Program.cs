@@ -209,6 +209,7 @@ app.MapAssetEndpoints();
 app.MapNonprofitEndpoints();
 app.MapChannelEndpoints();
 app.MapDashboardEndpoints();
+app.MapAuditRequestEndpoints();
 app.MapPluginEndpoints();
 app.MapGet("/capture/drafts/{id:guid}/photo", async (Guid id, HttpContext http, OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
 {

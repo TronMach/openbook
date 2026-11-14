@@ -64,7 +64,16 @@ Reports go out in the background within the hour. If OpenBook was off at the tim
 - **Check the books**: see [Checking the books](#checking-the-books) below.
 - **Year-end package**: choose **from**, **to** and the **basis** (accrual or cash; the company's unless you choose) and **Download package**: a ZIP of the main reports as Excel files (statements, trial balance, general ledger, aging, 1099 and more) with the 1099 data and a README, plus the mileage log, sales tax liability, inventory valuation and channel sales when you have any. Send it to your accountant instead of exporting reports one by one.
 - **1099 filing data**: a CSV for the **tax year** with each vendor over the threshold, their full tax ID, address, form and box, and amount, ready for a 1099 e-filing service. It contains full tax IDs, so handle it carefully.
+- **Audit requests**: the auditor's list of what to prepare, who has each item and when it's due; see [Audit requests](#audit-requests) below.
 - **Adjusting entries**: journal entries your accountant marks as *adjusting* (the **Adjusting entry** box on the journal entry form or page). The **Trial balance worksheet** report shows unadjusted balances, the adjustments and adjusted balances side by side, and **Adjusting journal entries** lists them.
+
+## Audit requests
+
+**Accountant → Audit requests** (accountant role) keeps the list of schedules and documents an auditor or reviewer asks for, often called the PBC ("prepared by client") list, one list per **Year**. Each request has an **Item**, an **Owner** (who prepares it), a **Due** date, **Notes** and a **Status**: **Open**, **Received** or **Not needed**; the date it went to **Received** or **Not needed** shows beside it. Open requests past their due date are marked **Overdue**, and the line above the list counts them. Nothing on the list posts to the books.
+
+- **Add a request** one at a time, or **Import the auditor's list** from a CSV with an **Item** (or **Request**) column and, if it has them, **Owner** (or **Assigned to**), **Due** and **Notes** (or **Comments**) columns. Items already on the year's list are skipped; a date that can't be read stops the whole file.
+- **Start from another year's list** copies every item, open again, with its due date moved on by the years between.
+- Change a row and **Save** it, or **Delete** it. **Download CSV** gives the list with each item's status, to send back to the auditor.
 
 ## Partners and their capital
 

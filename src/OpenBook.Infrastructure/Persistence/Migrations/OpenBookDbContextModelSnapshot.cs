@@ -5119,6 +5119,49 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("AdjustingEntries", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Reporting.AuditRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DoneOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DueOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Item")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Owner")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Year");
+
+                    b.ToTable("AuditRequests", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Reporting.Budget", b =>
                 {
                     b.Property<Guid>("Id")

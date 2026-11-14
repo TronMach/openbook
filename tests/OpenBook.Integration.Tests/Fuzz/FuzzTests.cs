@@ -66,6 +66,7 @@ public sealed class FuzzTests
         new("address", b => AddressParts.Parse(Text(b)), Seeds.Address),
         new("lots", b => { LotText.Parse(Text(b), ItemTracking.Lot, 5m, "Mug"); LotText.Parse(Text(b), ItemTracking.Serial, 3m, "Laptop"); }, Seeds.Lots),
         new("email-addresses", b => EmailAddresses.Parse(Text(b), "To"), Seeds.Emails),
+        new("audit-requests", b => OpenBook.Application.Reporting.AuditRequestService.Read(2025, Text(b), ["Trial balance"], DateTimeOffset.UnixEpoch), Seeds.AuditRequests),
     ];
 
     public static TheoryData<string> Names() => [.. Targets.Select(t => t.Name)];

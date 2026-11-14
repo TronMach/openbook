@@ -1,0 +1,178 @@
+@page "/accountant/requests"
+@using OpenBook.Application.Reporting
+@using OpenBook.Domain.Reporting
+@inject AuditRequestService Requests
+
+<PageTitle>@L["Audit requests"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Audit requests for {0}", _year]</h1>
+        <ActionLink Class="button secondary" Href="/accountant">@L["Accountant"]</ActionLink>
+        @if (_requests.Count > 0)
+        {
+            <a class="button secondary" href="/accountant/requests.csv?year=@_year" download>@L["Download CSV"]</a>
+        }
+    </div>
+    <p class="muted">@L["The list of schedules and documents your auditor or reviewer asks for (often called the PBC, “prepared by client”, list): who prepares each one, when it's due and when it went over. Nothing here posts to the books."]</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    else if (Added is { } added)
+    {
+        <div class="alert success" role="status">@L["Requests added: {0}.", added]</div>
+    }
+
+    <form method="get" action="/accountant/requests" class="inline-actions" data-enhance="false">
+        <label for="year">@L["Year"]</label>
+        <input id="year" name="year" type="number" class="short" min="1900" max="9999" value="@_year" />
+        @if (_years.Any(y => y != _year))
+        {
+            <span class="muted">@L["Lists:"]</span>
+            @foreach (var y in _years)
+            {
+                <a href="/accountant/requests?year=@y" aria-current="@(y == _year ? "page" : null)">@y</a>
+            }
+        }
+        <button type="submit" class="secondary">@L["Show"]</button>
+    </form>
+
+    @if (_requests.Count > 0)
+    {
+        <p>
+            @L["Open: {0}. Received: {1}. Not needed: {2}.", _summary.Open, _summary.Received, _summary.NotNeeded]
+            @if (_summary.Overdue > 0)
+            {
+                <span class="badge warn">@L["{0} overdue", _summary.Overdue]</span>
+            }
+        </p>
+        <div class="table-wrap">
+            <table class="data entry">
+                <thead>
+                    <tr><th>@L["Item"]</th><th>@L["Owner"]</th><th>@L["Due"]</th><th>@L["Status"]</th><th>@L["Notes"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _requests)
+                    {
+                        var formId = $"request-{r.Id}";
+                        <tr class="@(r.Status == AuditRequestStatus.Open ? "" : "muted")">
+                            <td><input form="@formId" name="item" value="@r.Item" maxlength="200" required style="min-width: 14rem" aria-label="@L["Item"]" /></td>
+                            <td><input form="@formId" name="owner" value="@r.Owner" maxlength="100" class="short" aria-label="@L["Owner"]" /></td>
+                            <td>
+                                <input form="@formId" name="dueOn" type="date" value="@r.DueOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" aria-label="@L["Due"]" />
+                                @if (r.IsOverdue(_today))
+                                {
+                                    <span class="badge warn">@L["Overdue"]</span>
+                                }
+                            </td>
+                            <td>
+                                <select form="@formId" name="status" aria-label="@L["Status"]">
+                                    <option value="Open" selected="@(r.Status == AuditRequestStatus.Open)">@L["Open"]</option>
+                                    <option value="Received" selected="@(r.Status == AuditRequestStatus.Received)">@L["Received"]</option>
+                                    <option value="NotNeeded" selected="@(r.Status == AuditRequestStatus.NotNeeded)">@L["Not needed"]</option>
+                                </select>
+                                @if (r.DoneOn is { } done)
+                                {
+                                    <span class="muted">@Labels.Date(done)</span>
+                                }
+                            </td>
+                            <td><input form="@formId" name="notes" value="@r.Notes" maxlength="1000" aria-label="@L["Notes"]" /></td>
+                            <td>
+                                <PostForm Action="@($"/accountant/requests/{r.Id}")" id="@formId" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="year" value="@_year" />
+                                    <button type="submit" class="secondary">@L["Save"]</button>
+                                </PostForm>
+                                <PostForm Action="@($"/accountant/requests/{r.Id}/delete")" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <input type="hidden" name="year" value="@_year" />
+                                    <button type="submit" class="secondary" data-confirm="@L["Delete this request?"]">@L["Delete"]</button>
+                                </PostForm>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p class="muted">@L["No requests for {0} yet.", _year]</p>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["Add a request"]</h2>
+        <PostForm Action="/accountant/requests" data-enhance="false" class="inline-actions">
+            <AntiforgeryToken />
+            <input type="hidden" name="year" value="@_year" />
+            <label for="new-item">@L["Item"]</label>
+            <input id="new-item" name="item" maxlength="200" required />
+            <label for="new-owner">@L["Owner"]</label>
+            <input id="new-owner" name="owner" maxlength="100" class="short" />
+            <label for="new-due">@L["Due"]</label>
+            <input id="new-due" name="dueOn" type="date" />
+            <label for="new-notes">@L["Notes"]</label>
+            <input id="new-notes" name="notes" maxlength="1000" />
+            <button type="submit" class="secondary">@L["Add"]</button>
+        </PostForm>
+    </div>
+
+    <div class="split-grid" style="margin-top: 1.5rem">
+        <div class="card">
+            <h2>@L["Import the auditor's list"]</h2>
+            <p class="muted">@L["A CSV with an Item (or Request) column, and Owner, Due and Notes columns if it has them. Items already on the list are skipped."]</p>
+            <PostForm Action="/accountant/requests/import" enctype="multipart/form-data" data-enhance="false">
+                <AntiforgeryToken />
+                <input type="hidden" name="year" value="@_year" />
+                <div class="field">
+                    <label for="request-file">@L["CSV file"]</label>
+                    <input id="request-file" type="file" name="file" accept=".csv,text/csv" required />
+                </div>
+                <div class="actions"><button type="submit" class="secondary">@L["Import"]</button></div>
+            </PostForm>
+        </div>
+        @if (_years.Any(y => y != _year))
+        {
+            <div class="card">
+                <h2>@L["Start from another year's list"]</h2>
+                <p class="muted">@L["Copies every item, open again, with its due date moved on by the years between."]</p>
+                <PostForm Action="/accountant/requests/copy" data-enhance="false">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="year" value="@_year" />
+                    <div class="field">
+                        <label for="copy-from">@L["Copy from"]</label>
+                        <select id="copy-from" name="fromYear">
+                            @foreach (var y in _years.Where(y => y != _year))
+                            {
+                                <option value="@y">@y</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">@L["Copy the list"]</button></div>
+                </PostForm>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<AuditRequest> _requests = [];
+    private IReadOnlyList<int> _years = [];
+    private AuditRequestSummary _summary = new(0, 0, 0, 0, 0);
+    private int _year;
+    private DateOnly _today;
+
+    [SupplyParameterFromQuery] private int? Year { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Added { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = CompanyTime.Today;
+        _year = Year is >= 1900 and <= 9999 ? Year.Value : _today.Year;
+        _requests = await Requests.ListAsync(_year);
+        _years = await Requests.YearsAsync();
+        _summary = Requests.Summarize(_requests);
+    }
+}

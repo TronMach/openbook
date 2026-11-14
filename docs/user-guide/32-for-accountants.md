@@ -154,6 +154,10 @@ plus the 1099 filing data as a CSV (for the last calendar year that ended by the
 
 **1099 filing data** on the same page downloads that CSV on its own for any **Tax year**, for the IRS IRIS template or a filing service. It holds full taxpayer IDs, so keep it private.
 
+### The auditor's request list
+
+**Accounts → Accountant tools → Audit requests** keeps the year's PBC list: import the auditor's spreadsheet as a CSV (or copy last year's list), give each item an **Owner** and a **Due** date, and mark it **Received** when it's handed over. Overdue items are flagged, and **Download CSV** sends the list back with each item's status. See [Audit requests](20-budgets-and-analysis.md#audit-requests).
+
 ## Reports you'll use
 
 **Reports** lists every report in groups. The ones accountants use most:

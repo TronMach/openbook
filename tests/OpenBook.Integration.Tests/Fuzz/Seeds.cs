@@ -204,6 +204,12 @@ internal static class Seeds
         "#1001,2026-03-02 09:00:00 -0500,paid,10.00,10.00,2,Blue mug,40.00,MUG-1,CA,\n" +
         "#1001,,,,,1,Red mug,30.00,MUG-2,,\n";
 
+    public const string AuditRequests =
+        "Request,Assigned to,Due date,Comments\r\n" +
+        "Bank reconciliations,Pat,2026-01-15,All accounts\r\n" +
+        "AR aging,Sam,01/31/2026,\"As of 12/31, with \"\"credits\"\"\"\r\n" +
+        "Loan statements,,,\r\n";
+
     public const string Returns =
         "return-date,order-id,sku,quantity,detailed-disposition,reason\n" +
         "2026-03-12,113-1,MUG-1,1,SELLABLE,UNWANTED_ITEM\n" +

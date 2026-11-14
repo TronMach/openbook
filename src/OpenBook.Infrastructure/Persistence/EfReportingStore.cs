@@ -28,6 +28,15 @@ internal sealed class EfReportingStore(OpenBookDbContext db) : IReportingStore
 
     public async Task<IReadOnlyList<AdjustingEntry>> ListAdjustingEntriesAsync(CancellationToken ct) => await db.AdjustingEntries.ToListAsync(ct);
 
+    public async Task<IReadOnlyList<AuditRequest>> ListAuditRequestsAsync(int? year, CancellationToken ct) =>
+        await (year is { } y ? db.AuditRequests.Where(r => r.Year == y) : db.AuditRequests).ToListAsync(ct);
+
+    public Task<AuditRequest?> GetAuditRequestAsync(Guid id, CancellationToken ct) => db.AuditRequests.SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    public void Add(AuditRequest request) => db.AuditRequests.Add(request);
+
+    public void Remove(AuditRequest request) => db.AuditRequests.Remove(request);
+
     public void Add(ForecastScenario scenario) => db.ForecastScenarios.Add(scenario);
 
     public void Remove(ForecastScenario scenario) => db.ForecastScenarios.Remove(scenario);

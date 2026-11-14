@@ -196,6 +196,7 @@ public static class DependencyInjection
         services.AddScoped<DashboardService>();
         services.AddScoped<ForecastService>();
         services.AddScoped<AdjustingEntryService>();
+        services.AddScoped<AuditRequestService>();
         services.AddScoped<AccountantPackageService>();
         services.AddScoped<OpenBook.Application.Capture.CaptureService>();
         return services;

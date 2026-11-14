@@ -15,6 +15,7 @@ using OpenBook.Application.Pricing;
 using OpenBook.Application.Projects;
 using OpenBook.Application.Purchases;
 using OpenBook.Application.Reporting;
+using OpenBook.Domain.Reporting;
 using OpenBook.Application.Sales;
 using OpenBook.Application.SalesTax;
 using OpenBook.Application.Segments;
@@ -180,6 +181,11 @@ internal static class EveryRecordKind
         var worker = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Dana", 50m, 100m)));
         await Do<TimeService>(s => s.CreateAsync(new TimeEntryDetails(worker.Id, d, 2m, customer.Id, service.Id, true)));
         await Do<PreBillService>(s => s.MakeDraftsAsync([customer.Id], today));
+
+        // Audit requests this year (one overdue) and last, for the request list and its copy form (C306).
+        await Do<AuditRequestService>(s => s.CreateAsync(new AuditRequestDetails(today.Year, "Bank reconciliations", "Dana", today.AddDays(-3), "All accounts")));
+        await Do<AuditRequestService>(s => s.CreateAsync(new AuditRequestDetails(today.Year, "Fixed asset schedule", null, today.AddDays(10))));
+        await Do<AuditRequestService>(s => s.CreateAsync(new AuditRequestDetails(today.Year - 1, "Payroll registers")));
 
         // Settings and lists.
         await Do<BudgetService>(s => s.CreateAsync(new CreateBudgetCommand("Next year", today.Year + 1)));

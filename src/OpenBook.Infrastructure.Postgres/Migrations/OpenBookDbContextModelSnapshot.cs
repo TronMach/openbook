@@ -5126,6 +5126,49 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("AdjustingEntries", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Reporting.AuditRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("DoneOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Item")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Owner")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Year");
+
+                    b.ToTable("AuditRequests", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Reporting.Budget", b =>
                 {
                     b.Property<Guid>("Id")

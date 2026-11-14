@@ -119,6 +119,7 @@ public static class Links
         "vendor_credit" => $"/purchases/vendor-credits/{id}",
         "vendor_deposit" => $"/purchases/vendor-deposits/{id}",
         "partner" or "partner_allocation" => "/accountant/partners",
+        "audit_request" => "/accountant/requests",
         "vendor_refund" => $"/purchases/vendor-refunds/{id}",
         "recurring_bill" => $"/purchases/recurring/{id}",
         "recurring_expense" => $"/banking/recurring/{id}",

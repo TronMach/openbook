@@ -117,6 +117,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<ViewPreference> ViewPreferences => Set<ViewPreference>();
     public DbSet<ForecastScenario> ForecastScenarios => Set<ForecastScenario>();
     public DbSet<AdjustingEntry> AdjustingEntries => Set<AdjustingEntry>();
+    public DbSet<AuditRequest> AuditRequests => Set<AuditRequest>();
     public DbSet<OpenBook.Domain.Capture.CaptureDevice> CaptureDevices => Set<OpenBook.Domain.Capture.CaptureDevice>();
     public DbSet<OpenBook.Domain.Capture.CaptureDraft> CaptureDrafts => Set<OpenBook.Domain.Capture.CaptureDraft>();
     public DbSet<CollectionSettings> CollectionSettings => Set<CollectionSettings>();
@@ -2593,6 +2594,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasKey(a => a.JournalEntryId);
             b.Property(a => a.MarkedBy).HasMaxLength(100);
             b.HasOne<JournalEntry>().WithMany().HasForeignKey(a => a.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AuditRequest>(b =>
+        {
+            b.ToTable("AuditRequests");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Item).HasMaxLength(200);
+            b.Property(r => r.Owner).HasMaxLength(100);
+            b.Property(r => r.Notes).HasMaxLength(1000);
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasIndex(r => r.Year);
         });
 
         modelBuilder.Entity<JobLease>(b =>

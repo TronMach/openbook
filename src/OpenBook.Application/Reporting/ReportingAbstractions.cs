@@ -29,6 +29,13 @@ public interface IReportingStore
 
     Task<IReadOnlyList<AdjustingEntry>> ListAdjustingEntriesAsync(CancellationToken ct);
 
+    Task<IReadOnlyList<AuditRequest>> ListAuditRequestsAsync(int? year, CancellationToken ct);
+
+    Task<AuditRequest?> GetAuditRequestAsync(Guid id, CancellationToken ct);
+
+    void Add(AuditRequest request);
+    void Remove(AuditRequest request);
+
     void Add(ForecastScenario scenario);
     void Remove(ForecastScenario scenario);
     void Add(AdjustingEntry entry);
