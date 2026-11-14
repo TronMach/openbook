@@ -274,10 +274,11 @@ public sealed class Item
     public static void EnsureIncomeAccount(Account account, ItemType? type = null)
     {
         ArgumentNullException.ThrowIfNull(account);
-        var liabilityAllowed = type is ItemType.Service or ItemType.NonInventory && account.Type == AccountType.OtherCurrentLiability;
-        if (account.Type.ClassOf() != AccountClass.Income && !liabilityAllowed)
+        // Gift cards post to a liability; retainage held on progress invoices to an other current asset (C338).
+        var otherAllowed = type is ItemType.Service or ItemType.NonInventory && account.Type is AccountType.OtherCurrentLiability or AccountType.OtherCurrentAsset;
+        if (account.Type.ClassOf() != AccountClass.Income && !otherAllowed)
             throw new DomainException("item.income_account_type", type is ItemType.Service or ItemType.NonInventory
-                ? $"'{account.Name}' isn't an income account (or an other current liability, for gift cards and the like)."
+                ? $"'{account.Name}' isn't an income account (or an other current liability, for gift cards and the like, or an other current asset, for retainage)."
                 : $"'{account.Name}' isn't an income account.");
         if (!account.IsActive)
             throw new DomainException("item.income_account_inactive", $"'{account.Name}' is inactive.");

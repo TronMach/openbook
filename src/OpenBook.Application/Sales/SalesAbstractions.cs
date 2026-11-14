@@ -396,6 +396,15 @@ public sealed class SalesAccounts(AccountService accounts)
         ?? await accounts.CreateAsync(new CreateAccountCommand(UndepositedFundsName, AccountType.OtherCurrentAsset,
             Description: "Payments received but not yet deposited."), ct);
 
+    public const string RetainageAccountName = "Retainage Receivable";
+
+    /// <summary>Where retainage held on progress invoices waits until it's billed (C338): an other current asset.</summary>
+    public async Task<Account> GetOrCreateRetainageAsync(CancellationToken ct) =>
+        (await accounts.GetChartAsync(ct)).Ordered(includeInactive: false).Select(x => x.Account)
+            .FirstOrDefault(a => a.Type == AccountType.OtherCurrentAsset && string.Equals(a.Name, RetainageAccountName, StringComparison.OrdinalIgnoreCase))
+        ?? await accounts.CreateAsync(new CreateAccountCommand(RetainageAccountName, AccountType.OtherCurrentAsset,
+            Description: "Retainage held back on progress invoices, until it's billed."), ct);
+
     /// <summary>A bank or credit card account to pay a refund from.</summary>
     public async Task<Account> GetPaymentAccountAsync(Guid id, CancellationToken ct)
     {

@@ -56,7 +56,8 @@ public sealed record ChangeInvoiceCommand(
     IReadOnlyList<int?>? FromLines = null);
 
 /// <summary>What part of a sales order or estimate an invoice bills, and whether that finishes it.</summary>
-internal sealed record InvoiceSource(Guid? SalesOrderId, IReadOnlyList<InvoiceSourceLine> Lines, bool Completes);
+/// <param name="RetainageRelease">Bills retainage held on the estimate's invoices: allowed once the estimate is closed, and leaves it as it is (C338).</param>
+internal sealed record InvoiceSource(Guid? SalesOrderId, IReadOnlyList<InvoiceSourceLine> Lines, bool Completes, bool RetainageRelease = false);
 
 public sealed class InvoiceService(
     ISalesStore store,
@@ -125,7 +126,7 @@ public sealed class InvoiceService(
         if (command.EstimateId is { } estimateId)
         {
             estimate = await store.GetEstimateAsync(estimateId, ct) ?? throw new EntityNotFoundException("estimate", estimateId);
-            if (estimate.Status == EstimateStatus.Closed)
+            if (estimate.Status == EstimateStatus.Closed && source?.RetainageRelease != true)
                 throw new DomainException("estimate.closed", $"Estimate {estimate.Number} is already invoiced.");
             if (estimate.Status == EstimateStatus.Declined)
                 throw new DomainException("estimate.declined", $"Estimate {estimate.Number} was declined.");
@@ -220,7 +221,7 @@ public sealed class InvoiceService(
                 orderBefore, SalesOrderService.Snapshot(order)));
         }
 
-        if (estimate is not null && (source?.Completes ?? true))
+        if (estimate is not null && (source?.Completes ?? true) && source?.RetainageRelease != true)
         {
             var estimateBefore = EstimateService.Snapshot(estimate);
             estimate.MarkInvoiced(invoice.Id);

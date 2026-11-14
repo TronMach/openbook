@@ -204,6 +204,25 @@ public sealed class SmallGapTests : IAsyncLifetime
         var facts = form.Facts.ToDictionary(f => f.Item1, f => f.Item2);
         var n2 = 300m.ToString("N2", System.Globalization.CultureInfo.CurrentCulture);
         Assert.Equal((n2, n2), (facts["Billed before"], facts["Left after this"]));
+        Assert.False(facts.ContainsKey("Retainage held"));
+    }
+
+    [Fact]
+    public async Task Retainage_is_left_out_of_the_contract_position_and_shown_on_its_own()
+    {
+        var sales = await _db.CreateAccount("Fees", AccountType.Income, "4000");
+        var work = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Build", ItemType.Service, sales.Id, 1_000m, Taxable: false)));
+        var client = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Builder Co")));
+        var estimate = await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(client.Id, Mar1, [new SalesLineDraft(work.Id, null, 1m, 1_000m)])));
+        await In<EstimateService, Invoice>(s => s.ProgressInvoiceAsync(estimate.Id, new InvoiceFromSourceCommand(Mar1, Percent: 30m, RetainagePercent: 10m)));
+        var second = await In<EstimateService, Invoice>(s => s.ProgressInvoiceAsync(estimate.Id, new InvoiceFromSourceCommand(Mar31, Percent: 40m, RetainagePercent: 10m)));
+
+        var form = await In<OpenBook.Application.Forms.FormService, OpenBook.Application.Forms.SalesForm>(s => s.BuildAsync(OpenBook.Application.Forms.FormKind.Invoice, second.Id));
+        var facts = form.Facts.ToDictionary(f => f.Item1, f => f.Item2);
+        static string N2(decimal d) => d.ToString("N2", System.Globalization.CultureInfo.CurrentCulture);
+        // 300.00 of work billed before, 300.00 left, and 30.00 + 40.00 held.
+        Assert.Equal((N2(300m), N2(300m), N2(70m)), (facts["Billed before"], facts["Left after this"], facts["Retainage held"]));
+        Assert.Equal(360m, second.Total);
     }
 
     [Fact]

@@ -26,7 +26,9 @@ public sealed record InvoiceFromSourceCommand(
     IReadOnlyList<InvoiceSourceLine>? Lines = null,
     decimal? Percent = null,
     string? Number = null,
-    DateOnly? DueDate = null);
+    DateOnly? DueDate = null,
+    // A progress invoice from an estimate may hold back this share as retainage (C338); orders ignore it.
+    decimal? RetainagePercent = null);
 
 /// <summary>A sales order or estimate with what's been invoiced of it so far.</summary>
 /// <param name="Remaining">By line number: what's left of each item line (and amount discount, 1 or 0).</param>

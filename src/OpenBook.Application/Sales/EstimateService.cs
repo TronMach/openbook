@@ -18,9 +18,11 @@ public sealed record SaveEstimateCommand(
     Guid? LocationId = null);
 
 /// <summary>Estimates: quotes that post nothing, and become invoices when accepted.</summary>
-public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, CustomFields.CustomFieldStamper customFields, IClock clock, ICurrentUser user)
+public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, CustomFields.CustomFieldStamper customFields, IClock clock, ICurrentUser user,
+    SalesAccounts salesAccounts, ItemService items)
 {
     internal const string EntityType = "estimate";
+    public const string RetainageItemName = "Retainage";
 
     public async Task<string> SuggestNumberAsync(CancellationToken ct = default) =>
         SalesAccounts.NextNumber(await store.ListEstimateNumbersAsync(ct));
@@ -105,11 +107,51 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         var progress = await ProgressAsync(estimate, ct);
         var picks = SalesOrderService.Picks(estimate.Lines, progress.Remaining, command);
         var (drafts, sources, completes) = PartialInvoicing.Build(estimate.Lines, progress.Remaining, picks, PartialInvoicing.Billed(estimate.Lines, progress.Invoices));
+        if (command.RetainagePercent is { } percent && percent != 0m)
+        {
+            if (percent is < 0m or > 50m || decimal.Round(percent, 2) != percent)
+                throw new DomainException("estimate.retainage_percent", "Retainage is a percentage from 0 to 50.");
+            // Held back from what this invoice bills (before tax): a negative line to the retainage account.
+            var billed = drafts.Where(d => d.Kind == SalesLineKind.Item).Sum(d => decimal.Round(d.Quantity * d.Rate, 2, MidpointRounding.AwayFromZero));
+            var held = decimal.Round(billed * percent / 100m, 2, MidpointRounding.AwayFromZero);
+            if (held > 0m)
+                drafts = [.. drafts, new SalesLineDraft((await RetainageItemAsync(ct)).Id, $"Retainage held ({percent:0.##}%)", -1m, held, Taxable: false)];
+        }
+
         return await invoices.CreateAsync(
             new CreateInvoiceCommand(estimate.CustomerId, command.Date, drafts, command.DueDate, command.Number, estimate.Memo, estimate.Id,
                 TaxCodeId: estimate.TaxCodeId ?? Guid.Empty, LocationId: estimate.LocationId),
             recurringInvoiceId: null, ct, source: new InvoiceSource(null, sources, completes));
     }
+
+    /// <summary>What's held as retainage on the estimate's posted invoices and not billed yet.</summary>
+    public async Task<decimal> RetainageHeldAsync(Guid id, CancellationToken ct = default)
+    {
+        var estimate = await store.GetEstimateAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var item = (await store.ListItemsAsync(ct)).FirstOrDefault(i => string.Equals(i.Name, RetainageItemName, StringComparison.OrdinalIgnoreCase));
+        if (item is null)
+            return 0m;
+        return -(await store.ListInvoicesAsync(estimate.CustomerId, ct)).Where(i => i.EstimateId == estimate.Id && i.Status == DocumentStatus.Posted)
+            .SelectMany(i => i.Lines).Where(l => l.ItemId == item.Id).Sum(l => l.Amount);
+    }
+
+    /// <summary>Bills the retainage held on the estimate's invoices (C338): an invoice moving it from the retainage account to receivables.</summary>
+    public async Task<Invoice> BillRetainageAsync(Guid id, DateOnly date, CancellationToken ct = default)
+    {
+        var estimate = await store.GetEstimateAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var held = await RetainageHeldAsync(id, ct);
+        if (held <= 0m)
+            throw new DomainException("estimate.no_retainage", "No retainage is waiting to be billed on this estimate.");
+        return await invoices.CreateAsync(new CreateInvoiceCommand(estimate.CustomerId, date,
+            [new SalesLineDraft((await RetainageItemAsync(ct)).Id, $"Retainage released (estimate {estimate.Number})", 1m, held, Taxable: false)],
+            Memo: estimate.Memo, EstimateId: estimate.Id, TaxCodeId: Guid.Empty, LocationId: estimate.LocationId),
+            recurringInvoiceId: null, ct, source: new InvoiceSource(null, [], Completes: false, RetainageRelease: true));
+    }
+
+    private async Task<Item> RetainageItemAsync(CancellationToken ct) =>
+        (await store.ListItemsAsync(ct)).FirstOrDefault(i => string.Equals(i.Name, RetainageItemName, StringComparison.OrdinalIgnoreCase))
+        ?? await items.CreateAsync(new ItemDetails(RetainageItemName, ItemType.Service, (await salesAccounts.GetOrCreateRetainageAsync(ct)).Id, 0m,
+            "Retainage held back on progress invoices, and released when it's billed.", Taxable: false), ct);
 
     private async Task<InvoicingProgress> ProgressAsync(Estimate estimate, CancellationToken ct)
     {

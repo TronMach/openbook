@@ -46,6 +46,14 @@
                 <label for="partial-date">Invoice date</label>
                 <input id="partial-date" type="date" name="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
             </div>
+            @if (AllowRetainage)
+            {
+                <div class="field">
+                    <label for="partial-retainage">@L["Retainage held"] <span class="muted">@L["(%, optional)"]</span></label>
+                    <input id="partial-retainage" name="retainage" class="short" inputmode="decimal" placeholder="10" />
+                    <span class="hint">@L["Held back from this invoice until the work is done; bill it from the estimate later."]</span>
+                </div>
+            }
         </div>
         <ClosedPeriodPassword Visible="Password" Interactive="false" />
         <p class="hint">@Hint</p>
@@ -61,6 +69,9 @@
     [Parameter, EditorRequired] public string Action { get; set; } = "";
     [Parameter] public string Title { get; set; } = "Invoice";
     [Parameter] public bool AllowPercent { get; set; }
+
+    /// <summary>Estimates' progress invoices may hold back retainage (C338).</summary>
+    [Parameter] public bool AllowRetainage { get; set; }
     [Parameter] public bool Password { get; set; }
 
     [Parameter]

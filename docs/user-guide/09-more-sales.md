@@ -31,6 +31,8 @@ On the estimate's page, **Invoice** offers three choices:
 - **This percentage of every line**: progress billing, for example 30% now. Each invoice bills that share of every line's quantity. An invoice made from an estimate prints where the contract stands: the estimate's total, what was billed before it, and what's left after it.
 - **The quantities entered above**: bill only some lines, or part of a line's quantity.
 
+**Retainage**: when a contract holds back part of each progress bill until the job is done, enter the share under **Retainage held** (for example 10). The invoice then takes that share off as a "Retainage held" line, so the customer owes less now, and the money waits in a **Retainage Receivable** account (made the first time). The estimate's page shows how much is held; when the work is done, **Bill retainage** makes one invoice for all of it. The invoices' contract position counts work, not retainage, and says how much is held.
+
 Choose the **invoice date** and **Create invoice**. The estimate keeps track of what's been invoiced, and closes when everything has been. Invoices keep the estimate's prices, so later price changes don't affect them. Tax is worked out again on each invoice.
 
 Once part of an estimate is invoiced it can't be edited any more. Voiding one of its invoices puts those quantities back to be invoiced again.

@@ -26,6 +26,9 @@
   <data name=" · {0} invitations waiting" xml:space="preserve">
     <value> · {0} invitations waiting</value>
   </data>
+  <data name="(%, optional)" xml:space="preserve">
+    <value>(%, optional)</value>
+  </data>
   <data name="(done)" xml:space="preserve">
     <value>(done)</value>
   </data>
@@ -421,6 +424,9 @@
   </data>
   <data name="Bill payment" xml:space="preserve">
     <value>Bill payment</value>
+  </data>
+  <data name="Bill retainage" xml:space="preserve">
+    <value>Bill retainage</value>
   </data>
   <data name="Bill to" xml:space="preserve">
     <value>Bill to</value>
@@ -1156,6 +1162,9 @@
   </data>
   <data name="Guide chapters" xml:space="preserve">
     <value>Guide chapters</value>
+  </data>
+  <data name="Held back from this invoice until the work is done; bill it from the estimate later." xml:space="preserve">
+    <value>Held back from this invoice until the work is done; bill it from the estimate later.</value>
   </data>
   <data name="Help" xml:space="preserve">
     <value>Help</value>
@@ -2315,6 +2324,12 @@
   <data name="Restricted or secret key" xml:space="preserve">
     <value>Restricted or secret key</value>
   </data>
+  <data name="Retainage" xml:space="preserve">
+    <value>Retainage</value>
+  </data>
+  <data name="Retainage held" xml:space="preserve">
+    <value>Retainage held</value>
+  </data>
   <data name="Retainer" xml:space="preserve">
     <value>Retainer</value>
   </data>
@@ -3241,6 +3256,9 @@
   </data>
   <data name="{0} is already paid, credited or written off, so the total can't go below that." xml:space="preserve">
     <value>{0} is already paid, credited or written off, so the total can't go below that.</value>
+  </data>
+  <data name="{0} is held back on this estimate's invoices." xml:space="preserve">
+    <value>{0} is held back on this estimate's invoices.</value>
   </data>
   <data name="{0} item(s) changed." xml:space="preserve">
     <value>{0} item(s) changed.</value>

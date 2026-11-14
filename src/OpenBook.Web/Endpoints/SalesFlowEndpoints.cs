@@ -24,7 +24,16 @@ public static class SalesFlowEndpoints
         app.MapPost("/sales/estimates/{id:guid}/invoice", async (Guid id, IFormCollection form, EstimateService estimates, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);
-            return await ToInvoice($"/sales/estimates/{id}", () => estimates.ProgressInvoiceAsync(id, InvoiceCommand(form), ct));
+            return await ToInvoice($"/sales/estimates/{id}", () => estimates.ProgressInvoiceAsync(id,
+                InvoiceCommand(form) with { RetainagePercent = FormNumbers.Number(form["retainage"]) }, ct));
+        }).RequireAuthorization();
+
+        // Retainage held on the estimate's progress invoices, billed now (C338). Field: date.
+        app.MapPost("/sales/estimates/{id:guid}/retainage", async (Guid id, IFormCollection form, EstimateService estimates, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = Password(form);
+            return await ToInvoice($"/sales/estimates/{id}", () => estimates.BillRetainageAsync(id,
+                DateOnly.TryParse(form["date"], CultureInfo.InvariantCulture, out var date) ? date : OpenBook.Application.CompanyTime.Today, ct));
         }).RequireAuthorization();
 
         app.MapPost("/sales/orders/{id:guid}/cancel", async (IFormCollection _, Guid id, SalesOrderService orders, CancellationToken ct) =>

@@ -81,9 +81,21 @@
 
     @if (open)
     {
-        <PartialInvoiceForm Lines="_estimate.Lines" Progress="_progress" Action="@($"/sales/estimates/{_estimate.Id}/invoice")" AllowPercent="true"
+        <PartialInvoiceForm Lines="_estimate.Lines" Progress="_progress" Action="@($"/sales/estimates/{_estimate.Id}/invoice")" AllowPercent="true" AllowRetainage="true"
                             Title="Turn into an invoice" Password="Password"
                             Hint="Invoice it all at once, or in progress invoices (a percentage, or the quantities done so far). The estimate closes once everything is invoiced, and can't be edited after the first progress invoice." />
+    }
+    @if (_retainageHeld > 0m)
+    {
+        <div class="card no-print" id="retainage">
+            <h2>@L["Retainage"]</h2>
+            <p>@L["{0} is held back on this estimate's invoices.", Labels.Amount(_retainageHeld)]</p>
+            <PostForm Action="@($"/sales/estimates/{_estimate.Id}/retainage")" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <input type="date" name="date" aria-label="@L["Invoice date"]" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
+                <button type="submit">@L["Bill retainage"]</button>
+            </PostForm>
+        </div>
     }
     @if (_estimate.Status != EstimateStatus.Closed)
     {
@@ -108,6 +120,7 @@
 </div>
 
 @code {
+    private decimal _retainageHeld;
     private Estimate? _estimate;
     private Customer? _customer;
     private OpenBook.Domain.Companies.Company? _company;
@@ -145,6 +158,7 @@
         _customer = await CustomerService.GetAsync(_estimate.CustomerId);
         _company = await Settings.GetAsync();
         _progress = await Estimates.ProgressAsync(Id);
+        _retainageHeld = await Estimates.RetainageHeldAsync(Id);
     }
 
     private async Task SetStatusAsync()

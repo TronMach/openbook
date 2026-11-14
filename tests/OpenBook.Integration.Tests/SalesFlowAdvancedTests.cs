@@ -124,6 +124,25 @@ public sealed class SalesFlowAdvancedTests : IAsyncLifetime
     // ---- Progress invoicing ----
 
     [Fact]
+    public async Task Retainage_is_held_on_progress_invoices_and_billed_at_the_end()
+    {
+        var estimate = await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(_acme.Id, Mar1, [Line(_design, 2m), Line(_consulting, 10m)])));
+
+        var first = await In<EstimateService, Invoice>(s => s.ProgressInvoiceAsync(estimate.Id, new InvoiceFromSourceCommand(Mar1, Percent: 50m, RetainagePercent: 10m)));
+        // 1,500.00 billed, 150.00 held back: the customer owes 1,350.00 now.
+        Assert.Equal(1350m, first.Total);
+        Assert.Equal("estimate.retainage_percent", await Refused(() =>
+            In<EstimateService, Invoice>(s => s.ProgressInvoiceAsync(estimate.Id, new InvoiceFromSourceCommand(Mar1, Percent: 10m, RetainagePercent: 60m)))));
+        await In<EstimateService, Invoice>(s => s.ProgressInvoiceAsync(estimate.Id, new InvoiceFromSourceCommand(Mar1.AddDays(30), RetainagePercent: 10m)));
+        Assert.Equal(300m, await In<EstimateService, decimal>(s => s.RetainageHeldAsync(estimate.Id)));
+
+        var release = await In<EstimateService, Invoice>(s => s.BillRetainageAsync(estimate.Id, Mar1.AddDays(60)));
+        Assert.Equal(300m, release.Total);
+        Assert.Equal(0m, await In<EstimateService, decimal>(s => s.RetainageHeldAsync(estimate.Id)));
+        Assert.Equal("estimate.no_retainage", await Refused(() => In<EstimateService, Invoice>(s => s.BillRetainageAsync(estimate.Id, Mar1.AddDays(60)))));
+    }
+
+    [Fact]
     public async Task Estimates_are_progress_invoiced_by_percentage_and_close_at_the_end()
     {
         var estimate = await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(_acme.Id, Mar1, [Line(_design, 2m), Line(_consulting, 10m)])));
