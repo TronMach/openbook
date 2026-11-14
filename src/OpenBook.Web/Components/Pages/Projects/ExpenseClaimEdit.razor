@@ -1,0 +1,132 @@
+@page "/time/claims/new"
+@page "/time/claims/{Id:guid}/edit"
+@using OpenBook.Domain.Projects
+@inject ExpenseClaimService Claims
+@inject WorkerService WorkerService
+@inject AccountService AccountService
+@inject CustomerService CustomerService
+
+<PageTitle>@(_view is null ? L["New expense claim"] : L["Change expense claim {0}", _view.Claim.Number]) · OpenBook</PageTitle>
+
+@if (Id is not null && _view is null)
+{
+    <div class="card"><p>@L["That claim doesn't exist."] <a href="/time/claims">@L["Back to expense claims"]</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@(_view is null ? L["New expense claim"] : L["Change expense claim {0}", _view.Claim.Number])</h1>
+        <ActionLink Class="button secondary" Href="@(_view is null ? "/time/claims" : $"/time/claims/{_view.Claim.Id}")">@L["Back"]</ActionLink>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_view is null && _workers.Count == 0)
+    {
+        <p class="muted">@L["There's no one on People and rates to pay back yet. An accountant adds people there, with the vendor record their bills go to."]</p>
+        <p><ActionLink Class="button secondary" Href="/time/people">@L["People and rates"]</ActionLink></p>
+    }
+    else if (_view is not null && _view.Claim.Status == ExpenseClaimStatus.Approved && !_view.BillVoided)
+    {
+        <p class="muted">@L["This claim is approved and billed. Void its bill to change it."]</p>
+    }
+    else
+    {
+        <p class="muted">@L["One line per receipt. Saving hands the claim in for approval; attach the receipts on the claim's page afterwards."]</p>
+        <PostForm Action="@(_view is null ? "/time/claims" : $"/time/claims/{_view.Claim.Id}")" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                @if (_view is null)
+                {
+                    <div class="field">
+                        <label for="worker">@L["Person"]</label>
+                        <select id="worker" name="workerId">
+                            @foreach (var w in _workers)
+                            {
+                                <option value="@w.Id" selected="@(w.Id == _me?.Id)">@w.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="field">
+                    <label for="memo">@L["Memo"]</label>
+                    <input id="memo" name="memo" maxlength="500" value="@_view?.Claim.Memo" placeholder="@L["Trip to the Denver client, March"]" />
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead><tr><th>@L["Date"]</th><th>@L["For"]</th><th>@L["Description"]</th><th class="num">@L["Amount"]</th><th>@L["Bill to customer"]</th></tr></thead>
+                    <tbody>
+                        @for (var r = 0; r < _rows; r++)
+                        {
+                            var row = r;
+                            var line = _view is not null && row < _view.Claim.Lines.Count ? _view.Claim.Lines[row] : null;
+                            <tr>
+                                <td><input name="date:@row" type="date" value="@((line?.Date ?? _today).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))" aria-label="@L["Date of line {0}", row + 1]" /></td>
+                                <td>
+                                    <select name="account:@row" data-search aria-label="@L["Account for line {0}", row + 1]">
+                                        <option value="">@L["Choose…"]</option>
+                                        @foreach (var a in _accounts)
+                                        {
+                                            <option value="@a.Id" selected="@(a.Id == line?.AccountId)">@_chart!.FullName(a.Id)</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input name="desc:@row" maxlength="@ExpenseClaimLine.MaxDescriptionLength" value="@line?.Description" style="min-width: 12rem" aria-label="@L["Description of line {0}", row + 1]" /></td>
+                                <td class="num"><input name="amount:@row" class="short" inputmode="decimal" value="@line?.Amount.ToString("0.00", System.Globalization.CultureInfo.CurrentCulture)" aria-label="@L["Amount of line {0}", row + 1]" /></td>
+                                <td>
+                                    <select name="customer:@row" data-search aria-label="@L["Customer to bill line {0} to", row + 1]">
+                                        <option value="">@L["Not billable"]</option>
+                                        @foreach (var c in _customers)
+                                        {
+                                            <option value="@c.Customer.Id" selected="@(c.Customer.Id == line?.CustomerId)">@c.FullName</option>
+                                        }
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_rows < ExpenseClaim.MaxLines)
+            {
+                <p><a href="@MoreRowsHref">@L["More lines"]</a> <span class="muted">@L["(before typing: the page reloads)"]</span></p>
+            }
+            <div class="actions"><button type="submit">@(_view is null ? L["Hand in the claim"] : L["Save and hand in again"])</button></div>
+        </PostForm>
+    }
+</div>
+
+@code {
+    private ExpenseClaimView? _view;
+    private IReadOnlyList<Worker> _workers = [];
+    private Worker? _me;
+    private ChartOfAccounts? _chart;
+    private IReadOnlyList<Account> _accounts = [];
+    private IReadOnlyList<CustomerEntry> _customers = [];
+    private int _rows;
+    private DateOnly _today;
+
+    [Parameter] public Guid? Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Rows { get; set; }
+
+    private string MoreRowsHref => (_view is null ? "/time/claims/new" : $"/time/claims/{_view.Claim.Id}/edit") + $"?rows={Math.Min(_rows + 5, ExpenseClaim.MaxLines)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = CompanyTime.Today;
+        if (Id is { } id)
+            _view = await Claims.GetAsync(id);
+        _workers = await WorkerService.ListAsync();
+        _me = await WorkerService.ForCurrentUserAsync();
+        _chart = await AccountService.GetChartAsync();
+        _accounts = [.. _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Expense)];
+        _customers = await CustomerService.ListRecordsAsync();
+        var least = Math.Max(5, (_view?.Claim.Lines.Count ?? 0) + 2);
+        _rows = Math.Clamp(Rows ?? least, least, ExpenseClaim.MaxLines);
+    }
+}

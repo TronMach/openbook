@@ -29,6 +29,11 @@ public interface IProjectStore
     Task<TimeSheet?> GetTimeSheetAsync(Guid id, CancellationToken ct);
     Task<TimeSheet?> GetTimeSheetAsync(Guid workerId, DateOnly weekStart, CancellationToken ct);
     void Add(TimeSheet sheet);
+
+    /// <summary>Tracked, with lines; one person's when <paramref name="workerId"/> is given.</summary>
+    Task<IReadOnlyList<ExpenseClaim>> ListExpenseClaimsAsync(Guid? workerId, CancellationToken ct);
+    Task<ExpenseClaim?> GetExpenseClaimAsync(Guid id, CancellationToken ct);
+    void Add(ExpenseClaim claim);
     Task<Project?> GetProjectAsync(Guid id, CancellationToken ct);
     Task<Project?> GetProjectForCustomerAsync(Guid customerId, CancellationToken ct);
 

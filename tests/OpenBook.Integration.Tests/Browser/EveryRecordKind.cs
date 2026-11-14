@@ -181,6 +181,9 @@ internal static class EveryRecordKind
         var worker = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Dana", 50m, 100m)));
         await Do<TimeService>(s => s.CreateAsync(new TimeEntryDetails(worker.Id, d, 2m, customer.Id, service.Id, true)));
         await Do<PreBillService>(s => s.MakeDraftsAsync([customer.Id], today));
+        // An expense claim waiting for approval, one line billable (C345): its page, the form and the list.
+        var claim = await In<ExpenseClaimService, ExpenseClaim>(s => s.SubmitAsync(worker.Id, "Client visit",
+            [new ExpenseClaimLineDraft(d, supplies, "Printer paper", 12.50m, customer.Id), new ExpenseClaimLineDraft(d, supplies, "Pens", 4m)]));
 
         // Audit requests this year (one overdue) and last, for the request list and its copy form (C306).
         await Do<AuditRequestService>(s => s.CreateAsync(new AuditRequestDetails(today.Year, "Bank reconciliations", "Dana", today.AddDays(-3), "All accounts")));
@@ -195,6 +198,6 @@ internal static class EveryRecordKind
         await Do<WebhookService>(s => s.CreateAsync("https://example.com/hook", null, null));
         var invite = await In<InviteService, SentInvite>(s => s.InviteAsync(new InviteCommand("sam@example.com", UserRole.Accountant, SendEmail: false), "http://localhost"));
         return ([invite.Link["http://localhost".Length..], $"/portal/{portal.Token}"],
-            [$"/banking/transactions/{expense.Id}/edit", $"/nonprofit/statements/{d.Year}/{donor.Id}/email", $"/projects/{fixedFee.Id}"]);
+            [$"/banking/transactions/{expense.Id}/edit", $"/nonprofit/statements/{d.Year}/{donor.Id}/email", $"/projects/{fixedFee.Id}", $"/time/claims/{claim.Id}/edit"]);
     }
 }

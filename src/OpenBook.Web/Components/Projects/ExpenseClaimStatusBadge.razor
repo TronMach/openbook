@@ -1,0 +1,24 @@
+@* A claim's status as a badge: waiting, approved, returned, or approved with its bill voided. *@
+@if (View.BillVoided)
+{
+    <span class="badge warn">@L["Bill voided"]</span>
+}
+else
+{
+    @switch (View.Claim.Status)
+    {
+        case ExpenseClaimStatus.Approved:
+            <span class="badge ok">@L["Approved"]</span>
+            break;
+        case ExpenseClaimStatus.Returned:
+            <span class="badge warn">@L["Returned"]</span>
+            break;
+        default:
+            <span class="badge">@L["Waiting for approval"]</span>
+            break;
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public ExpenseClaimView View { get; set; } = null!;
+}

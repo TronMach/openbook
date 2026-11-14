@@ -112,6 +112,7 @@ public static class Links
         "time_sheet" => "/time/review",
         "worker" => $"/time/people?edit={id}",
         "mileage_trip" => "/mileage",
+        "expense_claim" => $"/time/claims/{id}",
         "mileage_rate" => "/mileage",
         "collection_settings" => "/sales/collections/settings",
         "deposit" => $"/banking/deposits/{id}",

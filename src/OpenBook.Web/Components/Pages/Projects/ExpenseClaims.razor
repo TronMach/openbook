@@ -1,0 +1,79 @@
+@page "/time/claims"
+@using OpenBook.Domain.Projects
+@inject ExpenseClaimService Claims
+@inject WorkerService WorkerService
+
+<PageTitle>@L["Expense claims"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Expense claims"]</h1>
+        <ActionLink Class="button" Href="/time/claims/new">@L["New claim"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/projects">@L["Projects"]</ActionLink>
+    </div>
+    <p class="muted">@L["What people paid for themselves and want paid back. Hand in a claim with the receipts; once it's approved, a bill to the person's vendor record pays them back like any bill."]</p>
+
+    <nav class="toolbar" aria-label="@L["Which claims"]">
+        <a class="button @(_show == "waiting" ? "" : "secondary")" href="/time/claims?show=waiting" aria-current="@(_show == "waiting" ? "page" : null)">@L["Waiting for approval"] (@_all.Count(c => c.Waiting))</a>
+        @if (_me is not null)
+        {
+            <a class="button @(_show == "mine" ? "" : "secondary")" href="/time/claims?show=mine" aria-current="@(_show == "mine" ? "page" : null)">@L["Mine"]</a>
+        }
+        <a class="button @(_show == "all" ? "" : "secondary")" href="/time/claims?show=all" aria-current="@(_show == "all" ? "page" : null)">@L["All"]</a>
+    </nav>
+
+    @if (_shown.Count == 0)
+    {
+        <p class="muted">@(_show == "waiting" ? L["No claims are waiting for approval."] : L["No claims yet."])</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr><th>@L["No."]</th><th>@L["Person"]</th><th>@L["Handed in"]</th><th>@L["Status"]</th><th class="num">@L["Total"]</th><th>@L["Bill"]</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _shown)
+                    {
+                        <tr>
+                            <td><a href="/time/claims/@c.Claim.Id">@c.Claim.Number</a></td>
+                            <td>@c.Worker.Name</td>
+                            <td>@Labels.Date(DateOnly.FromDateTime(c.Claim.SubmittedAt.InCompanyTime().DateTime))</td>
+                            <td><ExpenseClaimStatusBadge View="c" /></td>
+                            <td class="num">@Labels.Amount(c.Claim.Total)</td>
+                            <td>
+                                @if (c.Bill is { } bill)
+                                {
+                                    <a href="/purchases/bills/@bill.Id">@(bill.Reference ?? L["Bill"])</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ExpenseClaimView> _all = [];
+    private IReadOnlyList<ExpenseClaimView> _shown = [];
+    private Worker? _me;
+    private string _show = "waiting";
+
+    [SupplyParameterFromQuery] private string? Show { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _all = await Claims.ListAsync();
+        _me = await WorkerService.ForCurrentUserAsync();
+        _show = Show is "waiting" or "mine" or "all" ? Show : _all.Any(c => c.Waiting) ? "waiting" : _me is not null ? "mine" : "all";
+        _shown = _show switch
+        {
+            "waiting" => [.. _all.Where(c => c.Waiting)],
+            "mine" => [.. _all.Where(c => _me is not null && (c.Worker.Id == _me.Id || string.Equals(c.Claim.SubmittedBy, _me.Username, StringComparison.OrdinalIgnoreCase)))],
+            _ => _all,
+        };
+    }
+}

@@ -101,6 +101,7 @@ public static class AccessRules
         ("/mileage/rates", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/rates", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/lock", UserRole.Accountant, UserRole.Accountant),
+        // Approving or returning an expense claim (C345); handing one in is standard.
         ("/time/review", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/projects/time-review", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/defaults", UserRole.Accountant, UserRole.Accountant),

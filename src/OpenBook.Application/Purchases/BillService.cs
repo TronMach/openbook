@@ -90,7 +90,8 @@ public sealed class BillService(
 
     /// <param name="recurringBillId">The template entering it, recorded on the bill.</param>
     /// <param name="source">For a bill made from a purchase order.</param>
-    internal async Task<Bill> CreateAsync(CreateBillCommand command, Guid? recurringBillId, CancellationToken ct, BillSource? source = null)
+    /// <param name="approvedAs">For a bill made by approving something else (an expense claim): a hold is approved at once, with this note.</param>
+    internal async Task<Bill> CreateAsync(CreateBillCommand command, Guid? recurringBillId, CancellationToken ct, BillSource? source = null, string? approvedAs = null)
     {
         ArgumentNullException.ThrowIfNull(command);
 
@@ -127,6 +128,8 @@ public sealed class BillService(
         if (settings?.ApprovalThreshold is { } threshold && bill.Total >= threshold)
             holds.Insert(0, $"The total, {bill.Total:N2}, is at or over the approval limit of {threshold:N2}.");
         bill.Hold(holds);
+        if (approvedAs is not null && bill.Approval == BillApproval.Pending)
+            bill.Approve(user.Actor, clock.UtcNow, approvedAs);
         if (source is not null)
         {
             bill.SetSource(source.PurchaseOrderId, source.Lines, source.LinesFromOrder);

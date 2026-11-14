@@ -26,6 +26,13 @@ internal sealed class EfProjectStore(OpenBookDbContext db) : IProjectStore
 
     public void Add(TimeSheet sheet) => db.TimeSheets.Add(sheet);
 
+    public async Task<IReadOnlyList<ExpenseClaim>> ListExpenseClaimsAsync(Guid? workerId, CancellationToken ct) =>
+        await db.ExpenseClaims.Where(c => workerId == null || c.WorkerId == workerId).ToListAsync(ct);
+
+    public Task<ExpenseClaim?> GetExpenseClaimAsync(Guid id, CancellationToken ct) => db.ExpenseClaims.SingleOrDefaultAsync(c => c.Id == id, ct);
+
+    public void Add(ExpenseClaim claim) => db.ExpenseClaims.Add(claim);
+
     public async Task<IReadOnlyList<Project>> ListProjectsAsync(CancellationToken ct) => await db.Projects.ToListAsync(ct);
 
     public Task<Project?> GetProjectAsync(Guid id, CancellationToken ct) => db.Projects.SingleOrDefaultAsync(p => p.Id == id, ct);

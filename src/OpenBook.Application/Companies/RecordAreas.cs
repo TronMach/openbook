@@ -17,7 +17,7 @@ public static class RecordAreas
         "inventory_adjustment" or "assembly_build" or "landed_cost" or "stock_transfer" => "inventory",
         "fixed_asset" or "loan" => "assets",
         "grant" or "donation" or "pledge" => "nonprofit",
-        "project" => "projects",
+        "project" or "expense_claim" => "projects",
         _ => "data",
     };
 }

@@ -29,6 +29,9 @@
   <data name="(%, optional)" xml:space="preserve">
     <value>(%, optional)</value>
   </data>
+  <data name="(before typing: the page reloads)" xml:space="preserve">
+    <value>(before typing: the page reloads)</value>
+  </data>
   <data name="(done)" xml:space="preserve">
     <value>(done)</value>
   </data>
@@ -136,6 +139,9 @@
   </data>
   <data name="Account" xml:space="preserve">
     <value>Account</value>
+  </data>
+  <data name="Account for line {0}" xml:space="preserve">
+    <value>Account for line {0}</value>
   </data>
   <data name="Accountant" xml:space="preserve">
     <value>Accountant</value>
@@ -248,6 +254,9 @@
   <data name="Alerts are off (OpenBook:Alerts:Enabled is false)." xml:space="preserve">
     <value>Alerts are off (OpenBook:Alerts:Enabled is false).</value>
   </data>
+  <data name="All" xml:space="preserve">
+    <value>All</value>
+  </data>
   <data name="All dates" xml:space="preserve">
     <value>All dates</value>
   </data>
@@ -284,6 +293,9 @@
   <data name="Amount" xml:space="preserve">
     <value>Amount</value>
   </data>
+  <data name="Amount of line {0}" xml:space="preserve">
+    <value>Amount of line {0}</value>
+  </data>
   <data name="an hour" xml:space="preserve">
     <value>an hour</value>
   </data>
@@ -298,6 +310,15 @@
   </data>
   <data name="Apply credit" xml:space="preserve">
     <value>Apply credit</value>
+  </data>
+  <data name="Approve" xml:space="preserve">
+    <value>Approve</value>
+  </data>
+  <data name="Approve and enter the bill" xml:space="preserve">
+    <value>Approve and enter the bill</value>
+  </data>
+  <data name="Approved" xml:space="preserve">
+    <value>Approved</value>
   </data>
   <data name="Area" xml:space="preserve">
     <value>Area</value>
@@ -340,6 +361,12 @@
   </data>
   <data name="Automatic backups aren't working" xml:space="preserve">
     <value>Automatic backups aren't working</value>
+  </data>
+  <data name="Back" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="Back to expense claims" xml:space="preserve">
+    <value>Back to expense claims</value>
   </data>
   <data name="Back to journal" xml:space="preserve">
     <value>Back to journal</value>
@@ -425,6 +452,9 @@
   <data name="Bill approvals and matching" xml:space="preserve">
     <value>Bill approvals and matching</value>
   </data>
+  <data name="Bill date" xml:space="preserve">
+    <value>Bill date</value>
+  </data>
   <data name="Bill for what you sold" xml:space="preserve">
     <value>Bill for what you sold</value>
   </data>
@@ -445,6 +475,12 @@
   </data>
   <data name="Bill to" xml:space="preserve">
     <value>Bill to</value>
+  </data>
+  <data name="Bill to customer" xml:space="preserve">
+    <value>Bill to customer</value>
+  </data>
+  <data name="Bill voided" xml:space="preserve">
+    <value>Bill voided</value>
   </data>
   <data name="Billable expenses" xml:space="preserve">
     <value>Billable expenses</value>
@@ -542,6 +578,9 @@
   <data name="Change a rate" xml:space="preserve">
     <value>Change a rate</value>
   </data>
+  <data name="Change expense claim {0}" xml:space="preserve">
+    <value>Change expense claim {0}</value>
+  </data>
   <data name="Change invoice {0}" xml:space="preserve">
     <value>Change invoice {0}</value>
   </data>
@@ -610,6 +649,9 @@
   </data>
   <data name="Choose what to change on all of them. Anything left as it is stays as each item has it. Nothing is saved until you've seen what will change." xml:space="preserve">
     <value>Choose what to change on all of them. Anything left as it is stays as each item has it. Nothing is saved until you've seen what will change.</value>
+  </data>
+  <data name="Choose…" xml:space="preserve">
+    <value>Choose…</value>
   </data>
   <data name="Classes are off" xml:space="preserve">
     <value>Classes are off</value>
@@ -788,6 +830,9 @@
   <data name="Customer price levels, quantity breaks, promotions and how prices round." xml:space="preserve">
     <value>Customer price levels, quantity breaks, promotions and how prices round.</value>
   </data>
+  <data name="Customer to bill line {0} to" xml:space="preserve">
+    <value>Customer to bill line {0} to</value>
+  </data>
   <data name="Customers" xml:space="preserve">
     <value>Customers</value>
   </data>
@@ -799,6 +844,9 @@
   </data>
   <data name="Date" xml:space="preserve">
     <value>Date</value>
+  </data>
+  <data name="Date of line {0}" xml:space="preserve">
+    <value>Date of line {0}</value>
   </data>
   <data name="Dates" xml:space="preserve">
     <value>Dates</value>
@@ -829,6 +877,9 @@
   </data>
   <data name="Description (optional)" xml:space="preserve">
     <value>Description (optional)</value>
+  </data>
+  <data name="Description of line {0}" xml:space="preserve">
+    <value>Description of line {0}</value>
   </data>
   <data name="Device" xml:space="preserve">
     <value>Device</value>
@@ -1019,6 +1070,15 @@
   <data name="Expect last year's takings again" xml:space="preserve">
     <value>Expect last year's takings again</value>
   </data>
+  <data name="Expense claim" xml:space="preserve">
+    <value>Expense claim</value>
+  </data>
+  <data name="Expense claim {0}" xml:space="preserve">
+    <value>Expense claim {0}</value>
+  </data>
+  <data name="Expense claims" xml:space="preserve">
+    <value>Expense claims</value>
+  </data>
   <data name="Export" xml:space="preserve">
     <value>Export</value>
   </data>
@@ -1192,6 +1252,15 @@
   </data>
   <data name="Guide chapters" xml:space="preserve">
     <value>Guide chapters</value>
+  </data>
+  <data name="Hand in the claim" xml:space="preserve">
+    <value>Hand in the claim</value>
+  </data>
+  <data name="Handed in" xml:space="preserve">
+    <value>Handed in</value>
+  </data>
+  <data name="Handed in. Attach the receipts below." xml:space="preserve">
+    <value>Handed in. Attach the receipts below.</value>
   </data>
   <data name="Held back from this invoice until the work is done; bill it from the estimate later." xml:space="preserve">
     <value>Held back from this invoice until the work is done; bill it from the estimate later.</value>
@@ -1445,6 +1514,9 @@
   <data name="link your account" xml:space="preserve">
     <value>link your account</value>
   </data>
+  <data name="Link {0} to a vendor record on People and rates first: the bill paying them back goes to it." xml:space="preserve">
+    <value>Link {0} to a vendor record on People and rates first: the bill paying them back goes to it.</value>
+  </data>
   <data name="Linked to a single sign-on account." xml:space="preserve">
     <value>Linked to a single sign-on account.</value>
   </data>
@@ -1490,6 +1562,9 @@
   <data name="Make your first invoice or sales receipt" xml:space="preserve">
     <value>Make your first invoice or sales receipt</value>
   </data>
+  <data name="Makes a bill to {0}'s vendor record for the claim, already approved, with the receipts copied to it. Billable lines go on to their customers' next invoices." xml:space="preserve">
+    <value>Makes a bill to {0}'s vendor record for the claim, already approved, with the receipts copied to it. Billable lines go on to their customers' next invoices.</value>
+  </data>
   <data name="Map SKUs in a spreadsheet" xml:space="preserve">
     <value>Map SKUs in a spreadsheet</value>
   </data>
@@ -1526,6 +1601,9 @@
   <data name="Milestones total {0} of the {1} fee; billed {2}." xml:space="preserve">
     <value>Milestones total {0} of the {1} fee; billed {2}.</value>
   </data>
+  <data name="Mine" xml:space="preserve">
+    <value>Mine</value>
+  </data>
   <data name="Money in the bank" xml:space="preserve">
     <value>Money in the bank</value>
   </data>
@@ -1537,6 +1615,9 @@
   </data>
   <data name="More languages, and regions that write decimals with a comma, are on the way." xml:space="preserve">
     <value>More languages, and regions that write decimals with a comma, are on the way.</value>
+  </data>
+  <data name="More lines" xml:space="preserve">
+    <value>More lines</value>
   </data>
   <data name="More options" xml:space="preserve">
     <value>More options</value>
@@ -1571,11 +1652,17 @@
   <data name="New" xml:space="preserve">
     <value>New</value>
   </data>
+  <data name="New claim" xml:space="preserve">
+    <value>New claim</value>
+  </data>
   <data name="New credit memo" xml:space="preserve">
     <value>New credit memo</value>
   </data>
   <data name="New estimate" xml:space="preserve">
     <value>New estimate</value>
+  </data>
+  <data name="New expense claim" xml:space="preserve">
+    <value>New expense claim</value>
   </data>
   <data name="New invoice" xml:space="preserve">
     <value>New invoice</value>
@@ -1646,6 +1733,12 @@
   <data name="No automatic backups" xml:space="preserve">
     <value>No automatic backups</value>
   </data>
+  <data name="No claims are waiting for approval." xml:space="preserve">
+    <value>No claims are waiting for approval.</value>
+  </data>
+  <data name="No claims yet." xml:space="preserve">
+    <value>No claims yet.</value>
+  </data>
   <data name="No custom fields" xml:space="preserve">
     <value>No custom fields</value>
   </data>
@@ -1694,6 +1787,9 @@
   <data name="No transactions yet." xml:space="preserve">
     <value>No transactions yet.</value>
   </data>
+  <data name="No." xml:space="preserve">
+    <value>No.</value>
+  </data>
   <data name="Nobody (each person decides)" xml:space="preserve">
     <value>Nobody (each person decides)</value>
   </data>
@@ -1723,6 +1819,9 @@
   </data>
   <data name="Not allowed" xml:space="preserve">
     <value>Not allowed</value>
+  </data>
+  <data name="Not billable" xml:space="preserve">
+    <value>Not billable</value>
   </data>
   <data name="Not chosen yet: each person's own" xml:space="preserve">
     <value>Not chosen yet: each person's own</value>
@@ -1819,6 +1918,9 @@
   </data>
   <data name="On: invoices can be paid online" xml:space="preserve">
     <value>On: invoices can be paid online</value>
+  </data>
+  <data name="One line per receipt. Saving hands the claim in for approval; attach the receipts on the claim's page afterwards." xml:space="preserve">
+    <value>One line per receipt. Saving hands the claim in for approval; attach the receipts on the claim's page afterwards.</value>
   </data>
   <data name="One link per area across the top" xml:space="preserve">
     <value>One link per area across the top</value>
@@ -2396,6 +2498,15 @@
   <data name="Retainers applied" xml:space="preserve">
     <value>Retainers applied</value>
   </data>
+  <data name="Return" xml:space="preserve">
+    <value>Return</value>
+  </data>
+  <data name="Return the claim" xml:space="preserve">
+    <value>Return the claim</value>
+  </data>
+  <data name="Returned" xml:space="preserve">
+    <value>Returned</value>
+  </data>
   <data name="Returns recorded: {0}. Already recorded, so skipped: {1}." xml:space="preserve">
     <value>Returns recorded: {0}. Already recorded, so skipped: {1}.</value>
   </data>
@@ -2474,6 +2585,9 @@
   <data name="Save" xml:space="preserve">
     <value>Save</value>
   </data>
+  <data name="Save and hand in again" xml:space="preserve">
+    <value>Save and hand in again</value>
+  </data>
   <data name="Save changes" xml:space="preserve">
     <value>Save changes</value>
   </data>
@@ -2545,6 +2659,9 @@
   </data>
   <data name="Sending through {0}, from {1}" xml:space="preserve">
     <value>Sending through {0}, from {1}</value>
+  </data>
+  <data name="Sends the claim back to be fixed and handed in again." xml:space="preserve">
+    <value>Sends the claim back to be fixed and handed in again.</value>
   </data>
   <data name="Sent to" xml:space="preserve">
     <value>Sent to</value>
@@ -2774,6 +2891,9 @@
   <data name="That account already signs in as someone else." xml:space="preserve">
     <value>That account already signs in as someone else.</value>
   </data>
+  <data name="That claim doesn't exist." xml:space="preserve">
+    <value>That claim doesn't exist.</value>
+  </data>
   <data name="That password or code isn't right." xml:space="preserve">
     <value>That password or code isn't right.</value>
   </data>
@@ -2867,6 +2987,9 @@
   <data name="There's no bank account to write a check from yet." xml:space="preserve">
     <value>There's no bank account to write a check from yet.</value>
   </data>
+  <data name="There's no one on People and rates to pay back yet. An accountant adds people there, with the vendor record their bills go to." xml:space="preserve">
+    <value>There's no one on People and rates to pay back yet. An accountant adds people there, with the vendor record their bills go to.</value>
+  </data>
   <data name="These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again." xml:space="preserve">
     <value>These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again.</value>
   </data>
@@ -2885,8 +3008,14 @@
   <data name="This browser" xml:space="preserve">
     <value>This browser</value>
   </data>
+  <data name="This claim is approved and billed. Void its bill to change it." xml:space="preserve">
+    <value>This claim is approved and billed. Void its bill to change it.</value>
+  </data>
   <data name="This invitation has expired, been withdrawn or already been used. Ask whoever invited you for a new one." xml:space="preserve">
     <value>This invitation has expired, been withdrawn or already been used. Ask whoever invited you for a new one.</value>
+  </data>
+  <data name="This is your own claim (or you handed it in), so someone else with the accountant role approves or returns it." xml:space="preserve">
+    <value>This is your own claim (or you handed it in), so someone else with the accountant role approves or returns it.</value>
   </data>
   <data name="This list goes away once every step is done. The user guide's first chapters walk through each one." xml:space="preserve">
     <value>This list goes away once every step is done. The user guide's first chapters walk through each one.</value>
@@ -2962,6 +3091,9 @@
   </data>
   <data name="Transferred {0} into the box in the books. Now take that much cash from the bank and put it in the box, which brings it back to its float." xml:space="preserve">
     <value>Transferred {0} into the box in the books. Now take that much cash from the bank and put it in the box, which brings it back to its float.</value>
+  </data>
+  <data name="Trip to the Denver client, March" xml:space="preserve">
+    <value>Trip to the Denver client, March</value>
   </data>
   <data name="Try again" xml:space="preserve">
     <value>Try again</value>
@@ -3095,6 +3227,9 @@
   <data name="Voided" xml:space="preserve">
     <value>Voided</value>
   </data>
+  <data name="voided" xml:space="preserve">
+    <value>voided</value>
+  </data>
   <data name="Waiting for approval" xml:space="preserve">
     <value>Waiting for approval</value>
   </data>
@@ -3124,6 +3259,12 @@
   </data>
   <data name="What is it?" xml:space="preserve">
     <value>What is it?</value>
+  </data>
+  <data name="What needs fixing" xml:space="preserve">
+    <value>What needs fixing</value>
+  </data>
+  <data name="What people paid for themselves and want paid back. Hand in a claim with the receipts; once it's approved, a bill to the person's vendor record pays them back like any bill." xml:space="preserve">
+    <value>What people paid for themselves and want paid back. Hand in a claim with the receipts; once it's approved, a bill to the person's vendor record pays them back like any bill.</value>
   </data>
   <data name="What the box should hold once it's replenished." xml:space="preserve">
     <value>What the box should hold once it's replenished.</value>
@@ -3157,6 +3298,9 @@
   </data>
   <data name="Which bills wait for someone's approval before they can be paid, and how closely bills must match purchase orders." xml:space="preserve">
     <value>Which bills wait for someone's approval before they can be paid, and how closely bills must match purchase orders.</value>
+  </data>
+  <data name="Which claims" xml:space="preserve">
+    <value>Which claims</value>
   </data>
   <data name="Which line of your tax form each income and expense account goes on, for the tax summary." xml:space="preserve">
     <value>Which line of your tax form each income and expense account goes on, for the tax summary.</value>

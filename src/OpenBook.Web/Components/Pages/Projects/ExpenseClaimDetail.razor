@@ -1,0 +1,149 @@
+@page "/time/claims/{Id:guid}"
+@using OpenBook.Domain.Projects
+@inject ExpenseClaimService Claims
+@inject AccountService AccountService
+@inject CustomerService CustomerService
+@inject BillApprovalService ApprovalService
+
+<PageTitle>@L["Expense claim"] · OpenBook</PageTitle>
+
+@if (_view is null)
+{
+    <div class="card"><p>@L["That claim doesn't exist."] <a href="/time/claims">@L["Back to expense claims"]</a>.</p></div>
+    return;
+}
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Expense claim {0}", _view.Claim.Number]</h1>
+        <ExpenseClaimStatusBadge View="_view" />
+        @if (_canChange)
+        {
+            <ActionLink Class="button secondary" Href="@($"/time/claims/{_view.Claim.Id}/edit")">@L["Change"]</ActionLink>
+        }
+        <ActionLink Class="button secondary" Href="/time/claims">@L["Expense claims"]</ActionLink>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    else if (Submitted == true)
+    {
+        <div class="alert success" role="status">@L["Handed in. Attach the receipts below."]</div>
+    }
+
+    <dl class="facts">
+        <dt>@L["Person"]</dt><dd>@_view.Worker.Name</dd>
+        <dt>@L["Handed in"]</dt><dd>@_view.Claim.SubmittedAt.InCompanyTime().ToString("g") · @_view.Claim.SubmittedBy</dd>
+        @if (_view.Claim.Memo is { } memo)
+        {
+            <dt>@L["Memo"]</dt><dd>@memo</dd>
+        }
+        @if (_view.Claim.ReviewedBy is { } reviewer)
+        {
+            <dt>@(_view.Claim.Status == ExpenseClaimStatus.Returned ? L["Returned"] : L["Approved"])</dt>
+            <dd>@_view.Claim.ReviewedAt?.InCompanyTime().ToString("g") · @reviewer</dd>
+        }
+        @if (_view.Claim.Note is { } note)
+        {
+            <dt>@L["Note"]</dt><dd>@note</dd>
+        }
+        @if (_view.Bill is { } bill)
+        {
+            <dt>@L["Bill"]</dt>
+            <dd><a href="/purchases/bills/@bill.Id">@(bill.Reference ?? L["Bill"])</a>@(_view.BillVoided ? $" ({L["voided"]})" : "")</dd>
+        }
+    </dl>
+
+    <div class="table-wrap">
+        <table class="data">
+            <thead><tr><th>@L["Date"]</th><th>@L["For"]</th><th>@L["Description"]</th><th>@L["Bill to customer"]</th><th class="num">@L["Amount"]</th></tr></thead>
+            <tbody>
+                @foreach (var line in _view.Claim.Lines)
+                {
+                    <tr>
+                        <td>@Labels.Date(line.Date)</td>
+                        <td>@_chart!.FullName(line.AccountId)</td>
+                        <td>@line.Description</td>
+                        <td>@(line.CustomerId is { } c ? _customers.GetValueOrDefault(c) : "")</td>
+                        <td class="num">@Labels.Amount(line.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot><tr><th scope="row" colspan="4">@L["Total"]</th><td class="num">@Labels.Amount(_view.Claim.Total)</td></tr></tfoot>
+        </table>
+    </div>
+
+    @if (_view.Waiting && _ownClaim)
+    {
+        <p class="muted">@L["This is your own claim (or you handed it in), so someone else with the accountant role approves or returns it."]</p>
+    }
+    else if (_view.Waiting)
+    {
+        <div class="split-grid" style="margin-top: 1.5rem">
+            <div class="card">
+                <h2>@L["Approve"]</h2>
+                @if (_view.Worker.VendorId is null)
+                {
+                    <p class="muted">@L["Link {0} to a vendor record on People and rates first: the bill paying them back goes to it.", _view.Worker.Name]</p>
+                    <p><ActionLink Class="button secondary" Href="/time/people">@L["People and rates"]</ActionLink></p>
+                }
+                else
+                {
+                    <p class="muted">@L["Makes a bill to {0}'s vendor record for the claim, already approved, with the receipts copied to it. Billable lines go on to their customers' next invoices.", _view.Worker.Name]</p>
+                    <PostForm Action="@($"/time/review/claims/{_view.Claim.Id}/approve")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <div class="field">
+                            <label for="bill-date">@L["Bill date"]</label>
+                            <input id="bill-date" name="billDate" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                        </div>
+                        <div class="field">
+                            <label for="approve-note">@L["Note"] <span class="muted">@L["(optional)"]</span></label>
+                            <input id="approve-note" name="note" maxlength="@ExpenseClaim.MaxNoteLength" />
+                        </div>
+                        <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                        <div class="actions"><button type="submit">@L["Approve and enter the bill"]</button></div>
+                    </PostForm>
+                }
+            </div>
+            <div class="card">
+                <h2>@L["Return"]</h2>
+                <p class="muted">@L["Sends the claim back to be fixed and handed in again."]</p>
+                <PostForm Action="@($"/time/review/claims/{_view.Claim.Id}/return")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="return-note">@L["What needs fixing"]</label>
+                        <input id="return-note" name="note" maxlength="@ExpenseClaim.MaxNoteLength" required />
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">@L["Return the claim"]</button></div>
+                </PostForm>
+            </div>
+        </div>
+    }
+
+    <Attachments EntityType="expense_claim" EntityId="_view.Claim.Id" />
+</div>
+
+@code {
+    private ExpenseClaimView? _view;
+    private ChartOfAccounts? _chart;
+    private IReadOnlyDictionary<Guid, string> _customers = new Dictionary<Guid, string>();
+    private bool _canChange;
+    private bool _ownClaim;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool? Submitted { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await Claims.GetAsync(Id);
+        if (_view is null)
+            return;
+        _chart = await AccountService.GetChartAsync();
+        _customers = await CustomerService.FullNamesAsync();
+        _canChange = Claims.IsTheirs(_view) && (_view.Claim.Status != ExpenseClaimStatus.Approved || _view.BillVoided);
+        _ownClaim = Claims.IsTheirs(_view) && !(await ApprovalService.GetSettingsAsync()).AllowSelfApproval;
+    }
+}

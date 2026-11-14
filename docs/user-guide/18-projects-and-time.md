@@ -59,7 +59,18 @@ Billable time needs a customer or project and a service. A **rate per hour** typ
 
 The mileage log by year is your record for taxes. The IRS business rates are filled in at the bottom of the page; check them before filing, and an accountant can add later years as they're announced (**Set rate**).
 
-**Pay people back for their trips** (on the Mileage page, once someone on **People and rates** is linked to a vendor record): choose the person and **Trips through** a date, and **Enter the bill**. OpenBook bills their trips not paid back yet, each at its year's mileage rate, to their vendor record on "Mileage Reimbursement" (an expense account it adds the first time), to pay with **Pay bills** like any other. Voiding that bill makes the trips due again. Other out-of-pocket costs are still entered as a bill to the person.
+**Pay people back for their trips** (on the Mileage page, once someone on **People and rates** is linked to a vendor record): choose the person and **Trips through** a date, and **Enter the bill**. OpenBook bills their trips not paid back yet, each at its year's mileage rate, to their vendor record on "Mileage Reimbursement" (an expense account it adds the first time), to pay with **Pay bills** like any other. Voiding that bill makes the trips due again. Other out-of-pocket costs go on an expense claim (below).
+
+## Expense claims
+
+**Projects → Expense claims** is where people hand in what they paid for themselves. **New claim**: choose the **Person** (yourself, if you're on **People and rates** with your user name), add a **Memo** if you like, and one line per receipt: **Date**, **For** (the expense account), **Description**, **Amount** and, for a cost to pass on, **Bill to customer**. **Hand in the claim**, then attach the receipts on the claim's page.
+
+Someone with the accountant role opens the claim from **Waiting for approval** and either:
+
+- **Approve and enter the bill**: OpenBook enters a bill to the person's vendor record (they need one on **People and rates**) dated the **Bill date**, one line per claim line on its account and the person's class, already approved even when it's over the approval limit, with the receipts copied to it. Lines with a customer become billable expenses for that customer's next invoice. Pay it with **Pay bills** like any other.
+- **Return the claim** with a note on **What needs fixing**. The person uses **Change**, fixes it and saves, which hands it in again.
+
+Whoever handed a claim in, or whose claim it is, can't approve or return it, unless **Settings → Bill approvals and matching** has **Let the person who entered a bill approve it too** ticked (the same setting covers both). If the bill is voided, the claim shows **Bill voided** and waits again: change it, return it or approve it again.
 
 ## Billing time, mileage and expenses
 

@@ -102,6 +102,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.TimeEntry> TimeEntries => Set<OpenBook.Domain.Projects.TimeEntry>();
     public DbSet<OpenBook.Domain.Projects.PreBill> PreBills => Set<OpenBook.Domain.Projects.PreBill>();
     public DbSet<OpenBook.Domain.Projects.TimeSheet> TimeSheets => Set<OpenBook.Domain.Projects.TimeSheet>();
+    public DbSet<OpenBook.Domain.Projects.ExpenseClaim> ExpenseClaims => Set<OpenBook.Domain.Projects.ExpenseClaim>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRule> AllocationRules => Set<OpenBook.Domain.Nonprofit.AllocationRule>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRun> AllocationRuns => Set<OpenBook.Domain.Nonprofit.AllocationRun>();
     public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
@@ -1505,6 +1506,36 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(x => new { x.WorkerId, x.WeekStart }).IsUnique();
             b.HasIndex(x => x.Status);
             b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(x => x.WorkerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Projects.ExpenseClaim>(b =>
+        {
+            b.ToTable("ExpenseClaims");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.HasIndex(x => x.Number).IsUnique();
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.Memo).HasMaxLength(OpenBook.Domain.Projects.ExpenseClaim.MaxNoteLength);
+            b.Property(x => x.SubmittedBy).HasMaxLength(200);
+            b.Property(x => x.ReviewedBy).HasMaxLength(200);
+            b.Property(x => x.Note).HasMaxLength(OpenBook.Domain.Projects.ExpenseClaim.MaxNoteLength);
+            b.Ignore(x => x.Total);
+            b.HasIndex(x => x.WorkerId);
+            b.HasIndex(x => x.Status);
+            b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(x => x.WorkerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Bill>().WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(x => x.Lines, l =>
+            {
+                l.ToTable("ExpenseClaimLines");
+                l.WithOwner().HasForeignKey("ExpenseClaimId");
+                l.HasKey("ExpenseClaimId", nameof(OpenBook.Domain.Projects.ExpenseClaimLine.LineNumber));
+                l.Property(x => x.LineNumber).ValueGeneratedNever();
+                l.Property(x => x.Description).HasMaxLength(OpenBook.Domain.Projects.ExpenseClaimLine.MaxDescriptionLength);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(x => x.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Projects.PreBill>(b =>
