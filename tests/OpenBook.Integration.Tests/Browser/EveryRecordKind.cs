@@ -173,6 +173,10 @@ internal static class EveryRecordKind
         await Do<PricingService>(s => s.CreateLevelAsync(new PriceLevelDetails("Partners", PriceLevelKind.FixedPercent, -10m)));
         await Do<PricingService>(s => s.CreateRuleAsync(new PriceRuleDetails("Spring sale", PriceAdjustment.Percent, -15m, [service.Id])));
         await Do<ProjectService>(s => s.CreateAsync(new CreateProjectCommand(new ProjectDetails(), CustomerId: customer.Id)));
+        // A fixed fee with a milestone, for the project page's milestones (C083).
+        var fixedFee = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(
+            new ProjectDetails(Arrangement: BillingArrangement.FixedFee, Fee: 2000m), "Website", customer.Id)));
+        await Do<ProjectMilestoneService>(s => s.AddAsync(fixedFee.Id, "Design approved", 800m, today.AddDays(14)));
         var worker = await In<WorkerService, Worker>(s => s.CreateAsync(new WorkerDetails("Dana", 50m, 100m)));
         await Do<TimeService>(s => s.CreateAsync(new TimeEntryDetails(worker.Id, d, 2m, customer.Id, service.Id, true)));
         await Do<PreBillService>(s => s.MakeDraftsAsync([customer.Id], today));
@@ -185,6 +189,6 @@ internal static class EveryRecordKind
         await Do<WebhookService>(s => s.CreateAsync("https://example.com/hook", null, null));
         var invite = await In<InviteService, SentInvite>(s => s.InviteAsync(new InviteCommand("sam@example.com", UserRole.Accountant, SendEmail: false), "http://localhost"));
         return ([invite.Link["http://localhost".Length..], $"/portal/{portal.Token}"],
-            [$"/banking/transactions/{expense.Id}/edit", $"/nonprofit/statements/{d.Year}/{donor.Id}/email"]);
+            [$"/banking/transactions/{expense.Id}/edit", $"/nonprofit/statements/{d.Year}/{donor.Id}/email", $"/projects/{fixedFee.Id}"]);
     }
 }

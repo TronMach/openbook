@@ -29,6 +29,26 @@ public static class ProjectEndpoints
         app.MapPost("/projects/{id:guid}", async (Guid id, IFormCollection form, ProjectService projects, CancellationToken ct) =>
             await Back($"/projects/{id}", async () => await projects.UpdateAsync(id, Details(form), ct))).RequireAuthorization();
 
+        // Milestones of a fixed fee (C083). Fields: name, amount, dueOn; to bill: itemId, date.
+        app.MapPost("/projects/{id:guid}/milestones", async (Guid id, IFormCollection form, ProjectMilestoneService milestones, CancellationToken ct) =>
+            await Back($"/projects/{id}#milestones", async () =>
+                await milestones.AddAsync(id, Text(form["name"]), Number(form["amount"]) ?? 0m, Date(form["dueOn"]), ct))).RequireAuthorization();
+        app.MapPost("/projects/{id:guid}/milestones/{line:int}/remove", async (Guid id, int line, IFormCollection _, ProjectMilestoneService milestones, CancellationToken ct) =>
+            await Back($"/projects/{id}#milestones", async () => await milestones.RemoveAsync(id, line, ct))).RequireAuthorization();
+        app.MapPost("/projects/{id:guid}/milestones/{line:int}/bill", async (Guid id, int line, IFormCollection form, ProjectMilestoneService milestones, CancellationToken ct) =>
+        {
+            try
+            {
+                var invoice = await milestones.BillAsync(id, line, Id(form["itemId"]) ?? throw new DomainException("project.milestone_item", "Choose the product or service to bill it with."),
+                    Date(form["date"]) ?? OpenBook.Application.CompanyTime.Today, ct);
+                return Results.Redirect($"/sales/invoices/{invoice.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/projects/{id}?error={Uri.EscapeDataString(ex.Message)}#milestones");
+            }
+        }).RequireAuthorization();
+
         // Fields: workerId, week (any day of it), and per row r: c:r, i:r, b:r and h:r:d (d = 0 for Monday … 6). A posted
         // empty cell means zero; a disabled (locked) cell isn't posted, so it's left alone.
         app.MapPost("/customers/{id:guid}/responsible", async (Guid id, IFormCollection form, ProjectService projects, CancellationToken ct) =>

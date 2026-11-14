@@ -5,6 +5,8 @@
 @inject WorkerService WorkerService
 @inject BillableExpenseService Billables
 @inject MileageService MileageService
+@inject ProjectMilestoneService Milestones
+@inject OpenBook.Application.Sales.ItemService Items
 
 <PageTitle>@(_project?.FullName ?? "Project") · OpenBook</PageTitle>
 
@@ -44,6 +46,65 @@
                     <span class="@(_worked > fee ? "out-of-balance" : "muted")">(@(_worked > fee ? $"{Labels.Amount(_worked - fee)} of effort beyond it" : $"{Labels.Amount(fee - _worked)} of it left in effort"))</span>
                 }
             </p>
+        }
+
+        @if (p.Arrangement == BillingArrangement.FixedFee)
+        {
+            <h2 id="milestones">@L["Milestones"]</h2>
+            <p class="muted">@L["The fee in parts, each billed when the work reaches it. Together they can be at most the fee."]</p>
+            @if (_milestones.Count > 0)
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>@L["Milestone"]</th><th>@L["Due"]</th><th class="num">@L["Amount"]</th><th>@L["Billed"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
+                        <tbody>
+                            @foreach (var ms in _milestones)
+                            {
+                                <tr>
+                                    <td>@ms.Milestone.Name</td>
+                                    <td>@(ms.Milestone.DueOn is { } due ? Labels.Date(due) : "")</td>
+                                    <td class="num">@Labels.Amount(ms.Milestone.Amount)</td>
+                                    <td>
+                                        @if (ms.Billed)
+                                        {
+                                            <a href="/sales/invoices/@ms.Invoice!.Id">@L["Invoice {0}", ms.Invoice.Number]</a>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!ms.Billed)
+                                        {
+                                            <PostForm Action="@($"/projects/{p.Id}/milestones/{ms.Milestone.LineNumber}/bill")" data-enhance="false" class="inline">
+                                                <AntiforgeryToken />
+                                                <select name="itemId" aria-label="@L["Bill it as"]" data-search required>
+                                                    <option value="">@L["Bill it as…"]</option>
+                                                    @foreach (var item in _services)
+                                                    {
+                                                        <option value="@item.Id">@item.Name</option>
+                                                    }
+                                                </select>
+                                                <input type="date" name="date" aria-label="@L["Invoice date"]" value="@OpenBook.Application.CompanyTime.Today.ToString("yyyy-MM-dd")" />
+                                                <button type="submit" class="secondary">@L["Bill it"]</button>
+                                            </PostForm>
+                                            <PostForm Action="@($"/projects/{p.Id}/milestones/{ms.Milestone.LineNumber}/remove")" data-enhance="false" class="inline">
+                                                <AntiforgeryToken />
+                                                <button type="submit" class="link">@L["Remove"]</button>
+                                            </PostForm>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="muted">@L["Milestones total {0} of the {1} fee; billed {2}.", Labels.Amount(_milestones.Sum(x => x.Milestone.Amount)), Labels.Amount(p.Fee ?? 0m), Labels.Amount(_milestones.Where(x => x.Billed).Sum(x => x.Milestone.Amount))]</p>
+            }
+            <PostForm Action="@($"/projects/{p.Id}/milestones")" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <input name="name" aria-label="@L["Milestone"]" placeholder="@L["Milestone (e.g. Design approved)"]" maxlength="200" required />
+                <input name="amount" aria-label="@L["Amount"]" placeholder="@L["Amount"]" inputmode="decimal" class="short" required />
+                <input type="date" name="dueOn" aria-label="@L["Due"]" />
+                <button type="submit" class="secondary">@L["Add milestone"]</button>
+            </PostForm>
         }
 
         @foreach (var warning in _figures.BudgetWarnings())
@@ -167,6 +228,8 @@
     private IReadOnlyList<BillableExpense> _expenses = [];
     private IReadOnlyList<MileageTrip> _trips = [];
     private Dictionary<Guid, string> _workers = [];
+    private IReadOnlyList<MilestoneStatus> _milestones = [];
+    private IReadOnlyList<OpenBook.Domain.Sales.Item> _services = [];
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -184,6 +247,11 @@
         _expenses = await Billables.ListAsync(customerId);
         _trips = await MileageService.ListAsync(customerId: customerId);
         _workers = (await WorkerService.ListAsync(includeInactive: true)).ToDictionary(w => w.Id, w => w.Name);
+        if (_project.Project.Arrangement == BillingArrangement.FixedFee)
+        {
+            _milestones = await Milestones.ListAsync(_project.Project.Id);
+            _services = (await Items.ListAsync()).Where(i => i.Type is OpenBook.Domain.Sales.ItemType.Service or OpenBook.Domain.Sales.ItemType.NonInventory).ToList();
+        }
     }
 
     private static RenderFragment Budget(decimal? budget, decimal actual) => budget is { } b

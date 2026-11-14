@@ -36,6 +36,44 @@ public sealed record ProjectDetails(
     BillingArrangement Arrangement = BillingArrangement.TimeAndMaterials,
     decimal? Fee = null);
 
+/// <summary>A part of a fixed fee, billed by its own invoice when the work reaches it.</summary>
+public sealed class ProjectMilestone
+{
+    private ProjectMilestone()
+    {
+    }
+
+    internal ProjectMilestone(int lineNumber, string? name, decimal amount, DateOnly? dueOn)
+    {
+        LineNumber = lineNumber;
+        Name = Text.Optional(name, 200, "project.milestone_name_too_long", "Milestone") ?? throw new DomainException("project.milestone_name_required", "Name the milestone.");
+        Amount = amount;
+        DueOn = dueOn;
+    }
+
+    public int LineNumber { get; private set; }
+    public string Name { get; private set; } = string.Empty;
+    public decimal Amount { get; private set; }
+
+    /// <summary>When the work should reach it; null when there's no date.</summary>
+    public DateOnly? DueOn { get; private set; }
+
+    /// <summary>The invoice that billed it; null until then (and again if that invoice is voided).</summary>
+    public Guid? InvoiceId { get; private set; }
+
+    public DateOnly? BilledOn { get; private set; }
+
+    public void MarkBilled(Guid invoiceId, DateOnly on)
+    {
+        if (InvoiceId is not null)
+            throw new DomainException("project.milestone_billed", "This milestone is billed already.");
+        (InvoiceId, BilledOn) = (invoiceId, on);
+    }
+
+    /// <summary>Its invoice was voided: the milestone is waiting to be billed again.</summary>
+    public void Unbill() => (InvoiceId, BilledOn) = (null, null);
+}
+
 /// <summary>
 /// A job done for a customer, tracked for budget and profit. A project is a sub-customer (its own customer record,
 /// usually billed with its parent), so its invoices, receipts and credit memos are the project's income without
@@ -64,6 +102,40 @@ public sealed class Project
     public DateTimeOffset CreatedAt { get; private set; }
 
     public bool IsOpen => Status is ProjectStatus.NotStarted or ProjectStatus.InProgress;
+
+    public const int MaxMilestones = 50;
+
+    private readonly List<ProjectMilestone> _milestones = [];
+
+    /// <summary>A fixed fee billed in parts as the work reaches them (C083, 2026-11-14); together they're at most the fee.</summary>
+    public IReadOnlyList<ProjectMilestone> Milestones => _milestones;
+
+    public ProjectMilestone AddMilestone(string? name, decimal amount, DateOnly? dueOn)
+    {
+        if (Arrangement != BillingArrangement.FixedFee)
+            throw new DomainException("project.milestones_fixed_fee", "Milestones are for a project billed at a fixed fee.");
+        if (_milestones.Count >= MaxMilestones)
+            throw new DomainException("project.too_many_milestones", $"A project can have up to {MaxMilestones} milestones.");
+        if (amount <= 0m || decimal.Round(amount, 2) != amount)
+            throw new DomainException("project.milestone_amount", "A milestone's amount must be above zero, to the cent.");
+        if (_milestones.Sum(m => m.Amount) + amount > (Fee ?? 0m))
+            throw new DomainException("project.milestones_over_fee", "The milestones would add up to more than the fee.");
+        var milestone = new ProjectMilestone(_milestones.Select(m => m.LineNumber).DefaultIfEmpty(0).Max() + 1, name, amount, dueOn);
+        _milestones.Add(milestone);
+        return milestone;
+    }
+
+    public ProjectMilestone Milestone(int line) =>
+        _milestones.FirstOrDefault(m => m.LineNumber == line) ?? throw new DomainException("project.milestone_unknown", "There's no such milestone.");
+
+    /// <summary>A milestone not billed yet can go; a billed one stays with its invoice.</summary>
+    public void RemoveMilestone(int line)
+    {
+        var milestone = Milestone(line);
+        if (milestone.InvoiceId is not null)
+            throw new DomainException("project.milestone_billed", "This milestone is billed: void its invoice first.");
+        _milestones.Remove(milestone);
+    }
 
     public static Project Create(Guid customerId, ProjectDetails details, DateTimeOffset createdAt)
     {

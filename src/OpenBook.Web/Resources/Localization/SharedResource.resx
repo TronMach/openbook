@@ -188,6 +188,9 @@
   <data name="Add landed costs" xml:space="preserve">
     <value>Add landed costs</value>
   </data>
+  <data name="Add milestone" xml:space="preserve">
+    <value>Add milestone</value>
+  </data>
   <data name="Add or change a state" xml:space="preserve">
     <value>Add or change a state</value>
   </data>
@@ -407,6 +410,15 @@
   <data name="Bill for what you sold" xml:space="preserve">
     <value>Bill for what you sold</value>
   </data>
+  <data name="Bill it" xml:space="preserve">
+    <value>Bill it</value>
+  </data>
+  <data name="Bill it as" xml:space="preserve">
+    <value>Bill it as</value>
+  </data>
+  <data name="Bill it as…" xml:space="preserve">
+    <value>Bill it as…</value>
+  </data>
   <data name="Bill payment" xml:space="preserve">
     <value>Bill payment</value>
   </data>
@@ -424,6 +436,9 @@
   </data>
   <data name="Billable time and mileage for this customer" xml:space="preserve">
     <value>Billable time and mileage for this customer</value>
+  </data>
+  <data name="Billed" xml:space="preserve">
+    <value>Billed</value>
   </data>
   <data name="Bills due within a week" xml:space="preserve">
     <value>Bills due within a week</value>
@@ -1256,6 +1271,9 @@
   <data name="Invoice number" xml:space="preserve">
     <value>Invoice number</value>
   </data>
+  <data name="Invoice {0}" xml:space="preserve">
+    <value>Invoice {0}</value>
+  </data>
   <data name="It only changes the menu, the home page and which reports come first; everything stays available." xml:space="preserve">
     <value>It only changes the menu, the home page and which reports come first; everything stays available.</value>
   </data>
@@ -1450,6 +1468,18 @@
   </data>
   <data name="Mileage rates" xml:space="preserve">
     <value>Mileage rates</value>
+  </data>
+  <data name="Milestone" xml:space="preserve">
+    <value>Milestone</value>
+  </data>
+  <data name="Milestone (e.g. Design approved)" xml:space="preserve">
+    <value>Milestone (e.g. Design approved)</value>
+  </data>
+  <data name="Milestones" xml:space="preserve">
+    <value>Milestones</value>
+  </data>
+  <data name="Milestones total {0} of the {1} fee; billed {2}." xml:space="preserve">
+    <value>Milestones total {0} of the {1} fee; billed {2}.</value>
   </data>
   <data name="Money in the bank" xml:space="preserve">
     <value>Money in the bank</value>
@@ -2698,6 +2728,9 @@
   </data>
   <data name="The check file some banks want before they'll cash your checks." xml:space="preserve">
     <value>The check file some banks want before they'll cash your checks.</value>
+  </data>
+  <data name="The fee in parts, each billed when the work reaches it. Together they can be at most the fee." xml:space="preserve">
+    <value>The fee in parts, each billed when the work reaches it. Together they can be at most the fee.</value>
   </data>
   <data name="The first month of your financial year: where reports' year and the year-end close start. Changing it doesn't alter any transactions." xml:space="preserve">
     <value>The first month of your financial year: where reports' year and the year-end close start. Changing it doesn't alter any transactions.</value>

@@ -9526,6 +9526,52 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Projects.ProjectMilestone", "Milestones", b1 =>
+                        {
+                            b1.Property<Guid>("ProjectId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer");
+
+                            NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b1.Property<int>("LineNumber"));
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<DateOnly?>("BilledOn")
+                                .HasColumnType("date");
+
+                            b1.Property<DateOnly?>("DueOn")
+                                .HasColumnType("date");
+
+                            b1.Property<Guid?>("InvoiceId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.HasKey("ProjectId", "LineNumber");
+
+                            b1.HasIndex("InvoiceId");
+
+                            b1.ToTable("ProjectMilestones", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Sales.Invoice", null)
+                                .WithMany()
+                                .HasForeignKey("InvoiceId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("ProjectId");
+                        });
+
+                    b.Navigation("Milestones");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Projects.TimeEntry", b =>

@@ -83,7 +83,7 @@ Bill and expense lines can be charged to a project for its profitability without
 
 ## Fixed fees and limits
 
-On a project, **How it's billed** can be by the hour, a **fixed fee** or **not to exceed**. Time on a fixed-fee project stays out of unbilled work, since the fee is what's invoiced: invoice it as an ordinary line, and the project page sets the fee against the effort worked. A not-to-exceed project is billed by the hour, and the billing run warns when a bill would take it over.
+On a project, **How it's billed** can be by the hour, a **fixed fee** or **not to exceed**. Time on a fixed-fee project stays out of unbilled work, since the fee is what's invoiced: invoice it as an ordinary line, and the project page sets the fee against the effort worked. To bill the fee in parts, add **Milestones** on the project's page (a name, an amount and optionally a due date; together at most the fee). When the work reaches one, choose what to **Bill it as** (a product or service) and select **Bill it**: an invoice for that amount to the project, named after the milestone. If that invoice is voided, the milestone can be billed again. A not-to-exceed project is billed by the hour, and the billing run warns when a bill would take it over.
 
 ## Reports
 

@@ -37,6 +37,38 @@ public sealed class FirmBillingTests : IAsyncLifetime
     private Task<TimeEntry> Work(decimal hours, Customer? client = null, DateOnly? on = null) =>
         In<TimeService, TimeEntry>(s => s.CreateAsync(new TimeEntryDetails(_dana.Id, on ?? Mar1, hours, (client ?? _acme).Id, _advice.Id, true)));
 
+    [Fact]
+    public async Task A_fixed_fee_is_billed_milestone_by_milestone()
+    {
+        var project = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(
+            new ProjectDetails(Arrangement: BillingArrangement.FixedFee, Fee: 3000m), "Website", _acme.Id)));
+        await In<ProjectMilestoneService, Project>(s => s.AddAsync(project.Id, "Design approved", 1000m, Mar1));
+        await In<ProjectMilestoneService, Project>(s => s.AddAsync(project.Id, "Launch", 1500m, Mar31));
+        Assert.Equal("project.milestones_over_fee", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<ProjectMilestoneService, Project>(s => s.AddAsync(project.Id, "Extras", 600m, null)))).Code);
+
+        var design = (await In<ProjectMilestoneService, IReadOnlyList<MilestoneStatus>>(s => s.ListAsync(project.Id)))[0].Milestone;
+        var invoice = await In<ProjectMilestoneService, Invoice>(s => s.BillAsync(project.Id, design.LineNumber, _advice.Id, Mar1));
+        Assert.Equal((project.CustomerId, 1000m), (invoice.CustomerId, invoice.Total));
+        Assert.Equal("Design approved", invoice.Lines.Single(l => l.Kind == SalesLineKind.Item).Description);
+        Assert.Equal("project.milestone_billed", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<ProjectMilestoneService, Invoice>(s => s.BillAsync(project.Id, design.LineNumber, _advice.Id, Mar1)))).Code);
+        Assert.Equal("project.milestone_billed", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<ProjectMilestoneService, Project>(s => s.RemoveAsync(project.Id, design.LineNumber)))).Code);
+
+        // Its invoice voided, the milestone waits to be billed again.
+        await In<InvoiceService, Invoice>(s => s.VoidAsync(invoice.Id, "Wrong client contact"));
+        Assert.False((await In<ProjectMilestoneService, IReadOnlyList<MilestoneStatus>>(s => s.ListAsync(project.Id)))[0].Billed);
+        var again = await In<ProjectMilestoneService, Invoice>(s => s.BillAsync(project.Id, design.LineNumber, _advice.Id, Mar31));
+        Assert.True((await In<ProjectMilestoneService, IReadOnlyList<MilestoneStatus>>(s => s.ListAsync(project.Id)))[0].Billed);
+        Assert.NotEqual(invoice.Id, again.Id);
+
+        // Milestones are for fixed fees only.
+        var hourly = await In<ProjectService, Project>(s => s.CreateAsync(new CreateProjectCommand(new ProjectDetails(), "Support", _acme.Id)));
+        Assert.Equal("project.milestones_fixed_fee", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<ProjectMilestoneService, Project>(s => s.AddAsync(hourly.Id, "Phase 1", 100m, null)))).Code);
+    }
+
     private async Task<PreBill> Draft() => Assert.Single(await In<PreBillService, IReadOnlyList<PreBill>>(s => s.MakeDraftsAsync([_acme.Id], Mar31)));
 
     private Task<IReadOnlyList<BillingRow>> Worksheet() => In<PreBillService, IReadOnlyList<BillingRow>>(s => s.WorksheetAsync(Mar31));
