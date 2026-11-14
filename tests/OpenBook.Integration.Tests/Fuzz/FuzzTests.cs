@@ -33,7 +33,11 @@ public sealed class FuzzTests
 
     private static int Cases => int.TryParse(Environment.GetEnvironmentVariable("OPENBOOK_FUZZ_CASES"), out var n) && n > 0 ? n : 300;
 
-    private sealed record Target(string Name, Action<byte[]> Read, params string[] Seeds);
+    private sealed record Target(string Name, Action<byte[]> Read, params string[] Seeds)
+    {
+        /// <summary>Samples that aren't text (fonts).</summary>
+        public byte[][] Binary { get; init; } = [];
+    }
 
     private static string Text(byte[] bytes) => Encoding.UTF8.GetString(bytes);
 
@@ -66,6 +70,10 @@ public sealed class FuzzTests
         new("address", b => AddressParts.Parse(Text(b)), Seeds.Address),
         new("lots", b => { LotText.Parse(Text(b), ItemTracking.Lot, 5m, "Mug"); LotText.Parse(Text(b), ItemTracking.Serial, 3m, "Laptop"); }, Seeds.Lots),
         new("email-addresses", b => EmailAddresses.Parse(Text(b), "To"), Seeds.Emails),
+        new("font-cmap", b => OpenBook.Application.Forms.FontCoverage.Read(b).Missing(["Acme 山田 م 😀 Z"]))
+        {
+            Binary = [Seeds.MinimalFont(4), Seeds.MinimalFont(12)],
+        },
         new("audit-requests", b => OpenBook.Application.Reporting.AuditRequestService.Read(2025, Text(b), ["Trial balance"], DateTimeOffset.UnixEpoch), Seeds.AuditRequests),
     ];
 
@@ -76,7 +84,7 @@ public sealed class FuzzTests
     public void Damaged_input_is_read_or_refused_cleanly(string name)
     {
         var target = Targets.Single(t => t.Name == name);
-        var seeds = target.Seeds.Select(s => Encoding.UTF8.GetBytes(s)).ToArray();
+        var seeds = target.Seeds.Select(s => Encoding.UTF8.GetBytes(s)).Concat(target.Binary).ToArray();
         var failures = new Dictionary<string, (int Case, string Detail, byte[] Input)>();
 
         // The samples themselves must read.

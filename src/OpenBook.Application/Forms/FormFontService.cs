@@ -30,6 +30,13 @@ public interface IBundledFonts
     (byte[] Regular, byte[] Bold)? Load(string key);
 }
 
+/// <summary>The machine's font that forms print with when a design names none ("OpenBook Sans").</summary>
+public interface IBuiltInFont
+{
+    /// <summary>Its regular face, or null when the machine has none.</summary>
+    byte[]? Regular();
+}
+
 /// <summary>Downloads a family's regular and bold TrueType faces from Google Fonts.</summary>
 public interface IGoogleFonts
 {

@@ -3,6 +3,63 @@ namespace OpenBook.Integration.Tests.Fuzz;
 /// <summary>Valid samples of each format the fuzzer damages: most from the readers' own tests.</summary>
 internal static class Seeds
 {
+    /// <summary>
+    /// The smallest TrueType file <c>FontCoverage</c> reads: a table directory with only "cmap", holding one Unicode
+    /// subtable of format 4 (A to Z, and the closing 0xFFFF segment) or 12 (A to Z and one emoji).
+    /// </summary>
+    public static byte[] MinimalFont(int format)
+    {
+        var cmap = new List<byte>();
+        void U16(int v) => cmap.AddRange([(byte)(v >> 8), (byte)v]);
+        void U32(long v) => cmap.AddRange([(byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v]);
+        U16(0);
+        U16(1);
+        U16(3);
+        U16(format == 12 ? 10 : 1);
+        U32(12);
+        if (format == 12)
+        {
+            (long Start, long End, long Glyph)[] groups = [(0x41, 0x5A, 1), (0x1F600, 0x1F600, 27)];
+            U16(12);
+            U16(0);
+            U32(16 + groups.Length * 12);
+            U32(0);
+            U32(groups.Length);
+            foreach (var (start, end, glyph) in groups)
+            {
+                U32(start);
+                U32(end);
+                U32(glyph);
+            }
+        }
+        else
+        {
+            U16(4);
+            U16(32);
+            U16(0);
+            U16(4);
+            U16(4);
+            U16(1);
+            U16(0);
+            U16(0x5A);
+            U16(0xFFFF);
+            U16(0);
+            U16(0x41);
+            U16(0xFFFF);
+            U16((1 - 0x41) & 0xFFFF);
+            U16(1);
+            U16(0);
+            U16(0);
+        }
+
+        var font = new List<byte> { 0, 1, 0, 0, 0, 1, 0, 16, 0, 0, 0, 0 };
+        font.AddRange("cmap"u8.ToArray());
+        font.AddRange([0, 0, 0, 0, 0, 0, 0, 28]);
+        font.AddRange([(byte)(cmap.Count >> 24), (byte)(cmap.Count >> 16), (byte)(cmap.Count >> 8), (byte)cmap.Count]);
+        font.AddRange(cmap);
+        return [.. font];
+    }
+
     public const string Iif =
         "!ACCNT\tNAME\tACCNTTYPE\tDESC\tACCNUM\r\n" +
         "ACCNT\tBusiness Checking\tBANK\tMain account\t1010\r\n" +

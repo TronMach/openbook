@@ -60,7 +60,7 @@ The **Fonts** card on the designs page lists the fonts you can pick in a design.
 
 A font you added can be removed (**Remove**) while no design uses it.
 
-A form prints in its one font: a letter the font doesn't have comes out as a box or a blank, and Arabic or Hebrew text comes out left to right, reversed. The fonts that come with OpenBook cover the Latin alphabets. When a document has text beyond them, such as a customer named in Japanese or Arabic, its **Print** button shows ⚠ with **Check the PDF: some text may not print as written**. Look at the PDF before sending it; for letters, add a font that has them (Google Fonts has families such as Noto Sans JP). Right-to-left text can't be printed correctly yet.
+A form prints in its one font: a letter the font doesn't have comes out as a box or a blank, and Arabic or Hebrew text comes out left to right, reversed. The fonts that come with OpenBook cover the Latin alphabets. When a document has characters its design's fonts don't have, such as a customer named in Japanese, its **Print** button shows ⚠ and a **Check the PDF** menu that names the font and the characters it lacks (the company's name and contact lines are checked against the company font). Add a font that has them (Google Fonts has families such as Noto Sans JP) and choose it for the design. Arabic or Hebrew text gets the same menu, saying it comes out reversed: right-to-left text can't be printed correctly yet.
 
 ## Printing
 

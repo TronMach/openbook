@@ -10,6 +10,11 @@ namespace OpenBook.Infrastructure.Forms;
 /// OpenBookSans-Regular.ttf and OpenBookSans-Bold.ttf into a "fonts" folder beside the app overrides them.
 /// Italic is simulated. PDFsharp embeds the font, so the PDF looks the same wherever it's opened.
 /// </summary>
+internal sealed class BuiltInFont : OpenBook.Application.Forms.IBuiltInFont
+{
+    public byte[]? Regular() => SystemFontResolver.BuiltInRegular();
+}
+
 internal sealed class SystemFontResolver : IFontResolver
 {
     public const string FamilyName = "OpenBook Sans";
@@ -45,6 +50,11 @@ internal sealed class SystemFontResolver : IFontResolver
                 "No font was found for PDF forms. Install DejaVu Sans or Liberation Sans, or put OpenBookSans-Regular.ttf in a 'fonts' folder next to the app.");
         return File.ReadAllBytes(path);
     });
+
+    /// <summary>The regular face OpenBook Sans prints with here, for checking which characters it has; null when there's none.</summary>
+    internal static byte[]? BuiltInRegular() => RegularPath.Value is { } path ? BuiltInBytes.Value : null;
+
+    private static readonly Lazy<byte[]?> BuiltInBytes = new(() => RegularPath.Value is { } path ? File.ReadAllBytes(path) : null);
 
     private static string? Find(IEnumerable<string> candidates) => candidates.FirstOrDefault(File.Exists);
 
