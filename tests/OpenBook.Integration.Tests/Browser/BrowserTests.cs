@@ -211,7 +211,7 @@ public sealed partial class BrowserTests(BrowserApp app)
     /// is up, so this waits until the list opens before typing, and until the highlighted choice is the one wanted
     /// (while the list catches up with the typing, "+ Add" can be the highlighted row).
     /// </summary>
-    private static async Task PickAsync(IPage page, ILocator input, string text, string expected)
+    internal static async Task PickAsync(IPage page, ILocator input, string text, string expected)
     {
         await OpenPickerAsync(page, input);
         await input.PressSequentiallyAsync(text);
@@ -223,7 +223,7 @@ public sealed partial class BrowserTests(BrowserApp app)
     }
 
     /// <summary>Clicks into a picker until its list opens: the first clicks may come before the page's circuit is up.</summary>
-    private static async Task OpenPickerAsync(IPage page, ILocator input)
+    internal static async Task OpenPickerAsync(IPage page, ILocator input)
     {
         var deadline = DateTime.UtcNow + Wait;
         while (true)
