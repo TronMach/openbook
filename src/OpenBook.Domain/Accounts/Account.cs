@@ -126,7 +126,8 @@ public sealed partial class Account
     public void ChangeType(AccountType type)
     {
         Type = ValidType(type);
-        if (type.IsBalanceSheet())
+        // A balance sheet line stays only on a balance sheet account, an income or deduction line only on the others.
+        if (TaxLines.Find(TaxLineKey) is { } line && line.BalanceSheet != type.IsBalanceSheet())
             TaxLineKey = null;
         if (!CanBeRestricted(type))
             DonorRestricted = false;
@@ -150,8 +151,10 @@ public sealed partial class Account
 
         if (TaxLines.Find(key.Trim()) is not { } line)
             throw new DomainException("account.tax_line_invalid", $"Unknown tax line '{key}'.");
-        if (Type.IsBalanceSheet())
-            throw new DomainException("account.tax_line_balance_sheet", "Only income and expense accounts go on tax lines.");
+        if (line.BalanceSheet != Type.IsBalanceSheet())
+            throw new DomainException("account.tax_line_balance_sheet", Type.IsBalanceSheet()
+                ? "A balance sheet account goes on a balance sheet line (Schedule L, or Part X of Form 990)."
+                : "Income and expense accounts go on income and deduction lines, not the balance sheet's.");
         TaxLineKey = line.Key;
     }
 

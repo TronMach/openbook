@@ -26,9 +26,16 @@ public enum TaxForm
 /// <param name="IsIncome">Income lines come first in the tax summary and are shown credit-positive.</param>
 /// <param name="SeparatelyStated">A Schedule K item (partnerships and S corporations): reported to the owners apart, so not in page 1's ordinary income.</param>
 /// <param name="HalfDeductible">Meals: half is deductible, so the tax summary takes half off.</param>
-public sealed record TaxLine(string Key, TaxForm Form, string Line, string Name, bool IsIncome, bool SeparatelyStated = false, bool HalfDeductible = false)
+/// <param name="BalanceSheet">
+/// A line of the return's balance sheet (Schedule L, or Part X of Form 990) for balance sheet accounts (C347, C074);
+/// <see cref="IsIncome"/> then means a liability or equity line, shown credit-positive.
+/// </param>
+public sealed record TaxLine(string Key, TaxForm Form, string Line, string Name, bool IsIncome, bool SeparatelyStated = false, bool HalfDeductible = false,
+    bool BalanceSheet = false)
 {
-    public string Label => SeparatelyStated ? $"Schedule K line {Line}: {Name}" : Line.Length == 0 ? Name : $"Line {Line}: {Name}";
+    public string Label => SeparatelyStated ? $"Schedule K line {Line}: {Name}"
+        : BalanceSheet ? $"{(Form == TaxForm.Form990 ? "Part X" : "Schedule L")} line {Line}: {Name}"
+        : Line.Length == 0 ? Name : $"Line {Line}: {Name}";
 }
 
 /// <summary>
@@ -96,20 +103,94 @@ public static class TaxLines
             ("IX 20", "Interest", false), ("IX 21", "Payments to affiliates", false), ("IX 22", "Depreciation", false), ("IX 23", "Insurance", false),
             ("IX 24", "Other expenses", false)),
         NonDeductible,
+        .. ScheduleL(TaxForm.Form1065, "p"),
+        .. ScheduleL(TaxForm.Form1120S, "s"),
+        .. ScheduleL(TaxForm.Form1120, "k"),
+        .. Balance(TaxForm.Form990, "n.10.",
+            ("1", "Cash, non-interest-bearing", false), ("2", "Savings and temporary cash investments", false),
+            ("3", "Pledges and grants receivable, net", false), ("4", "Accounts receivable, net", false),
+            ("5", "Loans and other receivables from officers, directors and other interested persons", false),
+            ("6", "Loans and other receivables from other disqualified persons", false), ("7", "Notes and loans receivable, net", false),
+            ("8", "Inventories for sale or use", false), ("9", "Prepaid expenses and deferred charges", false),
+            ("10a", "Land, buildings and equipment: cost or other basis", false), ("10b", "Less accumulated depreciation", false),
+            ("11", "Investments: publicly traded securities", false), ("12", "Investments: other securities", false),
+            ("13", "Investments: program-related", false), ("14", "Intangible assets", false), ("15", "Other assets", false),
+            ("17", "Accounts payable and accrued expenses", true), ("18", "Grants payable", true), ("19", "Deferred revenue", true),
+            ("20", "Tax-exempt bond liabilities", true), ("21", "Escrow or custodial account liability", true),
+            ("22", "Loans and other payables to officers, directors and other interested persons", true),
+            ("23", "Secured mortgages and notes payable to unrelated third parties", true),
+            ("24", "Unsecured notes and loans payable to unrelated third parties", true), ("25", "Other liabilities", true),
+            ("27", "Net assets without donor restrictions", true), ("28", "Net assets with donor restrictions", true),
+            ("29", "Capital stock or trust principal, or current funds", true), ("30", "Paid-in or capital surplus", true),
+            ("31", "Retained earnings, endowment, accumulated income, or other funds", true)),
     ];
+
+    /// <summary>
+    /// Schedule L (Balance Sheets per Books) of Forms 1065, 1120-S and 1120, as on the 2025 forms: keys "p.L1", "s.L22".
+    /// The assets match apart from line 7 and the numbering after it; liabilities and equity differ by form.
+    /// </summary>
+    private static IEnumerable<TaxLine> ScheduleL(TaxForm form, string prefix)
+    {
+        var partnership = form == TaxForm.Form1065;
+        // From line 7 on, the corporations' lines are one higher: 1065 has 7a/7b where they have 7 and 8.
+        string N(int line) => (partnership ? line : line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var lines = new List<(string Line, string Name, bool Credit)>
+        {
+            ("1", "Cash", false), ("2a", "Trade notes and accounts receivable", false), ("2b", "Less allowance for bad debts", false),
+            ("3", "Inventories", false), ("4", "U.S. government obligations", false), ("5", "Tax-exempt securities", false),
+            ("6", "Other current assets", false),
+        };
+        lines.AddRange(partnership
+            ? [("7a", "Loans to partners (or persons related to partners)", false), ("7b", "Mortgage and real estate loans", false)]
+            : [("7", "Loans to shareholders", false), ("8", "Mortgage and real estate loans", false)]);
+        lines.AddRange([
+            (N(8), "Other investments", false), ($"{N(9)}a", "Buildings and other depreciable assets", false), ($"{N(9)}b", "Less accumulated depreciation", false),
+            ($"{N(10)}a", "Depletable assets", false), ($"{N(10)}b", "Less accumulated depletion", false), (N(11), "Land (net of any amortization)", false),
+            ($"{N(12)}a", "Intangible assets (amortizable only)", false), ($"{N(12)}b", "Less accumulated amortization", false), (N(13), "Other assets", false),
+            (N(15), "Accounts payable", true), (N(16), "Mortgages, notes, bonds payable in less than 1 year", true), (N(17), "Other current liabilities", true),
+        ]);
+        lines.AddRange(form switch
+        {
+            TaxForm.Form1065 =>
+            [
+                ("18", "All nonrecourse loans", true), ("19a", "Loans from partners (or persons related to partners)", true),
+                ("19b", "Mortgages, notes, bonds payable in 1 year or more", true), ("20", "Other liabilities", true), ("21", "Partners' capital accounts", true),
+            ],
+            TaxForm.Form1120S =>
+            [
+                ("19", "Loans from shareholders", true), ("20", "Mortgages, notes, bonds payable in 1 year or more", true), ("21", "Other liabilities", true),
+                ("22", "Capital stock", true), ("23", "Additional paid-in capital", true), ("24", "Retained earnings", true),
+                ("25", "Adjustments to shareholders' equity", true), ("26", "Less cost of treasury stock", true),
+            ],
+            _ =>
+            [
+                ("19", "Loans from shareholders", true), ("20", "Mortgages, notes, bonds payable in 1 year or more", true), ("21", "Other liabilities", true),
+                ("22a", "Capital stock: preferred stock", true), ("22b", "Capital stock: common stock", true), ("23", "Additional paid-in capital", true),
+                ("24", "Retained earnings, appropriated", true), ("25", "Retained earnings, unappropriated", true),
+                ("26", "Adjustments to shareholders' equity", true), ("27", "Less cost of treasury stock", true),
+            ],
+        });
+        return Balance(form, $"{prefix}.L", [.. lines]);
+    }
+
+    private static IEnumerable<TaxLine> Balance(TaxForm form, string prefix, params (string Line, string Name, bool Credit)[] lines) =>
+        lines.Select(l => new TaxLine($"{prefix}{l.Line}", form, l.Line, l.Name, l.Credit, BalanceSheet: true));
+
+    /// <summary>The balance sheet lines of a form (Schedule L, or Part X of Form 990), in print order.</summary>
+    public static IReadOnlyList<TaxLine> BalanceSheetFor(TaxForm form) => [.. All.Where(l => l.Form == form && l.BalanceSheet)];
 
 
     private static readonly Dictionary<string, TaxLine> ByKey = All.ToDictionary(l => l.Key, StringComparer.Ordinal);
 
     public static TaxLine? Find(string? key) => key is not null && ByKey.TryGetValue(key, out var line) ? line : null;
 
-    /// <summary>The lines of one form in print order, then "Not deductible".</summary>
+    /// <summary>The income and deduction lines of one form in print order, then "Not deductible".</summary>
     public static IReadOnlyList<TaxLine> For(TaxForm form) =>
-        [.. All.Where(l => l.Form == form && l.Key != NonDeductibleKey), NonDeductible];
+        [.. All.Where(l => l.Form == form && !l.BalanceSheet && l.Key != NonDeductibleKey), NonDeductible];
 
     /// <summary>The line of that name on another form; null for a key that isn't a form's line, or a name it hasn't.</summary>
     public static TaxLine? Equivalent(string? key, TaxForm form) =>
-        Find(key) is { } line && line.Key != NonDeductibleKey ? All.FirstOrDefault(l => l.Form == form && l.Name == line.Name) : null;
+        Find(key) is { } line && line.Key != NonDeductibleKey ? All.FirstOrDefault(l => l.Form == form && l.BalanceSheet == line.BalanceSheet && l.Name == line.Name) : null;
 
     /// <summary>
     /// The line of <paramref name="form"/> another program's tax line name means, such as QuickBooks' "Sch C: Advertising"

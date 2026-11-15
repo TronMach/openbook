@@ -60,6 +60,39 @@
                     }
                 </tbody>
             </table>
+            @if (_balanceLines.Count > 0)
+            {
+                <h2 id="balance-sheet">@(_form == TaxForm.Form990 ? "Balance sheet accounts: Part X" : "Balance sheet accounts: Schedule L")</h2>
+                <p class="muted">
+                    For the <a href="/reports/tax-balance-sheet">tax balance sheet</a>. An account left on its usual line goes where its type and name
+                    suggest (shown in brackets); choose another when that's wrong, such as a loan from a partner or a savings account.
+                </p>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Account</th><th>Type</th><th>Balance sheet line</th></tr></thead>
+                        <tbody>
+                            @foreach (var (account, depth) in _balanceAccounts)
+                            {
+                                var current = TaxLines.Find(account.TaxLineKey);
+                                var debit = account.Type.ClassOf() == AccountClass.Asset;
+                                <tr class="@(account.IsActive ? null : "inactive")">
+                                    <td class="indent-@(Math.Min(depth, 5))"><label for="line-@account.Id">@Labels.AccountName(_chart, account.Id, _useNumbers)</label></td>
+                                    <td class="muted">@Labels.For(account.Type)</td>
+                                    <td>
+                                        <select id="line-@account.Id" name="line:@account.Id">
+                                            <option value="">(usual: @(current is null ? OpenBook.Application.Reporting.TaxBalanceSheet.LineFor(account, _chart, _form, _balanceLines).Label : "by type and name"))</option>
+                                            @foreach (var line in _balanceLines.Where(l => l.IsIncome != debit || l.Key == current?.Key))
+                                            {
+                                                <option value="@line.Key" selected="@(line.Key == current?.Key)">@line.Label</option>
+                                            }
+                                        </select>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
             <div class="actions">
                 <button type="submit">Save tax lines</button>
             </div>
@@ -71,6 +104,8 @@
     private ChartOfAccounts _chart = new([]);
     private List<(Account Account, int Depth)> _accounts = [];
     private IReadOnlyList<TaxLine> _lines = [];
+    private IReadOnlyList<TaxLine> _balanceLines = [];
+    private List<(Account Account, int Depth)> _balanceAccounts = [];
     private TaxForm _form;
     private OpenBook.Domain.Companies.BusinessType _businessType;
     private bool _useNumbers;
@@ -91,5 +126,8 @@
         _accounts = _chart.Ordered()
             .Where(x => !x.Account.Type.IsBalanceSheet())
             .ToList();
+        // Schedule L or Part X (C347, C074); Schedule C has none.
+        _balanceLines = TaxLines.BalanceSheetFor(_form);
+        _balanceAccounts = _balanceLines.Count == 0 ? [] : _chart.Ordered().Where(x => x.Account.Type.IsBalanceSheet()).ToList();
     }
 }

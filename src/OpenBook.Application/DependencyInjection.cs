@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddSingleton<ReportHistoryCache>();
         services.AddScoped<FinancialReports>();
         services.AddScoped<StatementReports>();
+        services.AddScoped<TaxBalanceSheet>();
         services.AddScoped<ActivityReports>();
         services.AddScoped<ListReports>();
         services.AddScoped<Lists.MergeService>();
