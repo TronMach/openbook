@@ -167,6 +167,8 @@ internal static class EveryRecordKind
         var restricted = await NewAccount("Scholarship gifts", AccountType.Income, restricted: true);
         await Do<GiftService>(s => s.RecordAsync(new RecordGiftCommand(donor.Id, d, 1000m, checking, IncomeAccountId: restricted.Id, ClassId: scholarships.Id)));
         await Do<GiftService>(s => s.PledgeAsync(new PledgeCommand(donor.Id, d, 500m)));
+        // A gift from before the move, for the donor page's history list (C080).
+        await Do<GiftHistoryService>(s => s.ImportCsvAsync($"Donor,Date,Amount,Description\r\n\"{donor.DisplayName}\",{d.AddYears(-1):yyyy-MM-dd},75.00,Old appeal\r\n"));
         await Do<GrantService>(s => s.CreateAsync(new GrantCommand("Roof repair", donor.Id, 1000m, d, d, today.AddMonths(6))));
         await Do<NonprofitService>(s => s.ReleaseAsync(new ReleaseCommand(d.AddDays(1), scholarships.Id, 300m)));
 

@@ -74,6 +74,8 @@ public sealed class FuzzTests
         {
             Binary = [Seeds.MinimalFont(4), Seeds.MinimalFont(12)],
         },
+        new("gift-history", b => OpenBook.Application.Nonprofit.GiftHistoryService.Read(Text(b),
+            new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase) { ["Pat Lee"] = Guid.NewGuid() }, DateTimeOffset.UnixEpoch), Seeds.GiftHistory),
         new("audit-requests", b => OpenBook.Application.Reporting.AuditRequestService.Read(2025, Text(b), ["Trial balance"], DateTimeOffset.UnixEpoch), Seeds.AuditRequests),
     ];
 

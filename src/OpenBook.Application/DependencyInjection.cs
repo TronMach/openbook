@@ -166,6 +166,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Accounts.PartnerService>();
         services.AddScoped<OpenBook.Application.Projects.MileageReimbursementService>();
         services.AddScoped<OpenBook.Application.Projects.ExpenseClaimService>();
+        services.AddScoped<OpenBook.Application.Nonprofit.GiftHistoryService>();
         services.AddScoped<OpenBook.Application.Projects.MileageService>();
         services.AddScoped<OpenBook.Application.Projects.BillingRateService>();
         services.AddScoped<OpenBook.Application.Channels.ChannelService>();

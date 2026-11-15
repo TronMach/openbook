@@ -70,7 +70,8 @@ public sealed record PledgeBalance(Pledge Pledge, string Donor, decimal Paid)
 }
 
 /// <summary>A donor's giving in a year: who they are, how to reach them, the gifts and their total.</summary>
-public sealed record Giver(Customer Donor, IReadOnlyList<Donation> Gifts)
+/// <param name="History">Gifts from before the move in the same year (C080), on the statement too.</param>
+public sealed record Giver(Customer Donor, IReadOnlyList<Donation> Gifts, IReadOnlyList<GiftHistory>? History = null)
 {
     public decimal Total => Gifts.Sum(g => g.Amount);
 }
@@ -146,8 +147,10 @@ public sealed class GiftService(
         var pledged = (await store.ListPledgesAsync(ct)).Where(p => p.DonorId == donorId && p.Status == DocumentStatus.Posted)
             .Sum(p => p.Amount - p.CancelledAmount - Paid(p.Id, all));
         var grants = (await store.ListGrantsAsync(ct)).Where(g => g.FunderId == donorId && g.Status != GrantStatus.Voided).Sum(g => g.Amount);
-        return new DonorGiving(theirs.Where(d => d.Date.Year == year).Sum(d => d.Amount), theirs.Where(d => d.Date.Year == year - 1).Sum(d => d.Amount),
-            theirs.Sum(d => d.Amount), theirs.Count, theirs.Count == 0 ? null : theirs.Max(d => d.Date), pledged, grants);
+        // Gifts from before the move count with the rest (C080).
+        var given = theirs.Select(d => (d.Date, d.Amount)).Concat((await store.ListGiftHistoryAsync(donorId, ct)).Select(h => (h.Date, h.Amount))).ToList();
+        return new DonorGiving(given.Where(d => d.Date.Year == year).Sum(d => d.Amount), given.Where(d => d.Date.Year == year - 1).Sum(d => d.Amount),
+            given.Sum(d => d.Amount), given.Count, given.Count == 0 ? null : given.Max(d => d.Date), pledged, grants);
     }
 
     /// <summary>A batch of gifts, all or none. A refusal names the donor it's about.</summary>
@@ -628,9 +631,11 @@ public sealed class GiftService(
     {
         var (first, last) = (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
         var gifts = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= first && d.Date <= last, ct);
+        var history = (await store.ListGiftHistoryAsync(null, ct)).Where(h => h.Date >= first && h.Date <= last).ToList();
         var donors = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
-        return gifts.GroupBy(g => g.DonorId)
-            .Select(g => new Giver(donors[g.Key], g.OrderBy(d => d.Date).ThenBy(d => d.Number).ToList()))
+        return gifts.Select(g => g.DonorId).Concat(history.Select(h => h.DonorId)).Distinct()
+            .Select(id => new Giver(donors[id], gifts.Where(g => g.DonorId == id).OrderBy(d => d.Date).ThenBy(d => d.Number).ToList(),
+                history.Where(h => h.DonorId == id).OrderBy(h => h.Date).ToList()))
             .OrderBy(g => g.Donor.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
@@ -717,7 +722,7 @@ public sealed class GiftService(
                     ?? throw new DomainException("donation.none_in_year", $"No gifts from this donor in {year}.");
         var company = await companies.GetRequiredCompanyAsync(ct);
         using var region = CompanyRegion.Use(company);
-        var letter = await LetterAsync(company, giver.Donor, $"Giving statement {year}", YearEnd(year), giver.Gifts, year, ct);
+        var letter = await LetterAsync(company, giver.Donor, $"Giving statement {year}", YearEnd(year), giver.Gifts, year, ct, giver.History);
         return new RenderedForm(FormService.FileName(company, $"Giving statement {year}", giver.Donor.DisplayName), renderer.Render([letter]), donorId,
             $"Giving statement {year}");
     }
@@ -732,7 +737,7 @@ public sealed class GiftService(
         using var region = CompanyRegion.Use(company);
         var letters = new List<DonorLetter>();
         foreach (var giver in givers)
-            letters.Add(await LetterAsync(company, giver.Donor, $"Giving statement {year}", YearEnd(year), giver.Gifts, year, ct));
+            letters.Add(await LetterAsync(company, giver.Donor, $"Giving statement {year}", YearEnd(year), giver.Gifts, year, ct, giver.History));
         return new RenderedForm(FormService.FileName(company, $"Giving statements {year}", ""), renderer.Render(letters), Guid.Empty, $"Giving statements {year}");
     }
 
@@ -751,7 +756,8 @@ public sealed class GiftService(
 
     /// <summary>The letter's wording: the gifts, what the donor got in return (or that they got nothing), and the tax-exempt statement.</summary>
     private async Task<DonorLetter> LetterAsync(
-        Domain.Companies.Company company, Customer donor, string title, DateOnly date, IReadOnlyList<Donation> gifts, int? year, CancellationToken ct)
+        Domain.Companies.Company company, Customer donor, string title, DateOnly date, IReadOnlyList<Donation> donations, int? year, CancellationToken ct,
+        IReadOnlyList<GiftHistory>? history = null)
     {
         var settings = await GetSettingsAsync(ct);
         var names = await segments.NamesAsync(ct);
@@ -769,6 +775,11 @@ public sealed class GiftService(
             return text;
         }
 
+        // Gifts in the books and gifts from before the move (C080), as one list in date order.
+        var gifts = donations.Select(d => (d.Date, d.Amount, d.Kind, d.GoodsValue, d.GoodsDescription, d.Deductible, Text: Describe(d)))
+            .Concat((history ?? []).Select(h => (h.Date, h.Amount, h.Kind, h.GoodsValue, h.GoodsDescription, h.Deductible,
+                Text: (h.Kind == GiftKind.InKind ? $"In-kind gift: {h.Description}" : h.Description ?? "Gift") + (h.Reference is { } r ? $" (ref. {r})" : ""))))
+            .OrderBy(g => g.Date).ToList();
         var intro = settings.Intro ?? (year is { } y
             ? $"Thank you for your generous support of {org} in {y}. These are the gifts we received from you this year."
             : $"Thank you for your generous gift to {org}.");
@@ -799,7 +810,7 @@ public sealed class GiftService(
             title,
             date,
             intro,
-            gifts.Select(g => new DonorLetterGift(g.Date, Describe(g), g.Kind == GiftKind.InKind ? 0m : g.Amount)).ToList(),
+            gifts.Select(g => new DonorLetterGift(g.Date, g.Text, g.Kind == GiftKind.InKind ? 0m : g.Amount)).ToList(),
             paragraphs,
             settings.SignerName,
             settings.SignerTitle,

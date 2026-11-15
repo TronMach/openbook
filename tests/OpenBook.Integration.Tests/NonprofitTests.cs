@@ -514,6 +514,35 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Equal(12500m, report.Find("Endowment net assets at the end", 3));
     }
 
+    [Fact]
+    public async Task Gifts_from_before_openbook_count_on_the_donor_and_the_years_statement_without_posting()
+    {
+        var pat = await Donor("Pat History");
+        await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 6, 1), 100m, Account("Checking")));
+        const string csv = "Donor,Date,Amount,Description,Reference,In kind,Goods description\r\n" +
+            "pat history,2026-02-14,250.00,Spring appeal,1001,,\r\n" +
+            "Pat History,2026-03-01,,Two laptops,,Yes,\r\n" +
+            "Pat History,2025-12-20,40.00,Year-end gift,,,\r\n";
+        Assert.Equal(3, await In<GiftHistoryService, int>(s => s.ImportCsvAsync(csv)));
+
+        var giving = await In<GiftService, DonorGiving>(s => s.GivingAsync(pat.Id));
+        Assert.Equal((4, 390m), (giving.Gifts, giving.AllTime));
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, GiftService.ContributionsName) - 100m);
+        var giver = Assert.Single(await In<GiftService, IReadOnlyList<Giver>>(s => s.GiversAsync(2026)), g => g.Donor.Id == pat.Id);
+        Assert.Equal((1, 2), (giver.Gifts.Count, giver.History!.Count));
+        Assert.NotEmpty((await In<GiftService, OpenBook.Application.Forms.RenderedForm>(s => s.YearStatementAsync(pat.Id, 2026))).Pdf);
+
+        Assert.Equal("import.unknown_donor", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftHistoryService, int>(s => s.ImportCsvAsync("Donor,Date,Amount\r\nNobody Here,2026-01-01,5\r\n")))).Code);
+        var history = await In<GiftHistoryService, IReadOnlyList<GiftHistory>>(s => s.ListAsync(pat.Id));
+        await In<GiftHistoryService, bool>(async s =>
+        {
+            await s.RemoveAsync(history[0].Id);
+            return true;
+        });
+        Assert.Equal(2, (await In<GiftHistoryService, IReadOnlyList<GiftHistory>>(s => s.ListAsync(pat.Id))).Count);
+    }
+
     // ---- Grants and Form 990 (slice 3) ----
 
     private Task<Grant> NewGrant(GrantCommand command) => In<GrantService, Grant>(s => s.CreateAsync(command));

@@ -145,6 +145,33 @@ public static class NonprofitEndpoints
             }
         }).RequireAuthorization();
 
+        // Gifts from before the move (C080): imported as history, never posted.
+        app.MapPost("/nonprofit/gifts/history/import", async (IFormFile? file, IFormCollection form, GiftHistoryService history, CancellationToken ct) =>
+        {
+            const string page = "/nonprofit/gifts/history";
+            if (file is null || file.Length == 0)
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString("Choose a CSV file.")}");
+            if (file.Length > ChannelEndpoints.MaxReportBytes)
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString("The file is larger than 20 MB.")}");
+            try
+            {
+                using var reader = new StreamReader(file.OpenReadStream());
+                var added = await history.ImportCsvAsync(await reader.ReadToEndAsync(ct), ct);
+                return Results.Redirect($"{page}?added={added}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/gifts/history/{id:guid}/remove", async (Guid id, IFormCollection form, GiftHistoryService history, CancellationToken ct) =>
+        {
+            var back = AccessRules.LocalPath(form["back"]) ?? "/nonprofit/gifts/history";
+            await history.RemoveAsync(id, ct);
+            return Results.Redirect(back);
+        }).RequireAuthorization();
+
         app.MapPost("/nonprofit/gifts/{id:guid}/void", async (Guid id, IFormCollection form, GiftService gifts, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = Password(form);

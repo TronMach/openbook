@@ -107,6 +107,9 @@
   <data name="A CSV with an Item (or Request) column, and Owner, Due and Notes columns if it has them. Items already on the list are skipped." xml:space="preserve">
     <value>A CSV with an Item (or Request) column, and Owner, Due and Notes columns if it has them. Items already on the list are skipped.</value>
   </data>
+  <data name="A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be." xml:space="preserve">
+    <value>A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be.</value>
+  </data>
   <data name="A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick &quot;also sign out my other sessions&quot; so it can't start capturing again (this browser stays signed in)." xml:space="preserve">
     <value>A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick "also sign out my other sessions" so it can't start capturing again (this browser stays signed in).</value>
   </data>
@@ -517,6 +520,9 @@
   </data>
   <data name="Bring bank and card transactions in automatically (through SimpleFIN) instead of importing statement files." xml:space="preserve">
     <value>Bring bank and card transactions in automatically (through SimpleFIN) instead of importing statement files.</value>
+  </data>
+  <data name="Bring in the gift list from your old system so each donor's page shows their whole history and this year's giving statements include the gifts made before you moved. These gifts aren't posted: their money is already in your opening balances." xml:space="preserve">
+    <value>Bring in the gift list from your old system so each donor's page shows their whole history and this year's giving statements include the gifts made before you moved. These gifts aren't posted: their money is already in your opening balances.</value>
   </data>
   <data name="Bring it back" xml:space="preserve">
     <value>Bring it back</value>
@@ -1214,8 +1220,17 @@
   <data name="Gift" xml:space="preserve">
     <value>Gift</value>
   </data>
+  <data name="Gift history" xml:space="preserve">
+    <value>Gift history</value>
+  </data>
   <data name="Gifts" xml:space="preserve">
     <value>Gifts</value>
+  </data>
+  <data name="Gifts added to donors' history: {0}." xml:space="preserve">
+    <value>Gifts added to donors' history: {0}.</value>
+  </data>
+  <data name="Gifts from before OpenBook" xml:space="preserve">
+    <value>Gifts from before OpenBook</value>
   </data>
   <data name="Gifts not yet thanked" xml:space="preserve">
     <value>Gifts not yet thanked</value>
@@ -1357,6 +1372,9 @@
   </data>
   <data name="Import the auditor's list" xml:space="preserve">
     <value>Import the auditor's list</value>
+  </data>
+  <data name="Import the history" xml:space="preserve">
+    <value>Import the history</value>
   </data>
   <data name="Import transactions" xml:space="preserve">
     <value>Import transactions</value>

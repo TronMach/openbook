@@ -261,6 +261,12 @@ internal static class Seeds
         "#1001,2026-03-02 09:00:00 -0500,paid,10.00,10.00,2,Blue mug,40.00,MUG-1,CA,\n" +
         "#1001,,,,,1,Red mug,30.00,MUG-2,,\n";
 
+    public const string GiftHistory =
+        "Donor,Date,Amount,Description,Reference,In kind,Goods value,Goods description\r\n" +
+        "Pat Lee,2026-02-14,250.00,Spring appeal,1001,,,\r\n" +
+        "pat lee,03/01/2026,,Two laptops,,Yes,,\r\n" +
+        "Pat Lee,2025-12-20,\"1,200.00\",Gala,,No,150.00,Dinner for two\r\n";
+
     public const string AuditRequests =
         "Request,Assigned to,Due date,Comments\r\n" +
         "Bank reconciliations,Pat,2026-01-15,All accounts\r\n" +

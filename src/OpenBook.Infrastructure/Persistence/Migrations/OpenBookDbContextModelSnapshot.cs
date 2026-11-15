@@ -3393,6 +3393,52 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("Donations", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.GiftHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DonorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GoodsDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("GoodsValue")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("GoodsValueMinor");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DonorId", "Date");
+
+                    b.ToTable("GiftHistory", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.GiftSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -9072,6 +9118,15 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ReturnEntryId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.GiftHistory", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("DonorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.Grant", b =>

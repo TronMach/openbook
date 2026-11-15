@@ -56,6 +56,12 @@ public interface INonprofitStore
     void Add(RestrictionRelease release);
     void Add(Donation donation);
     void Add(Pledge pledge);
+
+    /// <summary>Gifts from before the move (C080), one donor's or all.</summary>
+    Task<IReadOnlyList<GiftHistory>> ListGiftHistoryAsync(Guid? donorId, CancellationToken ct);
+    Task<GiftHistory?> GetGiftHistoryAsync(Guid id, CancellationToken ct);
+    void Add(GiftHistory gift);
+    void Remove(GiftHistory gift);
     void Add(GiftSettings settings);
     void Add(Grant grant);
     void Add(RecurringGift recurringGift);

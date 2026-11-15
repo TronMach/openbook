@@ -1,0 +1,35 @@
+@page "/nonprofit/gifts/history"
+
+<PageTitle>@L["Gift history"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Gifts from before OpenBook"]</h1>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts">@L["Gifts"]</ActionLink>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    else if (Added is { } added)
+    {
+        <div class="alert success" role="status">@L["Gifts added to donors' history: {0}.", added]</div>
+    }
+    <div class="card">
+        <p>@L["Bring in the gift list from your old system so each donor's page shows their whole history and this year's giving statements include the gifts made before you moved. These gifts aren't posted: their money is already in your opening balances."]</p>
+        <p class="muted">@L["A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be."]</p>
+        <PostForm Action="/nonprofit/gifts/history/import" enctype="multipart/form-data" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="history-file">@L["CSV file"]</label>
+                <input id="history-file" type="file" name="file" accept=".csv,text/csv" required />
+            </div>
+            <div class="actions"><button type="submit">@L["Import the history"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Added { get; set; }
+}

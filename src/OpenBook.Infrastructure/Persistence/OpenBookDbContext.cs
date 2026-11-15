@@ -103,6 +103,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.PreBill> PreBills => Set<OpenBook.Domain.Projects.PreBill>();
     public DbSet<OpenBook.Domain.Projects.TimeSheet> TimeSheets => Set<OpenBook.Domain.Projects.TimeSheet>();
     public DbSet<OpenBook.Domain.Projects.ExpenseClaim> ExpenseClaims => Set<OpenBook.Domain.Projects.ExpenseClaim>();
+    public DbSet<OpenBook.Domain.Nonprofit.GiftHistory> GiftHistory => Set<OpenBook.Domain.Nonprofit.GiftHistory>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRule> AllocationRules => Set<OpenBook.Domain.Nonprofit.AllocationRule>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRun> AllocationRuns => Set<OpenBook.Domain.Nonprofit.AllocationRun>();
     public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
@@ -1531,6 +1532,22 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(x => new { x.WorkerId, x.WeekStart }).IsUnique();
             b.HasIndex(x => x.Status);
             b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(x => x.WorkerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.GiftHistory>(b =>
+        {
+            b.ToTable("GiftHistory");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(x => x.GoodsValue).HasColumnName("GoodsValueMinor").HasConversion(MinorUnits);
+            b.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(x => x.Description).HasMaxLength(OpenBook.Domain.Nonprofit.GiftHistory.MaxTextLength);
+            b.Property(x => x.GoodsDescription).HasMaxLength(OpenBook.Domain.Nonprofit.GiftHistory.MaxTextLength);
+            b.Property(x => x.Reference).HasMaxLength(OpenBook.Domain.Nonprofit.Donation.MaxReferenceLength);
+            b.Ignore(x => x.Deductible);
+            b.HasIndex(x => new { x.DonorId, x.Date });
+            b.HasOne<Customer>().WithMany().HasForeignKey(x => x.DonorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Projects.ExpenseClaim>(b =>

@@ -69,6 +69,15 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
 
     public async Task<IReadOnlyList<Pledge>> ListPledgesAsync(CancellationToken ct) => await db.Pledges.ToListAsync(ct);
 
+    public async Task<IReadOnlyList<GiftHistory>> ListGiftHistoryAsync(Guid? donorId, CancellationToken ct) =>
+        await db.GiftHistory.Where(g => donorId == null || g.DonorId == donorId).ToListAsync(ct);
+
+    public Task<GiftHistory?> GetGiftHistoryAsync(Guid id, CancellationToken ct) => db.GiftHistory.SingleOrDefaultAsync(g => g.Id == id, ct);
+
+    public void Add(GiftHistory gift) => db.GiftHistory.Add(gift);
+
+    public void Remove(GiftHistory gift) => db.GiftHistory.Remove(gift);
+
     public Task<Pledge?> GetPledgeAsync(Guid id, CancellationToken ct) => db.Pledges.SingleOrDefaultAsync(p => p.Id == id, ct);
 
     public Task<GiftSettings?> GetSettingsAsync(CancellationToken ct) => db.GiftSettings.FirstOrDefaultAsync(ct);

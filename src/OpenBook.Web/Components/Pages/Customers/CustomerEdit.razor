@@ -7,6 +7,7 @@
 @inject InvoiceService Invoices
 @inject PaymentService Payments
 @inject OpenBook.Application.Nonprofit.GiftService Gifts
+@inject OpenBook.Application.Nonprofit.GiftHistoryService GiftHistory
 @inject SalesTaxService Taxes
 @inject PricingService Pricing
 @inject FormDesignService Designs
@@ -361,6 +362,34 @@
                         <dd>@Labels.Amount(giving.Grants)</dd>
                     }
                 </dl>
+                @if (_history.Count > 0)
+                {
+                    <details>
+                        <summary>Gifts from before OpenBook (@_history.Count)</summary>
+                        <div class="table-wrap">
+                            <table class="data">
+                                <thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
+                                <tbody>
+                                    @foreach (var h in _history)
+                                    {
+                                        <tr>
+                                            <td>@Labels.Date(h.Date)</td>
+                                            <td>@(h.Kind == OpenBook.Domain.Nonprofit.GiftKind.InKind ? $"In kind: {h.Description}" : h.Description)@(h.Reference is { } r ? $" ({r})" : "")</td>
+                                            <td class="num">@Labels.Amount(h.Amount)</td>
+                                            <td>
+                                                <PostForm Action="@($"/nonprofit/gifts/history/{h.Id}/remove")" data-enhance="false" class="inline">
+                                                    <AntiforgeryToken />
+                                                    <input type="hidden" name="back" value="@($"/customers/{_customer.Id}")" />
+                                                    <button type="submit" class="link" data-confirm="Remove this gift from their history?">Remove</button>
+                                                </PostForm>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                }
                 <div class="hub-actions">
                     <ActionLink Class="button secondary" Href="@($"/nonprofit/gifts?donor={_customer.Id}")">Their gifts</ActionLink>
                     <ActionLink Class="button secondary" Href="@($"/nonprofit/gifts/new?donor={_customer.Id}")">Record a gift</ActionLink>
@@ -411,6 +440,7 @@
     private Guid? ParentQuery { get; set; }
 
     private OpenBook.Application.Nonprofit.DonorGiving? _giving;
+    private IReadOnlyList<OpenBook.Domain.Nonprofit.GiftHistory> _history = [];
 
     [SupplyParameterFromForm(FormName = "customer")]
     private CustomerModel Input { get; set; } = default!;
@@ -433,6 +463,7 @@
             _level = _own?.Level ?? 0;
             _children = _all.Where(c => _descendants.Contains(c.Customer.Id)).ToList();
             _giving = await Gifts.GivingAsync(id);
+            _history = await GiftHistory.ListAsync(id);
             _invoices = await Invoices.ListAsync(id);
             _payments = await Payments.ListAsync(id);
             _designs = await Designs.ListAsync();
