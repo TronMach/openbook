@@ -37,6 +37,12 @@
                 <textarea id="intro" name="intro" rows="4" maxlength="@GiftSettings.MaxTextLength">@_settings.Intro</textarea>
                 <span class="hint">Leave empty for a plain thank-you that names the organization (and the year on statements).</span>
             </div>
+            <fieldset>
+                <legend>Online giving</legend>
+                <input type="hidden" name="onlineGivingSet" value="true" />
+                <label class="check"><input type="checkbox" name="onlineGiving" value="true" checked="@_settings.OnlineGiving" /> Open the giving page at <code>/give</code> on your public address, taking gifts by card through the online payment provider set up under Settings → Online payments</label>
+                <p class="hint">Each gift is recorded for the donor with the email they give (a new donor when there's none), into the online payments' deposit account, where the provider's payout clears it.</p>
+            </fieldset>
             <div class="actions"><button type="submit">Save</button></div>
         </PostForm>
     </div>

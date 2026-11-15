@@ -23,6 +23,21 @@ public static class OnlineEndpoints
     public static IEndpointRouteBuilder MapOnlineEndpoints(this IEndpointRouteBuilder app)
     {
         // Stripe posts events here; the signature is the authentication.
+        // The public giving page (C091): starts a checkout at the payment provider and sends the donor there.
+        app.MapPost("/give", async (IFormCollection form, OpenBook.Application.Nonprofit.OnlineGivingService giving, OnlinePaymentActor actor, CancellationToken ct) =>
+        {
+            actor.Use();
+            try
+            {
+                var amount = FormNumbers.Amount(form["amount"]) ?? throw new DomainException("giving.amount", "Enter the amount you'd like to give.");
+                return Results.Redirect(await giving.StartAsync(form["name"], form["email"], amount, form["note"], ct));
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/give?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).AllowAnonymous();
+
         app.MapPost("/hooks/stripe", async (HttpRequest request, OnlinePaymentService online, OnlinePaymentActor actor, ILoggerFactory logs, CancellationToken ct) =>
         {
             using var reader = new StreamReader(request.Body);

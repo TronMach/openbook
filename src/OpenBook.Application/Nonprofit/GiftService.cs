@@ -90,7 +90,8 @@ public sealed record GiftBatchRow(Guid DonorId, decimal Amount, string? Referenc
 /// <param name="ControlTotal">What the batch should add up to: the deposit slip's figure. Null checks nothing.</param>
 public sealed record GiftBatchCommand(DateOnly Date, GiftBatchDefaults Defaults, IReadOnlyList<GiftBatchRow> Rows, decimal? ControlTotal = null);
 
-public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string? SignerTitle, string? Intro);
+/// <param name="OnlineGiving">The public giving page on or off (C091); null leaves it.</param>
+public sealed record GiftSettingsCommand(string? Ein, string? SignerName, string? SignerTitle, string? Intro, bool? OnlineGiving = null);
 
 /// <summary>
 /// Gifts and pledges from donors (customer records), and the letters that thank them: an acknowledgment per gift and a
@@ -118,6 +119,8 @@ public sealed class GiftService(
         settings ??= new GiftSettings();
         var before = isNew ? null : Snapshot(settings);
         settings.Update(command.Ein, command.SignerName, command.SignerTitle, command.Intro);
+        if (command.OnlineGiving is { } online)
+            settings.SetOnlineGiving(online);
         if (isNew)
             store.Add(settings);
         if (Snapshot(settings) != before)

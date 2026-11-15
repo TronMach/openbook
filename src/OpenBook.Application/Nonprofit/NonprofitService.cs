@@ -57,6 +57,10 @@ public interface INonprofitStore
     void Add(Donation donation);
     void Add(Pledge pledge);
 
+    /// <summary>Gifts started on the public giving page (C091), by the processor's session.</summary>
+    Task<DonationCheckout?> FindDonationCheckoutAsync(string sessionId, CancellationToken ct);
+    void Add(DonationCheckout checkout);
+
     /// <summary>Gifts from before the move (C080), one donor's or all.</summary>
     Task<IReadOnlyList<GiftHistory>> ListGiftHistoryAsync(Guid? donorId, CancellationToken ct);
     Task<GiftHistory?> GetGiftHistoryAsync(Guid id, CancellationToken ct);

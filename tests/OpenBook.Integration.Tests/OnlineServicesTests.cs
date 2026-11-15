@@ -267,4 +267,39 @@ public sealed class OnlineServicesTests : IAsyncLifetime
         await In<OnlinePaymentService, OnlinePaymentNotice>(s => s.ResolveNoticeAsync(notices[0].Id));
         Assert.Single(await In<OnlinePaymentService, IReadOnlyList<OnlinePaymentNotice>>(s => s.NoticesAsync(openOnly: true)));
     }
+
+    [Fact]
+    public async Task A_gift_on_the_giving_page_is_recorded_once_for_the_donor_with_that_email()
+    {
+        Task<string> Give(string name, string email, decimal amount) =>
+            In<OpenBook.Application.Nonprofit.OnlineGivingService, string>(s => s.StartAsync(name, email, amount, "In memory of Sam"));
+        await TurnOnPayments();
+        Assert.False(await In<OpenBook.Application.Nonprofit.OnlineGivingService, bool>(s => s.OpenAsync()));
+        Assert.Equal("giving.off", await Refused(() => Give("Ana Ruiz", "ana@example.test", 50m)));
+        await In<OpenBook.Application.Nonprofit.GiftService, OpenBook.Domain.Nonprofit.GiftSettings>(s => s.SaveSettingsAsync(
+            new OpenBook.Application.Nonprofit.GiftSettingsCommand(null, null, null, null, OnlineGiving: true)));
+        Assert.True(await In<OpenBook.Application.Nonprofit.OnlineGivingService, bool>(s => s.OpenAsync()));
+        Assert.Equal("giving.email", await Refused(() => Give("Ana Ruiz", "not an email", 50m)));
+        Assert.Equal("giving.amount", await Refused(() => Give("Ana Ruiz", "ana@example.test", 0.5m)));
+
+        // A new donor: made from the name and email typed (C091).
+        var url = await Give("Ana Ruiz", "ana@example.test", 50m);
+        var sessionId = url[(url.LastIndexOf('/') + 1)..];
+        _db.Stripe.Pay(sessionId);
+        var paid = _db.Stripe.Event("checkout.session.completed", sessionId);
+        Assert.Equal(WebhookOutcome.Handled, await Webhook(paid));
+        Assert.Equal(WebhookOutcome.Ignored, await Webhook(paid));
+        var gifts = await In<OpenBook.Application.Nonprofit.GiftService, IReadOnlyList<OpenBook.Domain.Nonprofit.Donation>>(s => s.ListAsync());
+        var gift = Assert.Single(gifts);
+        Assert.Equal((50m, _undeposited.Id, "pi_" + sessionId[3..], "In memory of Sam", "Online giving"), (gift.Amount, gift.DebitAccountId, gift.Reference, gift.Memo, gift.Campaign));
+        var donor = await In<CustomerService, Customer?>(s => s.GetAsync(gift.DonorId));
+        Assert.Equal(("Ana Ruiz", "ana@example.test"), (donor!.DisplayName, donor.Email));
+
+        // Acme's email finds Acme.
+        var second = await Give("Someone at Acme", "AP@acme.test", 20m);
+        var secondId = second[(second.LastIndexOf('/') + 1)..];
+        _db.Stripe.Pay(secondId);
+        await Webhook(_db.Stripe.Event("checkout.session.completed", secondId));
+        Assert.Contains(await In<OpenBook.Application.Nonprofit.GiftService, IReadOnlyList<OpenBook.Domain.Nonprofit.Donation>>(s => s.ListAsync()), g => g.DonorId == _acme.Id && g.Amount == 20m);
+    }
 }

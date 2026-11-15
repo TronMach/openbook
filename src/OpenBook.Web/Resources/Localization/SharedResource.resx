@@ -116,6 +116,9 @@
   <data name="A drop-down per area listing its pages, so most pages are one click away" xml:space="preserve">
     <value>A drop-down per area listing its pages, so most pages are one click away</value>
   </data>
+  <data name="A note with your gift" xml:space="preserve">
+    <value>A note with your gift</value>
+  </data>
   <data name="A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role." xml:space="preserve">
     <value>A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role.</value>
   </data>
@@ -1235,6 +1238,12 @@
   <data name="Gifts not yet thanked" xml:space="preserve">
     <value>Gifts not yet thanked</value>
   </data>
+  <data name="Give" xml:space="preserve">
+    <value>Give</value>
+  </data>
+  <data name="Give by card" xml:space="preserve">
+    <value>Give by card</value>
+  </data>
   <data name="Give people a role under People and rates to set rates by role." xml:space="preserve">
     <value>Give people a role under People and rates to set rates by role.</value>
   </data>
@@ -1252,6 +1261,9 @@
   </data>
   <data name="Give them all the same price" xml:space="preserve">
     <value>Give them all the same price</value>
+  </data>
+  <data name="Give to {0}" xml:space="preserve">
+    <value>Give to {0}</value>
   </data>
   <data name="Go back" xml:space="preserve">
     <value>Go back</value>
@@ -1981,6 +1993,9 @@
   </data>
   <data name="Online card payments" xml:space="preserve">
     <value>Online card payments</value>
+  </data>
+  <data name="Online giving isn't open right now. Please get in touch with us to give another way." xml:space="preserve">
+    <value>Online giving isn't open right now. Please get in touch with us to give another way.</value>
   </data>
   <data name="Only on a computer or phone that's yours. Changing your password or signing out everywhere forgets it." xml:space="preserve">
     <value>Only on a computer or phone that's yours. Changing your password or signing out everywhere forgets it.</value>
@@ -2957,6 +2972,9 @@
   <data name="Thank donors" xml:space="preserve">
     <value>Thank donors</value>
   </data>
+  <data name="Thank you" xml:space="preserve">
+    <value>Thank you</value>
+  </data>
   <data name="That account already signs in as someone else." xml:space="preserve">
     <value>That account already signs in as someone else.</value>
   </data>
@@ -3449,6 +3467,9 @@
   <data name="You signed in with a recovery code, which can't be used again. Recovery codes left: {0}." xml:space="preserve">
     <value>You signed in with a recovery code, which can't be used again. Recovery codes left: {0}.</value>
   </data>
+  <data name="You'll pay on the card processor's secure page and come back here." xml:space="preserve">
+    <value>You'll pay on the card processor's secure page and come back here.</value>
+  </data>
   <data name="Your access ends on {0}." xml:space="preserve">
     <value>Your access ends on {0}.</value>
   </data>
@@ -3482,11 +3503,23 @@
   <data name="Your EIN and who signs acknowledgment letters and year-end giving statements." xml:space="preserve">
     <value>Your EIN and who signs acknowledgment letters and year-end giving statements.</value>
   </data>
+  <data name="Your email" xml:space="preserve">
+    <value>Your email</value>
+  </data>
+  <data name="Your gift to {0} went through. A receipt comes by email once it's recorded." xml:space="preserve">
+    <value>Your gift to {0} went through. A receipt comes by email once it's recorded.</value>
+  </data>
+  <data name="Your gift wasn't made. You can try again below." xml:space="preserve">
+    <value>Your gift wasn't made. You can try again below.</value>
+  </data>
   <data name="Your item" xml:space="preserve">
     <value>Your item</value>
   </data>
   <data name="Your language and region" xml:space="preserve">
     <value>Your language and region</value>
+  </data>
+  <data name="Your name" xml:space="preserve">
+    <value>Your name</value>
   </data>
   <data name="Your password" xml:space="preserve">
     <value>Your password</value>

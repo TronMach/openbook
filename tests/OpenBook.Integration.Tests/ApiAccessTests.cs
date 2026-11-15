@@ -492,6 +492,7 @@ public sealed class AccessRulesTests
     [InlineData("/sales/channels/0190a7a2-0000-7000-8000-000000000000/payouts/move-tax", "POST", UserRole.Standard)]
     [InlineData("/nonprofit/grants/0190a7a2-0000-7000-8000-000000000000/federal", "POST", UserRole.Accountant)]
     [InlineData("/nonprofit/gifts/history/import", "POST", UserRole.Standard)]
+    [InlineData("/give", "POST", UserRole.ViewOnly)]
     [InlineData("/time/claims", "POST", UserRole.Standard)]
     [InlineData("/time/claims/0190a7a2-0000-7000-8000-000000000000", "POST", UserRole.Standard)]
     [InlineData("/time/review/claims/0190a7a2-0000-7000-8000-000000000000/approve", "POST", UserRole.Accountant)]
@@ -616,7 +617,7 @@ public sealed class AccessRulesTests
     {
         string[] withoutArea =
         [
-            "/", "/Error", "/access-denied", "/not-found", "/login", "/setup", "/search", "/account", "/invite", "/portal", "/pay", "/help",
+            "/", "/Error", "/access-denied", "/not-found", "/login", "/setup", "/search", "/account", "/invite", "/portal", "/pay", "/give", "/help",
             "/settings", // the index only; its subpages have areas
             "/settings/api-keys", "/settings/users", "/settings/sign-in", "/settings/permission-sets", "/settings/webhooks",
             "/settings/plugins", "/settings/system", "/settings/email", "/settings/online-payments", "/settings/document-reading",

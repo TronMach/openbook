@@ -1,0 +1,70 @@
+@page "/give"
+@page "/give/thanks"
+@attribute [AllowAnonymous]
+@layout OpenBook.Web.Components.Layout.PortalLayout
+@inject OpenBook.Application.Nonprofit.OnlineGivingService Giving
+@inject OpenBook.Application.Companies.CompanySettingsService Company
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Give"] · @_name</PageTitle>
+
+<div class="card narrow">
+    @if (Navigation.Uri.Contains("/give/thanks", StringComparison.Ordinal))
+    {
+        <h1>@L["Thank you"]</h1>
+        <p>@L["Your gift to {0} went through. A receipt comes by email once it's recorded.", _name]</p>
+    }
+    else if (!_open)
+    {
+        <h1>@L["Give to {0}", _name]</h1>
+        <p>@L["Online giving isn't open right now. Please get in touch with us to give another way."]</p>
+    }
+    else
+    {
+        <h1>@L["Give to {0}", _name]</h1>
+        @if (Cancelled == true)
+        {
+            <div class="alert notice" role="status">@L["Your gift wasn't made. You can try again below."]</div>
+        }
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        <form method="post" action="/give" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="give-amount">@L["Amount"]</label>
+                <input id="give-amount" name="amount" inputmode="decimal" required class="short" placeholder="50.00" />
+            </div>
+            <div class="field">
+                <label for="give-name">@L["Your name"]</label>
+                <input id="give-name" name="name" required maxlength="@OpenBook.Domain.Nonprofit.DonationCheckout.MaxNameLength" autocomplete="name" />
+            </div>
+            <div class="field">
+                <label for="give-email">@L["Your email"]</label>
+                <input id="give-email" name="email" type="email" required maxlength="@OpenBook.Domain.Nonprofit.DonationCheckout.MaxEmailLength" autocomplete="email" />
+            </div>
+            <div class="field">
+                <label for="give-note">@L["A note with your gift"] <span class="muted">@L["(optional)"]</span></label>
+                <input id="give-note" name="note" maxlength="@OpenBook.Domain.Nonprofit.DonationCheckout.MaxNoteLength" />
+            </div>
+            <div class="actions"><button type="submit">@L["Give by card"]</button></div>
+            <p class="hint">@L["You'll pay on the card processor's secure page and come back here."]</p>
+        </form>
+    }
+</div>
+
+@code {
+    private bool _open;
+    private string _name = "";
+
+    [SupplyParameterFromQuery] private bool? Cancelled { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var company = await Company.GetAsync();
+        _name = company.LegalName ?? company.Name;
+        _open = await Giving.OpenAsync();
+    }
+}

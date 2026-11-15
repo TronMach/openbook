@@ -104,6 +104,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.TimeSheet> TimeSheets => Set<OpenBook.Domain.Projects.TimeSheet>();
     public DbSet<OpenBook.Domain.Projects.ExpenseClaim> ExpenseClaims => Set<OpenBook.Domain.Projects.ExpenseClaim>();
     public DbSet<OpenBook.Domain.Nonprofit.GiftHistory> GiftHistory => Set<OpenBook.Domain.Nonprofit.GiftHistory>();
+    public DbSet<OpenBook.Domain.Nonprofit.DonationCheckout> DonationCheckouts => Set<OpenBook.Domain.Nonprofit.DonationCheckout>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRule> AllocationRules => Set<OpenBook.Domain.Nonprofit.AllocationRule>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRun> AllocationRuns => Set<OpenBook.Domain.Nonprofit.AllocationRun>();
     public DbSet<OpenBook.Domain.Projects.MileageTrip> MileageTrips => Set<OpenBook.Domain.Projects.MileageTrip>();
@@ -1532,6 +1533,22 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasIndex(x => new { x.WorkerId, x.WeekStart }).IsUnique();
             b.HasIndex(x => x.Status);
             b.HasOne<OpenBook.Domain.Projects.Worker>().WithMany().HasForeignKey(x => x.WorkerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.DonationCheckout>(b =>
+        {
+            b.ToTable("DonationCheckouts");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.SessionId).HasMaxLength(200);
+            b.HasIndex(x => x.SessionId).IsUnique();
+            b.Property(x => x.Url).HasMaxLength(2000);
+            b.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(x => x.Name).HasMaxLength(OpenBook.Domain.Nonprofit.DonationCheckout.MaxNameLength);
+            b.Property(x => x.Email).HasMaxLength(OpenBook.Domain.Nonprofit.DonationCheckout.MaxEmailLength);
+            b.Property(x => x.Note).HasMaxLength(OpenBook.Domain.Nonprofit.DonationCheckout.MaxNoteLength);
+            b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+            b.HasOne<OpenBook.Domain.Nonprofit.Donation>().WithMany().HasForeignKey(x => x.DonationId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.GiftHistory>(b =>

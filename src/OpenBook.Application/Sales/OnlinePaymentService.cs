@@ -33,6 +33,15 @@ public interface IPaymentGateway
 public sealed record OnlinePaymentSettingsCommand(bool Enabled, Guid? DepositAccountId, string? PublicUrl, string? SecretKey = null, string? WebhookSecret = null,
     bool ClearSecretKey = false, bool ClearWebhookSecret = false);
 
+/// <summary>
+/// Checkouts other than invoice payment links (the giving page's, C091): the payment webhook offers each session it
+/// doesn't know to these; null means "not mine".
+/// </summary>
+public interface IOnlineCheckoutHandler
+{
+    Task<WebhookOutcome?> HandleAsync(string eventType, string sessionId, bool paid, string? paymentReference, decimal? amount, CancellationToken ct);
+}
+
 /// <summary>What a webhook call amounted to.</summary>
 public enum WebhookOutcome
 {
@@ -50,7 +59,7 @@ public enum WebhookOutcome
 /// </summary>
 public sealed class OnlinePaymentService(
     ISalesStore store, ICompanyStore companies, IPaymentGateway gateway, ISecretProtector secrets, PaymentService payments, SalesAccounts salesAccounts,
-    IUnitOfWork unit, IClock clock, ICurrentUser user)
+    IUnitOfWork unit, IClock clock, ICurrentUser user, IEnumerable<IOnlineCheckoutHandler> others)
 {
     public const string SettingsEntity = "online_payment_settings";
 
@@ -212,7 +221,20 @@ public sealed class OnlinePaymentService(
             return await NoticeAsync(json.RootElement, type, session, ct);
         // Endpoints subscribed to everything get events about things with no id, such as a balance.
         var sessionId = session.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
-        if (sessionId is null || await store.FindPaymentLinkAsync(sessionId, ct) is not { } link || link.Status == PaymentLinkStatus.Paid)
+        if (sessionId is null)
+            return WebhookOutcome.Ignored;
+        if (await store.FindPaymentLinkAsync(sessionId, ct) is not { } link)
+        {
+            var paid = session.TryGetProperty("payment_status", out var otherStatus) && otherStatus.GetString() == "paid";
+            var otherCents = session.TryGetProperty("amount_total", out var otherTotal) && otherTotal.ValueKind == JsonValueKind.Number ? otherTotal.GetInt64() : (long?)null;
+            var otherReference = session.TryGetProperty("payment_intent", out var otherIntent) && otherIntent.ValueKind == JsonValueKind.String ? otherIntent.GetString() : null;
+            foreach (var handler in others)
+                if (await handler.HandleAsync(type ?? "", sessionId, paid, otherReference, otherCents / 100m, ct) is { } outcome)
+                    return outcome;
+            return WebhookOutcome.Ignored;
+        }
+
+        if (link.Status == PaymentLinkStatus.Paid)
             return WebhookOutcome.Ignored;
 
         switch (type)

@@ -3393,6 +3393,60 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("Donations", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.DonationCheckout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DonationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DonationId");
+
+                    b.HasIndex("SessionId")
+                        .IsUnique();
+
+                    b.ToTable("DonationCheckouts", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Nonprofit.GiftHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3452,6 +3506,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("Intro")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("OnlineGiving")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SignerName")
                         .HasMaxLength(100)
@@ -9117,6 +9174,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
                         .WithMany()
                         .HasForeignKey("ReturnEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Nonprofit.DonationCheckout", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Nonprofit.Donation", null)
+                        .WithMany()
+                        .HasForeignKey("DonationId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

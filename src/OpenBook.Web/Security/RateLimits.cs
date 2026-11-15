@@ -23,7 +23,7 @@ public static class RateLimits
     // The setup page takes the setup code until a company exists.
     private static readonly string[] SignInPaths = ["/login", "/invite/", "/setup"];
 
-    private static readonly string[] LinkPaths = ["/portal/", "/pay/", "/invite/", "/capture/device-status/", "/hooks/", "/view/"];
+    private static readonly string[] LinkPaths = ["/portal/", "/pay/", "/invite/", "/capture/device-status/", "/hooks/", "/view/", "/give"];
 
     public static IServiceCollection AddOpenBookRateLimits(this IServiceCollection services, IConfiguration configuration)
     {

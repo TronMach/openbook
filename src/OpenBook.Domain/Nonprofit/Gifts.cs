@@ -451,6 +451,11 @@ public sealed class GiftSettings
     /// <summary>The thank-you paragraph that opens each letter; a default is used when empty.</summary>
     public string? Intro { get; private set; }
 
+    /// <summary>The public giving page (/give) takes gifts by card through the online payment provider (C091).</summary>
+    public bool OnlineGiving { get; private set; }
+
+    public void SetOnlineGiving(bool on) => OnlineGiving = on;
+
     public void Update(string? ein, string? signerName, string? signerTitle, string? intro)
     {
         var digits = ein is null ? "" : new string(ein.Where(char.IsDigit).ToArray());

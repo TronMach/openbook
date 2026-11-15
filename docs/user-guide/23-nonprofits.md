@@ -59,6 +59,8 @@ A donor's page has a **Giving** card once there's anything to show: this year, l
 
 ### Gifts made online
 
+**Your own giving page.** With online payments set up (**Settings → Online payments**, a Stripe account), tick **Open the giving page** under **Nonprofit → Settings → Online giving**. Donors then give at `/give` on your public address: they type the amount, their name and email and an optional note, and pay on Stripe's page. When Stripe reports the payment, OpenBook records the gift for the donor with that email (adding a new donor when there's none), into the online payments' deposit account with the campaign **Online giving**. Import the Stripe payout as usual: it finds those gifts by their charge and clears them, so nothing counts twice.
+
 Gifts through Stripe, PayPal or a giving platform reach you as a payout, after fees. To get a record of each donor as well:
 
 1. Add the processor as a sales channel ([chapter 22](22-sales-channels.md)).

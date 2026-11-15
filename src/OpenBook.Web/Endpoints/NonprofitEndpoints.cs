@@ -312,7 +312,8 @@ public static class NonprofitEndpoints
             try
             {
                 await Components.SettingsVersions.EnsureUnchangedAsync<OpenBook.Domain.Nonprofit.GiftSettings>(versions, form, ct);
-                await gifts.SaveSettingsAsync(new GiftSettingsCommand(form["ein"], form["signerName"], form["signerTitle"], form["intro"]), ct);
+                await gifts.SaveSettingsAsync(new GiftSettingsCommand(form["ein"], form["signerName"], form["signerTitle"], form["intro"],
+                    form.ContainsKey("onlineGivingSet") ? form["onlineGiving"] == "true" : null), ct);
                 return Results.Redirect("/nonprofit/settings?saved=true");
             }
             catch (DomainException ex)
