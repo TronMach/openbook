@@ -224,7 +224,12 @@ public sealed class BooksCheckService(
         }
 
         foreach (var p in await channels.ListPayoutsAsync(null, ct))
+        {
             Add($"Payout of {p.Date:MMM d, yyyy}", "channel_payout", p.Id, Domain.Channels.ChannelPayout.Source, p.JournalEntryId, p.Status == Domain.Channels.PayoutStatus.Posted);
+            Add($"Payout of {p.Date:MMM d, yyyy}, its tax moved to agencies", "channel_payout", p.Id, Domain.Channels.ChannelPayout.TaxMoveSource, p.TaxMoveEntryId,
+                p.Status == Domain.Channels.PayoutStatus.Posted);
+        }
+
         foreach (var b in await channelOrders.ListBatchesAsync(null, ct))
         {
             Add($"Orders of {b.Date:MMM d, yyyy}", "channel_orders", b.Id, Domain.Channels.ChannelOrderBatch.Source, b.JournalEntryId, b.Status == Domain.Channels.PayoutStatus.Posted);

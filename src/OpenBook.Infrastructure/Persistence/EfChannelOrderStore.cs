@@ -18,6 +18,17 @@ internal sealed class EfChannelOrderStore(OpenBookDbContext db) : IChannelOrderS
         (await db.ChannelOrderBatches.Where(b => b.ChannelId == channelId && b.Status != PayoutStatus.Dismissed).SelectMany(b => b.Lines.Select(l => l.OrderId)).Distinct().ToListAsync(ct))
             .ToHashSet(StringComparer.Ordinal);
 
+    public async Task<IReadOnlyDictionary<string, string>> OrderRegionsAsync(Guid channelId, IReadOnlyCollection<string> orderIds, CancellationToken ct)
+    {
+        if (orderIds.Count == 0)
+            return new Dictionary<string, string>();
+        var wanted = orderIds.ToList();
+        var found = await db.ChannelOrderBatches.Where(b => b.ChannelId == channelId && b.Status != PayoutStatus.Dismissed)
+            .SelectMany(b => b.Lines.Where(l => l.Region != null && wanted.Contains(l.OrderId)).Select(l => new { l.OrderId, l.Region }))
+            .ToListAsync(ct);
+        return found.GroupBy(x => x.OrderId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Region!, StringComparer.Ordinal);
+    }
+
     public async Task<IReadOnlyList<ChannelSku>> ListSkusAsync(Guid channelId, CancellationToken ct) =>
         await db.ChannelSkus.Where(s => s.ChannelId == channelId).ToListAsync(ct);
 

@@ -255,8 +255,8 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         var before = PayoutSnapshot(payout, channel);
         var recorded = await RecordedChargesAsync(channel, payout, ct);
         var recordedGifts = await RecordedGiftsAsync(channel, payout, ct);
-        var taxAccounts = (await taxes.ListAgenciesAsync(ct)).Where(a => a.IsActive && a.Region is not null).ToDictionary(a => a.Region!, a => a.LiabilityAccountId, StringComparer.OrdinalIgnoreCase);
-        var postings = payout.Postings(channel, taxAccounts);
+        var taxAccounts = await TaxAccountsAsync(ct);
+        var postings = payout.Postings(channel, taxAccounts, await OrderRegionsAsync(channel, payout, ct));
         if (postings.Count < 2)
             throw new DomainException("channel.payout_zero", "Everything in this payout nets to zero; there's nothing to post. Dismiss it instead.");
         var entry = await engine.StageAsync(new PostJournalEntryCommand(payout.Date, channel.Classed(postings), $"{channel.Name} payout {payout.ExternalId}", ChannelPayout.Source, payout.Id,
@@ -326,6 +326,51 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         return payments;
     }
 
+    private async Task<Dictionary<string, Guid>> TaxAccountsAsync(CancellationToken ct) =>
+        (await taxes.ListAgenciesAsync(ct)).Where(a => a.IsActive && a.Region is not null).ToDictionary(a => a.Region!, a => a.LiabilityAccountId, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Ship-to states of the orders the payout's tax lines name, for lines that don't say (C052).</summary>
+    private async Task<IReadOnlyDictionary<string, string>> OrderRegionsAsync(SalesChannel channel, ChannelPayout payout, CancellationToken ct) =>
+        await orders.OrderRegionsAsync(channel.Id, [.. payout.Lines
+            .Where(l => l.Type is ChannelLineType.Tax or ChannelLineType.MarketplaceTax && l.Region is null && l.Reference is not null)
+            .Select(l => l.Reference!).Distinct(StringComparer.Ordinal)], ct);
+
+    /// <summary>
+    /// Posted payouts of the channel whose sales tax went to the channel's tax account, though a state's agency would take
+    /// it now (an agency named its state later, or the orders came in since): one entry each on <paramref name="date"/>
+    /// moving the difference between the accounts (C052). Nothing touches the bank. Returns how many payouts moved.
+    /// </summary>
+    public async Task<int> MoveTaxToAgenciesAsync(Guid channelId, DateOnly date, CancellationToken ct = default)
+    {
+        var channel = await store.GetChannelAsync(channelId, ct) ?? throw new EntityNotFoundException(ChannelEntity, channelId);
+        var taxAccounts = await TaxAccountsAsync(ct);
+        var involved = taxAccounts.Values.Append(channel.TaxAccountId).ToHashSet();
+        var moved = 0;
+        foreach (var payout in (await store.ListPayoutsAsync(channel.Id, ct)).Where(p => p.Status == PayoutStatus.Posted && p.TaxMoveEntryId is null && p.JournalEntryId is not null))
+        {
+            var posted = await engine.GetAsync(payout.JournalEntryId!.Value, ct);
+            if (posted is null)
+                continue;
+            var was = posted.Lines.Where(l => involved.Contains(l.AccountId)).GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Debit - l.Credit));
+            var now = payout.Postings(channel, taxAccounts, await OrderRegionsAsync(channel, payout, ct))
+                .Where(l => involved.Contains(l.AccountId)).GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Debit - l.Credit));
+            var lines = involved.Select(a => (Account: a, Change: now.GetValueOrDefault(a) - was.GetValueOrDefault(a))).Where(x => x.Change != 0m)
+                .Select(x => x.Change > 0m ? Domain.Ledger.JournalLineDraft.Dr(x.Account, x.Change) : Domain.Ledger.JournalLineDraft.Cr(x.Account, -x.Change)).ToList();
+            if (lines.Count < 2)
+                continue;
+            var before = PayoutSnapshot(payout, channel);
+            var entry = await engine.StageAsync(new PostJournalEntryCommand(date, channel.Classed(lines),
+                $"{channel.Name} payout {payout.ExternalId}: sales tax to the states' agencies", ChannelPayout.TaxMoveSource, payout.Id, LocationId: channel.LocationId), ct);
+            payout.TaxMoved(entry.Id);
+            store.Add(Audit(AuditAction.Updated, PayoutEntity, payout.Id, before, PayoutSnapshot(payout, channel)));
+            moved++;
+        }
+
+        if (moved > 0)
+            await store.SaveChangesAsync(ct);
+        return moved;
+    }
+
     /// <summary>Voids the payout's entry (a reversal on the same date); the payout waits to be posted again.</summary>
     public async Task<ChannelPayout> VoidAsync(Guid payoutId, string reason, CancellationToken ct = default)
     {
@@ -335,6 +380,8 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
             throw new DomainException("channel.payout_not_posted", "That payout isn't posted.");
         var before = PayoutSnapshot(payout, channel);
         await engine.StageVoidAsync(entryId, reason, fromDocument: true, ct);
+        if (payout.TaxMoveEntryId is { } moveId)
+            await engine.StageVoidAsync(moveId, reason, fromDocument: true, ct);
         payout.Unpost();
         foreach (var payment in await sales.ListPaymentsInPayoutAsync(payout.Id, ct))
             payment.ClearPayout();

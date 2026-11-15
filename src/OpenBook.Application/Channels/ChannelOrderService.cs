@@ -17,6 +17,9 @@ public interface IChannelOrderStore
     Task<IReadOnlyList<ChannelOrderBatch>> ListBatchesAsync(Guid? channelId, CancellationToken ct);
     Task<ChannelOrderBatch?> GetBatchAsync(Guid id, CancellationToken ct);
     Task<IReadOnlySet<string>> OrderIdsAsync(Guid channelId, CancellationToken ct);
+
+    /// <summary>The ship-to state of each of these orders that has one (C052).</summary>
+    Task<IReadOnlyDictionary<string, string>> OrderRegionsAsync(Guid channelId, IReadOnlyCollection<string> orderIds, CancellationToken ct);
     Task<IReadOnlyList<ChannelSku>> ListSkusAsync(Guid channelId, CancellationToken ct);
 
     /// <summary>Batches holding an order whose id contains <paramref name="text"/> (lower case), newest first, at most <paramref name="take"/>.</summary>

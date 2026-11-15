@@ -57,7 +57,7 @@ The payment clears that much of the agency's liability. To correct one, void it 
 
 ## Sales through channels
 
-Tax that Amazon, Shopify and other sales channels report comes in with their payouts. To have it owed to the right agency, enter the state on the agency's page as the channel writes it (**State for online sales**, such as `TX`). When a payout posts, tax on lines shipped to that state goes to that agency's account: it shows as owed on **Sales tax** and in the liability report as **Online sales**, and paying the agency clears it. Tax a marketplace collected and paid itself nets to nothing there.
+Tax that Amazon, Shopify and other sales channels report comes in with their payouts. To have it owed to the right agency, enter the state on the agency's page as the channel writes it (**State for online sales**, such as `TX`). When a payout posts, tax on lines shipped to that state goes to that agency's account: it shows as owed on **Sales tax** and in the liability report as **Online sales**, and paying the agency clears it. Tax a marketplace collected and paid itself nets to nothing there. A tax line in the payout that gives no state but names its order takes the state from the channel's imported orders. Payouts posted before a state's agency was set up keep their tax in the channel's tax account: on the channel's page, **Move sales tax on posted payouts to the states' agencies** moves it with one entry per payout on the date you choose (the bank isn't touched, and voiding a payout takes its move back).
 
 Tax with no state in the report, or for a state with no agency, stays in the channel's own sales tax account. **Sales tax by state (online orders)** shows the figures by state to file from.
 

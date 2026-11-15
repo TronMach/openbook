@@ -24,6 +24,10 @@
         {
             <div class="alert error" role="alert">@Error</div>
         }
+        else if (Changed is > 0)
+        {
+            <div class="alert success" role="status">@L["Payouts whose tax moved: {0}.", Changed]</div>
+        }
         @if (Done is not null)
         {
             <div class="alert notice" role="status">@Done</div>
@@ -207,6 +211,20 @@
                     </tbody>
                 </table>
             </div>
+            @if (_payouts.Any(p => p.Status == PayoutStatus.Posted))
+            {
+                <details class="card" style="margin-top: 1rem" id="move-tax">
+                    <summary>@L["Move sales tax on posted payouts to the states' agencies"]</summary>
+                    <p class="hint">@L["For payouts posted before a state's tax agency was set up (or before their orders came in): the tax each one put in the channel's tax account moves to the agency of the state it was shipped to, by an entry on the date chosen. The bank isn't touched; voiding a payout takes its move back too."]</p>
+                    <PostForm Action="@($"/sales/channels/{_channel.Id}/payouts/move-tax")" data-enhance="false" class="inline-actions">
+                        <AntiforgeryToken />
+                        <label for="move-tax-date">@L["Date"]</label>
+                        <input id="move-tax-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                        <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                        <button type="submit" class="secondary">@L["Move the tax"]</button>
+                    </PostForm>
+                </details>
+            }
         }
 
         <div class="card" style="margin-top: 1.5rem" id="rules">
@@ -289,6 +307,8 @@
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private int? Changed { get; set; }
     [SupplyParameterFromQuery] private string? Done { get; set; }
     [SupplyParameterFromQuery] private int? Imported { get; set; }
     [SupplyParameterFromQuery] private int Skipped { get; set; }

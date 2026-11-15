@@ -323,6 +323,9 @@ public sealed class ChannelPayout
 {
     public const string Source = "channels.payout";
 
+    /// <summary>An entry moving a posted payout's sales tax to the agencies of the states it belongs to (C052).</summary>
+    public const string TaxMoveSource = "channels.payout_tax_move";
+
     private readonly List<ChannelPayoutLine> _lines = [];
 
     private ChannelPayout() => ExternalId = string.Empty;
@@ -344,6 +347,10 @@ public sealed class ChannelPayout
 
     public PayoutStatus Status { get; private set; }
     public Guid? JournalEntryId { get; private set; }
+
+    /// <summary>The entry that moved its tax to agencies after it was posted (<see cref="TaxMoveSource"/>); voided with the payout.</summary>
+    public Guid? TaxMoveEntryId { get; private set; }
+
     public DateTimeOffset ImportedAt { get; private set; }
 
     public IReadOnlyList<ChannelPayoutLine> Lines => _lines;
@@ -385,11 +392,14 @@ public sealed class ChannelPayout
     /// the tax account, so marketplace-collected tax nets out there. Tax on a line shipped to a state with its own
     /// agency goes to that agency's account (<paramref name="taxAccounts"/>, by region), so it's owed there.
     /// </summary>
-    public IReadOnlyList<Ledger.JournalLineDraft> Postings(SalesChannel channel, IReadOnlyDictionary<string, Guid>? taxAccounts = null)
+    /// <param name="orderRegions">Ship-to states of the channel's orders by order id, for tax lines that don't name one (C052).</param>
+    public IReadOnlyList<Ledger.JournalLineDraft> Postings(SalesChannel channel, IReadOnlyDictionary<string, Guid>? taxAccounts = null,
+        IReadOnlyDictionary<string, string>? orderRegions = null)
     {
         ArgumentNullException.ThrowIfNull(channel);
+        string? RegionOf(ChannelPayoutLine line) => line.Region ?? (line.Reference is { } order ? orderRegions?.GetValueOrDefault(order) : null);
         Guid AccountOf(ChannelPayoutLine line) =>
-            line.Type is ChannelLineType.Tax or ChannelLineType.MarketplaceTax && line.Region is { } region && taxAccounts?.GetValueOrDefault(region) is { } agency && agency != Guid.Empty
+            line.Type is ChannelLineType.Tax or ChannelLineType.MarketplaceTax && RegionOf(line) is { } region && taxAccounts?.GetValueOrDefault(region) is { } agency && agency != Guid.Empty
                 ? agency
                 : channel.RuleAccountFor(line) ?? channel.AccountFor(line.Type);
 
@@ -433,6 +443,16 @@ public sealed class ChannelPayout
     {
         Status = PayoutStatus.Pending;
         JournalEntryId = null;
+        TaxMoveEntryId = null;
+    }
+
+    public void TaxMoved(Guid entryId)
+    {
+        if (Status != PayoutStatus.Posted)
+            throw new DomainException("channel.payout_not_posted", "That payout isn't posted.");
+        if (TaxMoveEntryId is not null)
+            throw new DomainException("channel.tax_moved", "This payout's tax has been moved already.");
+        TaxMoveEntryId = entryId;
     }
 
     public void Dismiss()

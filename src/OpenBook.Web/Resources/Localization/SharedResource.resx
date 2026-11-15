@@ -1181,6 +1181,9 @@
   <data name="For other kinds of business" xml:space="preserve">
     <value>For other kinds of business</value>
   </data>
+  <data name="For payouts posted before a state's tax agency was set up (or before their orders came in): the tax each one put in the channel's tax account moves to the agency of the state it was shipped to, by an entry on the date chosen. The bank isn't touched; voiding a payout takes its move back too." xml:space="preserve">
+    <value>For payouts posted before a state's tax agency was set up (or before their orders came in): the tax each one put in the channel's tax account moves to the agency of the state it was shipped to, by an entry on the date chosen. The bank isn't touched; voiding a payout takes its move back too.</value>
+  </data>
   <data name="For something you keep in stock, use Items: it asks about stock and costs." xml:space="preserve">
     <value>For something you keep in stock, use Items: it asks about stock and costs.</value>
   </data>
@@ -1648,6 +1651,12 @@
   </data>
   <data name="Move in from another program" xml:space="preserve">
     <value>Move in from another program</value>
+  </data>
+  <data name="Move sales tax on posted payouts to the states' agencies" xml:space="preserve">
+    <value>Move sales tax on posted payouts to the states' agencies</value>
+  </data>
+  <data name="Move the tax" xml:space="preserve">
+    <value>Move the tax</value>
   </data>
   <data name="Name" xml:space="preserve">
     <value>Name</value>
@@ -2125,6 +2134,9 @@
   </data>
   <data name="Payouts" xml:space="preserve">
     <value>Payouts</value>
+  </data>
+  <data name="Payouts whose tax moved: {0}." xml:space="preserve">
+    <value>Payouts whose tax moved: {0}.</value>
   </data>
   <data name="PDF" xml:space="preserve">
     <value>PDF</value>

@@ -200,6 +200,25 @@ public static class ChannelEndpoints
             }
         }).RequireAuthorization();
 
+        // Sales tax on posted payouts to the agencies of their states (C052).
+        app.MapPost("/sales/channels/{id:guid}/payouts/move-tax", async (Guid id, IFormCollection form, ChannelService channels,
+            OpenBook.Application.Ledger.ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            var page = $"/sales/channels/{id}";
+            try
+            {
+                var date = DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : CompanyTime.Today;
+                var moved = await channels.MoveTaxToAgenciesAsync(id, date, ct);
+                return Results.Redirect(moved == 0 ? $"{page}?error={Uri.EscapeDataString("No posted payout has tax to move: it's where the states' agencies would put it already.")}" : $"{page}?changed={moved}#move-tax");
+            }
+            catch (DomainException ex)
+            {
+                var password = OpenBook.Web.Security.ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{password}#move-tax");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/sales/channels/{id:guid}/orders/post-waiting", async (Guid id, IFormCollection _, ChannelOrderService orders, IServiceScopeFactory scopes, CancellationToken ct) =>
         {
             var waiting = (await orders.BatchesAsync(id, ct)).Where(b => b.Status == PayoutStatus.Pending).OrderBy(b => b.Date).Select(b => (b.Id, b.Date)).ToList();

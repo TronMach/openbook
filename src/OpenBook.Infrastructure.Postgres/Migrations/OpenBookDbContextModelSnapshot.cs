@@ -1174,6 +1174,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid?>("TaxMoveEntryId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("integer");

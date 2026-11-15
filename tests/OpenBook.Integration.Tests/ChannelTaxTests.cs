@@ -78,6 +78,30 @@ public sealed class ChannelTaxTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Tax_with_no_state_takes_its_orders_state_and_posted_tax_moves_to_a_new_agency()
+    {
+        // The orders report knows order 1001 went to Texas; the payout's tax line only names the order (C052).
+        const string orders = "Order ID,Sale Date,SKU,Quantity,Price,Ship State\n1001,03/02/26,MUG-1,1,100.00,TX\n";
+        await In<ChannelOrderService, OrderImportResult>(s => s.ImportAsync(_shop.Id, System.Text.Encoding.UTF8.GetBytes(orders)));
+        await Posted(Line(ChannelLineType.Sale, 100m, null), new ChannelLineDraft(Mar5, ChannelLineType.Tax, 8.25m, Reference: "1001"));
+        Assert.Equal(8.25m, (await Owed())[_texas.Id]);
+
+        // Nevada's tax went to the channel's account, as Nevada had no agency; once it has one, the posted tax moves.
+        var payout = await Posted(Line(ChannelLineType.Sale, 50m, "NV"), Line(ChannelLineType.Tax, 3m, "NV"));
+        var nevada = await In<SalesTaxService, TaxAgency>(s => s.CreateAgencyAsync(new TaxAgencyDetails("Nevada Taxation", Region: "NV")));
+        Assert.Equal(0m, (await Owed()).GetValueOrDefault(nevada.Id));
+        Assert.Equal(1, await In<ChannelService, int>(s => s.MoveTaxToAgenciesAsync(_shop.Id, Mar5)));
+        Assert.Equal((3m, 8.25m), ((await Owed())[nevada.Id], (await Owed())[_texas.Id]));
+        Assert.Equal(0, await In<ChannelService, int>(s => s.MoveTaxToAgenciesAsync(_shop.Id, Mar5)));
+
+        // Voiding the payout takes the move back with it.
+        await In<ChannelService, ChannelPayout>(s => s.VoidAsync(payout.Id, "Wrong file"));
+        Assert.Equal(0m, (await Owed()).GetValueOrDefault(nevada.Id));
+        var check = await _db.InScope(sp => sp.GetRequiredService<OpenBook.Application.Ledger.BooksCheckService>().RunAsync(CancellationToken.None));
+        Assert.Empty(check.Results.Where(r => r.Outcome == OpenBook.Application.Ledger.CheckOutcome.Problem).Select(r => $"{r.Key}: {r.Summary}"));
+    }
+
+    [Fact]
     public async Task One_agency_takes_a_state()
     {
         var refused = await Assert.ThrowsAsync<DomainException>(() => In<SalesTaxService, TaxAgency>(s => s.CreateAgencyAsync(new TaxAgencyDetails("Another", Region: "TX"))));
