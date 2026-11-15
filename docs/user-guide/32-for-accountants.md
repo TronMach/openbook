@@ -199,7 +199,7 @@ The A/R aging and A/P aging are under the sales and expenses groups; fixed asset
 - **One currency.** The home currency is set once and can't change. There are no foreign currency transactions or revaluations.
 - **One company per installation.** No consolidation, intercompany entries or firm-wide client list.
 - **US tax forms.** Tax lines, the tax summary, 1099s and the estimated tax worksheet follow US federal forms. OpenBook prepares figures; it doesn't file returns or e-file 1099s.
-- **No K-1s.** **Partners and their capital** splits the year's net income by fixed shares and rolls each partner's capital forward. Guaranteed payments, special allocations and separately stated items are yours to work out.
+- **No K-1 forms.** **Partners and their capital** splits the year's net income by fixed shares and rolls each partner's capital forward, and **Schedule K-1 worksheet** splits ordinary income and the mapped Schedule K items by share. Guaranteed payments to one partner, special allocations and the capital account analysis are yours to work out.
 - **History brought in from other programs** comes in as journal entries. The agings don't list those amounts, and on the cash basis an imported invoice or bill counts when it was entered, not when it was paid, so take the move-in year's cash-basis and 1099 figures from the old program ([Moving in](24-moving-in.md)).
 - **No closing entries.** Retained earnings is worked out, not posted (see [Closing the books](#closing-the-books)).
 - **Backups and the full data export need an administrator.** With the accountant role you can download the year-end package and export reports, but not the company file.

@@ -93,6 +93,28 @@ public sealed class TaxBalanceSheetTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_k1_worksheet_splits_ordinary_income_and_schedule_k_items_by_share()
+    {
+        await BusinessType(Domain.Companies.BusinessType.Partnership);
+        var checking = await _db.CreateAccount("Checking", AccountType.Bank);
+        var sales = await _db.CreateAccount("Sales", AccountType.Income);
+        var interest = await _db.CreateAccount("Interest Income", AccountType.OtherIncome);
+        var meals = await _db.CreateAccount("Meals", AccountType.Expense);
+        await In<AccountService, int>(s => s.MapTaxLinesAsync(new Dictionary<Guid, string?> { [sales.Id] = "p.1a", [interest.Id] = "p.k5", [meals.Id] = "p.meals" }));
+        await Post(new DateOnly(2026, 3, 1), Dr(checking.Id, 1000m), Cr(sales.Id, 1000m));
+        await Post(new DateOnly(2026, 3, 2), Dr(checking.Id, 50m), Cr(interest.Id, 50m));
+        await Post(new DateOnly(2026, 3, 3), Dr(meals.Id, 100m), Cr(checking.Id, 100m));
+        await In<PartnerService, Partner>(s => s.CreateAsync("Ana", 60m, null));
+        await In<PartnerService, Partner>(s => s.CreateAsync("Ben", 40m, null));
+
+        var k1 = await _db.InScope(sp => sp.GetRequiredService<ReportCatalog>().RunAsync("k1-worksheet", ReportParameters.Parse("preset=Custom&from=2026-01-01&to=2026-12-31")));
+        // 1,000 of sales less meals at half (50) is 950 of ordinary income; interest is a Schedule K item of its own.
+        Assert.Equal((950m, 570m, 380m), ((decimal)k1.Find("Box 1: Ordinary business income (loss)", 1)!, (decimal)k1.Find("Box 1: Ordinary business income (loss)", 2)!, (decimal)k1.Find("Box 1: Ordinary business income (loss)", 3)!));
+        Assert.Equal((50m, 30m, 20m), ((decimal)k1.Find("Box 5: Interest income", 1)!, (decimal)k1.Find("Box 5: Interest income", 2)!, (decimal)k1.Find("Box 5: Interest income", 3)!));
+        Assert.Equal("Ana (60%)", k1.Columns[2].Header);
+    }
+
+    [Fact]
     public async Task Schedule_c_has_no_balance_sheet_and_the_lines_follow_the_2025_forms()
     {
         Assert.Contains("Schedule C has no balance sheet", (await Report()).Rows[0].Cells[0].Value as string, StringComparison.Ordinal);

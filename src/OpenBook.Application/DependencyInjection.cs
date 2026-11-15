@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<FinancialReports>();
         services.AddScoped<StatementReports>();
         services.AddScoped<TaxBalanceSheet>();
+        services.AddScoped<K1Worksheet>();
         services.AddScoped<ActivityReports>();
         services.AddScoped<ListReports>();
         services.AddScoped<Lists.MergeService>();
