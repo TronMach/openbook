@@ -3434,6 +3434,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("AmountMinor");
 
+                    b.Property<string>("AssistanceListing")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("AwardEntryId")
                         .HasColumnType("TEXT");
 
@@ -3455,6 +3459,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("EndsOn")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("FederalAgency")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("FunderId")
                         .HasColumnType("TEXT");
 
@@ -3465,9 +3473,17 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("IncomeAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("IndirectRatePercent")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("IndirectRateTenThousandths");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PassThroughEntity")
+                        .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("ReceivableAccountId")

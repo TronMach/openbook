@@ -3441,6 +3441,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("AmountMinor");
 
+                    b.Property<string>("AssistanceListing")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<Guid?>("AwardEntryId")
                         .HasColumnType("uuid");
 
@@ -3462,6 +3466,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateOnly>("EndsOn")
                         .HasColumnType("date");
 
+                    b.Property<string>("FederalAgency")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<Guid>("FunderId")
                         .HasColumnType("uuid");
 
@@ -3472,10 +3480,18 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("IncomeAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("IndirectRatePercent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("IndirectRateTenThousandths");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PassThroughEntity")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("uuid");

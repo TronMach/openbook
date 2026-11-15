@@ -468,6 +468,31 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Empty(check.Results.Where(r => r.Outcome == CheckOutcome.Problem).Select(r => $"{r.Key}: {r.Summary}"));
     }
 
+    [Fact]
+    public async Task A_federal_award_earns_its_indirect_rate_and_lists_on_the_sefa()
+    {
+        var state = await Donor("State Department of Health");
+        var grant = await NewGrant(new GrantCommand("Home visiting", state.Id, 50000m, Jan1, Jan1, Dec31, IncomeAccountId: Account("Grants:Restricted"), Conditional: true, Reference: "HV-26-014"));
+        await In<GrantService, Grant>(s => s.SetFederalAsync(grant.Id, "93.870", "Department of Health and Human Services", "State Department of Health", 10m));
+        await Post(new DateOnly(2026, 2, 1), Dr(Account("Program Supplies"), 1000m, classId: grant.ClassId), Cr(Account("Checking"), 1000m));
+
+        var position = (await PositionOf(grant.Id))!;
+        Assert.Equal((1000m, 1100m), (position.Spent, position.ReadyToRecognize));
+        var requested = await In<GrantService, Grant>(s => s.RequestAsync(grant.Id, new DateOnly(2026, 3, 1), Jan1, new DateOnly(2026, 2, 28)));
+        Assert.Equal(1100m, requested.Requests.Single().Amount);
+
+        var sefa = await Report("sefa", "preset=Custom&from=2026-01-01&to=2026-12-31");
+        Assert.Equal(1100m, sefa.Find("Home visiting", 4));
+        Assert.Equal("93.870", sefa.Find("Home visiting", 1));
+        Assert.Equal(1100m, sefa.Find("Total federal expenditures", 4));
+
+        Assert.Equal("grant.listing", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.SetFederalAsync(grant.Id, "CFDA 93", null, null, 0m)))).Code);
+        var plain = await NewGrant(new GrantCommand("Unrestricted award", state.Id, 1000m, Jan1, Jan1, Dec31, IncomeAccountId: Account("Grants:Unrestricted")));
+        Assert.Equal("grant.indirect_unconditional", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GrantService, Grant>(s => s.SetFederalAsync(plain.Id, null, null, null, 5m)))).Code);
+    }
+
     // ---- Grants and Form 990 (slice 3) ----
 
     private Task<Grant> NewGrant(GrantCommand command) => In<GrantService, Grant>(s => s.CreateAsync(command));

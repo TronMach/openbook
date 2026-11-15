@@ -249,6 +249,45 @@ public sealed class NonprofitReports(
             "Every grant whose period meets the report's. Spending on each grant's class and its subclasses, from the grant's start date.");
     }
 
+    /// <summary>
+    /// The Schedule of Expenditures of Federal Awards (C076): each federal grant (one with an Assistance Listing number)
+    /// with its expenditures in the period, the funder's share of the spending on its class plus the indirect costs its
+    /// rate allows, by federal agency. A worksheet for the single audit.
+    /// </summary>
+    public async Task<ReportTable> SefaAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var federal = (await grants.ListAsync(ct)).Where(g => g.Federal && g.Status != GrantStatus.Voided && g.StartsOn <= to && g.EndsOn >= from).ToList();
+        var rows = new List<ReportTableRow>();
+        var total = 0m;
+        foreach (var agency in federal.GroupBy(g => g.FederalAgency ?? "Federal agency not given").OrderBy(g => g.Key, StringComparer.CurrentCultureIgnoreCase))
+        {
+            rows.Add(new ReportTableRow([agency.Key, null, null, null, null], 0, ReportRowStyle.Section));
+            var agencyTotal = 0m;
+            foreach (var grant in agency.OrderBy(g => g.AssistanceListing, StringComparer.Ordinal).ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase))
+            {
+                var spent = (await grants.PositionAsync(grant.Id, to, ct))!.Spent - (await grants.PositionAsync(grant.Id, from.AddDays(-1), ct))!.Spent;
+                var expenditures = grant.ClaimableOn(spent);
+                agencyTotal += expenditures;
+                rows.Add(new ReportTableRow([new ReportCell(grant.Name, new ReportLink("grant", grant.Id)), grant.AssistanceListing,
+                    grant.PassThroughEntity ?? "Direct", grant.Reference, expenditures], 1));
+            }
+
+            rows.Add(new ReportTableRow([$"Total {agency.Key}", null, null, null, agencyTotal], 1, ReportRowStyle.Subtotal));
+            total += agencyTotal;
+        }
+
+        if (rows.Count == 0)
+            rows.Add(new ReportTableRow(["No federal award's period meets this one. Give a grant its Assistance Listing number on its page.", null, null, null, null]));
+        else
+            rows.Add(new ReportTableRow(["Total federal expenditures", null, null, null, total], 0, ReportRowStyle.Total));
+        return new ReportTable("Schedule of expenditures of federal awards",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Federal agency / program"), new("Assistance Listing"), new("Pass-through entity"), new("Award or pass-through number"), new("Expenditures", ColumnFormat.Money)],
+            rows, ReportBasis.Accrual,
+            "Expenditures: the funder's share of spending on each award's class in the period, with the indirect costs its rate allows. A worksheet for the single audit's SEFA and its notes.");
+    }
+
     /// <summary>Every grant on a date: awarded, earned as income, paid by the funder, spent and what's left.</summary>
     public async Task<ReportTable> GrantsAsync(DateOnly asOf, CancellationToken ct = default)
     {

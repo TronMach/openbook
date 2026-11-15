@@ -490,6 +490,7 @@ public sealed class AccessRulesTests
     [InlineData("/projects/0190a7a2-0000-7000-8000-000000000000/milestones/1/bill", "POST", UserRole.Standard)]
     [InlineData("/projects/0190a7a2-0000-7000-8000-000000000000/budget-lines", "POST", UserRole.Standard)]
     [InlineData("/sales/channels/0190a7a2-0000-7000-8000-000000000000/payouts/move-tax", "POST", UserRole.Standard)]
+    [InlineData("/nonprofit/grants/0190a7a2-0000-7000-8000-000000000000/federal", "POST", UserRole.Accountant)]
     [InlineData("/time/claims", "POST", UserRole.Standard)]
     [InlineData("/time/claims/0190a7a2-0000-7000-8000-000000000000", "POST", UserRole.Standard)]
     [InlineData("/time/review/claims/0190a7a2-0000-7000-8000-000000000000/approve", "POST", UserRole.Accountant)]

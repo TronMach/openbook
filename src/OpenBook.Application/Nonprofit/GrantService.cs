@@ -52,7 +52,7 @@ public sealed record GrantPosition(Grant Grant, string Funder, string ClassName,
 {
     /// <summary>A conditional grant's spending (the funder's share of it) not yet recognized as income, up to the award.</summary>
     public decimal ReadyToRecognize => Grant.Conditional && Grant.Status == GrantStatus.Active
-        ? Math.Max(0m, Math.Min(Grant.FunderShareOf(Spent), Grant.NetAward) - Grant.Recognized)
+        ? Math.Max(0m, Math.Min(Grant.ClaimableOn(Spent), Grant.NetAward) - Grant.Recognized)
         : 0m;
 
     /// <summary>What the organization's own match has covered of the spending.</summary>
@@ -208,7 +208,8 @@ public sealed class GrantService(
         var position = await PositionAsync(id, to, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var grant = await RequiredAsync(id, ct);
         var before = Snapshot(grant);
-        grant.AddRequest(date, from, to, amount ?? Math.Min(position.Spent, grant.NetAward) - Math.Max(grant.Requested, grant.Received));
+        // What the funder pays for the spending: its share, with the indirect costs its rate allows (C076).
+        grant.AddRequest(date, from, to, amount ?? Math.Min(grant.ClaimableOn(position.Spent), grant.NetAward) - Math.Max(grant.Requested, grant.Received));
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
@@ -300,6 +301,17 @@ public sealed class GrantService(
     }
 
     /// <summary>Conditional grants: income for what's been spent through the date and not recognized yet, up to the award.</summary>
+    /// <summary>Sets a grant's federal award details and indirect cost rate (C076), audited on the grant.</summary>
+    public async Task<Grant> SetFederalAsync(Guid id, string? assistanceListing, string? agency, string? passThrough, decimal indirectRatePercent, CancellationToken ct = default)
+    {
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        var before = Snapshot(grant);
+        grant.SetFederal(assistanceListing, agency, passThrough, indirectRatePercent);
+        store.Add(Audit(AuditAction.Updated, grant, before));
+        await store.SaveChangesAsync(ct);
+        return grant;
+    }
+
     /// <summary>Sets a conditional grant's funding share (percent of spending the funder pays), audited on the grant.</summary>
     public async Task<Grant> SetFundingShareAsync(Guid id, decimal percent, CancellationToken ct = default)
     {
@@ -611,6 +623,10 @@ public sealed class GrantService(
     private static string Snapshot(Grant g) => JsonSerializer.Serialize(new
     {
         g.FundingSharePercent,
+        g.IndirectRatePercent,
+        g.AssistanceListing,
+        g.FederalAgency,
+        g.PassThroughEntity,
         g.Name,
         g.FunderId,
         g.Reference,

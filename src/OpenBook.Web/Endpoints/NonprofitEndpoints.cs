@@ -405,6 +405,11 @@ public static class NonprofitEndpoints
                 Date(form["startsOn"]) ?? throw new DomainException("grant.dates_required", "Enter when the grant period starts."),
                 Date(form["endsOn"]) ?? throw new DomainException("grant.dates_required", "Enter when the grant period ends."), form["terms"]), ct))).RequireAuthorization();
 
+        // Federal award details and the indirect rate (C076).
+        app.MapPost("/nonprofit/grants/{id:guid}/federal", async (Guid id, IFormCollection form, GrantService grants, CancellationToken ct) =>
+            await Back($"/nonprofit/grants/{id}", () => grants.SetFederalAsync(id, form["assistanceListing"], form["agency"], form["passThrough"],
+                Number(form["indirectRate"]) ?? 0m, ct))).RequireAuthorization();
+
         app.MapPost("/nonprofit/grants/{id:guid}/share", async (Guid id, IFormCollection form, GrantService grants, CancellationToken ct) =>
             await Back($"/nonprofit/grants/{id}", () => grants.SetFundingShareAsync(id, Number(form["percent"]) ?? 0m, ct))).RequireAuthorization();
 

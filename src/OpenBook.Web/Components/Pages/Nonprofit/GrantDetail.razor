@@ -255,6 +255,20 @@
                         <span class="hint">For a matching grant: recognition counts only this share of what's spent; the rest is your match.</span>
                     </PostForm>
                 }
+                <PostForm Action="@($"/nonprofit/grants/{g.Id}/federal")" data-enhance="false" style="margin-top: 1rem">
+                    <AntiforgeryToken />
+                    <p class="muted">A federal award (or federal money passed through a state): its Assistance Listing number puts it on the <a href="/reports/sefa">schedule of expenditures of federal awards</a>.@(g.Conditional ? " The indirect rate is earned on top of the spending on its class, in what's recognized and requested." : "")</p>
+                    <div class="row">
+                        <div class="field"><label for="fed-listing">Assistance Listing number</label><input id="fed-listing" name="assistanceListing" class="short" maxlength="20" placeholder="93.778" value="@g.AssistanceListing" /></div>
+                        <div class="field"><label for="fed-agency">Federal agency</label><input id="fed-agency" name="agency" maxlength="200" value="@g.FederalAgency" /></div>
+                        <div class="field"><label for="fed-pass">Passed through by <span class="muted">(blank if direct)</span></label><input id="fed-pass" name="passThrough" maxlength="200" value="@g.PassThroughEntity" /></div>
+                        @if (g.Conditional)
+                        {
+                            <div class="field"><label for="fed-rate">Indirect rate (%)</label><input id="fed-rate" name="indirectRate" class="short" inputmode="decimal" value="@g.IndirectRatePercent.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" /></div>
+                        }
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">Save award details</button></div>
+                </PostForm>
                 <PostForm Action="@($"/nonprofit/grants/{g.Id}/amend")" data-enhance="false" style="margin-top: 1rem">
                     <AntiforgeryToken />
                     <p class="muted">@(g.Conditional ? "An amendment raises the award, so more can be recognized and paid. Nothing posts." : "An amendment raises the award: the extra is income and receivable on the date.")</p>

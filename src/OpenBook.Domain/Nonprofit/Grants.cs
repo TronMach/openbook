@@ -207,6 +207,46 @@ public sealed class Grant
     public decimal FunderShareOf(decimal spent) =>
         FundingSharePercent == 100m ? spent : decimal.Round(spent * FundingSharePercent / 100m, 2, MidpointRounding.AwayFromZero);
 
+    // ---- Government awards (C076) ----
+
+    /// <summary>
+    /// The indirect cost rate the award allows on direct spending (a negotiated or de minimis rate), percent; 0 for none.
+    /// A conditional grant earns it on top of the spending on its class.
+    /// </summary>
+    public decimal IndirectRatePercent { get; private set; }
+
+    /// <summary>The federal program's Assistance Listing number (formerly CFDA), e.g. "93.778"; null for a grant that isn't federal.</summary>
+    public string? AssistanceListing { get; private set; }
+
+    /// <summary>The federal agency the money comes from, e.g. "Department of Health and Human Services".</summary>
+    public string? FederalAgency { get; private set; }
+
+    /// <summary>The state or other organization passing the federal money through; null when it comes straight from the agency.</summary>
+    public string? PassThroughEntity { get; private set; }
+
+    public bool Federal => AssistanceListing is not null;
+
+    /// <summary>The indirect costs earned on direct spending, to the cent.</summary>
+    public decimal IndirectOn(decimal spent) => IndirectRatePercent == 0m ? 0m : decimal.Round(spent * IndirectRatePercent / 100m, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>What the funder pays for direct spending: its share of the spending and the indirect costs on it.</summary>
+    public decimal ClaimableOn(decimal spent) => FunderShareOf(spent + IndirectOn(spent));
+
+    public void SetFederal(string? assistanceListing, string? agency, string? passThrough, decimal indirectRatePercent)
+    {
+        if (indirectRatePercent is < 0m or > 100m || decimal.Round(indirectRatePercent, 4) != indirectRatePercent)
+            throw new DomainException("grant.indirect_rate", "The indirect rate is from 0 to 100 percent, to four decimals.");
+        if (indirectRatePercent != 0m && !Conditional)
+            throw new DomainException("grant.indirect_unconditional", "An indirect rate is for conditional grants, which are earned as money is spent.");
+        var listing = Text.Optional(assistanceListing, 20, "grant.listing_too_long", "Assistance Listing number");
+        if (listing is not null && !System.Text.RegularExpressions.Regex.IsMatch(listing, @"^\d{2}\.[0-9A-Za-z]{3,4}$"))
+            throw new DomainException("grant.listing", "An Assistance Listing number looks like 93.778: the agency's two digits, a point and the program's three.");
+        AssistanceListing = listing;
+        FederalAgency = Text.Optional(agency, 200, "grant.agency_too_long", "Federal agency");
+        PassThroughEntity = Text.Optional(passThrough, 200, "grant.pass_through_too_long", "Pass-through entity");
+        IndirectRatePercent = indirectRatePercent;
+    }
+
     public static Grant Create(
         Guid id, string name, Guid funderId, string? reference, decimal amount, DateOnly awardedOn, DateOnly startsOn, DateOnly endsOn,
         Guid classId, Guid incomeAccountId, Guid receivableAccountId, bool conditional, string? terms, Guid? awardEntryId, DateTimeOffset createdAt)
