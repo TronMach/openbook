@@ -14,6 +14,7 @@ For admins deciding how to run OpenBook, and for security reviewers. It says wha
 
 - someone on the internet, at a Server's public address (sign-in, anonymous links, the API);
 - a customer, or whoever has their link: the portal (`/portal/…`), document links (`/view/…`), payment pages, invitations;
+- anyone at all, when a nonprofit opens it: the giving page (`/give`), which only starts a card checkout at the payment provider (rate-limited); the gift is recorded only when the provider's signed webhook says it was paid;
 - a signed-in user trying to do more than their role or permission set allows;
 - a program with a stolen or limited API key;
 - a malicious file: attachments, statements and OFX, migration files, CSVs, documents to read, fonts, backups to restore;
