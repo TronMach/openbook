@@ -71,7 +71,15 @@ public sealed class SalesLineModel
 
     /// <summary>Each rate's tax on the lines, worked out as the domain will.</summary>
     public static IReadOnlyList<(string Label, decimal Amount)> Tax(
-        IReadOnlyList<SalesLineModel> lines, IReadOnlyList<Item> items, TaxCodeChoice? code, bool exempt)
+        IReadOnlyList<SalesLineModel> lines, IReadOnlyList<Item> items, TaxCodeChoice? code, bool exempt) =>
+        Tax(lines, items, code, _ => exempt);
+
+    /// <summary>The rates the customer holding an exemption is exempt from (none without one).</summary>
+    public static Func<TaxComponent, bool> ExemptFrom(Customer? holder) => c => holder is not null && holder.ExemptFrom(c);
+
+    /// <summary>The same, with an exemption that covers only some rates (a certificate for some states, C326).</summary>
+    public static IReadOnlyList<(string Label, decimal Amount)> Tax(
+        IReadOnlyList<SalesLineModel> lines, IReadOnlyList<Item> items, TaxCodeChoice? code, Func<TaxComponent, bool> exempt)
     {
         if (code is null)
             return [];

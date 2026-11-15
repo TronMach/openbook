@@ -275,9 +275,14 @@
                             <label for="exemption-expires">Expires <span class="muted">(optional)</span></label>
                             <InputDate id="exemption-expires" @bind-Value="Input.ExemptionExpiresOn" />
                         </div>
+                        <div class="field">
+                            <label for="exemption-regions">For states <span class="muted">(blank: all)</span></label>
+                            <InputText id="exemption-regions" @bind-Value="Input.ExemptionRegions" maxlength="100" class="short" placeholder="TX, OK" />
+                        </div>
                     </div>
                     <span class="hint">
-                        While the certificate is valid, their sales are taxed at zero and show as exempt on the liability report. Attach a copy
+                        While the certificate is valid, their sales are taxed at zero and show as exempt on the liability report. A certificate
+                        for some states only (their two-letter codes, as on the tax agencies) leaves other states' rates charged. Attach a copy
                         of the certificate below.
                     </span>
                 </fieldset>
@@ -488,6 +493,7 @@
                 ExemptionReason = _customer.ExemptionReason,
                 ExemptionExpiresOn = _customer.ExemptionExpiresOn,
                 ExemptionStartsOn = _customer.ExemptionStartsOn,
+                ExemptionRegions = _customer.ExemptionRegions,
                 PriceLevelId = _customer.PriceLevelId,
                 ParentId = _customer.ParentId,
                 BillWithParent = _customer.BillWithParent,
@@ -507,7 +513,8 @@
                 Input.BillingAddress, Input.ShippingAddress, Input.PaymentTermsDays, Input.Notes,
                 Input.EarlyPaymentDiscountPercent ?? 0m, Input.EarlyPaymentDiscountDays ?? 0,
                 Input.TaxCodeId, Input.ExemptionCertificate, Input.ExemptionReason, Input.ExemptionExpiresOn, Input.PriceLevelId ?? Guid.Empty,
-                Input.ParentId ?? Guid.Empty, Input.BillWithParent, Input.NoReminders, Input.NoLateFees, Input.CreditLimit, Input.CreditHold, Input.ExemptionStartsOn);
+                Input.ParentId ?? Guid.Empty, Input.BillWithParent, Input.NoReminders, Input.NoLateFees, Input.CreditLimit, Input.CreditHold, Input.ExemptionStartsOn,
+                Input.ExemptionRegions);
             await Versions.EnsureUnchangedAsync<Customer>(_customer?.Id ?? Guid.Empty, Input.Version);
             var saved = _customer is null ? await CustomerService.CreateAsync(details) : await CustomerService.UpdateAsync(_customer.Id, details);
             Navigation.NavigateTo($"/customers/{saved.Id}");
@@ -575,6 +582,7 @@
         public ExemptionReason? ExemptionReason { get; set; }
         public DateOnly? ExemptionExpiresOn { get; set; }
         public DateOnly? ExemptionStartsOn { get; set; }
+        public string? ExemptionRegions { get; set; }
 
         public Guid? PriceLevelId { get; set; }
 

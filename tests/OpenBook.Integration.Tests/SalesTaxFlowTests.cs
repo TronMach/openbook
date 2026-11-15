@@ -393,6 +393,35 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_certificate_for_some_states_exempts_only_their_tax()
+    {
+        var texas = await Tax(s => s.CreateAgencyAsync(new TaxAgencyDetails("Texas Comptroller", Region: "TX")));
+        var oklahoma = await Tax(s => s.CreateAgencyAsync(new TaxAgencyDetails("Oklahoma Tax Commission", Region: "OK")));
+        var texasRate = await Tax(s => s.CreateRateAsync(new TaxRateDetails("Texas", texas.Id, 6.25m), createCode: false));
+        var oklahomaRate = await Tax(s => s.CreateRateAsync(new TaxRateDetails("Oklahoma", oklahoma.Id, 4.5m), createCode: false));
+        var both = await Tax(s => s.CreateCodeAsync(new TaxCodeDetails("Texas and Oklahoma", [texasRate.Id, oklahomaRate.Id])));
+        var shop = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Texas reseller", TaxCodeId: both.Id,
+            ExemptionCertificate: "TX-1", ExemptionReason: ExemptionReason.Resale, ExemptionRegions: "tx")));
+
+        var invoice = await Invoice(shop, Mar1, null, Widgets(10));
+        Assert.Equal("Resale, certificate TX-1, for TX", invoice.TaxExemption);
+        Assert.Equal([0m, 45m], invoice.Lines.Where(l => l.Kind == SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l => l.Amount));
+        Assert.Equal(0m, await Balance(texas.LiabilityAccountId));
+        Assert.Equal(-45m, await Balance(oklahoma.LiabilityAccountId));
+
+        // A correction keeps what the exemption covered, though the certificate has gone since.
+        await In<CustomerService, Customer>(s => s.UpdateAsync(shop.Id, new CustomerDetails("Texas reseller", TaxCodeId: both.Id)));
+        var corrected = await Corrected(invoice, [Widgets(20)]);
+        Assert.Equal([0m, 90m], corrected.Lines.Where(l => l.Kind == SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l => l.Amount));
+
+        var report = await In<SalesTaxReports, TaxLiabilityReport>(s => s.LiabilityAsync(Mar1, new DateOnly(2026, 3, 31)));
+        var texasRow = Assert.Single(report.Agencies.Single(a => a.Agency.Id == texas.Id).Rates);
+        var oklahomaRow = Assert.Single(report.Agencies.Single(a => a.Agency.Id == oklahoma.Id).Rates);
+        Assert.Equal((2_000m, 0m, 0m), (texasRow.Exempt, texasRow.Taxable, texasRow.Tax));
+        Assert.Equal((0m, 2_000m, 90m), (oklahomaRow.Exempt, oklahomaRow.Taxable, oklahomaRow.Tax));
+    }
+
+    [Fact]
     public async Task A_return_is_due_after_its_period_until_paid()
     {
         await Tax(s => s.UpdateAgencyAsync(_stateDor.Id, new TaxAgencyDetails("State Department of Revenue", FilingFrequency.Monthly, "ST-1", DueDays: 15)));

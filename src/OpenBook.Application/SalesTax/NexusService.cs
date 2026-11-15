@@ -9,7 +9,7 @@ using OpenBook.Domain.SalesTax;
 namespace OpenBook.Application.SalesTax;
 
 /// <summary>One state's sales in a period against its threshold, if one is kept.</summary>
-/// <param name="HasAgency">An active tax agency is set up for the state (its "State for online sales").</param>
+/// <param name="HasAgency">An active tax agency is set up for the state (its "State").</param>
 public sealed record StateSales(string Region, decimal Sales, int Transactions, NexusThreshold? Threshold, bool HasAgency)
 {
     public bool OverThreshold => Threshold is { } t && (Sales >= t.SalesAmount || (t.Transactions is { } count && Transactions >= count));

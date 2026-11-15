@@ -49,8 +49,10 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
             return new BuiltSalesLines(lines, null, null);
 
         var components = await SalesTaxService.ComponentsAsync(taxes, id, ct, date);
-        var exemption = customer is { BillWithParent: true } ? CustomerTree.ExemptionOn(customer, date, await store.ListCustomersAsync(ct)) : customer?.ExemptionOn(date);
-        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, exemption is not null)], id, exemption);
+        var holder = customer is { BillWithParent: true } ? CustomerTree.ExemptionHolder(customer, date, await store.ListCustomersAsync(ct)) : customer?.ExemptionOn(date) is null ? null : customer;
+        var exemption = holder?.ExemptionOn(date);
+        // A certificate for some states only leaves the other states' rates charged (C326).
+        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, c => holder is not null && holder.ExemptFrom(c))], id, exemption);
     }
 
     /// <summary>
@@ -91,7 +93,9 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
 
         var lines = await BuildAsync(await PriceAsync(drafts, customer, date, ct), ct);
         KeepOriginals(lines, charged);
-        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, charged.TaxExemption is not null)], codeId, charged.TaxExemption);
+        // Kept as charged, down to which states' rates the exemption covered (C326).
+        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, TaxCalculator.KeptExemption(charged.Lines, charged.TaxExemption))],
+            codeId, charged.TaxExemption);
     }
 
     /// <summary>Automatic item lines get the quoted price and its source; quantity breaks see the item's total on the document.</summary>

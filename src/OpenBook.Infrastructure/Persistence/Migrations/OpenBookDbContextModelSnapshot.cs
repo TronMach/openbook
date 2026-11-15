@@ -5929,6 +5929,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ExemptionRegions")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateOnly?>("ExemptionStartsOn")
                         .HasColumnType("TEXT");
 

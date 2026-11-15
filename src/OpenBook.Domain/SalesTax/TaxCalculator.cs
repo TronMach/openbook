@@ -4,7 +4,8 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Domain.SalesTax;
 
 /// <summary>A rate of the tax code being charged, with the account its tax is owed on.</summary>
-public sealed record TaxComponent(Guid TaxRateId, string Name, decimal Percent, Guid LiabilityAccountId);
+/// <param name="Region">The state of the rate's agency, when it names one: for exemptions limited to some states (C326).</param>
+public sealed record TaxComponent(Guid TaxRateId, string Name, decimal Percent, Guid LiabilityAccountId, string? Region = null);
 
 /// <summary>
 /// Sales tax on a document. The taxable amount is the taxable item lines less each discount's taxable
@@ -47,13 +48,22 @@ public static class TaxCalculator
         decimal.Round(taxableAmount * percent / 100m, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>Each component's share of the tax on <paramref name="taxableAmount"/>; all zero when <paramref name="exempt"/>.</summary>
-    public static IReadOnlyList<decimal> Split(decimal taxableAmount, IReadOnlyList<TaxComponent> components, bool exempt)
+    public static IReadOnlyList<decimal> Split(decimal taxableAmount, IReadOnlyList<TaxComponent> components, bool exempt) =>
+        Split(taxableAmount, components, _ => exempt);
+
+    /// <summary>
+    /// Each component's share of the tax on <paramref name="taxableAmount"/>, those <paramref name="exempt"/> says the
+    /// customer is exempt from (an exemption for some states only, C326) left at zero and out of the combined rate.
+    /// </summary>
+    public static IReadOnlyList<decimal> Split(decimal taxableAmount, IReadOnlyList<TaxComponent> components, Func<TaxComponent, bool> exempt)
     {
         ArgumentNullException.ThrowIfNull(components);
-        var combined = components.Sum(c => c.Percent);
-        var total = exempt || combined == 0m ? 0m : TaxOn(taxableAmount, combined);
+        ArgumentNullException.ThrowIfNull(exempt);
+        var charged = components.Select(c => exempt(c) ? 0m : c.Percent).ToList();
+        var combined = charged.Sum();
+        var total = combined == 0m ? 0m : TaxOn(taxableAmount, combined);
         // A rate of 0% adds nothing to the running total, so it gets nothing, and no share can go below zero.
-        var weights = components.Select(c => c.Percent).ToList();
+        var weights = charged;
         var last = weights.FindLastIndex(w => w != 0m);
         return last < 0 ? [.. weights.Select(_ => 0m)] : [.. Common.Shares.ByWeight(total, weights[..(last + 1)]), .. weights[(last + 1)..].Select(_ => 0m)];
     }
@@ -62,7 +72,27 @@ public static class TaxCalculator
     /// The tax lines for a document's other lines: one per component, numbered after them, even when zero
     /// (an exempt customer, or nothing taxable), so the document records which rates it was taxed under.
     /// </summary>
-    public static IReadOnlyList<SalesLine> TaxLines(IReadOnlyList<SalesLine> lines, IReadOnlyList<TaxComponent> components, bool exempt)
+    /// <summary>
+    /// What a saved document's exemption covered, for working its tax out again on the same code: with an exemption, the
+    /// rates it left at nothing stay at nothing (all of them when nothing was taxable then), and the rest are charged (C326).
+    /// </summary>
+    public static Func<TaxComponent, bool> KeptExemption(IEnumerable<SalesLine> lines, string? exemption)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        if (exemption is null)
+            return _ => false;
+        var saved = lines.ToList();
+        var original = saved.Where(l => l.Kind == SalesLineKind.Tax && l.TaxRateId is not null)
+            .GroupBy(l => l.TaxRateId!.Value).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
+        if (TaxableAmount(saved.Where(l => l.Kind != SalesLineKind.Tax).ToList()) == 0m || original.Values.All(a => a == 0m))
+            return _ => true;
+        return c => original.GetValueOrDefault(c.TaxRateId) == 0m;
+    }
+
+    public static IReadOnlyList<SalesLine> TaxLines(IReadOnlyList<SalesLine> lines, IReadOnlyList<TaxComponent> components, bool exempt) =>
+        TaxLines(lines, components, _ => exempt);
+
+    public static IReadOnlyList<SalesLine> TaxLines(IReadOnlyList<SalesLine> lines, IReadOnlyList<TaxComponent> components, Func<TaxComponent, bool> exempt)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var shares = Split(TaxableAmount(lines), components, exempt);

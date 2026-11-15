@@ -46,6 +46,33 @@ public sealed class Customer
     /// <summary>The day the certificate takes effect; null = from always.</summary>
     public DateOnly? ExemptionStartsOn { get; private set; }
 
+    /// <summary>
+    /// The states the certificate covers, as agencies name them ("TX, OK"); null when it covers every state (C326). Tax
+    /// for an agency of another state is charged as usual.
+    /// </summary>
+    public string? ExemptionRegions { get; private set; }
+
+    /// <summary>Whether the customer's exemption covers this component's agency (every one when the certificate names no states).</summary>
+    public bool ExemptFrom(SalesTax.TaxComponent component)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        return ExemptionRegions is null || (component.Region is { } region && Regions(ExemptionRegions).Contains(region, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static string[] Regions(string list) => list.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>States typed as "tx, ok" kept as "TX, OK"; blank is null (every state).</summary>
+    public static string? NormalizeRegions(string? list)
+    {
+        if (string.IsNullOrWhiteSpace(list))
+            return null;
+        var regions = Regions(list).Select(r => r.Trim().ToUpperInvariant()).Distinct().ToList();
+        if (regions.Any(r => r.Length > 10))
+            throw new DomainException("customer.exemption_regions", "List the states as their agencies name them, such as TX, OK.");
+        var text = string.Join(", ", regions);
+        return text.Length <= 100 ? text : throw new DomainException("customer.exemption_regions", "List at most a hundred characters of states.");
+    }
+
     /// <summary>The customer's pricing baseline (see <c>Domain.Pricing.PriceLevel</c>); null for list prices.</summary>
     public Guid? PriceLevelId { get; private set; }
 
@@ -151,6 +178,7 @@ public sealed class Customer
             ExemptionReason = null;
             ExemptionExpiresOn = null;
             ExemptionStartsOn = null;
+            ExemptionRegions = null;
         }
         else
         {
@@ -159,6 +187,7 @@ public sealed class Customer
                 : throw new DomainException("customer.exemption_reason_required", "Choose why the customer is exempt.");
             ExemptionExpiresOn = details.ExemptionExpiresOn;
             ExemptionStartsOn = details.ExemptionStartsOn;
+            ExemptionRegions = NormalizeRegions(details.ExemptionRegions);
             if (ExemptionStartsOn > ExemptionExpiresOn)
                 throw new DomainException("customer.exemption_dates", "The certificate can't start after it expires.");
         }
@@ -170,7 +199,7 @@ public sealed class Customer
     /// </summary>
     public string? ExemptionOn(DateOnly date) =>
         ExemptionCertificate is not null && (ExemptionExpiresOn is null || date <= ExemptionExpiresOn) && (ExemptionStartsOn is null || date >= ExemptionStartsOn)
-            ? $"{ExemptionReasons.Label(ExemptionReason!.Value)}, certificate {ExemptionCertificate}"
+            ? $"{ExemptionReasons.Label(ExemptionReason!.Value)}, certificate {ExemptionCertificate}{(ExemptionRegions is { } states ? $", for {states}" : "")}"
             : null;
 
     public bool ExemptionExpired(DateOnly today) => ExemptionCertificate is not null && ExemptionExpiresOn is { } e && e < today;
@@ -220,7 +249,8 @@ public sealed record CustomerDetails(
     bool NoLateFees = false,
     decimal? CreditLimit = null,
     bool CreditHold = false,
-    DateOnly? ExemptionStartsOn = null);
+    DateOnly? ExemptionStartsOn = null,
+    string? ExemptionRegions = null);
 
 /// <summary>
 /// Rules for sub-customers: at most <see cref="MaxDepth"/> levels, no cycles, full names "Parent:Child", and who
@@ -276,6 +306,20 @@ public static class CustomerTree
     /// What makes a sale to the customer tax exempt on the date: its own certificate, else, for a sub-customer billed with
     /// its parent, the parent's (a project is covered by its client's).
     /// </summary>
+    /// <summary>The customer whose exemption covers a document on the date: the customer, or the parent it's billed with.</summary>
+    public static Customer? ExemptionHolder(Customer? customer, DateOnly date, IEnumerable<Customer> customers)
+    {
+        ArgumentNullException.ThrowIfNull(customers);
+        for (var i = 0; customer is not null && i <= MaxDepth; i++)
+        {
+            if (customer.ExemptionOn(date) is not null)
+                return customer;
+            customer = customer is { BillWithParent: true, ParentId: { } parent } ? customers.FirstOrDefault(c => c.Id == parent) : null;
+        }
+
+        return null;
+    }
+
     public static string? ExemptionOn(Customer? customer, DateOnly date, IEnumerable<Customer> customers)
     {
         ArgumentNullException.ThrowIfNull(customers);

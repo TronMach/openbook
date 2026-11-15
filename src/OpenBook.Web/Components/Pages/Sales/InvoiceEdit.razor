@@ -55,7 +55,7 @@
 
             @if (!_allLocked)
             {
-                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="_lockedLines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="_lockedLines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" />
             }
 
             @if (_locked.Count > 0)
@@ -72,7 +72,7 @@
                         </tbody>
                         @if (_allLocked)
                         {
-                            var tax = SalesLineModel.Tax(_lockedLines, _items, SelectedTax, TaxExemption is not null);
+                            var tax = SalesLineModel.Tax(_lockedLines, _items, SelectedTax, c => TaxExemption is not null && ExemptFrom(c));
                             <tfoot>
                                 @foreach (var (label, amount) in tax)
                                 {
@@ -142,6 +142,7 @@
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
     private bool KeepsTax => _taxCodeId == _invoice?.TaxCodeId;
     private string? TaxExemption => SelectedTax is null ? null : KeepsTax ? _invoice?.TaxExemption : _customer?.ExemptionOn(_date);
+    private Func<TaxComponent, bool> ExemptFrom => KeepsTax && _invoice is { } kept ? TaxCalculator.KeptExemption(kept.Lines, kept.TaxExemption) : SalesLineModel.ExemptFrom(_customer?.ExemptionOn(_date) is null ? null : _customer);
     private bool TaxExemptionExpired => SelectedTax is not null && !KeepsTax && _customer?.ExemptionCertificate is not null && TaxExemption is null;
 
     private bool CanSave => !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason)

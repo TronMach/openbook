@@ -37,12 +37,14 @@ public sealed record CustomerResponse(
     Guid? ParentId = null,
     bool BillWithParent = false,
     bool NoReminders = false,
-    bool NoLateFees = false)
+    bool NoLateFees = false,
+    DateOnly? ExemptionStartsOn = null,
+    string? ExemptionRegions = null)
 {
     public static CustomerResponse From(Customer c, decimal? balance = null) =>
         new(c.Id, c.DisplayName, c.CompanyName, c.Email, c.Phone, c.BillingAddress, c.ShippingAddress, c.PaymentTermsDays, c.Notes, c.IsActive, balance,
             c.EarlyPaymentDiscountPercent, c.EarlyPaymentDiscountDays, c.Terms.Label, c.TaxCodeId, c.ExemptionCertificate, c.ExemptionReason, c.ExemptionExpiresOn, c.PriceLevelId,
-            c.ParentId, c.BillWithParent, c.NoReminders, c.NoLateFees);
+            c.ParentId, c.BillWithParent, c.NoReminders, c.NoLateFees, c.ExemptionStartsOn, c.ExemptionRegions);
 }
 
 public sealed record ItemResponse(

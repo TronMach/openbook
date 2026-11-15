@@ -89,6 +89,45 @@ public sealed class SalesTaxTests
     }
 
     [Fact]
+    public void A_certificate_for_some_states_leaves_the_others_charged()
+    {
+        var texas = State with { Region = "TX" };
+        var oklahoma = City with { Region = "OK" };
+        var customer = Customer.Create(new CustomerDetails("Reseller", ExemptionCertificate: "R-1", ExemptionReason: ExemptionReason.Resale, ExemptionRegions: " tx ;ok, tx"));
+
+        Assert.Equal("TX, OK", customer.ExemptionRegions);
+        Assert.Equal("Resale, certificate R-1, for TX, OK", customer.ExemptionOn(new DateOnly(2026, 1, 1)));
+        var texasOnly = Customer.Create(new CustomerDetails("Shop", ExemptionCertificate: "R-2", ExemptionReason: ExemptionReason.Resale, ExemptionRegions: "TX"));
+        Assert.True(texasOnly.ExemptFrom(texas));
+        Assert.False(texasOnly.ExemptFrom(oklahoma));
+        Assert.False(texasOnly.ExemptFrom(State)); // an agency with no state isn't covered by a certificate that names states
+        Assert.True(Customer.Create(new CustomerDetails("All", ExemptionCertificate: "R-3", ExemptionReason: ExemptionReason.Resale)).ExemptFrom(State));
+        Assert.Null(Customer.Create(new CustomerDetails("None", ExemptionRegions: "TX")).ExemptionRegions); // no certificate, no states
+
+        // Only Oklahoma's 2% is charged, worked out on its own.
+        Assert.Equal([0m, 0.67m], TaxCalculator.Split(33.33m, [texas, oklahoma], texasOnly.ExemptFrom));
+        Assert.Equal("customer.exemption_regions", CodeOf(() => Customer.NormalizeRegions("Texas-and-Oklahoma")));
+        Assert.Null(Customer.NormalizeRegions("  "));
+    }
+
+    [Fact]
+    public void A_correction_keeps_the_rates_an_exemption_covered()
+    {
+        var texas = State with { Region = "TX" };
+        var oklahoma = City with { Region = "OK" };
+        var lines = Lines(new SalesLineDraft(Widget.Id, null, 1m, 100m));
+        var charged = TaxCalculator.TaxLines(lines, [texas, oklahoma], c => c.Region == "TX");
+        Assert.Equal([0m, 2m], charged.Select(l => l.Amount));
+
+        var kept = TaxCalculator.KeptExemption([.. lines, .. charged], "Resale, certificate R-1, for TX");
+        Assert.True(kept(texas));
+        Assert.False(kept(oklahoma));
+        Assert.False(TaxCalculator.KeptExemption([.. lines, .. charged], null)(texas));
+        var whollyExempt = TaxCalculator.TaxLines(lines, [texas, oklahoma], exempt: true);
+        Assert.True(TaxCalculator.KeptExemption([.. lines, .. whollyExempt], "Resale")(oklahoma));
+    }
+
+    [Fact]
     public void Exemption_certificates_apply_until_they_expire()
     {
         var customer = Customer.Create(new CustomerDetails("Reseller", ExemptionCertificate: "R-123", ExemptionReason: ExemptionReason.Resale,

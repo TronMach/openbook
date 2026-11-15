@@ -105,7 +105,8 @@
             @{
                 IReadOnlyList<SalesLineModel> everyLine = Also.Count == 0 ? Lines : [.. Lines, .. Also];
                 var subtotal = SalesLineModel.Total(everyLine);
-                var tax = SalesLineModel.Tax(everyLine, Items, Tax, Exempt);
+                Func<TaxComponent, bool> exemptFrom = c => Exempt && (ExemptFrom?.Invoke(c) ?? true);
+                var tax = SalesLineModel.Tax(everyLine, Items, Tax, exemptFrom);
                 var extra = (Tax is null ? 1 : 2) + (Classes is null ? 0 : 1);
             }
             @if (Also.Count > 0)
@@ -123,10 +124,11 @@
                     <td class="num">@Labels.Amount(subtotal)</td>
                     <td colspan="@extra"></td>
                 </tr>
-                @foreach (var (label, taxAmount) in tax)
+                @for (var t = 0; t < tax.Count; t++)
                 {
+                    var (label, taxAmount) = tax[t];
                     <tr>
-                        <td colspan="4" class="num muted">@label@(Exempt ? " · exempt" : "")</td>
+                        <td colspan="4" class="num muted">@label@(exemptFrom(Tax!.Components[t]) ? " · exempt" : "")</td>
                         <td class="num">@Labels.Amount(taxAmount)</td>
                         <td colspan="@extra"></td>
                     </tr>
@@ -198,6 +200,10 @@
     /// <summary>The customer is exempt on the document date: tax shows as zero.</summary>
     [Parameter]
     public bool Exempt { get; set; }
+
+    /// <summary>With <see cref="Exempt"/>, the rates the exemption covers (a certificate for some states, C326); null: all.</summary>
+    [Parameter]
+    public Func<TaxComponent, bool>? ExemptFrom { get; set; }
 
     /// <summary>Active classes when the company tracks them; null hides the class column.</summary>
     [Parameter]

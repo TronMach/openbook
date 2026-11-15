@@ -95,11 +95,13 @@ public sealed class SalesTaxReports(ISalesTaxStore store, ISalesStore sales, Sal
                 // By the percent charged: a rate that changed is two rows, and a past period keeps the percent it had.
                 var key = (line.TaxRateId!.Value, line.Rate);
                 var row = rows.GetValueOrDefault(key);
+                // An exemption for some states only (C326) leaves the other states' rates charged, and taxable for them.
+                var exemptHere = exempt && line.Amount == 0m;
                 rows[key] = (
                     row.Total + total,
                     row.NonTaxable + total - taxable,
-                    row.Exempt + (exempt ? taxable : 0m),
-                    row.Taxable + (exempt ? 0m : taxable),
+                    row.Exempt + (exemptHere ? taxable : 0m),
+                    row.Taxable + (exemptHere ? 0m : taxable),
                     row.Tax + Cents(sign * line.Amount));
             }
         }

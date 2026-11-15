@@ -152,6 +152,7 @@ internal static class SalesTaxApi
                 x.Customer.ExemptionCertificate,
                 x.Customer.ExemptionReason,
                 x.Customer.ExemptionExpiresOn,
+                x.Customer.ExemptionRegions,
                 x.Expired,
                 x.ExpiresSoon,
             }));

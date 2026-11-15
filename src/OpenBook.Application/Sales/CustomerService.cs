@@ -242,6 +242,7 @@ public sealed class CustomerService(ISalesStore store, ISalesTaxStore taxes, IPr
         ExemptionReason = c.ExemptionReason?.ToString(),
         c.ExemptionExpiresOn,
         c.ExemptionStartsOn,
+        c.ExemptionRegions,
         c.PriceLevelId,
         c.ParentId,
         c.BillWithParent,

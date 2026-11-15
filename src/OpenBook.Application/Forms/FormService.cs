@@ -261,10 +261,11 @@ public sealed class FormService(
         if (taxCodeId is null)
             return [];
         var totals = new List<FormTotal> { new("Subtotal", TaxCalculator.SalesAmount(lines)) };
+        // An exemption for some states only (C326) still prints the other states' tax.
+        totals.AddRange(lines.Where(l => l.Kind == SalesLineKind.Tax && (exemption is null || l.Amount != 0m)).OrderBy(l => l.LineNumber)
+            .Select(l => new FormTotal(l.Description ?? "Sales tax", l.Amount)));
         if (exemption is not null)
             totals.Add(new FormTotal($"Sales tax: exempt ({exemption})", 0m));
-        else
-            totals.AddRange(lines.Where(l => l.Kind == SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l => new FormTotal(l.Description ?? "Sales tax", l.Amount)));
         return totals;
     }
 

@@ -1704,6 +1704,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<TaxCode>().WithMany().HasForeignKey(c => c.TaxCodeId).OnDelete(DeleteBehavior.Restrict);
             b.Property(c => c.ExemptionCertificate).HasMaxLength(50);
             b.Property(c => c.ExemptionReason).HasConversion<string>().HasMaxLength(20);
+            b.Property(c => c.ExemptionRegions).HasMaxLength(100);
             b.HasOne<PriceLevel>().WithMany().HasForeignKey(c => c.PriceLevelId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<FormDesign>().WithMany().HasForeignKey(c => c.FormDesignId).OnDelete(DeleteBehavior.Restrict);
             b.Property(c => c.EmailCc).HasMaxLength(1000);

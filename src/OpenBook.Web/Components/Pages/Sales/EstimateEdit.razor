@@ -55,7 +55,7 @@
             {
                 <div class="alert notice" role="status">@_creditWarning</div>
             }
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" />
 
             <MoreOptions HasContent="@(_segments.Locations.Count > 0)" Open="@(_locationId is not null)">
                 <LocationField Options="_segments" @bind-Value="_locationId" />
@@ -126,6 +126,7 @@
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
     private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
     private string? TaxExemption => SelectedTax is null ? null : CustomerTree.ExemptionOn(TaxCustomer, _date, _customers);
+    private Func<TaxComponent, bool> ExemptFrom => SalesLineModel.ExemptFrom(CustomerTree.ExemptionHolder(TaxCustomer, _date, _customers));
     private bool TaxExemptionExpired => SelectedTax is not null && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
 
     /// <summary>Starts the document with the customer's tax code, when it can be charged.</summary>

@@ -295,7 +295,7 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         return components;
     }
 
-    private static TaxComponent Component(TaxRate rate, TaxAgency agency, DateOnly on) => new(rate.Id, rate.Name, rate.PercentOn(on), agency.LiabilityAccountId);
+    private static TaxComponent Component(TaxRate rate, TaxAgency agency, DateOnly on) => new(rate.Id, rate.Name, rate.PercentOn(on), agency.LiabilityAccountId, agency.Region);
 
     /// <summary>Sets a rate's percentage from a date on (null percent removes the change on that date), audited on the rate.</summary>
     public async Task<TaxRate> SetRateChangeAsync(Guid id, DateOnly effectiveFrom, decimal? percent, CancellationToken ct = default)
