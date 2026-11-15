@@ -3206,6 +3206,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid?>("PoolClassId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("RunsMonthly")
+                        .HasColumnType("boolean");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");

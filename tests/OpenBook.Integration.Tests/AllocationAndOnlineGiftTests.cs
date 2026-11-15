@@ -74,6 +74,24 @@ public sealed class AllocationAndOnlineGiftTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_rule_set_to_run_monthly_runs_once_for_the_month_just_ended()
+    {
+        await Rent(1000m);
+        var manual = await Rule();
+        var monthly = await In<AllocationService, AllocationRule>(s => s.SaveAsync(manual.Id, new AllocationRuleDetails("Rent", _rent.Id, null,
+            [new AllocationShareDraft(_food.Id, 60m), new AllocationShareDraft(_shelter.Id, 40m)], RunsMonthly: true)));
+        Assert.True(monthly.RunsMonthly);
+
+        // Still in March: nothing due. From April, March runs once (C088).
+        Assert.Empty((await In<AllocationService, (IReadOnlyList<AllocationRun>, IReadOnlyList<string>)>(s => s.RunDueAsync(Mar31))).Item1);
+        var (runs, refused) = await In<AllocationService, (IReadOnlyList<AllocationRun>, IReadOnlyList<string>)>(s => s.RunDueAsync(new DateOnly(2026, 4, 2)));
+        Assert.Empty(refused);
+        Assert.Equal((Mar1, Mar31, 1000m), (Assert.Single(runs).From, runs[0].To, runs[0].Amount));
+        Assert.Empty((await In<AllocationService, (IReadOnlyList<AllocationRun>, IReadOnlyList<string>)>(s => s.RunDueAsync(new DateOnly(2026, 4, 3)))).Item1);
+        Assert.Equal(600m, (await Lines()).Where(l => l.AccountId == _rent.Id && l.ClassId == _food.Id).Sum(l => l.Amount));
+    }
+
+    [Fact]
     public async Task Cents_land_exactly_and_a_void_puts_it_back()
     {
         await Rent(100.01m);

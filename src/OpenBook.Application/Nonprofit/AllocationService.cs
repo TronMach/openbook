@@ -97,6 +97,34 @@ public sealed class AllocationService(INonprofitStore store, AccountService acco
         return runs;
     }
 
+    /// <summary>
+    /// The rules set to run each month end (C088), for the calendar month before <paramref name="today"/>'s: each one that
+    /// has no standing run ending that month is run, on its own, so one refused (a closed month, say) leaves the rest.
+    /// Returns the runs made and the refusals, by rule name.
+    /// </summary>
+    public async Task<(IReadOnlyList<AllocationRun> Runs, IReadOnlyList<string> Refused)> RunDueAsync(DateOnly today, CancellationToken ct = default)
+    {
+        var to = new DateOnly(today.Year, today.Month, 1).AddDays(-1);
+        var from = new DateOnly(to.Year, to.Month, 1);
+        var done = (await store.ListAllocationRunsAsync(ct)).Where(r => r.Status == DocumentStatus.Posted && r.To == to).Select(r => r.RuleId).ToHashSet();
+        var due = (await store.ListAllocationRulesAsync(ct)).Where(r => r.IsActive && r.RunsMonthly && !done.Contains(r.Id)).ToList();
+        var runs = new List<AllocationRun>();
+        var refused = new List<string>();
+        foreach (var rule in due)
+        {
+            try
+            {
+                runs.AddRange(await RunAsync(from, to, [rule.Id], ct));
+            }
+            catch (DomainException ex)
+            {
+                refused.Add($"{rule.Name}: {ex.Message}");
+            }
+        }
+
+        return (runs, refused);
+    }
+
     public async Task<AllocationRun> VoidAsync(Guid id, string reason, CancellationToken ct = default)
     {
         var run = await store.GetAllocationRunAsync(id, ct) ?? throw new EntityNotFoundException(RunEntity, id);
@@ -114,6 +142,7 @@ public sealed class AllocationService(INonprofitStore store, AccountService acco
         r.AccountId,
         r.PoolClassId,
         r.IsActive,
+        r.RunsMonthly,
         Shares = r.Shares.Select(s => new { s.ClassId, s.Percent }),
     });
 

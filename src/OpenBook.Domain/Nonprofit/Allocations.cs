@@ -7,7 +7,8 @@ public sealed record AllocationShareDraft(Guid ClassId, decimal Percent);
 
 /// <param name="AccountId">The expense account being spread.</param>
 /// <param name="PoolClassId">Where its cost sits until it's spread; null for lines with no class.</param>
-public sealed record AllocationRuleDetails(string Name, Guid AccountId, Guid? PoolClassId, IReadOnlyList<AllocationShareDraft> Shares);
+/// <param name="RunsMonthly">Run by itself for each month just ended (C088), so costs entered on bills and recurring templates are spread without a manual run.</param>
+public sealed record AllocationRuleDetails(string Name, Guid AccountId, Guid? PoolClassId, IReadOnlyList<AllocationShareDraft> Shares, bool RunsMonthly = false);
 
 /// <summary>
 /// How a shared cost (rent, say) is spread across programs and functions: one account, from a pool, by percentages that
@@ -26,6 +27,9 @@ public sealed class AllocationRule
     public Guid AccountId { get; private set; }
     public Guid? PoolClassId { get; private set; }
     public bool IsActive { get; private set; }
+
+    /// <summary>Runs by itself after each month ends, for that month (C088).</summary>
+    public bool RunsMonthly { get; private set; }
     public IReadOnlyList<AllocationShare> Shares => _shares;
 
     public static AllocationRule Create(AllocationRuleDetails details)
@@ -53,6 +57,7 @@ public sealed class AllocationRule
             throw new DomainException("allocation.shares_total", $"The shares add up to {shares.Sum(s => s.Percent):0.####}%, not 100%.");
         AccountId = details.AccountId;
         PoolClassId = details.PoolClassId == Guid.Empty ? null : details.PoolClassId;
+        RunsMonthly = details.RunsMonthly;
         _shares.Clear();
         _shares.AddRange(shares.Select((s, i) => new AllocationShare(i + 1, s.ClassId, s.Percent)));
     }

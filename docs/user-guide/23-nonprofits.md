@@ -69,7 +69,7 @@ Gifts cleared this way don't wait to be deposited, and can't be voided until the
 
 ### Spreading shared costs
 
-**Nonprofit → Shared cost allocations** spreads an expense such as rent across programs and functions. A rule names the account, where the cost sits until it's spread (lines with no class, or a class you keep for it) and each class's percentage, adding up to 100. Pick a period, check what's in each pool, and **Post the allocations**: one entry per rule, dated at the end of the period, moving the cost out of the pool. Running it again moves only what's new, and a run can be voided.
+**Nonprofit → Shared cost allocations** spreads an expense such as rent across programs and functions. A rule names the account, where the cost sits until it's spread (lines with no class, or a class you keep for it) and each class's percentage, adding up to 100. Pick a period, check what's in each pool, and **Post the allocations**: one entry per rule, dated at the end of the period, moving the cost out of the pool. Running it again moves only what's new, and a run can be voided. Tick **Run at each month end by itself** on a rule and OpenBook runs it for the month just ended, once, early in the next month, so rent entered on bills or recurring templates is spread without a manual run. If a run is refused (the month is closed, say), **Settings → System** shows the job's error.
 
 ### Recurring gifts
 

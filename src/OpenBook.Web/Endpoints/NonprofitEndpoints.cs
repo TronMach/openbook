@@ -349,7 +349,7 @@ public static class NonprofitEndpoints
         {
             var shares = Enumerable.Range(0, 8).Select(i => new AllocationShareDraft(Id(form[$"class:{i}"]) ?? Guid.Empty, Number(form[$"percent:{i}"]) ?? 0m)).ToList();
             return await Back("/nonprofit/allocations", () => allocations.SaveAsync(Id(form["id"]),
-                new AllocationRuleDetails(form["name"].ToString(), Id(form["accountId"]) ?? Guid.Empty, Id(form["poolClassId"]), shares), ct));
+                new AllocationRuleDetails(form["name"].ToString(), Id(form["accountId"]) ?? Guid.Empty, Id(form["poolClassId"]), shares, form["monthly"] == "true"), ct));
         }).RequireAuthorization();
 
         app.MapPost("/nonprofit/allocations/rules/{id:guid}/active", async (Guid id, IFormCollection form, AllocationService allocations, CancellationToken ct) =>

@@ -3199,6 +3199,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("PoolClassId")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("RunsMonthly")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");

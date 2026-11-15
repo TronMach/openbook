@@ -176,6 +176,15 @@ internal sealed partial class RecurringPostingService(
             return true;
         }, ct);
 
+        // Allocation rules set to run each month end (C088): the month just ended, once; a refusal is the step's error.
+        await StepAsync("Cost allocations", async services =>
+        {
+            var (_, refused) = await services.GetRequiredService<OpenBook.Application.Nonprofit.AllocationService>().RunDueAsync(today, ct);
+            if (refused.Count > 0)
+                throw new DomainException("allocation.auto_refused", $"Some cost allocations couldn't run: {string.Join("; ", refused)}");
+            return true;
+        }, ct);
+
         await StepAsync("Idempotency keys", async services =>
         {
             await services.GetRequiredService<OpenBook.Application.IIdempotencyStore>().PurgeAsync(ct);
