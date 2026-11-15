@@ -8,6 +8,9 @@ using OpenBook.Domain.Sales;
 
 namespace OpenBook.Application.Sales;
 
+/// <summary>One option of a style's variants: its name and values ("Size": S, M, L).</summary>
+public sealed record VariantOption(string Name, IReadOnlyList<string> Values);
+
 /// <summary>Products and services.</summary>
 public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore purchases, AccountService accounts, IInventoryStore inventory, InventoryAccounts inventoryAccounts, IClock clock, ICurrentUser user)
 {
@@ -45,6 +48,65 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
         store.Add(Audit(AuditAction.Created, item, before: null));
         await store.SaveChangesAsync(ct);
         return item;
+    }
+
+    public const int MaxVariantOptions = 3;
+    public const int MaxVariantValues = 20;
+    public const int MaxVariantsAtOnce = 100;
+
+    /// <summary>
+    /// Makes an item for each combination of the options ("Size": S, M, L × "Colour": Red, Blue) as a variant of the
+    /// style (C329): named "T-shirt - M / Red", with the style's details (not its barcode) and quantity breaks.
+    /// Combinations it already has are left alone. Bundles and assemblies don't take variants.
+    /// </summary>
+    public async Task<IReadOnlyList<Item>> CreateVariantsAsync(Guid styleId, IReadOnlyList<VariantOption> options, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var style = await GetAsync(styleId, ct) ?? throw new EntityNotFoundException(EntityType, styleId);
+        if (style.VariantOfId is not null)
+            throw new DomainException("item.variant_of_variant", $"{style.Name} is a variant itself, so it can't have variants.");
+        if (style.IsBundle || style.IsAssembly)
+            throw new DomainException("item.variants_components", "Bundles and assemblies don't take variants: make variants of their components.");
+        var cleaned = options
+            .Select(o => (Name: o.Name?.Trim() ?? "", Values: (o.Values ?? []).Select(v => v?.Trim() ?? "").Where(v => v.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList()))
+            .Where(o => o.Name.Length > 0 || o.Values.Count > 0)
+            .ToList();
+        if (cleaned.Count == 0)
+            throw new DomainException("item.variants_none", "Name an option and its values, such as Size: S, M, L.");
+        if (cleaned.Count > MaxVariantOptions)
+            throw new DomainException("item.variants_options", $"Use at most {MaxVariantOptions} options.");
+        if (cleaned.Any(o => o.Name.Length == 0 || o.Values.Count == 0))
+            throw new DomainException("item.variants_option_incomplete", "Each option needs a name and at least one value.");
+        if (cleaned.Any(o => o.Values.Count > MaxVariantValues))
+            throw new DomainException("item.variants_values", $"Give an option at most {MaxVariantValues} values.");
+        IEnumerable<IReadOnlyList<string>> combinations = [[]];
+        foreach (var option in cleaned)
+            combinations = combinations.SelectMany(c => option.Values.Select(v => (IReadOnlyList<string>)[.. c, v])).ToList();
+        var all = combinations.ToList();
+        if (all.Count > MaxVariantsAtOnce)
+            throw new DomainException("item.variants_too_many", $"That's {all.Count} variants; make at most {MaxVariantsAtOnce} at once.");
+
+        var items = await store.ListItemsAsync(ct);
+        var created = new List<Item>();
+        foreach (var values in all)
+        {
+            var name = Item.NormalizeName($"{style.Name} - {string.Join(" / ", values)}");
+            if (items.Any(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)) || created.Any(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            var variant = Item.Create(style.Details() with { Name = name, Barcode = null });
+            variant.SetQuantityBreaks(style.QuantityBreaks.Select(b => (b.FromQuantity, b.Kind, b.Value)));
+            variant.MakeVariantOf(style, string.Join(", ", cleaned.Select((o, i) => $"{o.Name}: {values[i]}")));
+            created.Add(variant);
+        }
+
+        foreach (var variant in created)
+        {
+            store.Add(variant);
+            store.Add(Audit(AuditAction.Created, variant, before: null));
+        }
+
+        await store.SaveChangesAsync(ct);
+        return created;
     }
 
     /// <summary>Active income accounts, in chart order.</summary>
@@ -235,6 +297,14 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
         i.PreferredVendorId,
         i.ReorderQuantity,
         i.LeadTimeDays,
+        i.Category,
+        i.Weight,
+        i.Volume,
+        i.Unit,
+        i.PackUnit,
+        i.PackSize,
+        i.VariantOfId,
+        i.VariantOptions,
         Components = i.Components.Select(c => new { c.ComponentItemId, c.Quantity }).ToList(),
         QuantityBreaks = i.QuantityBreaks.Select(b => new { b.FromQuantity, Kind = b.Kind.ToString(), b.Value }).ToList(),
     });

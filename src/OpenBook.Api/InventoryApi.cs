@@ -84,6 +84,9 @@ internal static class InventoryApi
         inventory.MapPost("/adjustments/{id:guid}/void", async (Guid id, VoidInventoryAdjustmentRequest r, InventoryAdjustmentService s, CancellationToken ct) =>
             InventoryAdjustmentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
+        inventory.MapPost("/items/{id:guid}/variants", async (Guid id, IReadOnlyList<VariantOption> options, ItemService s, CancellationToken ct) =>
+            (await s.CreateVariantsAsync(id, options ?? [], ct)).Select(i => ItemResponse.From(i)).ToList());
+
         inventory.MapPut("/items/{id:guid}/components", async (Guid id, IReadOnlyList<ItemComponent> components, ItemService s, CancellationToken ct) =>
             ItemResponse.From(await s.SetComponentsAsync(id, (components ?? []).Select(c => (c.ComponentItemId, c.Quantity)).ToList(), ct)));
 

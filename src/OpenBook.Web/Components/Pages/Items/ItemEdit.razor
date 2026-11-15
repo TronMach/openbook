@@ -87,6 +87,21 @@
                     <InputNumber id="volume" @bind-Value="Input.Volume" class="short" />
                 </div>
             </div>
+            <div class="row">
+                <div class="field">
+                    <label for="unit">Unit <span class="muted">(optional)</span></label>
+                    <InputText id="unit" @bind-Value="Input.Unit" maxlength="@Item.MaxUnitLength" class="short" placeholder="each, kg, hour" />
+                </div>
+                <div class="field">
+                    <label for="pack-unit">Bought in packs of <span class="muted">(optional)</span></label>
+                    <InputText id="pack-unit" @bind-Value="Input.PackUnit" maxlength="@Item.MaxUnitLength" class="short" placeholder="carton" />
+                </div>
+                <div class="field">
+                    <label for="pack-size">Units to a pack</label>
+                    <InputNumber id="pack-size" @bind-Value="Input.PackSize" class="short" placeholder="24" />
+                </div>
+            </div>
+            <span class="hint">With a pack, reorder suggestions come in whole packs and purchase orders say how many packs a quantity is.</span>
             <div class="field">
                 <label for="barcode">Barcode <span class="muted">(optional)</span></label>
                 <InputText id="barcode" @bind-Value="Input.Barcode" maxlength="50" autocomplete="off" />
@@ -231,6 +246,66 @@
                 </tbody>
             </table>
             <div class="actions"><button type="submit" class="secondary">Save quantity breaks</button></div>
+        </PostForm>
+    </div>
+}
+
+@if (_style is not null)
+{
+    <div class="card">
+        <p>A variant of <a href="/items/@_style.Id">@_style.Name</a>@(_item!.VariantOptions is { } options ? $" ({options})" : "").
+            <span class="muted">Sales by style adds its sales to the style's.</span></p>
+    </div>
+}
+else if (_item is not null && !Item.HasComponents(_item.Type))
+{
+    <div class="card" id="variants">
+        <div class="toolbar">
+            <h2>Variants</h2>
+        </div>
+        @if (VariantError is not null)
+        {
+            <div class="alert error" role="alert">@VariantError</div>
+        }
+        else if (VariantsMade is { } made)
+        {
+            <div class="alert success" role="status">@(made == 0 ? "Those variants were there already." : made == 1 ? "Made 1 variant." : $"Made {made} variants.")</div>
+        }
+        @if (_variants.Count > 0)
+        {
+            <table class="data">
+                <thead><tr><th>Variant</th><th>Options</th><th class="num">Price</th></tr></thead>
+                <tbody>
+                    @foreach (var v in _variants)
+                    {
+                        <tr>
+                            <td><a href="/items/@v.Id">@v.Name</a>@(v.IsActive ? "" : " (inactive)")</td>
+                            <td>@v.VariantOptions</td>
+                            <td class="num">@Labels.Price(v.Rate)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        <p class="muted">
+            Sizes, colours and the like, each a product of its own with its own stock, made from this one's details. Give each option its values,
+            separated by commas; one variant is made for each combination you don't have yet. <strong>Reports → Sales by style</strong> adds them up.
+        </p>
+        <PostForm Action="@($"/items/{_item.Id}/variants")" data-enhance="false">
+            <AntiforgeryToken />
+            <table class="data entry">
+                <thead><tr><th>Option</th><th>Values</th></tr></thead>
+                <tbody>
+                    @for (var n = 0; n < ItemService.MaxVariantOptions; n++)
+                    {
+                        <tr>
+                            <td><input name="option@(n)" aria-label="Option @(n + 1)" maxlength="40" placeholder="@(n == 0 ? "Size" : n == 1 ? "Colour" : "")" /></td>
+                            <td><input name="values@(n)" aria-label="Values of option @(n + 1)" maxlength="400" placeholder="@(n == 0 ? "S, M, L" : n == 1 ? "Red, Blue" : "")" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="actions"><button type="submit" class="secondary">Make variants</button></div>
         </PostForm>
     </div>
 }
@@ -419,6 +494,8 @@
     private List<Account> _incomeAccounts = [];
     private List<Account> _liabilities = [];
     private IReadOnlyList<string> _categories = [];
+    private IReadOnlyList<Item> _variants = [];
+    private Item? _style;
     private List<Account> _assetAccounts = [];
     private List<Account> _costAccounts = [];
     private StockLevel? _stock;
@@ -447,6 +524,12 @@
 
     [SupplyParameterFromQuery(Name = "components")]
     public string? ComponentsSaved { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? VariantError { get; set; }
+
+    [SupplyParameterFromQuery(Name = "variants")]
+    public int? VariantsMade { get; set; }
 
     [SupplyParameterFromForm(FormName = "item")]
     private ItemModel Input { get; set; } = default!;
@@ -560,12 +643,15 @@
         // Sales tax liabilities (and the account above them) belong to the tax agencies, not to items.
         var taxAccounts = (await Taxes.ListAgenciesAsync()).Select(t => t.LiabilityAccountId).ToHashSet();
         var taxParents = taxAccounts.Select(id => _chart.Find(id)?.ParentId).OfType<Guid>().ToHashSet();
-        _categories = [.. (await ItemService.ListAsync(includeInactive: true)).Select(i => i.Category).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
+        var everyItem = await ItemService.ListAsync(includeInactive: true);
+        _categories = [.. everyItem.Select(i => i.Category).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase)];
         _liabilities = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type == AccountType.OtherCurrentLiability && !taxAccounts.Contains(a.Id) && !taxParents.Contains(a.Id)).ToList();
         _assetAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.OtherCurrentAsset).ToList();
         _costAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
         _item = Id is { } id ? await ItemService.GetAsync(id) : null;
+        _variants = _item is null ? [] : [.. everyItem.Where(i => i.VariantOfId == _item.Id).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)];
+        _style = _item?.VariantOfId is { } styleId ? everyItem.FirstOrDefault(i => i.Id == styleId) : null;
         if (_item is not null && Item.HasComponents(_item.Type))
         {
             // Bundles hold anything but bundles; assemblies are built from tracked stock.
@@ -590,7 +676,7 @@
             {
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
-                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, Category = _item.Category, Weight = _item.Weight, Volume = _item.Volume, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
+                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, Category = _item.Category, Weight = _item.Weight, Volume = _item.Volume, Unit = _item.Unit, PackUnit = _item.PackUnit, PackSize = _item.PackSize, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
                 PreferredVendorId = _item.PreferredVendorId, ReorderQuantity = _item.ReorderQuantity, LeadTimeDays = _item.LeadTimeDays,
             };
         Input.Version ??= opened;
@@ -632,7 +718,8 @@
             var tracking = _assetLocked ? _item!.Tracking : Input.Tracking;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
                 asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild, Input.SellShort,
-                Input.PreferredVendorId, Input.ReorderQuantity, Input.LeadTimeDays, Input.Category ?? "", Input.Weight ?? 0m, Input.Volume ?? 0m);
+                Input.PreferredVendorId, Input.ReorderQuantity, Input.LeadTimeDays, Input.Category ?? "", Input.Weight ?? 0m, Input.Volume ?? 0m,
+                Input.Unit ?? "", Input.PackUnit ?? "", Input.PackSize);
             await Versions.EnsureUnchangedAsync<Item>(_item?.Id ?? Guid.Empty, Input.Version);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
@@ -694,6 +781,9 @@
         public decimal? Weight { get; set; }
 
         public decimal? Volume { get; set; }
+        public string? Unit { get; set; }
+        public string? PackUnit { get; set; }
+        public decimal? PackSize { get; set; }
 
         public Guid? PreferredVendorId { get; set; }
 

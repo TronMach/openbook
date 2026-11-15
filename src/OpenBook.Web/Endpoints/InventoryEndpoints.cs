@@ -39,6 +39,23 @@ public static class InventoryEndpoints
             }
         }).RequireAuthorization();
 
+        // Fields: option{n} (a name) and values{n} (comma-separated).
+        app.MapPost("/items/{id:guid}/variants", async (Guid id, IFormCollection form, ItemService items, CancellationToken ct) =>
+        {
+            var options = Enumerable.Range(0, ItemService.MaxVariantOptions)
+                .Select(n => new VariantOption(form[$"option{n}"].ToString(), form[$"values{n}"].ToString().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)))
+                .ToList();
+            try
+            {
+                var made = await items.CreateVariantsAsync(id, options, ct);
+                return Results.Redirect($"/items/{id}?variants={made.Count}#variants");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/items/{id}?variantError={Uri.EscapeDataString(ex.Message)}#variants");
+            }
+        }).RequireAuthorization();
+
         app.MapPost("/items/{id:guid}/lots/expiry", async (Guid id, IFormCollection form, InventoryService inventory, CancellationToken ct) =>
         {
             var date = DateOnly.TryParseExact(form["expiresOn"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : (DateOnly?)null;

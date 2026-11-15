@@ -86,7 +86,10 @@ public sealed class MergeService(ISalesStore sales, IPurchasesStore purchases, I
             throw new DomainException("merge.item_type", $"{merged.Name} and {kept.Name} are different types. Change one so they match first.");
         if (!kept.IsActive)
             throw new DomainException("merge.kept_inactive", $"{kept.Name} is inactive. Make it active first, or keep the other one.");
-        var names = (await sales.ListItemsAsync(ct)).Select(i => i.Name).ToList();
+        var all = await sales.ListItemsAsync(ct);
+        if (all.Any(i => i.VariantOfId == merged.Id))
+            throw new DomainException("merge.item_variants", $"{merged.Name} has variants, which would be left without their style. Merge the other one into it instead.");
+        var names = all.Select(i => i.Name).ToList();
 
         return await MergeAsync(MergeKind.Item, "item", merged.Id, kept.Id, merged.Name, kept.Name, () =>
         {

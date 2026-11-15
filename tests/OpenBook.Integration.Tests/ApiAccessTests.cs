@@ -575,6 +575,8 @@ public sealed class AccessRulesTests
     [InlineData("/inventory/items.csv", "GET", UserRole.ViewOnly)]
     [InlineData("/items/batch", "GET", UserRole.Standard)]
     [InlineData("/items/batch", "POST", UserRole.Standard)]
+    [InlineData("/items/0190a7a2-0000-7000-8000-000000000000/variants", "POST", UserRole.Standard)]
+    [InlineData("/api/inventory/items/0190a7a2-0000-7000-8000-000000000000/variants", "POST", UserRole.Standard)]
     [InlineData("/api/items/batch", "POST", UserRole.Standard)]
     [InlineData("/inventory/items/import", "GET", UserRole.Standard)]
     [InlineData("/api/inventory/items/file", "GET", UserRole.ViewOnly)]

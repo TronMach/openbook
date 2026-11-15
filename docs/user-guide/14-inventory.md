@@ -17,7 +17,7 @@ If you sell goods you keep in stock, make them **inventory** items. OpenBook the
 - **Inventory asset account** and **cost of goods sold account**: leave them on *Default* to use "Inventory Asset" and "Cost of Goods Sold" (created when first needed).
 - **Purchase cost**: the default unit cost for stock added by adjustments.
 - **Reorder point**: at or below this quantity on hand the item shows **Low**. [Reordering stock](15-purchase-orders.md#reordering-stock) also counts what's on order and promised, so it can differ.
-- **Reorder quantity** and **Preferred vendor**: what [reordering stock](15-purchase-orders.md#reordering-stock) suggests, and whom it orders from. Leave the quantity blank to order just enough to bring it back above the reorder point.
+- **Reorder quantity** and **Preferred vendor**: what [reordering stock](15-purchase-orders.md#reordering-stock) suggests, and whom it orders from. Leave the quantity blank to order just enough to bring it back above the reorder point. A product bought in packs is suggested in whole packs.
 - **Costing**: **FIFO (first in, first out)**, or **Weighted average**, which costs every sale at the average of what's on hand.
 - **Lot or serial numbers**: none, lots, or serial numbers (below).
 - **Barcode**: scanning it into any item picker chooses the item.
@@ -82,7 +82,7 @@ To change many items at once, or keep a list outside OpenBook, use **Inventory â
 
 - **Item ID** and **Item** (the name), then **Type**, **Active**, **Description**, **Category** and **Barcode**.
 - Pricing: **Price**, **Purchase cost**, **Quantity breaks** (written like `10: 5%; 50: 8.00`, meaning 5% off from 10 units and 8.00 each from 50), and a **Price level:** column for each per-item price level.
-- **Taxable**, the accounts (full name or number), **Cost method**, **Tracking**, **Preferred vendor**, the reorder settings, and **Weight** and **Volume** per unit (a blank cell clears them).
+- **Taxable**, the accounts (full name or number), **Cost method**, **Tracking**, **Preferred vendor**, the reorder settings, **Weight** and **Volume** per unit, and **Unit**, **Pack** and **Pack size** (a blank cell clears them; a blank **Pack** clears the size too).
 - **On hand** in the warehouse you choose.
 - A column for each item custom field.
 

@@ -6468,6 +6468,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<long?>("PackSize")
+                        .HasColumnType("bigint")
+                        .HasColumnName("PackSizeTenThousandths");
+
+                    b.Property<string>("PackUnit")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<Guid?>("PreferredVendorId")
                         .HasColumnType("uuid");
 
@@ -6505,6 +6513,17 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("Unit")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("VariantOfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VariantOptions")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
@@ -6530,6 +6549,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.HasIndex("Name")
                         .IsUnique();
+
+                    b.HasIndex("VariantOfId");
 
                     b.ToTable("Items", (string)null);
                 });

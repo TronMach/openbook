@@ -163,7 +163,19 @@ public sealed class ActivityReports(
     }
 
     /// <summary>Sales by item category (the items' own figures, as on sales by product or service, added up per category).</summary>
-    public async Task<ReportTable> SalesByCategoryAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    public Task<ReportTable> SalesByCategoryAsync(DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        SalesByGroupAsync(from, to, "Sales by category", "Category", "No category", (item, _) => item?.Category,
+            "Each product or service's sales, as on sales by product or service, added up by the category on its page.", ct);
+
+    /// <summary>Sales by style (C329): each item's variants added to it; items without variants on their own.</summary>
+    public Task<ReportTable> SalesByStyleAsync(DateOnly from, DateOnly to, CancellationToken ct = default) =>
+        SalesByGroupAsync(from, to, "Sales by style", "Style", "Not stocked", (item, all) =>
+            item is null ? null : item.VariantOfId is { } style && all.TryGetValue(style, out var parent) ? parent.Name : item.Name,
+            "Each product or service's sales, as on sales by product or service, with variants (sizes, colours) added to the item they were made from.", ct);
+
+    private async Task<ReportTable> SalesByGroupAsync(
+        DateOnly from, DateOnly to, string title, string heading, string none, Func<Item?, IReadOnlyDictionary<Guid, Item>, string?> group, string note,
+        CancellationToken ct)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var (byItem, discounts) = await SoldByItemAsync(from, to, ct);
@@ -177,10 +189,9 @@ public sealed class ActivityReports(
         var unstocked = channel.Where(c => c.ItemId is null).Sum(c => c.Amount);
         var items = (await sales.ListItemsAsync(ct)).ToDictionary(i => i.Id);
         var total = byItem.Values.Sum(v => v.Amount) + discounts + unstocked;
-        const string None = "No category";
         var groups = byItem.Where(kv => kv.Value.Amount != 0m || kv.Value.Quantity != 0m)
-            .GroupBy(kv => items.TryGetValue(kv.Key, out var i) && i.Category is { } c ? c : None, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(g => g.Key == None ? 1 : 0).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+            .GroupBy(kv => group(items.GetValueOrDefault(kv.Key), items) ?? none, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key == none ? 1 : 0).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
         var rows = groups.Select(g => new ReportTableRow(
         [
             g.Key, new ReportCell(g.Count()), g.Sum(kv => kv.Value.Amount), new ReportCell(Share(g.Sum(kv => kv.Value.Amount), total)),
@@ -191,11 +202,11 @@ public sealed class ActivityReports(
             rows.Add(new ReportTableRow(["Discounts", ReportCell.Empty, discounts, new ReportCell(Share(discounts, total))]));
         rows.Add(new ReportTableRow(["Total", ReportCell.Empty, total, new ReportCell(total == 0m ? null : 100m)], 0, ReportRowStyle.Total));
         return new ReportTable(
-            "Sales by category",
+            title,
             [company.Name, $"{Comparisons.Describe(from, to)} · Accrual basis"],
-            [new("Category"), new("Items sold", ColumnFormat.Number), new("Amount", ColumnFormat.Money), new("% of sales", ColumnFormat.Percent)],
+            [new(heading), new("Items sold", ColumnFormat.Number), new("Amount", ColumnFormat.Money), new("% of sales", ColumnFormat.Percent)],
             rows,
-            Note: "Each product or service's sales, as on sales by product or service, added up by the category on its page.");
+            Note: note);
     }
 
     /// <summary>

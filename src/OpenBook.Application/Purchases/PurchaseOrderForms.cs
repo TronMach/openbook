@@ -30,8 +30,11 @@ public sealed class PurchaseOrderForms(
             facts.Add(("Our account", account));
         var itemIds = order.Lines.Select(l => l.ItemId).OfType<Guid>().Distinct().ToList();
         var items = itemIds.Count == 0 ? new Dictionary<Guid, Domain.Sales.Item>() : await sales.GetItemsAsync(itemIds, ct);
+        // An item bought in packs says how many packs the quantity is (C329).
+        static string? WithPacks(string? description, Domain.Sales.Item? item, decimal quantity) =>
+            item?.InPacks(quantity) is { } packs ? string.IsNullOrWhiteSpace(description) ? $"({packs})" : $"{description} ({packs})" : description;
         var lines = order.Lines.Select(l => l.IsItem
-            ? new FormLine(l.Description, l.Quantity, l.UnitCost, l.Amount, LineNumber: l.LineNumber,
+            ? new FormLine(WithPacks(l.Description, l.ItemId is { } packed ? items.GetValueOrDefault(packed) : null, l.Quantity), l.Quantity, l.UnitCost, l.Amount, LineNumber: l.LineNumber,
                 Cells: FormService.Cells(l.ItemId is { } item ? items.GetValueOrDefault(item) : null, null, null, null))
             : new FormLine(l.Description, null, null, l.Amount, LineNumber: l.LineNumber)).ToList();
         var party = new FormParty(vendor.CompanyName is { } name && name != vendor.DisplayName ? $"{vendor.DisplayName}\n{name}" : vendor.DisplayName,

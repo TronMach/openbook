@@ -74,7 +74,7 @@ public sealed class ItemFileService(
     [
         IdHeader, "Item", "Type", "Active", "Description", "Category", "Barcode", "Price", "Purchase cost", "Taxable", "Income account",
         "Inventory asset account", "Cost account", "Cost method", "Tracking", "Preferred vendor", "Reorder point", "Reorder quantity",
-        "Lead time days", "Weight", "Volume", "Quantity breaks", "On hand",
+        "Lead time days", "Weight", "Volume", "Unit", "Pack", "Pack size", "Quantity breaks", "On hand",
     ];
 
     /// <summary>Every item (inactive ones too) as CSV, with the On hand of <paramref name="warehouseId"/> (null: the default warehouse).</summary>
@@ -114,6 +114,9 @@ public sealed class ItemFileService(
                 item.LeadTimeDays?.ToString(CultureInfo.InvariantCulture),
                 item.Weight is { } weight ? Number(weight) : null,
                 item.Volume is { } volume ? Number(volume) : null,
+                item.Unit,
+                item.PackUnit,
+                item.PackSize is { } packSize ? Number(packSize) : null,
                 BreaksText(item.QuantityBreaks),
             };
             cells.AddRange(context.Levels.Select(l => l.PriceFor(item.Id) is { } price ? Number(price) : null));
@@ -307,6 +310,9 @@ public sealed class ItemFileService(
         var leadCol = Col("Lead time days", "Lead time");
         var weightCol = Col("Weight", "Weight per unit");
         var volumeCol = Col("Volume", "Volume per unit");
+        var unitCol = Col("Unit", "U/M", "Unit of measure");
+        var packCol = Col("Pack", "Purchase unit");
+        var packSizeCol = Col("Pack size", "Units per pack");
         var breaksCol = Col("Quantity breaks");
         var onHandCol = Col("On hand", "Quantity on hand", "Qty on hand", "Quantity");
         var levelCols = context.Levels.Select(l => (Level: l, Column: Col(LevelPrefix + l.Name))).Where(x => x.Column is not null).ToList();
@@ -368,6 +374,9 @@ public sealed class ItemFileService(
                     // A blank cell in a present column clears the measure (0); an absent column keeps it.
                     Weight: Present(weightCol) ? F(weightCol) is { } w ? Rate(w, "weight") : 0m : null,
                     Volume: Present(volumeCol) ? F(volumeCol) is { } v ? Rate(v, "volume") : 0m : null,
+                    Unit: Present(unitCol) ? F(unitCol) ?? string.Empty : before?.Unit,
+                    PackUnit: Present(packCol) ? F(packCol) ?? string.Empty : before?.PackUnit,
+                    PackSize: Present(packSizeCol) ? F(packSizeCol) is { } ps ? Rate(ps, "pack size") : null : before?.PackSize,
                     AutoBuild: before?.AutoBuild ?? false,
                     SellShort: before?.SellShort ?? ShortStock.Company);
                 if (tracked)
@@ -551,6 +560,14 @@ public sealed class ItemFileService(
             Add("Weight", Shown(before.Weight), Shown(newWeight == 0m ? null : newWeight));
         if (after.Volume is { } newVolume)
             Add("Volume", Shown(before.Volume), Shown(newVolume == 0m ? null : newVolume));
+        static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        if (after.Unit is not null)
+            Add("Unit", Text(before.Unit), Text(after.Unit));
+        if (after.PackUnit is not null)
+        {
+            Add("Pack", Text(before.PackUnit), Text(after.PackUnit));
+            Add("Pack size", Shown(before.PackSize), Shown(Text(after.PackUnit) is null ? null : after.PackSize));
+        }
     }
 
     private static RowPlan Failed(int line, string? name, string message) =>

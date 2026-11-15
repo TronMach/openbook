@@ -1785,6 +1785,11 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(i => i.Barcode).HasMaxLength(50);
             b.Property(i => i.Category).HasMaxLength(50);
             b.Property(i => i.Weight).HasColumnName("WeightTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(i => i.Unit).HasMaxLength(Item.MaxUnitLength);
+            b.Property(i => i.PackUnit).HasMaxLength(Item.MaxUnitLength);
+            b.Property(i => i.PackSize).HasColumnName("PackSizeTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(i => i.VariantOptions).HasMaxLength(Item.MaxVariantOptionsLength);
+            b.HasIndex(i => i.VariantOfId); // no foreign key: SQLite would rebuild Items for one to itself; merging refuses a style
             b.Property(i => i.Volume).HasColumnName("VolumeTenThousandths").HasConversion(NullableTenThousandths);
             b.HasIndex(i => i.Barcode).IsUnique();
             b.Ignore(i => i.IsBundle);

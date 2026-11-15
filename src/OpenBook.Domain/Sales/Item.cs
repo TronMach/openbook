@@ -116,6 +116,54 @@ public sealed class Item
     /// <summary>One unit's volume (cubic feet or meters, used throughout), for landed costs by volume; null when not given.</summary>
     public decimal? Volume { get; private set; }
 
+    /// <summary>What one of it is ("each", "kg", "hour"), shown beside quantities (C329); null for none.</summary>
+    public string? Unit { get; private set; }
+
+    /// <summary>
+    /// The pack it's bought in ("carton"), with <see cref="PackSize"/> units to a pack: reorder suggestions come in whole
+    /// packs and purchase forms say how many packs a quantity is (C329). Null for none.
+    /// </summary>
+    public string? PackUnit { get; private set; }
+
+    public decimal? PackSize { get; private set; }
+
+    /// <summary>The style this item is a variant of ("T-shirt" for "T-shirt - M / Red"), C329; null when it isn't one.</summary>
+    public Guid? VariantOfId { get; private set; }
+
+    /// <summary>A variant's options as made ("Size: M, Colour: Red").</summary>
+    public string? VariantOptions { get; private set; }
+
+    public const int MaxUnitLength = 20;
+    public const int MaxVariantOptionsLength = 200;
+
+    /// <summary>Makes this item a variant of <paramref name="style"/> with these options.</summary>
+    public void MakeVariantOf(Item style, string options)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+        if (style.Id == Id || style.VariantOfId is not null)
+            throw new DomainException("item.variant_of_variant", $"{style.Name} is a variant itself, so it can't have variants.");
+        VariantOfId = style.Id;
+        VariantOptions = Text.Optional(options, MaxVariantOptionsLength, "item.variant_options_too_long", "Variant options");
+    }
+
+    /// <summary>A quantity in whole packs ("2 cartons"), when it's a whole number of them; null otherwise or without a pack.</summary>
+    public string? InPacks(decimal quantity)
+    {
+        if (PackUnit is not { } pack || PackSize is not { } size || quantity <= 0m || quantity % size != 0m)
+            return null;
+        var packs = quantity / size;
+        return $"{packs.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture)} {(packs == 1m ? pack : Plural(pack))} of {size.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture)}";
+    }
+
+    /// <summary>A quantity to buy rounded up to whole packs; as it is without a pack.</summary>
+    public decimal UpToPacks(decimal quantity) =>
+        PackSize is { } size && quantity > 0m ? Math.Ceiling(quantity / size) * size : quantity;
+
+    private static string Plural(string unit) =>
+        unit.EndsWith('s') || unit.EndsWith('x') || unit.EndsWith("ch", StringComparison.Ordinal) ? unit + "es"
+        : unit.EndsWith('y') && unit.Length > 1 && !"aeiou".Contains(unit[^2], StringComparison.Ordinal) ? unit[..^1] + "ies"
+        : unit + "s";
+
     /// <summary>A positive measure to four decimals; 0 clears it.</summary>
     private static decimal? Measure(decimal value, string what) => value == 0m ? null
         : value > 0m && value <= 1_000_000_000m && decimal.Round(value, 4) == value ? value
@@ -149,7 +197,8 @@ public sealed class Item
     /// <summary>The item's details as they are, to change a few and save them back.</summary>
     public ItemDetails Details() => new(
         Name, Type, IncomeAccountId, Rate, Description, Taxable, InventoryAssetAccountId, CostAccountId, ReorderPoint, PurchaseCost,
-        CostMethod, Tracking, Barcode, AutoBuild, SellShort, PreferredVendorId, ReorderQuantity, LeadTimeDays, Category, Weight, Volume);
+        CostMethod, Tracking, Barcode, AutoBuild, SellShort, PreferredVendorId, ReorderQuantity, LeadTimeDays, Category, Weight, Volume,
+        Unit ?? "", PackUnit ?? "", PackSize);
 
     /// <summary>Replaces the components. The service checks what they are (no bundles in bundles, assemblies take tracked items, no cycles).</summary>
     public void SetComponents(IEnumerable<(Guid ItemId, decimal Quantity)> components)
@@ -211,6 +260,15 @@ public sealed class Item
             Weight = Measure(weight, "weight");
         if (details.Volume is { } volume)
             Volume = Measure(volume, "volume");
+        if (details.Unit is not null)
+            Unit = Text.Optional(details.Unit, MaxUnitLength, "item.unit_too_long", "Unit");
+        if (details.PackUnit is not null)
+        {
+            PackUnit = Text.Optional(details.PackUnit, MaxUnitLength, "item.unit_too_long", "Pack");
+            PackSize = PackUnit is null ? null
+                : details.PackSize is { } size && size > 1m && size <= 1_000_000m && decimal.Round(size, SalesLine.Precision) == size ? size
+                : throw new DomainException("item.pack_size", $"Say how many units come in a {PackUnit}: more than one, to four decimals.");
+        }
         Taxable = details.Taxable;
         PreferredVendorId = details.PreferredVendorId is { } vendor && vendor != Guid.Empty ? vendor : null;
         IncomeAccountId = details.IncomeAccountId == Guid.Empty
@@ -357,4 +415,7 @@ public sealed record ItemDetails(
     int? LeadTimeDays = null,
     string? Category = null,
     decimal? Weight = null,
-    decimal? Volume = null);
+    decimal? Volume = null,
+    string? Unit = null,
+    string? PackUnit = null,
+    decimal? PackSize = null);

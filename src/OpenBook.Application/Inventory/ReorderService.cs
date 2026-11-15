@@ -32,9 +32,10 @@ public sealed record StockOutlook(Item Item, decimal OnHand, decimal OnPurchaseO
     /// The item's reorder quantity, else enough whole units to bring it back above the reorder point, or with a lead time
     /// and sales, to last the lead time and a month more, whichever is more; 0 when it needn't be ordered.
     /// </summary>
-    public decimal Suggested => !NeedsReorder ? 0m : Item.ReorderQuantity ?? Math.Max(
+    /// <remarks>An item bought in packs is suggested in whole packs (C329).</remarks>
+    public decimal Suggested => !NeedsReorder ? 0m : Item.UpToPacks(Item.ReorderQuantity ?? Math.Max(
         Item.ReorderPoint is { } point ? Math.Floor(point - Projected) + 1m : 0m,
-        LeadTimeDemand > 0m ? Math.Ceiling(LeadTimeDemand + SoldPerMonth - Projected) : 0m);
+        LeadTimeDemand > 0m ? Math.Ceiling(LeadTimeDemand + SoldPerMonth - Projected) : 0m));
 }
 
 /// <summary>One item to order: from whom, how many and at what unit cost (null for the item's purchase cost).</summary>

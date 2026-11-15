@@ -56,7 +56,17 @@ public sealed record ItemResponse(
 {
     public static ItemResponse From(Item i) => new(
         i.Id, i.Name, i.Type, i.Description, i.Rate, i.IncomeAccountId, i.IsActive, i.Taxable, i.InventoryAssetAccountId, i.CostAccountId, i.ReorderPoint, i.PurchaseCost,
-        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList(), i.CostMethod, i.Components.ToList(), i.Tracking, i.Barcode, i.AutoBuild, i.SellShort) { PreferredVendorId = i.PreferredVendorId, ReorderQuantity = i.ReorderQuantity, LeadTimeDays = i.LeadTimeDays };
+        i.QuantityBreaks.Select(b => new QuantityBreakDto(b.FromQuantity, b.Kind, b.Value)).ToList(), i.CostMethod, i.Components.ToList(), i.Tracking, i.Barcode, i.AutoBuild, i.SellShort)
+    {
+        PreferredVendorId = i.PreferredVendorId, ReorderQuantity = i.ReorderQuantity, LeadTimeDays = i.LeadTimeDays,
+        Unit = i.Unit, PackUnit = i.PackUnit, PackSize = i.PackSize, VariantOfId = i.VariantOfId, VariantOptions = i.VariantOptions,
+    };
+
+    public string? Unit { get; init; }
+    public string? PackUnit { get; init; }
+    public decimal? PackSize { get; init; }
+    public Guid? VariantOfId { get; init; }
+    public string? VariantOptions { get; init; }
 }
 
 /// <param name="Rate">For a tax line, the percentage charged.</param>

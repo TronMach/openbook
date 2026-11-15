@@ -6461,6 +6461,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("PackSize")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("PackSizeTenThousandths");
+
+                    b.Property<string>("PackUnit")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("PreferredVendorId")
                         .HasColumnType("TEXT");
 
@@ -6498,6 +6506,17 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Unit")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("VariantOfId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VariantOptions")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
@@ -6523,6 +6542,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Name")
                         .IsUnique();
+
+                    b.HasIndex("VariantOfId");
 
                     b.ToTable("Items", (string)null);
                 });
