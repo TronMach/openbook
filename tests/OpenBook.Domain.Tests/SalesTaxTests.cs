@@ -128,6 +128,24 @@ public sealed class SalesTaxTests
     }
 
     [Fact]
+    public void A_typed_tax_amount_is_split_between_the_rates_and_recognised_later()
+    {
+        // 8.00 typed on 100 at 6.25% + 2%, split 6.25 : 2.
+        Assert.Equal([6.06m, 1.94m], TaxCalculator.Split(100m, [State, City], _ => false, 8m));
+        Assert.Equal([0m, 0m], TaxCalculator.Split(100m, [State, City], _ => false, 0m));
+        Assert.Equal("tax.typed_cents", CodeOf(() => TaxCalculator.Split(100m, [State, City], _ => false, 8.005m)));
+        Assert.Equal("tax.typed_out_of_range", CodeOf(() => TaxCalculator.Split(100m, [State, City], _ => false, 100.01m)));
+        Assert.Equal("tax.typed_out_of_range", CodeOf(() => TaxCalculator.Split(100m, [State, City], _ => false, -1m)));
+        Assert.Equal("tax.typed_no_rate", CodeOf(() => TaxCalculator.Split(100m, [State, City], _ => true, 8m)));
+
+        var lines = Lines(new SalesLineDraft(Widget.Id, null, 1m, 100m));
+        var typed = TaxCalculator.TaxLines(lines, [State, City], _ => false, 8m);
+        Assert.Equal(8m, TaxCalculator.TypedTax([.. lines, .. typed], null));
+        Assert.Null(TaxCalculator.TypedTax([.. lines, .. TaxCalculator.TaxLines(lines, [State, City], exempt: false)], null));
+        Assert.Null(TaxCalculator.TypedTax(lines, null));
+    }
+
+    [Fact]
     public void Exemption_certificates_apply_until_they_expire()
     {
         var customer = Customer.Create(new CustomerDetails("Reseller", ExemptionCertificate: "R-123", ExemptionReason: ExemptionReason.Resale,

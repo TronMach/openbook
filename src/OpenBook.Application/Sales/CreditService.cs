@@ -20,7 +20,8 @@ public sealed record CreateCreditMemoCommand(
     Guid? TaxCodeId = null,
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
-    Guid? WarehouseId = null);
+    Guid? WarehouseId = null,
+    decimal? TaxAmount = null);
 
 /// <summary>A correction to a posted credit memo (<see cref="CreditService.ChangeCreditMemoAsync"/>). The customer can't change.</summary>
 /// <param name="Lines">Every line the credit memo should have, tax lines left out (they're recalculated).</param>
@@ -41,7 +42,9 @@ public sealed record ChangeCreditMemoCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
-    IReadOnlyList<int?>? FromLines = null);
+    IReadOnlyList<int?>? FromLines = null,
+    decimal? TaxAmount = null,
+    bool WorkOutTax = false);
 
 public enum CreditKind
 {
@@ -119,7 +122,7 @@ public sealed class CreditService(
         if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("creditmemo.number_taken", $"Number {number} is already used by an invoice.");
 
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
         var stock = await inventory.PlanReturnAsync(lines, command.Date, warehouseId, ct);
@@ -170,7 +173,7 @@ public sealed class CreditService(
 
         var drafts = command.Lines.ToList();
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
-            new TaxAsCharged(credit.TaxCodeId, credit.TaxExemption, credit.CustomerId, credit.Lines, command.FromLines), ct);
+            new TaxAsCharged(credit.TaxCodeId, credit.TaxExemption, credit.CustomerId, credit.Lines, command.FromLines), command.TaxAmount, command.WorkOutTax, ct);
         if (credit.AmountRefunded > 0m && (await store.ListRefundsAsync(credit.CustomerId, ct)).Any(r => r.CreditMemoId == credit.Id && r.Status == DocumentStatus.Posted && r.Date < command.Date))
             throw new DomainException("refund.before_source", "This credit memo has a refund dated before that, and a refund can't come before its credit.");
         var used = credit.AmountApplied + credit.AmountRefunded;

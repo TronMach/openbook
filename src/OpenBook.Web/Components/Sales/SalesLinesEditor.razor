@@ -106,7 +106,8 @@
                 IReadOnlyList<SalesLineModel> everyLine = Also.Count == 0 ? Lines : [.. Lines, .. Also];
                 var subtotal = SalesLineModel.Total(everyLine);
                 Func<TaxComponent, bool> exemptFrom = c => Exempt && (ExemptFrom?.Invoke(c) ?? true);
-                var tax = SalesLineModel.Tax(everyLine, Items, Tax, exemptFrom);
+                var worked = SalesLineModel.Tax(everyLine, Items, Tax, exemptFrom);
+                var tax = TaxAmount is null ? worked : SalesLineModel.Tax(everyLine, Items, Tax, exemptFrom, TaxAmount);
                 var extra = (Tax is null ? 1 : 2) + (Classes is null ? 0 : 1);
             }
             @if (Also.Count > 0)
@@ -130,6 +131,17 @@
                     <tr>
                         <td colspan="4" class="num muted">@label@(exemptFrom(Tax!.Components[t]) ? " · exempt" : "")</td>
                         <td class="num">@Labels.Amount(taxAmount)</td>
+                        <td colspan="@extra"></td>
+                    </tr>
+                }
+                @if (TypedTax)
+                {
+                    <tr>
+                        <td colspan="4" class="num"><label for="tax-amount">Tax amount <span class="muted">(blank: worked out)</span></label></td>
+                        <td class="num">
+                            <input id="tax-amount" type="number" step="0.01" min="0" class="num short" placeholder="@worked.Sum(t => t.Amount).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                                   @bind:get="TaxAmount" @bind:set="SetTaxAmountAsync" />
+                        </td>
                         <td colspan="@extra"></td>
                     </tr>
                 }
@@ -204,6 +216,23 @@
     /// <summary>With <see cref="Exempt"/>, the rates the exemption covers (a certificate for some states, C326); null: all.</summary>
     [Parameter]
     public Func<TaxComponent, bool>? ExemptFrom { get; set; }
+
+    /// <summary>Shows a field for typing the tax instead (C328): on invoices, receipts and credit memos.</summary>
+    [Parameter]
+    public bool TypedTax { get; set; }
+
+    /// <summary>The tax as typed; null is worked out from the rates.</summary>
+    [Parameter]
+    public decimal? TaxAmount { get; set; }
+
+    [Parameter]
+    public EventCallback<decimal?> TaxAmountChanged { get; set; }
+
+    private async Task SetTaxAmountAsync(decimal? amount)
+    {
+        await TaxAmountChanged.InvokeAsync(amount);
+        await OnChange.InvokeAsync();
+    }
 
     /// <summary>Active classes when the company tracks them; null hides the class column.</summary>
     [Parameter]

@@ -422,6 +422,37 @@ public sealed class SalesTaxFlowTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_typed_tax_amount_is_charged_and_kept_while_the_lines_are()
+    {
+        var invoice = await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [Widgets(10)], TaxAmount: 80m)));
+        Assert.Equal(1_080m, TotalOf(invoice)); // 82.50 worked out
+        Assert.Equal(80m, TaxCalculator.TypedTax(invoice.Lines, invoice.TaxExemption));
+        Assert.Equal(-80m, await Balance(_stateDor.LiabilityAccountId) + await Balance(_city.LiabilityAccountId));
+
+        var memoOnly = await Corrected(invoice);
+        Assert.Equal(1_080m, TotalOf(memoOnly));
+        var moreLines = await Corrected(memoOnly, [Widgets(20)]);
+        Assert.Equal(2_165m, TotalOf(moreLines)); // what it was typed for changed: worked out again
+        var typedAgain = await In<InvoiceService, Invoice>(s => s.ChangeAsync(invoice.Id, new ChangeInvoiceCommand(Mar1, [Widgets(20)], "Typed", TaxAmount: 160m)));
+        Assert.Equal(2_160m, TotalOf(typedAgain));
+        var workedOut = await In<InvoiceService, Invoice>(s => s.ChangeAsync(invoice.Id, new ChangeInvoiceCommand(Mar1, [Widgets(20)], "Worked out", WorkOutTax: true)));
+        Assert.Equal(2_165m, TotalOf(workedOut));
+
+        var receipt = await In<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(
+            new CreateSalesReceiptCommand(null, Mar1, _checking.Id, [Widgets(1)], TaxCodeId: _springfield.Id, TaxAmount: 8m)));
+        Assert.Equal(108m, receipt.Total);
+        var credit = await In<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(new CreateCreditMemoCommand(_acme.Id, Mar1, [Widgets(1)], TaxAmount: 8.30m)));
+        Assert.Equal(108.30m, credit.Total);
+
+        Assert.Equal("tax.typed_without_code", await Refused(() => In<InvoiceService, Invoice>(s =>
+            s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [Widgets(1)], TaxCodeId: Guid.Empty, TaxAmount: 5m)))));
+        Assert.Equal("tax.typed_no_rate", await Refused(() => In<InvoiceService, Invoice>(s =>
+            s.CreateAsync(new CreateInvoiceCommand(_reseller.Id, Mar1, [Widgets(1)], TaxAmount: 5m)))));
+        Assert.Equal("tax.typed_out_of_range", await Refused(() => In<InvoiceService, Invoice>(s =>
+            s.CreateAsync(new CreateInvoiceCommand(_acme.Id, Mar1, [Widgets(1), Labor(1)], TaxAmount: 101m)))));
+    }
+
+    [Fact]
     public async Task A_return_is_due_after_its_period_until_paid()
     {
         await Tax(s => s.UpdateAgencyAsync(_stateDor.Id, new TaxAgencyDetails("State Department of Revenue", FilingFrequency.Monthly, "ST-1", DueDays: 15)));

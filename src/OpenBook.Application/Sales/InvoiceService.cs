@@ -30,7 +30,8 @@ public sealed record CreateInvoiceCommand(
     Guid? WarehouseId = null,
     IReadOnlyList<Guid>? BillableExpenseIds = null,
     IReadOnlyList<Guid>? TimeEntryIds = null,
-    IReadOnlyList<Guid>? MileageTripIds = null);
+    IReadOnlyList<Guid>? MileageTripIds = null,
+    decimal? TaxAmount = null);
 
 /// <summary>A correction to a posted invoice (<see cref="InvoiceService.ChangeAsync"/>). The customer can't change.</summary>
 /// <param name="Lines">Every line the invoice should have, tax lines left out (they're recalculated).</param>
@@ -53,7 +54,9 @@ public sealed record ChangeInvoiceCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
-    IReadOnlyList<int?>? FromLines = null);
+    IReadOnlyList<int?>? FromLines = null,
+    decimal? TaxAmount = null,
+    bool WorkOutTax = false);
 
 /// <summary>What part of a sales order or estimate an invoice bills, and whether that finishes it.</summary>
 /// <param name="RetainageRelease">Bills retainage held on the estimate's invoices: allowed once the estimate is closed, and leaves it as it is (C338).</param>
@@ -176,7 +179,7 @@ public sealed class InvoiceService(
             throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
         await EnsureNotCreditMemoAsync(number, ct);
 
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId, command.Date, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
         var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
@@ -265,7 +268,7 @@ public sealed class InvoiceService(
         var drafts = command.Lines.ToList();
         EnsureLockedLinesKept(invoice, drafts);
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
-            new TaxAsCharged(invoice.TaxCodeId, invoice.TaxExemption, invoice.CustomerId, invoice.Lines, command.FromLines), ct);
+            new TaxAsCharged(invoice.TaxCodeId, invoice.TaxExemption, invoice.CustomerId, invoice.Lines, command.FromLines), command.TaxAmount, command.WorkOutTax, ct);
         var dueDate = command.DueDate ?? command.Date.AddDays(invoice.DueDate.DayNumber - invoice.Date.DayNumber);
         if (lines.Sum(l => l.Amount) < invoice.AmountPaid)
             throw new DomainException("invoice.total_below_paid",

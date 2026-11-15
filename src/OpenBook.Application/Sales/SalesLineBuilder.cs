@@ -1,5 +1,6 @@
 using OpenBook.Application.Pricing;
 using OpenBook.Application.SalesTax;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Sales;
 using OpenBook.Domain.SalesTax;
 
@@ -39,20 +40,26 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
     /// a tax line for each rate of the tax code (zero when the customer is exempt on <paramref name="date"/>).
     /// </summary>
     /// <param name="taxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no tax.</param>
+    public Task<BuiltSalesLines> BuildAsync(
+        IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, CancellationToken ct) =>
+        BuildAsync(drafts, customer, taxCodeId, date, null, ct);
+
+    /// <param name="typedTax">The total tax as typed (C328), split between the code's rates; null works it out.</param>
     public async Task<BuiltSalesLines> BuildAsync(
-        IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, CancellationToken ct)
+        IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, decimal? typedTax, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(drafts);
         var lines = await BuildAsync(await PriceAsync(drafts, customer, date, ct), ct);
         var codeId = taxCodeId ?? customer?.TaxCodeId;
         if (codeId is not { } id || id == Guid.Empty)
-            return new BuiltSalesLines(lines, null, null);
+            return typedTax is null or 0m ? new BuiltSalesLines(lines, null, null)
+                : throw new DomainException("tax.typed_without_code", "Choose a tax code to charge the typed tax under.");
 
         var components = await SalesTaxService.ComponentsAsync(taxes, id, ct, date);
         var holder = customer is { BillWithParent: true } ? CustomerTree.ExemptionHolder(customer, date, await store.ListCustomersAsync(ct)) : customer?.ExemptionOn(date) is null ? null : customer;
         var exemption = holder?.ExemptionOn(date);
         // A certificate for some states only leaves the other states' rates charged (C326).
-        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, c => holder is not null && holder.ExemptFrom(c))], id, exemption);
+        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, c => holder is not null && holder.ExemptFrom(c), typedTax)], id, exemption);
     }
 
     /// <summary>
@@ -77,8 +84,16 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
     /// lines. Another code is charged as it stands now.
     /// </summary>
     /// <param name="taxCodeId">Null keeps the document's code; <see cref="Guid.Empty"/> charges no tax.</param>
+    public Task<BuiltSalesLines> BuildCorrectionAsync(
+        IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, TaxAsCharged charged, CancellationToken ct) =>
+        BuildCorrectionAsync(drafts, customer, taxCodeId, date, charged, null, false, ct);
+
+    /// <param name="typedTax">The total tax as typed (C328). Null keeps a typed amount the document had while its taxable
+    /// amount stays the same (else the tax is worked out again).</param>
+    /// <param name="workOutTax">Drops a typed amount the document had and works the tax out from its rates.</param>
     public async Task<BuiltSalesLines> BuildCorrectionAsync(
-        IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, TaxAsCharged charged, CancellationToken ct)
+        IReadOnlyList<SalesLineDraft> drafts, Customer? customer, Guid? taxCodeId, DateOnly date, TaxAsCharged charged, decimal? typedTax, bool workOutTax,
+        CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(charged);
         _carried = charged.Lines.Select(l => l.ItemId).OfType<Guid>().ToHashSet();
@@ -86,15 +101,19 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         var components = TaxCalculator.Charged(charged.Lines);
         if (codeId != charged.TaxCodeId || customer?.Id != charged.CustomerId || components.Count == 0)
         {
-            var built = await BuildAsync(drafts, customer, codeId, date, ct);
+            var built = await BuildAsync(drafts, customer, codeId, date, typedTax, ct);
             KeepOriginals(built.Lines, charged);
             return built;
         }
 
         var lines = await BuildAsync(await PriceAsync(drafts, customer, date, ct), ct);
         KeepOriginals(lines, charged);
+        // A typed amount stays while what it was typed for does (C328).
+        var oldTaxable = TaxCalculator.TaxableAmount(charged.Lines.Where(l => l.Kind != SalesLineKind.Tax).ToList());
+        var typed = typedTax ?? (workOutTax || TaxCalculator.TaxableAmount(lines) != oldTaxable ? null : TaxCalculator.TypedTax(charged.Lines, charged.TaxExemption));
         // Kept as charged, down to which states' rates the exemption covered (C326).
-        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, TaxCalculator.KeptExemption(charged.Lines, charged.TaxExemption))],
+        return new BuiltSalesLines(
+            [.. lines, .. TaxCalculator.TaxLines(lines, components, TaxCalculator.KeptExemption(charged.Lines, charged.TaxExemption), typed)],
             codeId, charged.TaxExemption);
     }
 

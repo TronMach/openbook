@@ -55,7 +55,7 @@
 
             @if (!_allLocked)
             {
-                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="_lockedLines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" />
+                <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Also="_lockedLines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" TypedTax="true" @bind-TaxAmount="_taxAmount" />
             }
 
             @if (_locked.Count > 0)
@@ -72,7 +72,7 @@
                         </tbody>
                         @if (_allLocked)
                         {
-                            var tax = SalesLineModel.Tax(_lockedLines, _items, SelectedTax, c => TaxExemption is not null && ExemptFrom(c));
+                            var tax = SalesLineModel.Tax(_lockedLines, _items, SelectedTax, c => TaxExemption is not null && ExemptFrom(c), _taxAmount);
                             <tfoot>
                                 @foreach (var (label, amount) in tax)
                                 {
@@ -109,6 +109,8 @@
 </div>
 
 @code {
+    private decimal? _taxAmount; // typed in place of the worked-out tax (C328)
+    private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
     // Noted when the form opens, so a save can tell if the record has moved on.
     private int? _version;
 
@@ -154,6 +156,7 @@
         _invoice = await Ops.RunAsync<InvoiceService, Invoice?>(s => s.GetAsync(Id));
         if (_invoice is not null)
         {
+            _taxAmount = TaxCalculator.TypedTax(_invoice.Lines, _invoice.TaxExemption);
             _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_invoice.LocationId, .. _invoice.Lines.Select(l => l.ClassId)]));
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
             _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_invoice.TaxCodeId, _invoice.Lines));
@@ -209,7 +212,7 @@
             var drafts = SalesLineModel.Drafts(editable).Concat(_locked.Select(l => l.ToDraft())).ToList();
             var from = editable.Select(l => l.OriginalLine).Concat(_locked.Select(l => (int?)l.LineNumber)).ToList();
             var command = new ChangeInvoiceCommand(_date, drafts, _reason!, _dueDate, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId,
-                WarehouseId: _warehouseId, FromLines: from);
+                WarehouseId: _warehouseId, FromLines: from, TaxAmount: TypedTaxAmount, WorkOutTax: _taxAmount is null);
             await Ops.ChangeAsync<Invoice, InvoiceService, Invoice>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/invoices/{Id}");
         }

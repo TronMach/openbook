@@ -22,7 +22,7 @@ When a rate changes, edit its percentage. The new rate applies to documents from
 
 ## On sales
 
-When you choose a customer, their tax code is selected in the form's **Sales tax** field (it only appears once you have tax codes). Change it for one sale if you need to, for example delivery to a different place, or choose **No sales tax**. An exempt customer's form says so; if their certificate has expired, it warns you and tax is charged. Each line has a **taxable** box that starts from the product's setting.
+When you choose a customer, their tax code is selected in the form's **Sales tax** field (it only appears once you have tax codes). Change it for one sale if you need to, for example delivery to a different place, or choose **No sales tax**. An exempt customer's form says so; if their certificate has expired, it warns you and tax is charged. Each line has a **taxable** box that starts from the product's setting. On invoices, sales receipts and credit memos, when the tax should be a different amount than OpenBook works out (it has to match a customer's or a marketplace's figure, say), type it in **Tax amount** under the tax lines; it's shared between the code's rates the same way. Leave it blank to have it worked out. A typed amount stays when you change the document later as long as the taxable amount stays the same; change the lines and it's worked out again unless you type it again.
 
 OpenBook adds the tax under the subtotal: taxable lines, less their share of any discounts, times the code's combined rate, rounded once, then split among the rates. Invoices and PDFs show one tax row per rate.
 

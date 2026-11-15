@@ -47,7 +47,7 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customer.Id" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" TypedTax="true" @bind-TaxAmount="_taxAmount" />
 
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
@@ -72,6 +72,8 @@
 </div>
 
 @code {
+    private decimal? _taxAmount; // typed in place of the worked-out tax (C328)
+    private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
     // Noted when the form opens, so a save can tell if the record has moved on.
     private int? _version;
 
@@ -112,6 +114,7 @@
         _credit = await Ops.RunAsync<CreditService, CreditMemo?>(s => s.GetCreditMemoAsync(Id));
         if (_credit is not null)
         {
+            _taxAmount = TaxCalculator.TypedTax(_credit.Lines, _credit.TaxExemption);
             _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_credit.LocationId, .. _credit.Lines.Select(l => l.ClassId)]));
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
             _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_credit.TaxCodeId, _credit.Lines));
@@ -146,7 +149,7 @@
         {
             var lines = _lines.Where(l => !l.IsBlank).ToList();
             var command = new ChangeCreditMemoCommand(_date, SalesLineModel.Drafts(lines), _reason!, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId,
-                WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList());
+                WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList(), TaxAmount: TypedTaxAmount, WorkOutTax: _taxAmount is null);
             await Ops.ChangeAsync<CreditMemo, CreditService, CreditMemo>(Id, _version, s => s.ChangeCreditMemoAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/credit-memos/{Id}");
         }

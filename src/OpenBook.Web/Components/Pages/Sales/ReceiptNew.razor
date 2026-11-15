@@ -45,7 +45,7 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" CustomerCodeOff="@(TaxCustomer?.TaxCodeId is { } own && _taxCodes.All(c => c.Code.Id != own))" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" TypedTax="true" @bind-TaxAmount="_taxAmount" />
 
             <MoreOptions Open="@(_depositAccountId != _defaultDepositId || _locationId is not null || _warehouseId is not null)">
                 <div class="field">
@@ -77,6 +77,8 @@
 </div>
 
 @code {
+    private decimal? _taxAmount; // typed in place of the worked-out tax (C328)
+    private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
     // What's typed so far, kept in the tab in case the connection goes.
     internal sealed record Draft(Guid? CustomerId, Guid DepositAccountId, string? Number, DateOnly Date, string? Reference, PaymentMethod? Method, string? Memo,
         Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines);
@@ -202,7 +204,7 @@
         _error = null;
         try
         {
-            var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, Method: _method);
+            var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, Method: _method, TaxAmount: TypedTaxAmount);
             var receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command), _closingPassword);
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/receipts/{receipt.Id}");

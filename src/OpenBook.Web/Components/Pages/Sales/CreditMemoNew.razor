@@ -39,7 +39,7 @@
 
             <SalesTaxField Choices="_taxCodes" @bind-Value="_taxCodeId" CustomerCodeOff="@(TaxCustomer?.TaxCodeId is { } own && _taxCodes.All(c => c.Code.Id != own))" Exemption="@TaxExemption" Expired="TaxExemptionExpired" />
 
-            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" />
+            <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" TypedTax="true" @bind-TaxAmount="_taxAmount" />
 
             <MoreOptions HasContent="@(_segments.Locations.Count > 0 || _warehouses.Count > 1)" Open="@(_locationId is not null || _warehouseId is not null)">
                 <LocationField Options="_segments" @bind-Value="_locationId" />
@@ -60,6 +60,8 @@
 </div>
 
 @code {
+    private decimal? _taxAmount; // typed in place of the worked-out tax (C328)
+    private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
     internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines);
 
     private FormDraft<Draft>? _draft;
@@ -138,7 +140,7 @@
         _error = null;
         try
         {
-            var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId);
+            var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, TaxAmount: TypedTaxAmount);
             var credit = await Ops.RunAsync<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(command), _closingPassword);
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/credit-memos/{credit.Id}");

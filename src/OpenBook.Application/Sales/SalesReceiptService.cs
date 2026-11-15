@@ -21,7 +21,8 @@ public sealed record CreateSalesReceiptCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
-    PaymentMethod? Method = null);
+    PaymentMethod? Method = null,
+    decimal? TaxAmount = null);
 
 /// <summary>A correction to a posted sales receipt (<see cref="SalesReceiptService.ChangeAsync"/>).</summary>
 /// <param name="Lines">Every line the receipt should have, tax lines left out (they're recalculated).</param>
@@ -49,7 +50,9 @@ public sealed record ChangeSalesReceiptCommand(
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
     IReadOnlyList<int?>? FromLines = null,
-    PaymentMethod? Method = null);
+    PaymentMethod? Method = null,
+    decimal? TaxAmount = null,
+    bool WorkOutTax = false);
 
 public sealed class SalesReceiptService(
     ISalesStore store,
@@ -91,7 +94,7 @@ public sealed class SalesReceiptService(
         if ((await store.ListReceiptNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
 
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, ct);
+        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
         var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
 
@@ -151,7 +154,7 @@ public sealed class SalesReceiptService(
 
         var drafts = command.Lines.ToList();
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
-            new TaxAsCharged(receipt.TaxCodeId, receipt.TaxExemption, receipt.CustomerId, receipt.Lines, command.FromLines), ct);
+            new TaxAsCharged(receipt.TaxCodeId, receipt.TaxExemption, receipt.CustomerId, receipt.Lines, command.FromLines), command.TaxAmount, command.WorkOutTax, ct);
         if (receipt.DepositId is not null && (lines.Sum(l => l.Amount) != receipt.Total || depositAccountId != receipt.DepositAccountId))
             throw new DomainException("receipt.deposited",
                 $"Sales receipt {receipt.Number} is in a bank deposit, so its total and deposit account can't change. Void the deposit first.");

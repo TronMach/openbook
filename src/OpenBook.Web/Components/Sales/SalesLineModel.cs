@@ -78,15 +78,25 @@ public sealed class SalesLineModel
     public static Func<TaxComponent, bool> ExemptFrom(Customer? holder) => c => holder is not null && holder.ExemptFrom(c);
 
     /// <summary>The same, with an exemption that covers only some rates (a certificate for some states, C326).</summary>
+    /// <param name="typed">The total tax as typed (C328); one the save would refuse shows the worked-out tax instead.</param>
     public static IReadOnlyList<(string Label, decimal Amount)> Tax(
-        IReadOnlyList<SalesLineModel> lines, IReadOnlyList<Item> items, TaxCodeChoice? code, Func<TaxComponent, bool> exempt)
+        IReadOnlyList<SalesLineModel> lines, IReadOnlyList<Item> items, TaxCodeChoice? code, Func<TaxComponent, bool> exempt, decimal? typed = null)
     {
         if (code is null)
             return [];
         var amounts = Amounts(lines);
         var taxable = TaxCalculator.TaxableAmount(lines.Select((l, i) => (
             l.IsDiscount ? l.Kind : l.ItemId is null ? SalesLineKind.Note : SalesLineKind.Item, amounts[i], l.IsTaxable(items))));
-        var shares = TaxCalculator.Split(taxable, code.Components, exempt);
+        IReadOnlyList<decimal> shares;
+        try
+        {
+            shares = TaxCalculator.Split(taxable, code.Components, exempt, typed);
+        }
+        catch (OpenBook.Domain.Common.DomainException) when (typed is not null)
+        {
+            shares = TaxCalculator.Split(taxable, code.Components, exempt);
+        }
+
         return code.Components.Select((c, i) => (TaxCalculator.Describe(c.Name, c.Percent), shares[i])).ToList();
     }
 

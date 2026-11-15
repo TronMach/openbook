@@ -1,4 +1,5 @@
 using System.Globalization;
+using OpenBook.Domain.Common;
 using OpenBook.Domain.Sales;
 
 namespace OpenBook.Domain.SalesTax;
@@ -55,13 +56,16 @@ public static class TaxCalculator
     /// Each component's share of the tax on <paramref name="taxableAmount"/>, those <paramref name="exempt"/> says the
     /// customer is exempt from (an exemption for some states only, C326) left at zero and out of the combined rate.
     /// </summary>
-    public static IReadOnlyList<decimal> Split(decimal taxableAmount, IReadOnlyList<TaxComponent> components, Func<TaxComponent, bool> exempt)
+    /// <param name="typed">The total tax as typed on the document (C328), in place of the rates': split between them the same way.</param>
+    public static IReadOnlyList<decimal> Split(decimal taxableAmount, IReadOnlyList<TaxComponent> components, Func<TaxComponent, bool> exempt, decimal? typed = null)
     {
         ArgumentNullException.ThrowIfNull(components);
         ArgumentNullException.ThrowIfNull(exempt);
         var charged = components.Select(c => exempt(c) ? 0m : c.Percent).ToList();
         var combined = charged.Sum();
-        var total = combined == 0m ? 0m : TaxOn(taxableAmount, combined);
+        if (typed is { } amount)
+            CheckTyped(amount, taxableAmount, combined);
+        var total = typed ?? (combined == 0m ? 0m : TaxOn(taxableAmount, combined));
         // A rate of 0% adds nothing to the running total, so it gets nothing, and no share can go below zero.
         var weights = charged;
         var last = weights.FindLastIndex(w => w != 0m);
@@ -69,9 +73,36 @@ public static class TaxCalculator
     }
 
     /// <summary>
-    /// The tax lines for a document's other lines: one per component, numbered after them, even when zero
-    /// (an exempt customer, or nothing taxable), so the document records which rates it was taxed under.
+    /// A typed tax amount (C328) is in cents, on the same side as the taxable amount and no more than it, and needs a
+    /// rate to go on.
     /// </summary>
+    private static void CheckTyped(decimal typed, decimal taxableAmount, decimal combinedPercent)
+    {
+        if (decimal.Round(typed, 2) != typed)
+            throw new DomainException("tax.typed_cents", "Type the tax in cents.");
+        if (typed == 0m)
+            return;
+        if (combinedPercent == 0m)
+            throw new DomainException("tax.typed_no_rate", "There's no rate to charge the typed tax under: the customer is exempt from every rate of this code.");
+        if (Math.Sign(typed) != Math.Sign(taxableAmount) || Math.Abs(typed) > Math.Abs(taxableAmount))
+            throw new DomainException("tax.typed_out_of_range", "The tax typed must be between zero and the taxable amount.");
+    }
+
+    /// <summary>
+    /// The tax a saved document was charged when it was typed rather than worked out (C328): its tax lines' total when
+    /// it differs from what its rates give on its lines; null when it was worked out.
+    /// </summary>
+    public static decimal? TypedTax(IReadOnlyList<SalesLine> lines, string? exemption)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var charged = Charged(lines);
+        if (charged.Count == 0)
+            return null;
+        var stored = lines.Where(l => l.Kind == SalesLineKind.Tax).Sum(l => l.Amount);
+        var worked = Split(TaxableAmount(lines.Where(l => l.Kind != SalesLineKind.Tax).ToList()), charged, KeptExemption(lines, exemption)).Sum();
+        return stored == worked ? null : stored;
+    }
+
     /// <summary>
     /// What a saved document's exemption covered, for working its tax out again on the same code: with an exemption, the
     /// rates it left at nothing stay at nothing (all of them when nothing was taxable then), and the rest are charged (C326).
@@ -89,13 +120,19 @@ public static class TaxCalculator
         return c => original.GetValueOrDefault(c.TaxRateId) == 0m;
     }
 
+    /// <summary>
+    /// The tax lines for a document's other lines: one per component, numbered after them, even when zero
+    /// (an exempt customer, or nothing taxable), so the document records which rates it was taxed under.
+    /// </summary>
     public static IReadOnlyList<SalesLine> TaxLines(IReadOnlyList<SalesLine> lines, IReadOnlyList<TaxComponent> components, bool exempt) =>
         TaxLines(lines, components, _ => exempt);
 
-    public static IReadOnlyList<SalesLine> TaxLines(IReadOnlyList<SalesLine> lines, IReadOnlyList<TaxComponent> components, Func<TaxComponent, bool> exempt)
+    /// <param name="typed">The total tax as typed (C328); null works it out from the rates.</param>
+    public static IReadOnlyList<SalesLine> TaxLines(
+        IReadOnlyList<SalesLine> lines, IReadOnlyList<TaxComponent> components, Func<TaxComponent, bool> exempt, decimal? typed = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        var shares = Split(TaxableAmount(lines), components, exempt);
+        var shares = Split(TaxableAmount(lines), components, exempt, typed);
         return components
             .Select((c, i) => SalesLine.Tax(lines.Count + i + 1, c.TaxRateId, Describe(c.Name, c.Percent), c.Percent, shares[i], c.LiabilityAccountId))
             .ToList();

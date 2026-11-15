@@ -101,6 +101,7 @@ Contributors: a change to anything under "What's covered" that isn't additive ne
 
 ## Change log
 
+- **2026-11-15**: invoice, sales receipt and credit memo create and change requests take optional `taxAmount` (the total tax, split between the code's rates); change requests also `workOutTax`. New refusals for a bad typed amount: `tax.typed_cents`, `tax.typed_out_of_range`, `tax.typed_no_rate`, `tax.typed_without_code`. Additive.
 - **2026-11-15**: customers take optional `exemptionRegions` ("TX, OK"; blank covers every state), returned with `exemptionStartsOn` on customers and on `GET /api/sales-tax/exempt-customers`. Additive.
 - **2026-11-14**: items take optional `weight` and `volume`; landed costs take `method` `ByWeight` or `ByVolume`. Additive.
 - **2026-11-14**: `POST /api/nonprofit/pledges` and `/grants` take optional `alreadyOnBooks`; a pledge made so has `journalEntryId` of all zeros. Additive.
