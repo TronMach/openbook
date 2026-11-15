@@ -1,0 +1,137 @@
+@page "/nonprofit/households/{Id:guid}"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Domain.Nonprofit
+@inject HouseholdService HouseholdService
+@inject CustomerService CustomerService
+@inject GiftService GiftService
+
+<PageTitle>@(_view?.Household.Name ?? "Household") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_view is null)
+    {
+        <h1>Household not found</h1>
+        <p><a href="/nonprofit/households">Back to households</a></p>
+    }
+    else
+    {
+        var household = _view.Household;
+        <div class="toolbar">
+            <h1>@household.Name</h1>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={household.Id}")">History</ActionLink>
+            <ActionLink Class="button secondary" Href="/nonprofit/households">Households</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <div class="card">
+            <h2>Members</h2>
+            <table class="data">
+                <thead><tr><th>Donor</th><th>Email</th><th>Statements</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var m in _view.Members)
+                    {
+                        var primary = m.Id == household.PrimaryDonorId;
+                        <tr>
+                            <td><a href="/customers/@m.Id">@m.DisplayName</a></td>
+                            <td>@m.Email</td>
+                            <td>@(primary ? "Go here" : "")</td>
+                            <td>
+                                @if (!primary)
+                                {
+                                    <PostForm Action="@($"/nonprofit/households/{household.Id}/members/{m.Id}/primary")" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary" aria-label="Send statements here: @m.DisplayName">Send statements here</button>
+                                    </PostForm>
+                                    <PostForm Action="@($"/nonprofit/households/{household.Id}/members/{m.Id}/remove")" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary" aria-label="Take out @m.DisplayName" data-confirm="Take @m.DisplayName out of the household?">Take out</button>
+                                    </PostForm>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <PostForm Action="@($"/nonprofit/households/{household.Id}/members")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="member-donor">Add a member</label>
+                    <select id="member-donor" name="donorId" data-search required>
+                        <option value="">Choose a donor…</option>
+                        @foreach (var c in _free)
+                        {
+                            <option value="@c.Customer.Id">@c.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="actions"><button type="submit" class="secondary">Add member</button></div>
+            </PostForm>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Giving statements</h2>
+            <p class="muted">One statement for the year with every member's gifts, each under its giver's name, sent to @(_view.Primary?.DisplayName ?? "the member chosen above").</p>
+            <ul>
+                @foreach (var year in _years)
+                {
+                    <li><a href="/nonprofit/statements/@year/households/@household.Id" target="_blank">@year statement (PDF)</a></li>
+                }
+            </ul>
+            @if (_years.Count == 0)
+            {
+                <p class="muted">No gifts from its members yet.</p>
+            }
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Name</h2>
+            <PostForm Action="@($"/nonprofit/households/{household.Id}")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="household-name">Name</label>
+                        <input id="household-name" name="name" value="@household.Name" required maxlength="@Household.MaxNameLength" />
+                    </div>
+                    <div class="field">
+                        <label for="household-salutation">Statements addressed to <span class="muted">(blank: the name)</span></label>
+                        <input id="household-salutation" name="salutation" value="@household.Salutation" maxlength="@Household.MaxNameLength" />
+                    </div>
+                </div>
+                <div class="actions"><button type="submit" class="secondary">Save</button></div>
+            </PostForm>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>Remove the household</h2>
+            <p class="muted">The members stay as donors with their gifts; their statements go out one each again.</p>
+            <PostForm Action="@($"/nonprofit/households/{household.Id}/remove")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="actions"><button type="submit" class="danger" data-confirm="Remove @household.Name? Its members and their gifts stay.">Remove household</button></div>
+            </PostForm>
+        </div>
+    }
+</div>
+
+@code {
+    private HouseholdView? _view;
+    private IReadOnlyList<CustomerEntry> _free = [];
+    private IReadOnlyList<int> _years = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await HouseholdService.ListAsync();
+        _view = all.FirstOrDefault(h => h.Household.Id == Id);
+        if (_view is null)
+            return;
+        var taken = all.SelectMany(h => h.Household.Members).Select(m => m.DonorId).ToHashSet();
+        _free = [.. (await CustomerService.ListRecordsAsync()).Where(c => !taken.Contains(c.Customer.Id))];
+        var members = _view.Household.Members.Select(m => m.DonorId).ToHashSet();
+        _years = [.. (await GiftService.ListAsync()).Where(g => members.Contains(g.DonorId) && g.Counts).Select(g => g.Date.Year).Distinct().OrderDescending()];
+    }
+}

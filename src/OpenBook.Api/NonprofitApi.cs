@@ -96,6 +96,52 @@ internal static class NonprofitApi
         });
         nonprofit.MapPost("/releases/{id:guid}/void", async (Guid id, VoidRequest r, NonprofitService s, CancellationToken ct) =>
             ReleaseResponse.From(await s.VoidAsync(id, r.Reason, ct)));
+        // Households and soft credits (C622).
+        nonprofit.MapGet("/households", async (HouseholdService s, CancellationToken ct) => (await s.ListAsync(ct)).Select(HouseholdResponse.From));
+        nonprofit.MapGet("/households/{id:guid}", async (Guid id, HouseholdService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } h ? Results.Ok(HouseholdResponse.From(h)) : Results.NotFound());
+        nonprofit.MapPost("/households", async (HouseholdRequest r, HouseholdService s, CancellationToken ct) =>
+        {
+            var household = await s.CreateAsync(r.PrimaryDonorId, r.Name, r.Salutation, ct);
+            foreach (var member in r.MemberIds ?? [])
+                await s.AddMemberAsync(household.Id, member, ct);
+            return Results.Created($"/api/nonprofit/households/{household.Id}", HouseholdResponse.From((await s.GetAsync(household.Id, ct))!));
+        });
+        nonprofit.MapPut("/households/{id:guid}", async (Guid id, HouseholdRequest r, HouseholdService s, CancellationToken ct) =>
+        {
+            await s.RenameAsync(id, r.Name, r.Salutation, ct);
+            var current = (await s.GetAsync(id, ct))!.Household;
+            var wanted = (r.MemberIds ?? []).Append(r.PrimaryDonorId).ToHashSet();
+            foreach (var member in wanted.Where(m => !current.Has(m)).ToList())
+                await s.AddMemberAsync(id, member, ct);
+            await s.MakePrimaryAsync(id, r.PrimaryDonorId, ct);
+            foreach (var member in current.Members.Select(m => m.DonorId).Where(m => !wanted.Contains(m)).ToList())
+                await s.RemoveMemberAsync(id, member, ct);
+            return HouseholdResponse.From((await s.GetAsync(id, ct))!);
+        });
+        nonprofit.MapDelete("/households/{id:guid}", async (Guid id, HouseholdService s, CancellationToken ct) =>
+        {
+            await s.RemoveAsync(id, ct);
+            return Results.NoContent();
+        });
+        nonprofit.MapGet("/statements/{year:int}/households/{id:guid}", async (int year, Guid id, GiftService s, CancellationToken ct) =>
+        {
+            var statement = await s.HouseholdStatementAsync(id, year, ct);
+            return Results.File(statement.Pdf, "application/pdf", statement.FileName);
+        });
+        nonprofit.MapGet("/gifts/{id:guid}/soft-credits", async (Guid id, SoftCreditService s, CancellationToken ct) =>
+            (await s.ListAsync(id, null, ct)).Select(SoftCreditResponse.From));
+        nonprofit.MapPost("/gifts/{id:guid}/soft-credits", async (Guid id, SoftCreditRequest r, SoftCreditService s, CancellationToken ct) =>
+        {
+            var credit = await s.AddAsync(id, r.DonorId, r.Amount, r.Note, ct);
+            return Results.Created($"/api/nonprofit/gifts/{id}/soft-credits/{credit.Id}", SoftCreditResponse.From((await s.ListAsync(id, null, ct)).Single(v => v.Credit.Id == credit.Id)));
+        });
+        nonprofit.MapDelete("/gifts/{id:guid}/soft-credits/{creditId:guid}", async (Guid id, Guid creditId, SoftCreditService s, CancellationToken ct) =>
+        {
+            await s.RemoveAsync(creditId, ct);
+            return Results.NoContent();
+        });
+
         nonprofit.MapGet("/gifts", async (DateOnly? from, DateOnly? to, Guid? donorId, GiftService s, CancellationToken ct) =>
             (await s.ListAsync(from, to, donorId, ct)).Select(GiftResponse.From));
         nonprofit.MapPost("/gifts/batch", async (GiftBatchCommand r, GiftService s, CancellationToken ct) =>
@@ -287,3 +333,20 @@ internal static class NonprofitApi
 }
 
 public sealed record GrantShareRequest(decimal Percent);
+
+/// <summary>A household: its name, who statements are addressed to and sent to, and its members (C622).</summary>
+public sealed record HouseholdResponse(Guid Id, string Name, string? Salutation, Guid PrimaryDonorId, IReadOnlyList<Guid> MemberIds)
+{
+    public static HouseholdResponse From(HouseholdView v) =>
+        new(v.Household.Id, v.Household.Name, v.Household.Salutation, v.Household.PrimaryDonorId, [.. v.Household.Members.Select(m => m.DonorId)]);
+}
+
+/// <param name="MemberIds">Every member besides the primary one; on a change, members left out are taken out.</param>
+public sealed record HouseholdRequest(string? Name, Guid PrimaryDonorId, string? Salutation = null, IReadOnlyList<Guid>? MemberIds = null);
+
+public sealed record SoftCreditRequest(Guid DonorId, decimal? Amount = null, string? Note = null);
+
+public sealed record SoftCreditResponse(Guid Id, Guid DonationId, Guid DonorId, decimal Amount, string? Note)
+{
+    public static SoftCreditResponse From(SoftCreditView v) => new(v.Credit.Id, v.Credit.DonationId, v.Credit.DonorId, v.Credit.Amount, v.Credit.Note);
+}

@@ -145,6 +145,64 @@ public static class NonprofitEndpoints
             }
         }).RequireAuthorization();
 
+        // Soft credits (C622). Fields: donorId, amount (blank: all of the gift), note.
+        app.MapPost("/nonprofit/gifts/{id:guid}/soft-credits", async (Guid id, IFormCollection form, SoftCreditService credits, CancellationToken ct) =>
+        {
+            try
+            {
+                await credits.AddAsync(id, Id(form["donorId"]) ?? throw new DomainException("soft_credit.donor_required", "Choose who to credit."),
+                    string.IsNullOrWhiteSpace(form["amount"]) ? null : Number(form["amount"]) ?? throw new DomainException("soft_credit.amount", "Credit an amount above zero, up to the gift, in cents."),
+                    form["note"], ct);
+                return Results.Redirect($"/nonprofit/gifts/{id}#soft-credits");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/nonprofit/gifts/{id}?error={Uri.EscapeDataString(ex.Message)}#soft-credits");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/gifts/{id:guid}/soft-credits/{creditId:guid}/remove", async (Guid id, Guid creditId, IFormCollection _, SoftCreditService credits, CancellationToken ct) =>
+        {
+            await credits.RemoveAsync(creditId, ct);
+            return Results.Redirect($"/nonprofit/gifts/{id}#soft-credits");
+        }).RequireAuthorization();
+
+        // Households (C622). Fields: donorId, name, salutation.
+        app.MapPost("/nonprofit/households", async (IFormCollection form, HouseholdService households, CancellationToken ct) =>
+        {
+            try
+            {
+                var household = await households.CreateAsync(Id(form["donorId"]) ?? throw new DomainException("household.donor_required", "Choose the donor."),
+                    form["name"], form["salutation"], ct);
+                return Results.Redirect($"/nonprofit/households/{household.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/nonprofit/households?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/nonprofit/households/{id:guid}", (Guid id, IFormCollection form, HouseholdService households, CancellationToken ct) =>
+            Household(id, () => households.RenameAsync(id, form["name"], form["salutation"], ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/households/{id:guid}/members", (Guid id, IFormCollection form, HouseholdService households, CancellationToken ct) =>
+            Household(id, () => households.AddMemberAsync(id, Id(form["donorId"]) ?? throw new DomainException("household.donor_required", "Choose the donor to add."), ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/households/{id:guid}/members/{donorId:guid}/remove", (Guid id, Guid donorId, IFormCollection _, HouseholdService households, CancellationToken ct) =>
+            Household(id, () => households.RemoveMemberAsync(id, donorId, ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/households/{id:guid}/members/{donorId:guid}/primary", (Guid id, Guid donorId, IFormCollection _, HouseholdService households, CancellationToken ct) =>
+            Household(id, () => households.MakePrimaryAsync(id, donorId, ct))).RequireAuthorization();
+
+        app.MapPost("/nonprofit/households/{id:guid}/remove", async (Guid id, IFormCollection _, HouseholdService households, CancellationToken ct) =>
+        {
+            await households.RemoveAsync(id, ct);
+            return Results.Redirect("/nonprofit/households?removed=true");
+        }).RequireAuthorization();
+
+        app.MapGet("/nonprofit/statements/{year:int}/households/{householdId:guid}", (int year, Guid householdId, GiftService gifts, CancellationToken ct) =>
+            Pdf("/nonprofit/thanks", async () => (await gifts.HouseholdStatementAsync(householdId, year, ct)).Pdf)).RequireAuthorization();
+
         // Gifts from before the move (C080): imported as history, never posted.
         app.MapPost("/nonprofit/gifts/history/import", async (IFormFile? file, IFormCollection form, GiftHistoryService history, CancellationToken ct) =>
         {
@@ -565,6 +623,19 @@ public static class NonprofitEndpoints
 
     private static string Reason(IFormCollection form) =>
         form["reason"].ToString().Trim() is { Length: > 0 } reason ? reason : throw new DomainException("void.reason_required", "Say why.");
+
+    private static async Task<IResult> Household(Guid id, Func<Task<OpenBook.Domain.Nonprofit.Household>> change)
+    {
+        try
+        {
+            await change();
+            return Results.Redirect($"/nonprofit/households/{id}");
+        }
+        catch (DomainException ex)
+        {
+            return Results.Redirect($"/nonprofit/households/{id}?error={Uri.EscapeDataString(ex.Message)}");
+        }
+    }
 
     private static Guid? Id(string? value) => Guid.TryParse(value, out var id) && id != Guid.Empty ? id : null;
 

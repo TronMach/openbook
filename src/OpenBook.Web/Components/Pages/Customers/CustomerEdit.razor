@@ -8,6 +8,7 @@
 @inject PaymentService Payments
 @inject OpenBook.Application.Nonprofit.GiftService Gifts
 @inject OpenBook.Application.Nonprofit.GiftHistoryService GiftHistory
+@inject OpenBook.Application.Nonprofit.HouseholdService Households
 @inject SalesTaxService Taxes
 @inject PricingService Pricing
 @inject FormDesignService Designs
@@ -340,7 +341,7 @@
         <ResponsibleCard CustomerId="_customer.Id" />
         <CustomerEmailCard Customer="_customer" Error="@EmailError" />
 
-        @if (_giving is { Any: true } giving)
+        @if (_giving is { } giving && (giving.Any || _household is not null))
         {
             <section class="card">
                 <h2>Giving</h2>
@@ -365,6 +366,16 @@
                     {
                         <dt>Grants awarded</dt>
                         <dd>@Labels.Amount(giving.Grants)</dd>
+                    }
+                    @if (giving.SoftCredits > 0m)
+                    {
+                        <dt>Soft credits</dt>
+                        <dd>@Labels.Amount(giving.SoftCredits) <span class="muted">on others' gifts</span></dd>
+                    }
+                    @if (_household is { } household)
+                    {
+                        <dt>Household</dt>
+                        <dd><a href="/nonprofit/households/@household.Household.Id">@household.Household.Name</a></dd>
                     }
                 </dl>
                 @if (_history.Count > 0)
@@ -445,6 +456,7 @@
     private Guid? ParentQuery { get; set; }
 
     private OpenBook.Application.Nonprofit.DonorGiving? _giving;
+    private OpenBook.Application.Nonprofit.HouseholdView? _household;
     private IReadOnlyList<OpenBook.Domain.Nonprofit.GiftHistory> _history = [];
 
     [SupplyParameterFromForm(FormName = "customer")]
@@ -468,6 +480,7 @@
             _level = _own?.Level ?? 0;
             _children = _all.Where(c => _descendants.Contains(c.Customer.Id)).ToList();
             _giving = await Gifts.GivingAsync(id);
+            _household = await Households.OfDonorAsync(id);
             _history = await GiftHistory.ListAsync(id);
             _invoices = await Invoices.ListAsync(id);
             _payments = await Payments.ListAsync(id);

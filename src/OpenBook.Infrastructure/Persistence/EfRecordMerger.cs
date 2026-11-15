@@ -35,6 +35,9 @@ internal sealed class EfRecordMerger(OpenBookDbContext db) : IRecordMerger
         ("ItemComponents", "ComponentItemId", ["ItemId"]),
         ("PriceLevelItems", "ItemId", ["PriceLevelId"]),
         ("VendorBankAccounts", "VendorId", []),
+        // A donor is in one household: the merged one's membership goes when the kept one has one (C622).
+        ("HouseholdMembers", "DonorId", []),
+        ("SoftCredits", "DonorId", ["DonationId"]),
     ];
 
     public async Task<int> MoveReferencesAsync(MergeKind kind, Guid mergeId, Guid keepId, CancellationToken ct)

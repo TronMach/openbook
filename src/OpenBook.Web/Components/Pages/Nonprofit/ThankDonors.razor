@@ -68,16 +68,23 @@
     else
     {
         <table class="data">
-            <thead><tr><th>Donor</th><th>Email</th><th class="num">Gifts</th><th class="num">Total</th><th>Statement</th></tr></thead>
+            <thead><tr><th>Donor or household</th><th>Email</th><th class="num">Gifts</th><th class="num">Total</th><th>Statement</th></tr></thead>
             <tbody>
                 @foreach (var g in _givers)
                 {
                     <tr>
-                        <td><a href="/customers/@g.Donor.Id">@g.Donor.DisplayName</a></td>
-                        <td>@g.Donor.Email</td>
-                        <td class="num">@g.Gifts.Count</td>
+                        @if (g.Household is { } household)
+                        {
+                            <td><a href="/nonprofit/households/@household.Id">@household.Name</a> <span class="muted">(@string.Join(", ", g.Givers.Select(m => m.Donor.DisplayName)))</span></td>
+                        }
+                        else
+                        {
+                            <td><a href="/customers/@g.SendTo.Id">@g.SendTo.DisplayName</a></td>
+                        }
+                        <td>@g.SendTo.Email</td>
+                        <td class="num">@g.GiftCount</td>
                         <td class="num">@Labels.Amount(g.Total)</td>
-                        <td><a href="/nonprofit/statements/@_year/@g.Donor.Id" target="_blank">PDF</a></td>
+                        <td><a href="@(g.Household is null ? $"/nonprofit/statements/{_year}/{g.Id}" : $"/nonprofit/statements/{_year}/households/{g.Id}")" target="_blank">PDF</a></td>
                     </tr>
                 }
             </tbody>
@@ -87,7 +94,7 @@
             <a class="button secondary" href="/nonprofit/statements/@_year" target="_blank">Download all to print (one PDF)</a>
             <PostForm Action="@($"/nonprofit/statements/{_year}/email")" data-enhance="false" class="inline">
                 <AntiforgeryToken />
-                <button type="submit">Email every donor with an address (@_givers.Count(g => !string.IsNullOrWhiteSpace(g.Donor.Email)))</button>
+                <button type="submit">Email every donor with an address (@_givers.Count(g => !string.IsNullOrWhiteSpace(g.SendTo.Email)))</button>
             </PostForm>
         </div>
     }
@@ -96,7 +103,7 @@
 @code {
     private int _year;
     private IReadOnlyList<Donation> _unthanked = [];
-    private IReadOnlyList<Giver> _givers = [];
+    private IReadOnlyList<StatementGroup> _givers = [];
     private Dictionary<Guid, string> _names = [];
 
     [SupplyParameterFromQuery(Name = "year")] private int? Year { get; set; }
@@ -109,7 +116,8 @@
         // Statements go out early in the new year for the year just ended.
         _year = Year ?? (today.Month <= 2 ? today.Year - 1 : today.Year);
         _unthanked = (await GiftService.ListAsync()).Where(g => g.Status == DocumentStatus.Posted && g.AcknowledgedAt is null).ToList();
-        _givers = await GiftService.GiversAsync(_year);
+        // A household's members get one statement (C622).
+        _givers = await GiftService.StatementGroupsAsync(_year);
         _names = (await CustomerService.ListRecordsAsync()).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
     }
 }

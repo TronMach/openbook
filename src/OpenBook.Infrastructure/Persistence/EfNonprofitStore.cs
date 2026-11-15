@@ -83,6 +83,23 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
 
     public void Remove(GiftHistory gift) => db.GiftHistory.Remove(gift);
 
+    public async Task<IReadOnlyList<Household>> ListHouseholdsAsync(CancellationToken ct) => await db.Households.ToListAsync(ct);
+
+    public Task<Household?> GetHouseholdAsync(Guid id, CancellationToken ct) => db.Households.SingleOrDefaultAsync(h => h.Id == id, ct);
+
+    public void Add(Household household) => db.Households.Add(household);
+
+    public void Remove(Household household) => db.Households.Remove(household);
+
+    public async Task<IReadOnlyList<SoftCredit>> ListSoftCreditsAsync(Guid? donationId, Guid? donorId, CancellationToken ct) =>
+        await db.SoftCredits.Where(c => (donationId == null || c.DonationId == donationId) && (donorId == null || c.DonorId == donorId)).ToListAsync(ct);
+
+    public Task<SoftCredit?> GetSoftCreditAsync(Guid id, CancellationToken ct) => db.SoftCredits.SingleOrDefaultAsync(c => c.Id == id, ct);
+
+    public void Add(SoftCredit credit) => db.SoftCredits.Add(credit);
+
+    public void Remove(SoftCredit credit) => db.SoftCredits.Remove(credit);
+
     public Task<Pledge?> GetPledgeAsync(Guid id, CancellationToken ct) => db.Pledges.SingleOrDefaultAsync(p => p.Id == id, ct);
 
     public Task<GiftSettings?> GetSettingsAsync(CancellationToken ct) => db.GiftSettings.FirstOrDefaultAsync(ct);

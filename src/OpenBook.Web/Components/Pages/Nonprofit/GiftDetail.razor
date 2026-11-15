@@ -7,6 +7,7 @@
 @inject CustomerService CustomerService
 @inject AccountService AccountService
 @inject SegmentService Segments
+@inject SoftCreditService SoftCredits
 
 <PageTitle>Gift · OpenBook</PageTitle>
 
@@ -170,6 +171,63 @@
             </div>
         }
 
+        <div class="card" id="soft-credits" style="margin-top: 1.5rem">
+            <h2>Soft credits</h2>
+            <p class="muted">
+                Recognition for someone besides the donor: a spouse, a fundraiser who brought the gift in. It shows on donor reports and recognition
+                lists, never on receipts or giving statements, which are the donor's.
+            </p>
+            @if (_credits.Count > 0)
+            {
+                <table class="data">
+                    <thead><tr><th>Credited</th><th>Why</th><th class="num">Amount</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _credits)
+                        {
+                            <tr>
+                                <td><a href="/customers/@c.Credit.DonorId">@c.Credited</a></td>
+                                <td>@c.Credit.Note</td>
+                                <td class="num">@Labels.Amount(c.Credit.Amount)</td>
+                                <td>
+                                    <PostForm Action="@($"/nonprofit/gifts/{_gift.Id}/soft-credits/{c.Credit.Id}/remove")" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary" data-confirm="Take this soft credit off?" aria-label="Take off @c.Credited's soft credit">Take off</button>
+                                    </PostForm>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            @if (_gift.Status == DocumentStatus.Posted)
+            {
+                <PostForm Action="@($"/nonprofit/gifts/{_gift.Id}/soft-credits")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field">
+                            <label for="credit-donor">Credit</label>
+                            <select id="credit-donor" name="donorId" data-search required>
+                                <option value="">Choose someone…</option>
+                                @foreach (var c in _people.Where(p => p.Customer.Id != _gift.DonorId))
+                                {
+                                    <option value="@c.Customer.Id">@c.FullName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="credit-amount">Amount <span class="muted">(blank: all of it)</span></label>
+                            <input id="credit-amount" name="amount" inputmode="decimal" class="short" />
+                        </div>
+                        <div class="field">
+                            <label for="credit-note">Why <span class="muted">(optional)</span></label>
+                            <input id="credit-note" name="note" maxlength="@SoftCredit.MaxNoteLength" placeholder="Spouse" />
+                        </div>
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">Add soft credit</button></div>
+                </PostForm>
+            }
+        </div>
+
         <Attachments EntityType="donation" EntityId="_gift.Id" />
         <Notes EntityType="donation" EntityId="_gift.Id" />
     }
@@ -188,6 +246,8 @@
     [SupplyParameterFromQuery] private int? Split { get; set; }
 
     private IReadOnlyList<string> _campaigns = [];
+    private IReadOnlyList<SoftCreditView> _credits = [];
+    private IReadOnlyList<CustomerEntry> _people = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -196,6 +256,8 @@
         if (_gift is null)
             return;
         _donor = await CustomerService.GetAsync(_gift.DonorId);
+        _credits = await SoftCredits.ListAsync(_gift.Id);
+        _people = await CustomerService.ListRecordsAsync();
         _chart = await AccountService.GetChartAsync();
         if (_gift.ClassId is { } classId)
             _purpose = (await Segments.NamesAsync()).GetValueOrDefault(classId);

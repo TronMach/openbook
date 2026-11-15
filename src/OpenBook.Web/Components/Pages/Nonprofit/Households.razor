@@ -1,0 +1,91 @@
+@page "/nonprofit/households"
+@using OpenBook.Application.Nonprofit
+@using OpenBook.Domain.Nonprofit
+@inject HouseholdService HouseholdService
+@inject CustomerService CustomerService
+
+<PageTitle>Households · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Households</h1>
+        <ActionLink Class="button secondary" Href="/nonprofit/gifts">Gifts</ActionLink>
+        <ActionLink Class="button secondary" Href="/reports/giving-by-household">Giving by household</ActionLink>
+    </div>
+    <p class="muted">
+        Donors who give as one, such as a couple. Their year's giving goes out as one statement and letter, addressed as you say, to one member's
+        address and email. Each member keeps their own gifts, receipts and history.
+    </p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Removed)
+    {
+        <div class="alert success" role="status">Household removed. Its members' gifts are as they were.</div>
+    }
+
+    @if (_households.Count == 0)
+    {
+        <p class="muted">No households yet.</p>
+    }
+    else
+    {
+        <table class="data">
+            <thead><tr><th>Household</th><th>Members</th><th>Statements go to</th></tr></thead>
+            <tbody>
+                @foreach (var h in _households)
+                {
+                    <tr>
+                        <td><a href="/nonprofit/households/@h.Household.Id">@h.Household.Name</a></td>
+                        <td>@string.Join(", ", h.Members.Select(m => m.DisplayName))</td>
+                        <td>@h.Primary?.DisplayName</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>New household</h2>
+        <PostForm Action="/nonprofit/households" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="field">
+                <label for="household-donor">First member <span class="muted">(statements go to them)</span></label>
+                <select id="household-donor" name="donorId" data-search required>
+                    <option value="">Choose a donor…</option>
+                    @foreach (var c in _free)
+                    {
+                        <option value="@c.Customer.Id">@c.FullName</option>
+                    }
+                </select>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="household-name">Name <span class="muted">(blank: theirs + "household")</span></label>
+                    <input id="household-name" name="name" maxlength="@Household.MaxNameLength" placeholder="The Smith household" />
+                </div>
+                <div class="field">
+                    <label for="household-salutation">Statements addressed to <span class="muted">(optional)</span></label>
+                    <input id="household-salutation" name="salutation" maxlength="@Household.MaxNameLength" placeholder="Pat and Sam Smith" />
+                </div>
+            </div>
+            <div class="actions"><button type="submit">Add household</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<HouseholdView> _households = [];
+    private IReadOnlyList<CustomerEntry> _free = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Removed { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _households = await HouseholdService.ListAsync();
+        var taken = _households.SelectMany(h => h.Household.Members).Select(m => m.DonorId).ToHashSet();
+        _free = [.. (await CustomerService.ListRecordsAsync()).Where(c => !taken.Contains(c.Customer.Id))];
+    }
+}

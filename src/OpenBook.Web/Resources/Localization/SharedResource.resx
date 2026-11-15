@@ -1340,6 +1340,9 @@
   <data name="Hours of budget line {0}" xml:space="preserve">
     <value>Hours of budget line {0}</value>
   </data>
+  <data name="Households" xml:space="preserve">
+    <value>Households</value>
+  </data>
   <data name="How dates and numbers are shown to you, and the language of the screens. This is kept in this browser." xml:space="preserve">
     <value>How dates and numbers are shown to you, and the language of the screens. This is kept in this browser.</value>
   </data>

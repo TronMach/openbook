@@ -282,6 +282,93 @@ public sealed class NonprofitTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_household_gets_one_statement_and_soft_credits_stay_off_it()
+    {
+        var pat = await Donor("Pat Giver", "pat@example.test");
+        var sam = await Donor("Sam Giver");
+        var kim = await Donor("Kim Friend", "kim@example.test");
+        var checking = Account("Checking");
+        var patsGift = await Give(new RecordGiftCommand(pat.Id, new DateOnly(2026, 3, 1), 100m, checking));
+        await Give(new RecordGiftCommand(sam.Id, new DateOnly(2026, 5, 1), 50m, checking));
+        await Give(new RecordGiftCommand(kim.Id, new DateOnly(2026, 6, 1), 75m, checking));
+
+        var household = await In<HouseholdService, Household>(s => s.CreateAsync(pat.Id, "The Giver household", "Pat and Sam Giver"));
+        await In<HouseholdService, Household>(s => s.AddMemberAsync(household.Id, sam.Id));
+        Assert.Equal("household.donor_taken", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<HouseholdService, Household>(s => s.CreateAsync(sam.Id, null, null)))).Code);
+        Assert.Equal("household.primary_member", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<HouseholdService, Household>(s => s.RemoveMemberAsync(household.Id, pat.Id)))).Code);
+
+        // One statement for the household (to Pat, its primary member), one for Kim.
+        var groups = await In<GiftService, IReadOnlyList<StatementGroup>>(s => s.StatementGroupsAsync(2026));
+        Assert.Equal(["Kim Friend", "The Giver household"], groups.Select(g => g.Name));
+        var together = groups.Single(g => g.Household is not null);
+        Assert.Equal((150m, 2, pat.Id), (together.Total, together.GiftCount, together.SendTo.Id));
+        var statement = await In<GiftService, Application.Forms.RenderedForm>(s => s.HouseholdStatementAsync(household.Id, 2026));
+        Assert.Equal("%PDF"u8.ToArray(), statement.Pdf[..4]);
+        Assert.Equal("%PDF"u8.ToArray(), (await In<GiftService, Application.Forms.RenderedForm>(s => s.YearStatementsAsync(2026))).Pdf[..4]);
+        Assert.Equal("donation.none_in_year", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<GiftService, Application.Forms.RenderedForm>(s => s.HouseholdStatementAsync(household.Id, 2025)))).Code);
+
+        // Emailed once to the household, at Pat's address, and once to Kim.
+        await _db.InScope(sp => sp.GetRequiredService<Application.Forms.EmailService>().SaveSettingsAsync(new Application.Forms.EmailSettingsCommand(
+            Domain.Companies.EmailDelivery.Smtp, "smtp.test", 587, Domain.Companies.SmtpSecurity.Auto, "books", "s3cret", false, "books@charity.test", "Charity", null)));
+        var recipients = await In<GiftService, IReadOnlyList<Guid>>(s => s.DonorsInYearAsync(2026));
+        Assert.Equal([kim.Id, household.Id], recipients);
+        var run = await In<Application.Forms.EmailService, Application.Forms.EmailRun>(s =>
+            s.SendEachAsync([.. recipients.Select(d => new Application.Forms.EmailSource(Domain.Email.EmailKind.GivingStatement, d, Year: 2026))]));
+        Assert.Equal(2, run.Sent.Count);
+        Assert.Equal(["kim@example.test", "pat@example.test"], _db.Mail.Sent.Select(m => m.Message.To).Order(StringComparer.Ordinal));
+
+        // Kim is soft-credited with half of Pat's gift: on the reports and Kim's page, not on anyone's statement.
+        await In<SoftCreditService, SoftCredit>(s => s.AddAsync(patsGift.Id, kim.Id, 50m, "Raised it"));
+        Assert.Equal("soft_credit.own_gift", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<SoftCreditService, SoftCredit>(s => s.AddAsync(patsGift.Id, pat.Id, null, null)))).Code);
+        Assert.Equal("soft_credit.duplicate", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<SoftCreditService, SoftCredit>(s => s.AddAsync(patsGift.Id, kim.Id, null, null)))).Code);
+        Assert.Equal("soft_credit.amount", (await Assert.ThrowsAsync<DomainException>(() =>
+            In<SoftCreditService, SoftCredit>(s => s.AddAsync(patsGift.Id, sam.Id, 100.01m, null)))).Code);
+        var samCredit = await In<SoftCreditService, SoftCredit>(s => s.AddAsync(patsGift.Id, sam.Id, null, "Spouse"));
+
+        var giving = await Report("giving-by-donor", "preset=Custom&from=2026-01-01&to=2026-12-31");
+        Assert.Equal((75m, 50m), ((decimal)giving.Find("Kim Friend", 2)!, (decimal)giving.Find("Kim Friend", 5)!));
+        Assert.Equal(150m, (await In<GiftService, IReadOnlyList<StatementGroup>>(s => s.StatementGroupsAsync(2026))).Single(g => g.Household is not null).Total);
+        Assert.Equal(50m, (await In<GiftService, DonorGiving>(s => s.GivingAsync(kim.Id))).SoftCredits);
+        var byHousehold = await Report("giving-by-household", "preset=Custom&from=2026-01-01&to=2026-12-31");
+        // Sam's credit on Pat's gift is inside the household: not counted again.
+        Assert.Equal(150m, byHousehold.Find("The Giver household", 2));
+        Assert.Null(byHousehold.Find("The Giver household", 3));
+        Assert.Equal(50m, byHousehold.Find("Kim Friend", 3));
+        var credits = await Report("soft-credits", "preset=Custom&from=2026-01-01&to=2026-12-31");
+        Assert.Equal(150m, credits.Find("Total", 4));
+
+        await _db.InScope(async sp => { await sp.GetRequiredService<SoftCreditService>().RemoveAsync(samCredit.Id); return true; });
+        Assert.Single(await In<SoftCreditService, IReadOnlyList<SoftCreditView>>(s => s.ListAsync(patsGift.Id)));
+
+        // Removing the household leaves its members' gifts; their statements go out one each again.
+        await _db.InScope(async sp => { await sp.GetRequiredService<HouseholdService>().RemoveAsync(household.Id); return true; });
+        Assert.Equal(3, (await In<GiftService, IReadOnlyList<StatementGroup>>(s => s.StatementGroupsAsync(2026))).Count);
+    }
+
+    [Fact]
+    public async Task Merging_donors_keeps_one_household_membership_and_moves_soft_credits()
+    {
+        var pat = await Donor("Pat Giver");
+        var dup = await Donor("Pat Giver (old)");
+        var sam = await Donor("Sam Giver");
+        var gift = await Give(new RecordGiftCommand(sam.Id, new DateOnly(2026, 3, 1), 100m, Account("Checking")));
+        var household = await In<HouseholdService, Household>(s => s.CreateAsync(sam.Id, "Givers", null));
+        await In<HouseholdService, Household>(s => s.AddMemberAsync(household.Id, dup.Id));
+        await In<SoftCreditService, SoftCredit>(s => s.AddAsync(gift.Id, dup.Id, null, "Spouse"));
+
+        await In<Application.Lists.MergeService, Application.Lists.MergeResult>(s => s.MergeCustomersAsync(dup.Id, pat.Id));
+
+        var after = (await In<HouseholdService, HouseholdView?>(s => s.GetAsync(household.Id)))!;
+        Assert.Equal(new[] { sam.Id, pat.Id }.Order(), after.Household.Members.Select(m => m.DonorId).Order());
+        Assert.Equal(pat.Id, Assert.Single(await In<SoftCreditService, IReadOnlyList<SoftCreditView>>(s => s.ListAsync(gift.Id))).Credit.DonorId);
+    }
+
+    [Fact]
     public async Task Cancelling_the_rest_of_a_pledge_takes_the_unpaid_part_off_accrual_income()
     {
         var sam = await Donor("Sam Pledger");

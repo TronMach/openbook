@@ -165,7 +165,12 @@ internal static class EveryRecordKind
         var donor = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Pat Donor", Email: "pat@donor.test")));
         var scholarships = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Scholarships"));
         var restricted = await NewAccount("Scholarship gifts", AccountType.Income, restricted: true);
-        await Do<GiftService>(s => s.RecordAsync(new RecordGiftCommand(donor.Id, d, 1000m, checking, IncomeAccountId: restricted.Id, ClassId: scholarships.Id)));
+        var gift = await In<GiftService, OpenBook.Domain.Nonprofit.Donation>(s => s.RecordAsync(new RecordGiftCommand(donor.Id, d, 1000m, checking, IncomeAccountId: restricted.Id, ClassId: scholarships.Id)));
+        // A household and a soft credit (C622): the household page, its statement links, and the gift's soft credit list.
+        var spouse = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Sam Donor")));
+        var household = await In<HouseholdService, OpenBook.Domain.Nonprofit.Household>(s => s.CreateAsync(donor.Id, "The Donor household", "Pat and Sam Donor"));
+        await Do<HouseholdService>(s => s.AddMemberAsync(household.Id, spouse.Id));
+        await Do<SoftCreditService>(s => s.AddAsync(gift.Id, spouse.Id, null, "Spouse"));
         await Do<GiftService>(s => s.PledgeAsync(new PledgeCommand(donor.Id, d, 500m)));
         // A gift from before the move, for the donor page's history list (C080).
         await Do<GiftHistoryService>(s => s.ImportCsvAsync($"Donor,Date,Amount,Description\r\n\"{donor.DisplayName}\",{d.AddYears(-1):yyyy-MM-dd},75.00,Old appeal\r\n"));

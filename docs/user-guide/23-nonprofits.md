@@ -55,7 +55,17 @@ A check that bounces after it was deposited: on the gift's page, **Returned by t
 
 ### Seeing what a donor has given
 
-A donor's page has a **Giving** card once there's anything to show: this year, last year, all time, the last gift, what's still to come on pledges and any grants. **Their gifts** opens the Gifts page for that donor alone. Their gifts, pledges and grants also list in the **Customer Center** and turn up in search, by donor, reference or amount.
+A donor's page has a **Giving** card once there's anything to show: this year, last year, all time, the last gift, what's still to come on pledges and any grants, their **Soft credits** and their **Household**. **Their gifts** opens the Gifts page for that donor alone. Their gifts, pledges and grants also list in the **Customer Center** and turn up in search, by donor, reference or amount.
+
+### Households
+
+A couple or a family who give together can get one year-end statement instead of one each. **Nonprofit → Households** (standard role): under **New household** choose the **First member**, who the statement goes to (their address and email), and optionally a **Name** ("The Smith household"; blank uses the member's name) and who **Statements addressed to** ("Pat and Sam Smith"). On the household's page, **Add a member**, **Send statements here** to send them to another member, **Take out** a member, rename it, or **Remove household**.
+
+A donor is in one household at most. Each member keeps their own gifts, acknowledgment letters and history; a household changes nothing in the books. Its statement lists every member's gifts for the year, each under the giver's name. Merging two donors keeps one membership.
+
+### Soft credits
+
+A soft credit recognizes someone besides the donor for a gift: a spouse, or a board member who brought the gift in. On the gift's page, under **Soft credits**, choose who to **Credit**, an **Amount** (blank: all of the gift) and **Why**, then **Add soft credit**; **Take off** removes one. Soft credits show on the person's Giving card and on **Giving by donor**, **Giving by household** and **Soft credits** reports, never on acknowledgment letters or giving statements, which belong to the person who paid. They post nothing.
 
 ### Gifts made online
 
@@ -84,7 +94,7 @@ A recurring gift is recorded on its date whether or not the money came: OpenBook
 **Nonprofit → Thank donors**:
 
 - **Gifts not thanked yet**: tick gifts and **Email the ticked gifts' letters** (each donor with an email address gets theirs, and those gifts are marked thanked), **Letters for the ticked gifts (one PDF)** to print them together, or **Mark the ticked gifts as thanked** after printing or sending them another way. A single gift's letter is also on its page.
-- **Year-end giving statements**: choose the **year** and **Show**. Download each donor's statement, all of them in one PDF, or **email every donor with an address**.
+- **Year-end giving statements**: choose the **year** and **Show**. Download each donor's statement, all of them in one PDF, or **email every donor with an address**. A household's members who gave share one row and one statement, sent to the member it goes to.
 
 Letters use your company name, address and form style. **Nonprofit → Settings** (letter settings) adds:
 
@@ -142,7 +152,7 @@ In the **Nonprofit** group:
 - **Net asset roll-forward** (net assets without and with donor restrictions from the start of a period to its end, with releases between them) and **In-kind gifts** (what was given and its recorded value), for the audit and Schedule M; the open pledges and grants reports are the pledges and grants schedules.
 - **Endowment roll-forward**, for the endowment note in your financial statements: the endowment funds' net assets at the start, **Contributions**, **Investment return** (income, gains and losses), what was **Appropriated for expenditure**, other changes such as releases, and the end, without and with donor restrictions. An endowment fund is a class with "Endowment" in its name (and the classes under it), so post its gifts, investment return and spending on that class. Investment return is income on accounts named for investments, interest, dividends or gains, or mapped to Form 990 Part VIII line 3 or 7.
 - **Schedule B contributors**: donors whose gifts in a calendar year came to $5,000 or more, money and in kind, with their addresses (the general rule of Form 990 Schedule B).
-- **Giving by donor**, **Giving by campaign**, **Lapsed donors** (gave last fiscal year but not yet this one; with a fiscal year starting in July, "2026" is July 2026 to June 2027) and **Open pledges**.
+- **Giving by donor** (with each donor's **Soft credits** in a column of their own, not in the total), **Giving by household** (members' gifts added up together; soft credits between members of one household aren't counted twice), **Soft credits** (each credit with its gift and why), **Giving by campaign**, **Lapsed donors** (gave last fiscal year but not yet this one; with a fiscal year starting in July, "2026" is July 2026 to June 2027) and **Open pledges**.
 - **Grants**: awards, spending, recognized income and what funders still owe.
 - **Form 990 Part IX expenses**: expenses by 990 line and function, from your accounts' tax lines.
 

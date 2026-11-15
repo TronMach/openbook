@@ -66,6 +66,16 @@ public interface INonprofitStore
     Task<GiftHistory?> GetGiftHistoryAsync(Guid id, CancellationToken ct);
     void Add(GiftHistory gift);
     void Remove(GiftHistory gift);
+
+    /// <summary>Households and soft credits (C622).</summary>
+    Task<IReadOnlyList<Household>> ListHouseholdsAsync(CancellationToken ct);
+    Task<Household?> GetHouseholdAsync(Guid id, CancellationToken ct);
+    void Add(Household household);
+    void Remove(Household household);
+    Task<IReadOnlyList<SoftCredit>> ListSoftCreditsAsync(Guid? donationId, Guid? donorId, CancellationToken ct);
+    Task<SoftCredit?> GetSoftCreditAsync(Guid id, CancellationToken ct);
+    void Add(SoftCredit credit);
+    void Remove(SoftCredit credit);
     void Add(GiftSettings settings);
     void Add(Grant grant);
     void Add(RecurringGift recurringGift);

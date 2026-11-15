@@ -9,33 +9,111 @@ namespace OpenBook.Application.Nonprofit;
 /// <summary>Reports on donors and gifts, from the gifts and pledges themselves (posted only).</summary>
 public sealed class GiftReports(INonprofitStore store, ISalesStore sales, GiftService gifts, ICompanyStore companies)
 {
-    /// <summary>Each donor's gifts in a period: count, total, largest and latest; with detail, each gift under its donor.</summary>
+    /// <summary>
+    /// Each donor's gifts in a period: count, total, largest and latest, and what they're soft-credited with on others'
+    /// gifts (C622, apart from the total); with detail, each gift under its donor.
+    /// </summary>
     public async Task<ReportTable> GivingByDonorAsync(DateOnly from, DateOnly to, bool detail, CancellationToken ct = default)
     {
         var company = await companies.GetRequiredCompanyAsync(ct);
         var names = await NamesAsync(ct);
         var posted = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= from && d.Date <= to, ct);
+        var credited = await SoftCreditsAsync(posted, ct);
         var rows = new List<ReportTableRow>();
-        foreach (var donor in posted.GroupBy(d => d.DonorId).OrderBy(g => names.GetValueOrDefault(g.Key), StringComparer.CurrentCultureIgnoreCase))
+        var byDonor = posted.ToLookup(d => d.DonorId);
+        var donors = posted.Select(d => d.DonorId).Concat(credited.Select(c => c.DonorId)).Distinct()
+            .OrderBy(id => names.GetValueOrDefault(id), StringComparer.CurrentCultureIgnoreCase);
+        foreach (var donorId in donors)
         {
-            var name = names.GetValueOrDefault(donor.Key, "?");
-            rows.Add(new ReportTableRow([new ReportCell(name, new ReportLink("customer", donor.Key)), (decimal)donor.Count(), donor.Sum(d => d.Amount),
-                donor.Max(d => d.Amount), donor.Max(d => d.Date).ToString("d", System.Globalization.CultureInfo.CurrentCulture)], 0, detail ? ReportRowStyle.Subtotal : ReportRowStyle.Normal));
+            var name = names.GetValueOrDefault(donorId, "?");
+            var gifts = byDonor[donorId].ToList();
+            var soft = credited.Where(c => c.DonorId == donorId).Sum(c => c.Amount);
+            rows.Add(new ReportTableRow([new ReportCell(name, new ReportLink("customer", donorId)), (decimal)gifts.Count, gifts.Sum(d => d.Amount),
+                gifts.Count == 0 ? null : gifts.Max(d => d.Amount), gifts.Count == 0 ? null : gifts.Max(d => d.Date).ToString("d", System.Globalization.CultureInfo.CurrentCulture),
+                soft == 0m ? null : soft], 0, detail ? ReportRowStyle.Subtotal : ReportRowStyle.Normal));
             if (detail)
             {
-                foreach (var gift in donor.OrderBy(d => d.Date).ThenBy(d => d.Number))
+                foreach (var gift in gifts.OrderBy(d => d.Date).ThenBy(d => d.Number))
                     rows.Add(new ReportTableRow([new ReportCell($"{gift.Number} · {(gift.Kind == GiftKind.InKind ? "In kind" : gift.PledgeId is null ? "Gift" : "Pledge payment")}", new ReportLink("donation", gift.Id)),
-                        null, gift.Amount, null, gift.Date.ToString("d", System.Globalization.CultureInfo.CurrentCulture)], 1));
+                        null, gift.Amount, null, gift.Date.ToString("d", System.Globalization.CultureInfo.CurrentCulture), null], 1));
             }
         }
 
-        rows.Add(new ReportTableRow(["Total", (decimal)posted.Count, posted.Sum(d => d.Amount), null, null], 0, ReportRowStyle.Total));
+        rows.Add(new ReportTableRow(["Total", (decimal)posted.Count, posted.Sum(d => d.Amount), null, null, credited.Sum(c => c.Amount) is var s && s != 0m ? s : null], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Giving by donor",
             [company.Name, Comparisons.Describe(from, to)],
-            [new("Donor"), new("Gifts", ColumnFormat.Number), new("Total", ColumnFormat.Money), new("Largest", ColumnFormat.Money), new("Latest")],
+            [new("Donor"), new("Gifts", ColumnFormat.Number), new("Total", ColumnFormat.Money), new("Largest", ColumnFormat.Money), new("Latest"), new("Soft credits", ColumnFormat.Money)],
             rows,
-            Note: "Gifts received (money and in kind, including pledge payments); pledges themselves aren't counted until paid.");
+            Note: "Gifts received (money and in kind, including pledge payments); pledges themselves aren't counted until paid. Soft credits are recognition for gifts others paid, shown apart and not in the total.");
+    }
+
+    /// <summary>The soft credits on these gifts (C622).</summary>
+    private async Task<IReadOnlyList<SoftCredit>> SoftCreditsAsync(IReadOnlyList<Donation> gifts, CancellationToken ct)
+    {
+        var ids = gifts.Select(g => g.Id).ToHashSet();
+        return ids.Count == 0 ? [] : [.. (await store.ListSoftCreditsAsync(null, null, ct)).Where(c => ids.Contains(c.DonationId))];
+    }
+
+    /// <summary>Each soft credit on gifts in a period (C622): who's credited, for whose gift, how much and why.</summary>
+    public async Task<ReportTable> SoftCreditsAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var names = await NamesAsync(ct);
+        var posted = (await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= from && d.Date <= to, ct)).ToDictionary(d => d.Id);
+        var credits = (await SoftCreditsAsync([.. posted.Values], ct))
+            .OrderBy(c => names.GetValueOrDefault(c.DonorId), StringComparer.CurrentCultureIgnoreCase).ThenBy(c => posted[c.DonationId].Date).ToList();
+        var rows = credits.Select(c => new ReportTableRow(
+        [
+            new ReportCell(names.GetValueOrDefault(c.DonorId, "?"), new ReportLink("customer", c.DonorId)),
+            new ReportCell($"{posted[c.DonationId].Number} · {names.GetValueOrDefault(posted[c.DonationId].DonorId, "?")}", new ReportLink("donation", c.DonationId)),
+            posted[c.DonationId].Date.ToString("d", System.Globalization.CultureInfo.CurrentCulture),
+            c.Note,
+            c.Amount,
+        ])).ToList();
+        rows.Add(new ReportTableRow(["Total", null, null, null, credits.Sum(c => c.Amount)], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Soft credits",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Credited"), new("Gift"), new("Date"), new("Why"), new("Amount", ColumnFormat.Money)],
+            rows,
+            Note: "Recognition for gifts someone else paid for. They're not on receipts or giving statements, which are the payer's.");
+    }
+
+    /// <summary>
+    /// Giving in a period by household (C622): a household's members' gifts together, everyone else on their own; soft
+    /// credits apart, leaving out credits between members of the same household.
+    /// </summary>
+    public async Task<ReportTable> GivingByHouseholdAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var names = await NamesAsync(ct);
+        var households = await store.ListHouseholdsAsync(ct);
+        var posted = await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= from && d.Date <= to, ct);
+        var credited = await SoftCreditsAsync(posted, ct);
+        var gifts = posted.ToDictionary(d => d.Id);
+        Household? Of(Guid donorId) => households.FirstOrDefault(h => h.Has(donorId));
+        (string Name, ReportLink Link) Key(Guid donorId) => Of(donorId) is { } h
+            ? (h.Name, new ReportLink(HouseholdService.EntityType, h.Id))
+            : (names.GetValueOrDefault(donorId, "?"), new ReportLink("customer", donorId));
+        var given = posted.GroupBy(d => Key(d.DonorId)).ToDictionary(g => g.Key, g => (Count: g.Count(), Total: g.Sum(d => d.Amount)));
+        var soft = credited.Where(c => Of(c.DonorId) is not { } h || !h.Has(gifts[c.DonationId].DonorId))
+            .GroupBy(c => Key(c.DonorId)).ToDictionary(g => g.Key, g => g.Sum(c => c.Amount));
+        var keys = given.Keys.Concat(soft.Keys).Distinct().OrderBy(k => k.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        var rows = keys.Select(k => new ReportTableRow(
+        [
+            new ReportCell(k.Name, k.Link),
+            (decimal)given.GetValueOrDefault(k).Count,
+            given.GetValueOrDefault(k).Total,
+            soft.GetValueOrDefault(k) is var s && s != 0m ? s : null,
+        ])).ToList();
+        rows.Add(new ReportTableRow(["Total", (decimal)posted.Count, posted.Sum(d => d.Amount), soft.Values.Sum() is var t && t != 0m ? t : null], 0, ReportRowStyle.Total));
+        return new ReportTable(
+            "Giving by household",
+            [company.Name, Comparisons.Describe(from, to)],
+            [new("Household or donor"), new("Gifts", ColumnFormat.Number), new("Total", ColumnFormat.Money), new("Soft credits", ColumnFormat.Money)],
+            rows,
+            Note: "A household's members' gifts added up together; donors in no household on their own. Soft credits between members of one household aren't counted twice.");
     }
 
     /// <summary>

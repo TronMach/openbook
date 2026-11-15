@@ -256,6 +256,21 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
         }
 
         var year = source.Year ?? throw new DomainException("email.year_required", "Choose the year of the giving statement.");
+        if (await store.GetHouseholdAsync(source.Id, ct) is { } household)
+        {
+            // A household's statement (C622): to the member it goes to, with its members' money gifts in the total.
+            var sendTo = await DonorAsync(household.PrimaryDonorId, ct);
+            var members = household.Members.Select(m => m.DonorId).ToList();
+            var (from, to) = (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
+            var together = (await store.FindDonationsAsync(d => members.Contains(d.DonorId) && d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= from && d.Date <= to
+                && d.Kind != GiftKind.InKind, ct)).Sum(d => d.Amount);
+            return new EmailContext(HouseholdService.EntityType, household.Id, household.Name, $"Giving statement {year}",
+                FormService.FileName(company, $"Giving statement {year}", household.Name), sendTo.Email, new Dictionary<string, string>
+                {
+                    ["donor"] = household.AddressedTo, ["year"] = year.ToString(System.Globalization.CultureInfo.InvariantCulture), ["total"] = M(together), ["company"] = company.Name,
+                }, Customer: sendTo);
+        }
+
         var giver = await DonorAsync(source.Id, ct);
         var (giverId, first, last) = (giver.Id, new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
         var total = (await store.FindDonationsAsync(d => d.DonorId == giverId && d.Status == DocumentStatus.Posted && d.Date >= first && d.Date <= last && d.Kind != GiftKind.InKind, ct))
@@ -271,8 +286,13 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
     {
         EmailKind.GiftAcknowledgment => gifts.AcknowledgmentAsync(source.Id, ct),
         EmailKind.PledgeReminder => gifts.PledgeStatementAsync(source.Id, CompanyTime.Today, ct),
-        _ => gifts.YearStatementAsync(source.Id, source.Year!.Value, ct),
+        _ => StatementAsync(source, ct),
     };
+
+    private async Task<RenderedForm> StatementAsync(EmailSource source, CancellationToken ct) =>
+        await store.GetHouseholdAsync(source.Id, ct) is not null
+            ? await gifts.HouseholdStatementAsync(source.Id, source.Year!.Value, ct)
+            : await gifts.YearStatementAsync(source.Id, source.Year!.Value, ct);
 
     public Task<string?> PayLinkAsync(EmailSource source, CancellationToken ct) => Task.FromResult<string?>(null);
 

@@ -76,10 +76,21 @@ public sealed record Giver(Customer Donor, IReadOnlyList<Donation> Gifts, IReadO
     public decimal Total => Gifts.Sum(g => g.Amount);
 }
 
-/// <summary>A donor at a glance. <paramref name="OpenPledges"/> is what's still to come on their pledges.</summary>
-public sealed record DonorGiving(decimal ThisYear, decimal LastYear, decimal AllTime, int Gifts, DateOnly? LastGift, decimal OpenPledges, decimal Grants)
+/// <summary>
+/// One giving statement for a year: a donor's own, or a household's (C622) with each member's gifts, sent to
+/// <paramref name="SendTo"/> (the household's primary member). <paramref name="Id"/> is the donor's or the household's.
+/// </summary>
+public sealed record StatementGroup(Guid Id, string Name, Customer SendTo, IReadOnlyList<Giver> Givers, Household? Household = null)
 {
-    public bool Any => Gifts > 0 || OpenPledges > 0m || Grants > 0m;
+    public decimal Total => Givers.Sum(g => g.Total);
+    public int GiftCount => Givers.Sum(g => g.Gifts.Count);
+}
+
+/// <summary>A donor at a glance. <paramref name="OpenPledges"/> is what's still to come on their pledges.</summary>
+/// <param name="SoftCredits">What they're credited with on others' gifts (C622), all time; never part of their giving.</param>
+public sealed record DonorGiving(decimal ThisYear, decimal LastYear, decimal AllTime, int Gifts, DateOnly? LastGift, decimal OpenPledges, decimal Grants, decimal SoftCredits = 0m)
+{
+    public bool Any => Gifts > 0 || OpenPledges > 0m || Grants > 0m || SoftCredits > 0m;
 }
 
 /// <summary>One gift of a batch.</summary>
@@ -152,8 +163,10 @@ public sealed class GiftService(
         var grants = (await store.ListGrantsAsync(ct)).Where(g => g.FunderId == donorId && g.Status != GrantStatus.Voided).Sum(g => g.Amount);
         // Gifts from before the move count with the rest (C080).
         var given = theirs.Select(d => (d.Date, d.Amount)).Concat((await store.ListGiftHistoryAsync(donorId, ct)).Select(h => (h.Date, h.Amount))).ToList();
+        var counted = all.Select(d => d.Id).ToHashSet();
+        var softCredits = (await store.ListSoftCreditsAsync(null, donorId, ct)).Where(c => counted.Contains(c.DonationId)).Sum(c => c.Amount);
         return new DonorGiving(given.Where(d => d.Date.Year == year).Sum(d => d.Amount), given.Where(d => d.Date.Year == year - 1).Sum(d => d.Amount),
-            given.Sum(d => d.Amount), given.Count, given.Count == 0 ? null : given.Max(d => d.Date), pledged, grants);
+            given.Sum(d => d.Amount), given.Count, given.Count == 0 ? null : given.Max(d => d.Date), pledged, grants, softCredits);
     }
 
     /// <summary>A batch of gifts, all or none. A refusal names the donor it's about.</summary>
@@ -642,6 +655,56 @@ public sealed class GiftService(
             .OrderBy(g => g.Donor.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
+    /// <summary>
+    /// The year's statements: a household's members who gave go together on one (C622), the rest one per donor, in name
+    /// order. Soft credits aren't on any: a statement is the payer's record.
+    /// </summary>
+    public async Task<IReadOnlyList<StatementGroup>> StatementGroupsAsync(int year, CancellationToken ct = default)
+    {
+        var givers = await GiversAsync(year, ct);
+        var households = await store.ListHouseholdsAsync(ct);
+        var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
+        var groups = new List<StatementGroup>();
+        foreach (var household in households)
+        {
+            var members = givers.Where(g => household.Has(g.Donor.Id)).ToList();
+            if (members.Count > 0)
+                groups.Add(new StatementGroup(household.Id, household.Name, customers.GetValueOrDefault(household.PrimaryDonorId) ?? members[0].Donor, members, household));
+        }
+
+        var grouped = groups.SelectMany(g => g.Givers).Select(g => g.Donor.Id).ToHashSet();
+        groups.AddRange(givers.Where(g => !grouped.Contains(g.Donor.Id)).Select(g => new StatementGroup(g.Donor.Id, g.Donor.DisplayName, g.Donor, [g])));
+        return [.. groups.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase)];
+    }
+
+    /// <summary>A household's giving statement for a calendar year: its members' gifts on one letter (C622).</summary>
+    public async Task<RenderedForm> HouseholdStatementAsync(Guid householdId, int year, CancellationToken ct = default)
+    {
+        var group = (await StatementGroupsAsync(year, ct)).FirstOrDefault(g => g.Id == householdId && g.Household is not null)
+                    ?? (await store.GetHouseholdAsync(householdId, ct) is null
+                        ? throw new EntityNotFoundException(HouseholdService.EntityType, householdId)
+                        : throw new DomainException("donation.none_in_year", $"No gifts from this household in {year}."));
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        using var region = CompanyRegion.Use(company);
+        var letter = await StatementLetterAsync(company, group, year, ct);
+        return new RenderedForm(FormService.FileName(company, $"Giving statement {year}", group.Name), renderer.Render([letter]), group.SendTo.Id,
+            $"Giving statement {year}");
+    }
+
+    /// <summary>A statement group's letter: a donor's own, or a household's with each gift under its giver's name.</summary>
+    private Task<DonorLetter> StatementLetterAsync(Domain.Companies.Company company, StatementGroup group, int year, CancellationToken ct)
+    {
+        if (group.Household is not { } household)
+        {
+            var giver = group.Givers[0];
+            return LetterAsync(company, giver.Donor, $"Giving statement {year}", YearEnd(year), giver.Gifts, year, ct, giver.History);
+        }
+
+        var names = group.Givers.ToDictionary(g => g.Donor.Id, g => g.Donor.DisplayName);
+        return LetterAsync(company, group.SendTo, $"Giving statement {year}", YearEnd(year), [.. group.Givers.SelectMany(g => g.Gifts)], year, ct,
+            [.. group.Givers.SelectMany(g => g.History ?? [])], household.AddressedTo, names);
+    }
+
     /// <summary>The thank-you letter for one gift.</summary>
     public async Task<RenderedForm> AcknowledgmentAsync(Guid id, CancellationToken ct = default)
     {
@@ -733,20 +796,24 @@ public sealed class GiftService(
     /// <summary>Every donor's giving statement for the year in one PDF, a letter per donor, to print.</summary>
     public async Task<RenderedForm> YearStatementsAsync(int year, CancellationToken ct = default)
     {
-        var givers = await GiversAsync(year, ct);
-        if (givers.Count == 0)
+        var groups = await StatementGroupsAsync(year, ct);
+        if (groups.Count == 0)
             throw new DomainException("donation.none_in_year", $"No gifts were recorded in {year}.");
         var company = await companies.GetRequiredCompanyAsync(ct);
         using var region = CompanyRegion.Use(company);
         var letters = new List<DonorLetter>();
-        foreach (var giver in givers)
-            letters.Add(await LetterAsync(company, giver.Donor, $"Giving statement {year}", YearEnd(year), giver.Gifts, year, ct, giver.History));
+        // A household's members share one letter (C622).
+        foreach (var group in groups)
+            letters.Add(await StatementLetterAsync(company, group, year, ct));
         return new RenderedForm(FormService.FileName(company, $"Giving statements {year}", ""), renderer.Render(letters), Guid.Empty, $"Giving statements {year}");
     }
 
-    /// <summary>The donors who gave in the year (posted gifts), in name order, for emailing their statements.</summary>
+    /// <summary>
+    /// Who gets the year's statements by email, in name order: each donor who gave, a household's members once as the
+    /// household (C622). The ids are donors' or households'; the email source tells them apart.
+    /// </summary>
     public async Task<IReadOnlyList<Guid>> DonorsInYearAsync(int year, CancellationToken ct = default) =>
-        [.. (await GiversAsync(year, ct)).Select(g => g.Donor.Id)];
+        [.. (await StatementGroupsAsync(year, ct)).Select(g => g.Id)];
 
     /// <summary>Marks a gift thanked once its acknowledgment is emailed (saved by the caller) and gives the audit record.</summary>
     internal async Task<AuditRecord> MarkAcknowledgedAsync(Guid id, CancellationToken ct)
@@ -760,8 +827,10 @@ public sealed class GiftService(
     /// <summary>The letter's wording: the gifts, what the donor got in return (or that they got nothing), and the tax-exempt statement.</summary>
     private async Task<DonorLetter> LetterAsync(
         Domain.Companies.Company company, Customer donor, string title, DateOnly date, IReadOnlyList<Donation> donations, int? year, CancellationToken ct,
-        IReadOnlyList<GiftHistory>? history = null)
+        IReadOnlyList<GiftHistory>? history = null, string? addressedTo = null, IReadOnlyDictionary<Guid, string>? giverNames = null)
     {
+        // A household's letter (C622) names whose gift each line is.
+        string Whose(Guid donorId, string text) => giverNames is null ? text : $"{giverNames.GetValueOrDefault(donorId, "?")}: {text}";
         var settings = await GetSettingsAsync(ct);
         var names = await segments.NamesAsync(ct);
         var pledges = (await store.ListPledgesAsync(ct)).ToDictionary(p => p.Id, p => p.Number);
@@ -779,9 +848,9 @@ public sealed class GiftService(
         }
 
         // Gifts in the books and gifts from before the move (C080), as one list in date order.
-        var gifts = donations.Select(d => (d.Date, d.Amount, d.Kind, d.GoodsValue, d.GoodsDescription, d.Deductible, Text: Describe(d)))
+        var gifts = donations.Select(d => (d.Date, d.Amount, d.Kind, d.GoodsValue, d.GoodsDescription, d.Deductible, Text: Whose(d.DonorId, Describe(d))))
             .Concat((history ?? []).Select(h => (h.Date, h.Amount, h.Kind, h.GoodsValue, h.GoodsDescription, h.Deductible,
-                Text: (h.Kind == GiftKind.InKind ? $"In-kind gift: {h.Description}" : h.Description ?? "Gift") + (h.Reference is { } r ? $" (ref. {r})" : ""))))
+                Text: Whose(h.DonorId, (h.Kind == GiftKind.InKind ? $"In-kind gift: {h.Description}" : h.Description ?? "Gift") + (h.Reference is { } r ? $" (ref. {r})" : "")))))
             .OrderBy(g => g.Date).ToList();
         var intro = settings.Intro ?? (year is { } y
             ? $"Thank you for your generous support of {org} in {y}. These are the gifts we received from you this year."
@@ -807,9 +876,10 @@ public sealed class GiftService(
             ? $"{org} is a tax-exempt organization under section 501(c)(3) of the Internal Revenue Code (EIN {ein}). Please keep this letter for your tax records."
             : "Please keep this letter for your tax records.");
 
+        var party = FormService.CustomerParty(donor);
         return new DonorLetter(
             FormService.CompanyParty(company),
-            FormService.CustomerParty(donor),
+            addressedTo is null ? party : party with { Name = addressedTo },
             title,
             date,
             intro,

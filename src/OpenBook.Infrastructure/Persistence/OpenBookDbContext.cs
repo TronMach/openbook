@@ -104,6 +104,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Projects.TimeSheet> TimeSheets => Set<OpenBook.Domain.Projects.TimeSheet>();
     public DbSet<OpenBook.Domain.Projects.ExpenseClaim> ExpenseClaims => Set<OpenBook.Domain.Projects.ExpenseClaim>();
     public DbSet<OpenBook.Domain.Nonprofit.GiftHistory> GiftHistory => Set<OpenBook.Domain.Nonprofit.GiftHistory>();
+    public DbSet<OpenBook.Domain.Nonprofit.Household> Households => Set<OpenBook.Domain.Nonprofit.Household>();
+    public DbSet<OpenBook.Domain.Nonprofit.SoftCredit> SoftCredits => Set<OpenBook.Domain.Nonprofit.SoftCredit>();
     public DbSet<OpenBook.Domain.Nonprofit.DonationCheckout> DonationCheckouts => Set<OpenBook.Domain.Nonprofit.DonationCheckout>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRule> AllocationRules => Set<OpenBook.Domain.Nonprofit.AllocationRule>();
     public DbSet<OpenBook.Domain.Nonprofit.AllocationRun> AllocationRuns => Set<OpenBook.Domain.Nonprofit.AllocationRun>();
@@ -1549,6 +1551,41 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(x => x.Note).HasMaxLength(OpenBook.Domain.Nonprofit.DonationCheckout.MaxNoteLength);
             b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             b.HasOne<OpenBook.Domain.Nonprofit.Donation>().WithMany().HasForeignKey(x => x.DonationId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.Household>(b =>
+        {
+            b.ToTable("Households");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Name).HasMaxLength(OpenBook.Domain.Nonprofit.Household.MaxNameLength);
+            b.Property(x => x.Salutation).HasMaxLength(OpenBook.Domain.Nonprofit.Household.MaxNameLength);
+            b.Ignore(x => x.AddressedTo);
+            b.HasOne<Customer>().WithMany().HasForeignKey(x => x.PrimaryDonorId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(x => x.Members, m =>
+            {
+                m.ToTable("HouseholdMembers");
+                m.WithOwner().HasForeignKey(x => x.HouseholdId);
+                m.HasKey(x => x.Id);
+                m.Property(x => x.Id).ValueGeneratedNever();
+                // A donor is in one household at most.
+                m.HasIndex(x => x.DonorId).IsUnique();
+                m.HasOne<Customer>().WithMany().HasForeignKey(x => x.DonorId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(x => x.Members).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Nonprofit.SoftCredit>(b =>
+        {
+            b.ToTable("SoftCredits");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.Id).ValueGeneratedNever();
+            b.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            b.Property(x => x.Note).HasMaxLength(OpenBook.Domain.Nonprofit.SoftCredit.MaxNoteLength);
+            b.HasIndex(x => new { x.DonationId, x.DonorId }).IsUnique();
+            b.HasIndex(x => x.DonorId);
+            b.HasOne<OpenBook.Domain.Nonprofit.Donation>().WithMany().HasForeignKey(x => x.DonationId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Customer>().WithMany().HasForeignKey(x => x.DonorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Nonprofit.GiftHistory>(b =>
