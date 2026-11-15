@@ -110,6 +110,25 @@ public sealed class ItemFileTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Weight_and_volume_go_out_and_come_back_in_the_file()
+    {
+        var csv = With(await Export(), "Mug", "Weight", "1.25");
+        csv = With(csv, "Mug", "Volume", "0.04");
+        var preview = await In<ItemFileService, ItemFilePlan>(s => s.PreviewAsync(csv, Options));
+        Assert.Equal(1, preview.ChangedCount);
+        await In<ItemFileService, ItemFilePlan>(s => s.ImportAsync(csv, Options));
+        var mug = await In<ItemService, Item?>(s => s.GetAsync(_mug.Id));
+        Assert.Equal((1.25m, 0.04m), (mug!.Weight, mug.Volume));
+
+        var again = OpenBook.Application.Import.Csv.Parse(await Export());
+        var columns = again[0].Fields.ToList();
+        Assert.Equal("1.25", again.Skip(1).Single(r => r.Fields[1] == "Mug").Fields[columns.IndexOf("Weight")]);
+        // A blank cell clears it.
+        await In<ItemFileService, ItemFilePlan>(s => s.ImportAsync(With(With(csv, "Mug", "Weight", ""), "Mug", "Volume", ""), Options));
+        Assert.Null((await In<ItemService, Item?>(s => s.GetAsync(_mug.Id)))!.Weight);
+    }
+
+    [Fact]
     public async Task Changes_in_the_file_reach_the_items_their_prices_fields_and_stock()
     {
         var csv = await Export();
@@ -120,7 +139,7 @@ public sealed class ItemFileTests : IAsyncLifetime
         csv = With(csv, "Mug", "On hand", "7");
         csv = With(csv, "Design work", "Item", "Design hours");
         csv = With(csv, "Design hours", "Description", "By the hour");
-        csv += ",Bowl,Inventory,Yes,,Kitchen,,20,6,Yes,Sales,,,FIFO,None,Clay Co,,,,,,15,Red\r\n";
+        csv += ",Bowl,Inventory,Yes,,Kitchen,,20,6,Yes,Sales,,,FIFO,None,Clay Co,,,,,,,,15,Red\r\n";
 
         var preview = await In<ItemFileService, ItemFilePlan>(s => s.PreviewAsync(csv, Options));
         Assert.Equal((1, 2, 0), (preview.NewCount, preview.ChangedCount, preview.ErrorCount));
@@ -172,7 +191,7 @@ public sealed class ItemFileTests : IAsyncLifetime
         var csv = await Export();
         csv = With(csv, "Mug", "Price", "15");
         csv = With(csv, "Design work", "Income account", "No such account");
-        csv += ",Plate,Inventory,Yes,,,,8,3,Yes,Sales,,,FIFO,None,,,,,10 five,,,\r\n";
+        csv += ",Plate,Inventory,Yes,,,,8,3,Yes,Sales,,,FIFO,None,,,,,,,10 five,,,\r\n";
 
         var preview = await In<ItemFileService, ItemFilePlan>(s => s.PreviewAsync(csv, Options));
 

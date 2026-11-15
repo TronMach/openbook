@@ -30,7 +30,7 @@
         <dl class="facts">
             <dt>Date</dt><dd>@Labels.Date(_landed.Date)</dd>
             <dt>Came out of</dt><dd>@_chart.FullName(_landed.FromAccountId)</dd>
-            <dt>Spread by</dt><dd>@(_landed.Method == LandedCostMethod.ByQuantity ? "Quantity" : "Value")</dd>
+            <dt>Spread by</dt><dd>@(_landed.Method switch { LandedCostMethod.ByQuantity => "Quantity", LandedCostMethod.ByWeight => "Weight", LandedCostMethod.ByVolume => "Volume", _ => "Value" })</dd>
             @if (_landed.Memo is { } memo)
             {
                 <dt>Memo</dt><dd>@memo</dd>

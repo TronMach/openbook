@@ -110,6 +110,17 @@ public sealed class Item
     /// <summary>A product line or group ("Mugs", "Consulting") for reports by category; null for none.</summary>
     public string? Category { get; private set; }
 
+    /// <summary>One unit's shipping weight, in whatever unit the business uses throughout (C077); null when not given.</summary>
+    public decimal? Weight { get; private set; }
+
+    /// <summary>One unit's volume (cubic feet or meters, used throughout), for landed costs by volume; null when not given.</summary>
+    public decimal? Volume { get; private set; }
+
+    /// <summary>A positive measure to four decimals; 0 clears it.</summary>
+    private static decimal? Measure(decimal value, string what) => value == 0m ? null
+        : value > 0m && value <= 1_000_000_000m && decimal.Round(value, 4) == value ? value
+        : throw new DomainException("item.measure", $"The {what} is a number above zero, to four decimals.");
+
     /// <summary>Who you usually buy it from: reordering groups items into one purchase order per preferred vendor.</summary>
     public Guid? PreferredVendorId { get; private set; }
 
@@ -138,7 +149,7 @@ public sealed class Item
     /// <summary>The item's details as they are, to change a few and save them back.</summary>
     public ItemDetails Details() => new(
         Name, Type, IncomeAccountId, Rate, Description, Taxable, InventoryAssetAccountId, CostAccountId, ReorderPoint, PurchaseCost,
-        CostMethod, Tracking, Barcode, AutoBuild, SellShort, PreferredVendorId, ReorderQuantity, LeadTimeDays, Category);
+        CostMethod, Tracking, Barcode, AutoBuild, SellShort, PreferredVendorId, ReorderQuantity, LeadTimeDays, Category, Weight, Volume);
 
     /// <summary>Replaces the components. The service checks what they are (no bundles in bundles, assemblies take tracked items, no cycles).</summary>
     public void SetComponents(IEnumerable<(Guid ItemId, decimal Quantity)> components)
@@ -196,6 +207,10 @@ public sealed class Item
         Barcode = NormalizeBarcode(details.Barcode);
         if (details.Category is not null)
             Category = Text.Optional(details.Category, 50, "item.category_too_long", "Category");
+        if (details.Weight is { } weight)
+            Weight = Measure(weight, "weight");
+        if (details.Volume is { } volume)
+            Volume = Measure(volume, "volume");
         Taxable = details.Taxable;
         PreferredVendorId = details.PreferredVendorId is { } vendor && vendor != Guid.Empty ? vendor : null;
         IncomeAccountId = details.IncomeAccountId == Guid.Empty
@@ -340,4 +355,6 @@ public sealed record ItemDetails(
     Guid? PreferredVendorId = null,
     decimal? ReorderQuantity = null,
     int? LeadTimeDays = null,
-    string? Category = null);
+    string? Category = null,
+    decimal? Weight = null,
+    decimal? Volume = null);

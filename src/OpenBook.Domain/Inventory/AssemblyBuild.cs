@@ -105,6 +105,12 @@ public enum LandedCostMethod
 
     /// <summary>In proportion to each line's quantity.</summary>
     ByQuantity,
+
+    /// <summary>In proportion to each line's quantity times its item's weight per unit (C077).</summary>
+    ByWeight,
+
+    /// <summary>In proportion to each line's quantity times its item's volume per unit (C077).</summary>
+    ByVolume,
 }
 
 /// <summary>What one received line (a cost layer) got of a landed cost, split between stock on hand and stock already sold.</summary>
@@ -180,12 +186,23 @@ public sealed class LandedCost
     /// Splits <paramref name="amount"/> over the received lines by value or quantity, rounding to the cent with the
     /// last line taking what's left.
     /// </summary>
-    public static IReadOnlyList<decimal> Allocate(decimal amount, IReadOnlyList<(decimal Quantity, decimal Cost)> received, LandedCostMethod method)
+    /// <param name="unitMeasures">Each line's item's weight or volume per unit, for <see cref="LandedCostMethod.ByWeight"/> and <see cref="LandedCostMethod.ByVolume"/>.</param>
+    public static IReadOnlyList<decimal> Allocate(decimal amount, IReadOnlyList<(decimal Quantity, decimal Cost)> received, LandedCostMethod method,
+        IReadOnlyList<decimal?>? unitMeasures = null)
     {
         ArgumentNullException.ThrowIfNull(received);
         if (received.Count == 0)
             throw new DomainException("landed_cost.no_stock", "Those bills didn't bring in any inventory.");
-        var weights = received.Select(r => method == LandedCostMethod.ByQuantity ? r.Quantity : r.Cost).ToList();
+        if (method is LandedCostMethod.ByWeight or LandedCostMethod.ByVolume && (unitMeasures is null || unitMeasures.Count != received.Count || unitMeasures.Any(m => m is null)))
+            throw new DomainException("landed_cost.no_measure", method == LandedCostMethod.ByWeight
+                ? "Some of those products have no weight per unit: give each one its weight on its page, or spread by value or quantity."
+                : "Some of those products have no volume per unit: give each one its volume on its page, or spread by value or quantity.");
+        var weights = received.Select((r, i) => method switch
+        {
+            LandedCostMethod.ByQuantity => r.Quantity,
+            LandedCostMethod.ByWeight or LandedCostMethod.ByVolume => r.Quantity * unitMeasures![i]!.Value,
+            _ => r.Cost,
+        }).ToList();
         var total = weights.Sum();
         if (total <= 0m)
             throw new DomainException("landed_cost.no_basis", method == LandedCostMethod.ByValue

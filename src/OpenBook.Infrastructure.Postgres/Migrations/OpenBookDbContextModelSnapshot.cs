@@ -6399,6 +6399,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
 
+                    b.Property<long?>("Volume")
+                        .HasColumnType("bigint")
+                        .HasColumnName("VolumeTenThousandths");
+
+                    b.Property<long?>("Weight")
+                        .HasColumnType("bigint")
+                        .HasColumnName("WeightTenThousandths");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Barcode")

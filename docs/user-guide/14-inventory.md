@@ -82,7 +82,7 @@ To change many items at once, or keep a list outside OpenBook, use **Inventory â
 
 - **Item ID** and **Item** (the name), then **Type**, **Active**, **Description**, **Category** and **Barcode**.
 - Pricing: **Price**, **Purchase cost**, **Quantity breaks** (written like `10: 5%; 50: 8.00`, meaning 5% off from 10 units and 8.00 each from 50), and a **Price level:** column for each per-item price level.
-- **Taxable**, the accounts (full name or number), **Cost method**, **Tracking**, **Preferred vendor** and the reorder settings.
+- **Taxable**, the accounts (full name or number), **Cost method**, **Tracking**, **Preferred vendor**, the reorder settings, and **Weight** and **Volume** per unit (a blank cell clears them).
 - **On hand** in the warehouse you choose.
 - A column for each item custom field.
 
@@ -140,7 +140,7 @@ Freight, duty and customs charges are part of what stock cost you. **Inventory â
 1. Enter the **date**, the **amount** and where it **comes out of**: by default "Landed Cost Clearing", where you post the freight bill itself.
 2. Choose the **bills** whose goods it belongs to.
 3. If the cost belongs to only some of the products on them (duty on one line of a shipment, say), tick those under **Only these products**; with none ticked it goes on all of them.
-4. **Spread by** the goods' **value** or **quantity**.
+4. **Spread by** the goods' **value**, **quantity**, **weight** or **volume** (the last two use each product's weight or volume per unit, from its page; every product on the bills needs one).
 5. **Post landed cost**.
 
 The part for stock still on hand raises its cost; the part for stock already sold goes to cost of goods sold.

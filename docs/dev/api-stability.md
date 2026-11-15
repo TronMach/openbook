@@ -101,6 +101,7 @@ Contributors: a change to anything under "What's covered" that isn't additive ne
 
 ## Change log
 
+- **2026-11-14**: items take optional `weight` and `volume`; landed costs take `method` `ByWeight` or `ByVolume`. Additive.
 - **2026-11-14**: `POST /api/nonprofit/pledges` and `/grants` take optional `alreadyOnBooks`; a pledge made so has `journalEntryId` of all zeros. Additive.
 - **2026-11-14**: channel requests take optional `marketplaceWarehouseId`; order lines carry `byMarketplace`. Additive.
 - **2026-11-14**: `POST /api/inventory/landed-costs` takes optional `itemIds` (only those items' stock gets the cost); `GET /api/inventory/landed-costs/candidates` adds `itemIds`. Additive.

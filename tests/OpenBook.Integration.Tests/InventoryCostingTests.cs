@@ -218,6 +218,27 @@ public sealed class InventoryCostingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Landed_costs_spread_by_weight_or_volume()
+    {
+        var anvil = await NewItem("Anvil", ItemType.Inventory);
+        var feather = await NewItem("Feather", ItemType.Inventory);
+        var bill = await Buy(Jan10, (anvil, 2m, 200m), (feather, 100m, 50m));
+        Assert.Equal("landed_cost.no_measure", await Refused(() => Run(sp => sp.GetRequiredService<LandedCostService>().CreateAsync(
+            new CreateLandedCostCommand(Feb1, 30m, [bill.Id], LandedCostMethod.ByWeight, _freight.Id)))));
+
+        await Run(sp => sp.GetRequiredService<ItemService>().UpdateAsync(anvil.Id, new ItemDetails("Anvil", ItemType.Inventory, _sales.Id, 10m, Weight: 50m, Volume: 1m)));
+        await Run(sp => sp.GetRequiredService<ItemService>().UpdateAsync(feather.Id, new ItemDetails("Feather", ItemType.Inventory, _sales.Id, 10m, Weight: 0.01m, Volume: 0.02m)));
+        // By weight: 2 × 50 = 100 against 100 × 0.01 = 1, so the anvils take 100/101 of the freight.
+        var byWeight = await Run(sp => sp.GetRequiredService<LandedCostService>().CreateAsync(
+            new CreateLandedCostCommand(Feb1, 101m, [bill.Id], LandedCostMethod.ByWeight, _freight.Id)));
+        Assert.Equal((100m, 1m), (Share(byWeight, anvil).Amount, Share(byWeight, feather).Amount));
+        // By volume: 2 × 1 = 2 against 100 × 0.02 = 2, an even split.
+        var byVolume = await Run(sp => sp.GetRequiredService<LandedCostService>().CreateAsync(
+            new CreateLandedCostCommand(Feb1, 10m, [bill.Id], LandedCostMethod.ByVolume, _freight.Id)));
+        Assert.Equal((5m, 5m), (Share(byVolume, anvil).Amount, Share(byVolume, feather).Amount));
+    }
+
+    [Fact]
     public async Task Landed_cost_on_stock_built_into_assemblies_goes_onto_the_assemblies()
     {
         var leg = await NewItem("Steel leg", ItemType.Inventory);

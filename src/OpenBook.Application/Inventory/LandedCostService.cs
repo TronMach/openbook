@@ -111,8 +111,14 @@ public sealed class LandedCostService(
                 throw new DomainException("landed_cost.no_chosen_items", "None of the products chosen came in on those bills.");
         }
 
-        var shares = LandedCost.Allocate(command.Amount, received.Select(r => (r.Quantity, r.Cost)).ToList(), command.Method);
         var items = await sales.GetItemsAsync(received.Select(r => r.ItemId).Distinct().ToList(), ct);
+        var measures = command.Method switch
+        {
+            LandedCostMethod.ByWeight => received.Select(r => items[r.ItemId].Weight).ToList(),
+            LandedCostMethod.ByVolume => received.Select(r => items[r.ItemId].Volume).ToList(),
+            _ => null,
+        };
+        var shares = LandedCost.Allocate(command.Amount, received.Select(r => (r.Quantity, r.Cost)).ToList(), command.Method, measures);
         if (items.Values.FirstOrDefault(i => i.InventoryAssetAccountId == from.Id) is { } own)
             throw new DomainException("landed_cost.account_is_stock", $"'{from.Name}' is where {own.Name} is kept, so the cost would come out of the same account it goes into. Use the account the freight or duty was entered to.");
         var lines = new List<(Guid BillId, Guid LayerId, Guid ItemId, decimal Amount, decimal ToStock)>();

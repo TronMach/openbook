@@ -1749,6 +1749,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(i => i.SellShort).HasConversion<string>().HasMaxLength(20);
             b.Property(i => i.Barcode).HasMaxLength(50);
             b.Property(i => i.Category).HasMaxLength(50);
+            b.Property(i => i.Weight).HasColumnName("WeightTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(i => i.Volume).HasColumnName("VolumeTenThousandths").HasConversion(NullableTenThousandths);
             b.HasIndex(i => i.Barcode).IsUnique();
             b.Ignore(i => i.IsBundle);
             b.Ignore(i => i.IsAssembly);

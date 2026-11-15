@@ -6392,6 +6392,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("Volume")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("VolumeTenThousandths");
+
+                    b.Property<long?>("Weight")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("WeightTenThousandths");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Barcode")

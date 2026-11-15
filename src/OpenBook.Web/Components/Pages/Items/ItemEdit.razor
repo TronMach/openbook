@@ -77,6 +77,16 @@
                     }
                 </datalist>
             </div>
+            <div class="row">
+                <div class="field">
+                    <label for="weight">Weight per unit <span class="muted">(optional, for landed costs)</span></label>
+                    <InputNumber id="weight" @bind-Value="Input.Weight" class="short" />
+                </div>
+                <div class="field">
+                    <label for="volume">Volume per unit <span class="muted">(optional)</span></label>
+                    <InputNumber id="volume" @bind-Value="Input.Volume" class="short" />
+                </div>
+            </div>
             <div class="field">
                 <label for="barcode">Barcode <span class="muted">(optional)</span></label>
                 <InputText id="barcode" @bind-Value="Input.Barcode" maxlength="50" autocomplete="off" />
@@ -580,7 +590,7 @@
             {
                 Name = _item.Name, Type = _item.Type, Description = _item.Description, Rate = _item.Rate, IncomeAccountId = _item.IncomeAccountId, Taxable = _item.Taxable,
                 InventoryAssetAccountId = _item.InventoryAssetAccountId, CostAccountId = _item.CostAccountId, ReorderPoint = _item.ReorderPoint, PurchaseCost = _item.PurchaseCost,
-                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, Category = _item.Category, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
+                CostMethod = _item.CostMethod, Tracking = _item.Tracking, Barcode = _item.Barcode, Category = _item.Category, Weight = _item.Weight, Volume = _item.Volume, AutoBuild = _item.AutoBuild, SellShort = _item.SellShort,
                 PreferredVendorId = _item.PreferredVendorId, ReorderQuantity = _item.ReorderQuantity, LeadTimeDays = _item.LeadTimeDays,
             };
         Input.Version ??= opened;
@@ -622,7 +632,7 @@
             var tracking = _assetLocked ? _item!.Tracking : Input.Tracking;
             var details = new ItemDetails(Input.Name, Input.Type, Input.IncomeAccountId!.Value, Input.Rate ?? 0m, Input.Description, Input.Taxable,
                 asset, Input.CostAccountId, Input.ReorderPoint, Input.PurchaseCost ?? 0m, method, tracking, Input.Barcode, Input.AutoBuild, Input.SellShort,
-                Input.PreferredVendorId, Input.ReorderQuantity, Input.LeadTimeDays, Input.Category ?? "");
+                Input.PreferredVendorId, Input.ReorderQuantity, Input.LeadTimeDays, Input.Category ?? "", Input.Weight ?? 0m, Input.Volume ?? 0m);
             await Versions.EnsureUnchangedAsync<Item>(_item?.Id ?? Guid.Empty, Input.Version);
             var saved = _item is null ? await ItemService.CreateAsync(details) : await ItemService.UpdateAsync(_item.Id, details);
             // A new bundle or assembly goes straight on to its components.
@@ -680,6 +690,10 @@
         [StringLength(50)]
         public string? Barcode { get; set; }
         public string? Category { get; set; }
+
+        public decimal? Weight { get; set; }
+
+        public decimal? Volume { get; set; }
 
         public Guid? PreferredVendorId { get; set; }
 
