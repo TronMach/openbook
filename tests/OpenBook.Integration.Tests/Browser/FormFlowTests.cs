@@ -92,6 +92,7 @@ public sealed class FormFlowTests(BrowserApp app)
     {
         var tag = Tag();
         var (customer, invoice) = await InvoiceAsync(tag, 340m);
+        await NewAccount($"Bank {tag}", AccountType.Bank); // somewhere to put it, when this runs before the tests that make one
 
         await using var page = await app.SignedInAsync();
         var p = page.Page;
