@@ -16,6 +16,7 @@ namespace OpenBook.Application.Nonprofit;
 
 /// <param name="ClassId">The grant's class; null creates one named after the grant, counting as program services.</param>
 /// <param name="IncomeAccountId">Null: "Grants", created on first use.</param>
+/// <param name="AlreadyOnBooks">An unconditional grant carried over from the old books (C080): its receivable and income are in the opening balances, so no award is posted. Enter what the funder still owes.</param>
 public sealed record GrantCommand(
     string Name,
     Guid FunderId,
@@ -28,7 +29,8 @@ public sealed record GrantCommand(
     bool Conditional = false,
     string? Reference = null,
     string? Terms = null,
-    Guid? ParentClassId = null);
+    Guid? ParentClassId = null,
+    bool AlreadyOnBooks = false);
 
 public sealed record GrantDetailsCommand(string Name, string? Reference, DateOnly StartsOn, DateOnly EndsOn, string? Terms);
 
@@ -160,7 +162,8 @@ public sealed class GrantService(
 
         var id = Guid.CreateVersion7();
         Guid? awardEntry = null;
-        if (!command.Conditional)
+        // A grant carried over from the old books (C080) has its receivable and income in the opening balances already.
+        if (!command.Conditional && !command.AlreadyOnBooks)
         {
             var memo = $"Grant: {command.Name.Trim()} ({funder.DisplayName})";
             awardEntry = (await engine.StageAsync(new PostJournalEntryCommand(command.AwardedOn,

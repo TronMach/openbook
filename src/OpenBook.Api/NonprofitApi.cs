@@ -29,7 +29,7 @@ public sealed record PledgeResponse(
     Guid IncomeAccountId, Guid? ClassId, string? Memo, DocumentStatus Status, Guid JournalEntryId)
 {
     public static PledgeResponse From(PledgeBalance b) => new(b.Pledge.Id, b.Pledge.Number, b.Pledge.DonorId, b.Donor, b.Pledge.Date, b.Pledge.DueDate,
-        b.Pledge.Amount, b.Paid, b.Balance, b.Pledge.IncomeAccountId, b.Pledge.ClassId, b.Pledge.Memo, b.Pledge.Status, b.Pledge.JournalEntryId);
+        b.Pledge.Amount, b.Paid, b.Balance, b.Pledge.IncomeAccountId, b.Pledge.ClassId, b.Pledge.Memo, b.Pledge.Status, b.Pledge.JournalEntryId ?? Guid.Empty);
 }
 
 public sealed record GiftSettingsResponse(string? Ein, string? SignerName, string? SignerTitle, string? Intro)

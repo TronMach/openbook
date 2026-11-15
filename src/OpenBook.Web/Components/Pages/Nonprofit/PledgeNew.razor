@@ -63,6 +63,7 @@
                 </div>
             </div>
             <div class="field"><label for="memo">Memo <span class="muted">(optional)</span></label><input id="memo" name="memo" maxlength="@Donation.MaxTextLength" /></div>
+            <label class="check"><input type="checkbox" name="alreadyOnBooks" value="true" /> Already on the books: a pledge from before OpenBook, its receivable in the opening balances. Enter what's still owed; nothing is posted now.</label>
             <ClosedPeriodPassword Visible="Password" Interactive="false" />
             <div class="actions"><button type="submit">Record pledge</button></div>
         </PostForm>

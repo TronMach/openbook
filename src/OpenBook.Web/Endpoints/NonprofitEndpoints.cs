@@ -238,7 +238,8 @@ public static class NonprofitEndpoints
                     Id(form["incomeAccountId"]),
                     Id(form["classId"]),
                     Date(form["dueDate"]),
-                    form["memo"]), ct);
+                    form["memo"],
+                    form["alreadyOnBooks"] == "true"), ct);
                 return Results.Redirect($"/nonprofit/pledges/{pledge.Id}");
             }
             catch (DomainException ex)
@@ -312,7 +313,8 @@ public static class NonprofitEndpoints
                     form["conditional"] == "true",
                     form["reference"],
                     form["terms"],
-                    Id(form["parentClassId"])), ct);
+                    Id(form["parentClassId"]),
+                    form["alreadyOnBooks"] == "true"), ct);
                 return Results.Redirect($"/nonprofit/grants/{grant.Id}");
             }
             catch (DomainException ex)

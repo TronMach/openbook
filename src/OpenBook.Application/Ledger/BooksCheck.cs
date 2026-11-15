@@ -541,7 +541,9 @@ public sealed class BooksCheckService(
         var (lines, others) = On(d, accountIds, Domain.Nonprofit.Pledge.Source, Domain.Nonprofit.Pledge.CancelSource, Domain.Nonprofit.Donation.Source,
             Domain.Nonprofit.Donation.ReturnSource);
         var standing = pledges.Where(p => p.Status == DocumentStatus.Posted).Select(p => p.Id).ToHashSet();
-        var promised = pledges.Where(p => standing.Contains(p.Id)).Sum(p => p.Amount - p.CancelledAmount);
+        // A pledge carried over already on the books (C080) has no entry: its promise is in an opening balance entry, which
+        // counts among the direct entries, so only the pledges with entries of their own are expected from the records.
+        var promised = pledges.Where(p => standing.Contains(p.Id)).Sum(p => (p.JournalEntryId is null ? 0m : p.Amount) - p.CancelledAmount);
         var paid = d.Gifts.Where(g => g.Counts && g.PledgeId is { } id && standing.Contains(id)).Sum(g => g.Amount);
         return Compare("pledges", "Pledges receivable match the open pledges",
             "What's still to come on pledges (promised, less cancelled and paid) equals the pledges receivable account, on the accrual basis.",
@@ -558,7 +560,9 @@ public sealed class BooksCheckService(
             Domain.Nonprofit.Grant.RecognitionSource, Domain.Nonprofit.Grant.AdjustmentSource);
         return Compare("grants", "Grants receivable and advances match the grants",
             "What funders still owe for income recognized, less money they paid ahead and isn't earned yet, equals the grants receivable and refundable advance accounts, on the accrual basis.",
-            grants.Sum(g => g.Receivable) - grants.Sum(g => g.Advance), lines.Sum(l => l.Amount), others, "The grants",
+            // An unconditional grant carried over already on the books (C080) has its award in an opening balance entry instead.
+            grants.Sum(g => g.Receivable) - grants.Sum(g => g.Advance) - grants.Where(g => !g.Conditional && g.AwardEntryId is null).Sum(g => g.NetAward),
+            lines.Sum(l => l.Amount), others, "The grants",
             Names(d, accountIds, "the grants receivable account"));
     }
 

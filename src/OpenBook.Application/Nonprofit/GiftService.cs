@@ -56,7 +56,12 @@ public sealed record RecordGiftCommand(
 public sealed record GiftPart(decimal Amount, Guid? IncomeAccountId = null, Guid? ClassId = null);
 
 /// <param name="IncomeAccountId">Null: "Contributions", created on first use.</param>
-public sealed record PledgeCommand(Guid DonorId, DateOnly Date, decimal Amount, Guid? IncomeAccountId = null, Guid? ClassId = null, DateOnly? DueDate = null, string? Memo = null);
+/// <param name="AlreadyOnBooks">
+/// A pledge carried over from the old books, whose receivable is already in the opening balances (C080): nothing is
+/// posted now. Enter what's still owed; payments then come off the receivable as usual.
+/// </param>
+public sealed record PledgeCommand(Guid DonorId, DateOnly Date, decimal Amount, Guid? IncomeAccountId = null, Guid? ClassId = null, DateOnly? DueDate = null, string? Memo = null,
+    bool AlreadyOnBooks = false);
 
 /// <summary>A pledge with what's been paid on it by posted gifts.</summary>
 public sealed record PledgeBalance(Pledge Pledge, string Donor, decimal Paid)
@@ -537,11 +542,11 @@ public sealed class GiftService(
 
         var id = Guid.CreateVersion7();
         var memo = $"Pledge from {donor.DisplayName}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
+        var entry = command.AlreadyOnBooks ? null : await engine.StageAsync(new PostJournalEntryCommand(command.Date,
             [JournalLineDraft.Dr(receivable.Id, command.Amount, memo, classId), JournalLineDraft.Cr(income.Id, command.Amount, memo, classId)],
             command.Memo ?? memo, Pledge.Source, id, EntryBasis.AccrualOnly), ct);
         var number = (await store.ListPledgesAsync(ct)).Select(p => p.Number).DefaultIfEmpty(0).Max() + 1;
-        var pledge = Pledge.Create(id, number, donor.Id, command.Date, command.Amount, receivable.Id, income.Id, classId, command.DueDate, command.Memo, entry.Id, clock.UtcNow);
+        var pledge = Pledge.Create(id, number, donor.Id, command.Date, command.Amount, receivable.Id, income.Id, classId, command.DueDate, command.Memo, entry?.Id, clock.UtcNow);
         store.Add(pledge);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Posted, PledgeEntity, pledge.Id, null, Snapshot(pledge)));
         await store.SaveChangesAsync(ct);
@@ -557,7 +562,8 @@ public sealed class GiftService(
             throw new DomainException("pledge.has_payments", "Gifts have been paid on this pledge. Void them first.");
         await EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, pledge.Amount, ct);
         var before = Snapshot(pledge);
-        await engine.StageVoidAsync(pledge.JournalEntryId, reason, fromDocument: true, ct);
+        if (pledge.JournalEntryId is { } entryId)
+            await engine.StageVoidAsync(entryId, reason, fromDocument: true, ct);
         pledge.Void();
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Voided, PledgeEntity, pledge.Id, before, Snapshot(pledge)));
         await store.SaveChangesAsync(ct);

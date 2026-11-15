@@ -356,7 +356,10 @@ public sealed class Pledge
 
     public string? Memo { get; private set; }
     public DocumentStatus Status { get; private set; }
-    public Guid JournalEntryId { get; private set; }
+
+    /// <summary>The entry recording the promise; null for a pledge carried over already on the books (C080).</summary>
+    public Guid? JournalEntryId { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>The unpaid part written off, when the donor won't pay the rest.</summary>
@@ -367,7 +370,7 @@ public sealed class Pledge
 
     public static Pledge Create(
         Guid id, int number, Guid donorId, DateOnly date, decimal amount, Guid receivableAccountId, Guid incomeAccountId, Guid? classId,
-        DateOnly? dueDate, string? memo, Guid journalEntryId, DateTimeOffset createdAt)
+        DateOnly? dueDate, string? memo, Guid? journalEntryId, DateTimeOffset createdAt)
     {
         Check(date, amount, dueDate);
         return new Pledge

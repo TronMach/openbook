@@ -32,7 +32,14 @@
             {
                 <a class="button secondary" href="/nonprofit/pledges/@p.Id/statement" target="_blank">Pledge statement (PDF)</a>
             }
-            <ActionLink Class="button secondary" Href="@($"/journal/{p.JournalEntryId}")">Journal entry</ActionLink>
+            @if (p.JournalEntryId is { } entryId)
+            {
+                <ActionLink Class="button secondary" Href="@($"/journal/{entryId}")">Journal entry</ActionLink>
+            }
+            else
+            {
+                <span class="badge">Carried over on the books</span>
+            }
             <ActionLink Class="button secondary" Href="@($"/audit?entityId={p.Id}")">History</ActionLink>
             <ActionLink Class="button secondary" Href="/nonprofit/pledges">Pledges</ActionLink>
         </div>

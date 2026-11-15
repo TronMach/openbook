@@ -3552,7 +3552,7 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("IncomeAccountId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("JournalEntryId")
+                    b.Property<Guid?>("JournalEntryId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Memo")
@@ -9429,8 +9429,7 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
                         .WithMany()
                         .HasForeignKey("JournalEntryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OpenBook.Domain.Accounts.Account", null)
                         .WithMany()

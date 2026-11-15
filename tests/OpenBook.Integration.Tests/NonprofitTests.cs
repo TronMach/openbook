@@ -438,6 +438,36 @@ public sealed class NonprofitTests : IAsyncLifetime
         Assert.Empty(check.Results.Where(r => r.Outcome == OpenBook.Application.Ledger.CheckOutcome.Problem).Select(r => $"{r.Key}: {r.Summary}"));
     }
 
+    [Fact]
+    public async Task Pledges_and_grants_from_before_openbook_come_in_without_posting_again()
+    {
+        var sam = await Donor("Sam Carryover");
+        var foundation = await Donor("Elm Foundation");
+        var checking = Account("Checking");
+        var equity = (await In<AccountService, Account>(s => s.CreateAsync(new CreateAccountCommand("Opening Balance Equity", AccountType.Equity)))).Id;
+        // The opening balances already hold what's owed: 300 on a pledge, 2,000 on a grant.
+        var receivable = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.PledgeAsync(new PledgeCommand(sam.Id, Jan1, 1m, Account("Contributions:Unrestricted"))));
+        await In<GiftService, Domain.Nonprofit.Pledge>(s => s.VoidPledgeAsync(receivable.Id, "Only to make the receivable account"));
+        await Post(Jan1, Dr(receivable.ReceivableAccountId, 300m), Cr(equity, 300m));
+
+        var pledge = await In<GiftService, Domain.Nonprofit.Pledge>(s => s.PledgeAsync(new PledgeCommand(sam.Id, Jan1, 300m, Account("Contributions:Unrestricted"), AlreadyOnBooks: true)));
+        Assert.Null(pledge.JournalEntryId);
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, "Contributions:Unrestricted"));
+        await Give(new RecordGiftCommand(sam.Id, new DateOnly(2026, 2, 1), 100m, checking, PledgeId: pledge.Id));
+        Assert.Equal(200m, (await In<GiftService, PledgeBalance?>(s => s.GetPledgeAsync(pledge.Id)))!.Balance);
+
+        var grant = await NewGrant(new GrantCommand("Old award", foundation.Id, 2000m, new DateOnly(2025, 6, 1), new DateOnly(2025, 7, 1), Dec31,
+            IncomeAccountId: Account("Grants:Restricted"), AlreadyOnBooks: true));
+        Assert.Null(grant.AwardEntryId);
+        Assert.Equal(0m, await IncomeAsync(ReportBasis.Accrual, "Grants:Restricted"));
+        await Post(Jan1, Dr(grant.ReceivableAccountId, 2000m), Cr(equity, 2000m));
+        await In<GrantService, Grant>(s => s.ReceiveAsync(grant.Id, new DateOnly(2026, 3, 1), 500m, checking));
+        Assert.Equal(1500m, (await PositionOf(grant.Id))!.Grant.Due);
+
+        var check = await _db.InScope(sp => sp.GetRequiredService<BooksCheckService>().RunAsync(CancellationToken.None));
+        Assert.Empty(check.Results.Where(r => r.Outcome == CheckOutcome.Problem).Select(r => $"{r.Key}: {r.Summary}"));
+    }
+
     // ---- Grants and Form 990 (slice 3) ----
 
     private Task<Grant> NewGrant(GrantCommand command) => In<GrantService, Grant>(s => s.CreateAsync(command));
