@@ -123,11 +123,12 @@ public class BrowserApp : IAsyncLifetime
     public async Task<BrowserPage> SignedInAsync()
     {
         var page = await OpenAsync();
-        await page.Page.GotoAsync("/login");
+        // The first request of a run can wait on a cold app and a busy machine (two suites at once): longer than a click.
+        await page.Page.GotoAsync("/login", new() { Timeout = 120_000 });
         await page.Page.Locator("#username").FillAsync(Username);
         await page.Page.Locator("#password").FillAsync(Password);
         await page.Page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }).ClickAsync();
-        await page.Page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.Ordinal));
+        await page.Page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.Ordinal), new() { Timeout = 120_000 });
         return page;
     }
 
