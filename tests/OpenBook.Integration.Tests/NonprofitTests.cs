@@ -493,6 +493,27 @@ public sealed class NonprofitTests : IAsyncLifetime
             In<GrantService, Grant>(s => s.SetFederalAsync(plain.Id, null, null, null, 5m)))).Code);
     }
 
+    [Fact]
+    public async Task The_endowment_roll_forward_follows_the_endowment_classes()
+    {
+        Assert.Contains("No class is named for an endowment", (await Report("endowment-rollforward", "preset=Custom&from=2026-01-01&to=2026-12-31")).Rows[0].Cells[0].Value as string, StringComparison.Ordinal);
+        var fund = (await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Smith Scholarship Endowment"))).Id;
+        var gains = await _db.CreateAccount("Investment Gains", AccountType.OtherIncome);
+        var checking = Account("Checking");
+        await Post(new DateOnly(2025, 6, 1), Dr(checking, 10000m), Cr(Account("Contributions:Restricted"), 10000m, classId: fund));
+        await Post(new DateOnly(2026, 3, 1), Dr(checking, 2000m), Cr(Account("Contributions:Restricted"), 2000m, classId: fund));
+        await Post(new DateOnly(2026, 6, 30), Dr(checking, 800m), Cr(gains.Id, 800m, classId: fund));
+        await Post(new DateOnly(2026, 9, 1), Dr(Account("Program Supplies"), 300m, classId: fund), Cr(checking, 300m));
+        await Post(new DateOnly(2026, 9, 1), Dr(Account("Program Supplies"), 50m, classId: _scholarships), Cr(checking, 50m)); // not the endowment
+
+        var report = await Report("endowment-rollforward", "preset=Custom&from=2026-01-01&to=2026-12-31");
+        Assert.Equal((0m, 10000m), ((decimal)report.Find("Endowment net assets at the start", 1)!, (decimal)report.Find("Endowment net assets at the start", 2)!));
+        Assert.Equal(2000m, report.Find("Contributions", 2));
+        Assert.Equal(800m, report.Find("Investment return (income, gains and losses)", 1));
+        Assert.Equal(-300m, report.Find("Appropriated for expenditure (spending)", 1));
+        Assert.Equal(12500m, report.Find("Endowment net assets at the end", 3));
+    }
+
     // ---- Grants and Form 990 (slice 3) ----
 
     private Task<Grant> NewGrant(GrantCommand command) => In<GrantService, Grant>(s => s.CreateAsync(command));

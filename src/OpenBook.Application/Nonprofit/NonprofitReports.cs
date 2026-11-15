@@ -419,6 +419,75 @@ public sealed class NonprofitReports(
             "Ties to the statement of financial position at both dates and to the statement of activities for the change.");
     }
 
+    /// <summary>
+    /// The endowment roll-forward for the financial statement notes (C323, ASC 958-205): net assets of the endowment
+    /// funds at the start, contributions, investment return, what was spent (appropriated for expenditure), other changes
+    /// (releases, transfers) and the end, without and with donor restrictions. Endowment funds are the classes named for
+    /// one ("Endowment", "Smith Scholarship Endowment") and the classes under them.
+    /// </summary>
+    public async Task<ReportTable> EndowmentRollForwardAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, CancellationToken ct = default)
+    {
+        var company = await companies.GetRequiredCompanyAsync(ct);
+        var reportBasis = basis ?? company.DefaultReportBasis;
+        var chart = await accounts.GetChartAsync(ct);
+        var funds = (await segments.ListAsync(SegmentKind.Class, includeInactive: true, ct))
+            .Where(c => c.FullName.Contains("endowment", StringComparison.OrdinalIgnoreCase)).Select(c => c.Segment.Id).ToHashSet();
+        var title = "Endowment net assets";
+        var columns = new List<ReportColumn> { new(""), new(Without, ColumnFormat.Money), new(With, ColumnFormat.Money), new("Total", ColumnFormat.Money) };
+        if (funds.Count == 0)
+            return new ReportTable(title, [company.Name], columns,
+                [new(["No class is named for an endowment. Give the endowment fund a class with \"Endowment\" in its name and post its gifts, investment return and spending on it.", null, null, null])],
+                reportBasis);
+
+        var lines = (await ledger.LinesAsync(reportBasis, null, to, ct)).Where(l => l.ClassId is { } c && funds.Contains(c)
+            && chart.Get(l.AccountId).Type.ClassOf() is AccountClass.Income or AccountClass.Expense).ToList();
+        // By the account's tax line (its own or its nearest parent's) or its full name, so "Contributions:Restricted" counts.
+        string LineOf(Account a) => TaxLines.Find(a.TaxLineKey)?.Key ?? (a.ParentId is { } p && chart.Find(p) is { } parent ? LineOf(parent) : "");
+        bool IsContribution(Account a) => LineOf(a) == "n.8.1"
+            || GiftWords.Any(w => chart.FullName(a.Id).Contains(w, StringComparison.OrdinalIgnoreCase));
+        bool IsReturn(Account a) => LineOf(a) is "n.8.3" or "n.8.7"
+            || ReturnWords.Any(w => chart.FullName(a.Id).Contains(w, StringComparison.OrdinalIgnoreCase));
+        (decimal Without, decimal With) Sum(Func<LedgerLine, bool> test)
+        {
+            decimal free = 0m, held = 0m;
+            foreach (var l in lines.Where(test))
+            {
+                if (chart.Get(l.AccountId).DonorRestricted)
+                    held -= l.Amount;
+                else
+                    free -= l.Amount;
+            }
+
+            return (free, held);
+        }
+
+        bool InPeriod(LedgerLine l) => l.Date >= from && l.Date <= to;
+        var start = Sum(l => l.Date < from);
+        var gifts = Sum(l => InPeriod(l) && l.Source != RestrictionRelease.Source && IsContribution(chart.Get(l.AccountId)));
+        var investment = Sum(l => InPeriod(l) && l.Source != RestrictionRelease.Source && IsReturn(chart.Get(l.AccountId)) && !IsContribution(chart.Get(l.AccountId)));
+        var spent = Sum(l => InPeriod(l) && chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense);
+        var end = Sum(_ => true);
+        var other = (end.Without - start.Without - gifts.Without - investment.Without - spent.Without, end.With - start.With - gifts.With - investment.With - spent.With);
+        ReportTableRow Row(string label, (decimal Without, decimal With) v, int depth = 1, ReportRowStyle style = ReportRowStyle.Normal) =>
+            new([label, v.Without, v.With, v.Without + v.With], depth, style);
+        return new ReportTable(title,
+            [company.Name, $"{Comparisons.Describe(from, to)} · {StatementReports.Describe(reportBasis)}"],
+            columns,
+            [
+                Row("Endowment net assets at the start", start, 0),
+                Row("Contributions", gifts),
+                Row("Investment return (income, gains and losses)", investment),
+                Row("Appropriated for expenditure (spending)", spent),
+                Row("Other changes (releases, transfers)", other),
+                Row("Endowment net assets at the end", end, 0, ReportRowStyle.Total),
+            ],
+            reportBasis,
+            "Activity on the classes named for an endowment (and the classes under them), by whether each account holds donor-restricted amounts. Investment return is income on investment, interest, dividend and gain accounts (or Form 990 Part VIII lines 3 and 7).");
+    }
+
+    private static readonly string[] ReturnWords = ["invest", "gain", "dividend", "interest", "appreciation"];
+    private static readonly string[] GiftWords = ["contribution", "gift", "donation"];
+
     private static (decimal Without, decimal With) NetAssets(ChartOfAccounts chart, IEnumerable<LedgerLine> lines)
     {
         decimal free = 0m, held = 0m;
