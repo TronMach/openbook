@@ -216,6 +216,19 @@ docker compose up -d</pre>
         }
     }
 
+    <div class="card" id="support-file">
+        <h2>@L["Support file"]</h2>
+        <p class="muted">
+            @L["When something goes wrong, download this file and send it with your bug report. It holds how OpenBook is set up, the background jobs, the recent warnings and errors and the last {0} days of log files. Email and network addresses, usernames, passwords, keys and tokens are taken out first. OpenBook doesn't send it anywhere: you choose where it goes.", SupportFile.LogDays]
+        </p>
+        <p class="muted">
+            @L["Names in error messages, such as a customer's, stay in. Open the file and read it before you send it. Issues on GitHub are public, so anyone can read a file attached there."]
+        </p>
+        <div class="actions">
+            <ActionLink Class="button secondary" Href="/settings/system/support-file">@L["Download support file"]</ActionLink>
+        </div>
+    </div>
+
     <h2>Recent warnings and errors</h2>
     @if (_log is null || _log.RecentProblems.Count == 0)
     {

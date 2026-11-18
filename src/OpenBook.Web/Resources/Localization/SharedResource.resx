@@ -944,6 +944,9 @@
   <data name="Download SKUs (CSV)" xml:space="preserve">
     <value>Download SKUs (CSV)</value>
   </data>
+  <data name="Download support file" xml:space="preserve">
+    <value>Download support file</value>
+  </data>
   <data name="Due" xml:space="preserve">
     <value>Due</value>
   </data>
@@ -1699,6 +1702,9 @@
   </data>
   <data name="Name, number, memo or amount" xml:space="preserve">
     <value>Name, number, memo or amount</value>
+  </data>
+  <data name="Names in error messages, such as a customer's, stay in. Open the file and read it before you send it. Issues on GitHub are public, so anyone can read a file attached there." xml:space="preserve">
+    <value>Names in error messages, such as a customer's, stay in. Open the file and read it before you send it. Issues on GitHub are public, so anyone can read a file attached there.</value>
   </data>
   <data name="Needs attention" xml:space="preserve">
     <value>Needs attention</value>
@@ -2933,6 +2939,9 @@
   <data name="Store address" xml:space="preserve">
     <value>Store address</value>
   </data>
+  <data name="Support file" xml:space="preserve">
+    <value>Support file</value>
+  </data>
   <data name="Switch off" xml:space="preserve">
     <value>Switch off</value>
   </data>
@@ -3370,6 +3379,9 @@
   </data>
   <data name="When" xml:space="preserve">
     <value>When</value>
+  </data>
+  <data name="When something goes wrong, download this file and send it with your bug report. It holds how OpenBook is set up, the background jobs, the recent warnings and errors and the last {0} days of log files. Email and network addresses, usernames, passwords, keys and tokens are taken out first. OpenBook doesn't send it anywhere: you choose where it goes." xml:space="preserve">
+    <value>When something goes wrong, download this file and send it with your bug report. It holds how OpenBook is set up, the background jobs, the recent warnings and errors and the last {0} days of log files. Email and network addresses, usernames, passwords, keys and tokens are taken out first. OpenBook doesn't send it anywhere: you choose where it goes.</value>
   </data>
   <data name="Where the money is sorted" xml:space="preserve">
     <value>Where the money is sorted</value>

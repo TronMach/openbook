@@ -162,6 +162,19 @@ public sealed partial class InstallationTests : IAsyncLifetime
         Assert.Contains("action=\"/settings/system/quit\"", system, StringComparison.Ordinal);
         Assert.DoesNotContain("Data protection keys", system, StringComparison.Ordinal);
 
+        // The support file: the set-up without the company's folders, and the log written so far.
+        Assert.Contains("href=\"/settings/system/support-file\"", system, StringComparison.Ordinal);
+        using var download = await browser.GetAsync("/settings/system/support-file");
+        Assert.Equal(HttpStatusCode.OK, download.StatusCode);
+        Assert.Equal("application/zip", download.Content.Headers.ContentType?.MediaType);
+        Assert.StartsWith("openbook-support-", download.Content.Headers.ContentDisposition?.FileName?.Trim('"'), StringComparison.Ordinal);
+        using var zip = new System.IO.Compression.ZipArchive(await download.Content.ReadAsStreamAsync());
+        Assert.Contains(zip.Entries, e => e.FullName == "README.txt");
+        using var about = new StreamReader(zip.GetEntry("about.txt")!.Open());
+        var aboutText = await about.ReadToEndAsync();
+        Assert.Contains("Install           Desktop", aboutText, StringComparison.Ordinal);
+        Assert.DoesNotContain(DataFolder, aboutText, StringComparison.OrdinalIgnoreCase);
+
         var backup = await browser.GetStringAsync("/backup");
         Assert.Contains("OpenBook Desktop backs up every day", backup, StringComparison.Ordinal);
         Assert.Contains("/backup/download", backup, StringComparison.Ordinal);

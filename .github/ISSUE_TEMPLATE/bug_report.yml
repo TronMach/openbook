@@ -65,7 +65,7 @@ body:
     id: more
     attributes:
       label: Anything else
-      description: Screenshots (with private details covered), or lines from the log (Settings → System lists recent problems).
+      description: Screenshots (with private details covered), lines from the log (Settings → System lists recent problems), or the support file from Settings → System → Download support file. Issues are public, so read the file before attaching it.
   - type: checkboxes
     id: private
     attributes:

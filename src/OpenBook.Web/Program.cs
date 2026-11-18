@@ -308,6 +308,28 @@ app.MapPost("/settings/system/updates/install", async (IFormCollection form, Ope
         again by itself in a minute or two and opens a new tab; you can close this one.</p></body></html>
         """, "text/html");
 }).RequireAuthorization();
+// The support file (Settings > System, admins): set-up, jobs, recent problems and a week of logs with personal details
+// taken out, for the admin to read and send with a bug report. OpenBook sends it nowhere itself.
+app.MapGet("/settings/system/support-file", (IServiceProvider services, OpenBook.Web.Hosting.Installation install, OpenBook.Infrastructure.Persistence.OpenBookStorage storage,
+    OpenBook.Web.Diagnostics.JobStatus jobs, OpenBook.Application.Plugins.PluginRegistry plugins) =>
+{
+    var log = services.GetService<OpenBook.Web.Diagnostics.FileLoggerProvider>();
+    var now = DateTimeOffset.UtcNow;
+    var facts = new OpenBook.Web.Diagnostics.SupportFacts(
+        OpenBook.Web.Hosting.UpdateService.CurrentVersion,
+        install.IsDesktop ? "Desktop" : "Server",
+        $"{System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} on {System.Runtime.InteropServices.RuntimeInformation.OSDescription}",
+        storage.Provider == OpenBook.Infrastructure.DatabaseProvider.Postgres ? "PostgreSQL" : storage.Encrypted ? "SQLite, encrypted" : "SQLite",
+        CompanyTime.Zone.Id,
+        new DateTimeOffset(System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime(), TimeSpan.Zero),
+        plugins.SafeMode ? "safe mode: none loaded" : $"{plugins.Plugins.Count} found",
+        jobs.Runs,
+        log?.RecentProblems ?? [],
+        log?.Directory);
+    using var zip = new MemoryStream();
+    OpenBook.Web.Diagnostics.SupportFile.Write(zip, facts, now);
+    return Results.File(zip.ToArray(), "application/zip", OpenBook.Web.Diagnostics.SupportFile.FileName(now));
+}).RequireAuthorization();
 app.MapPurchasingEndpoints();
 app.MapMergeEndpoints();
 app.MapOnlineEndpoints();
