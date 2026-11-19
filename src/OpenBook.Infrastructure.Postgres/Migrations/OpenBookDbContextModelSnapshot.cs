@@ -839,6 +839,34 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("PettyCashFunds", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Banking.PlaidSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ProtectedSecret")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlaidSettings", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Banking.PositivePaySettings", b =>
                 {
                     b.Property<Guid>("AccountId")

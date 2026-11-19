@@ -65,6 +65,7 @@ public sealed class FuzzTests
         new("receipt-text", b => ReceiptParser.Parse(Text(b), ["Corner Cafe", "Paper Co"]), Seeds.Receipt),
         new("claude-answer", b => ClaudeDocumentReader.Parse(Text(b)), Seeds.ClaudeAnswer),
         new("simplefin", b => SimpleFin.Parse(Text(b), TimeZoneInfo.Utc), Seeds.SimpleFin),
+        new("plaid", b => { Plaid.TransactionsPage(Text(b)); Plaid.Accounts(Text(b)); _ = Plaid.Error(Text(b), 400); }, Seeds.Plaid),
         new("update-manifest", b => UpdateManifest.Parse(Text(b)), Seeds.Manifest),
         new("report-query", b => BuilderOptions.Parse(ReportParameters.Parse(Text(b))), Seeds.ReportQuery),
         new("address", b => AddressParts.Parse(Text(b)), Seeds.Address),

@@ -60,6 +60,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<BankFeedItem> BankFeedItems => Set<BankFeedItem>();
     public DbSet<BankRule> BankRules => Set<BankRule>();
     public DbSet<BankConnection> BankConnections => Set<BankConnection>();
+    public DbSet<PlaidSettings> PlaidSettings => Set<PlaidSettings>();
     public DbSet<PettyCashFund> PettyCashFunds => Set<PettyCashFund>();
     public DbSet<RecurringExpense> RecurringExpenses => Set<RecurringExpense>();
     public DbSet<CashCount> CashCounts => Set<CashCount>();
@@ -201,7 +202,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         typeof(Item), typeof(Customer), typeof(Vendor), typeof(BankTransaction), typeof(BankDeposit),
         // Settings pages note the version when they open and check it when they save (2026-11-14).
         typeof(Company), typeof(EmailSettings), typeof(SignInSettings), typeof(OnlinePaymentSettings), typeof(OpenBook.Domain.Documents.DocumentReadingSettings),
-        typeof(CollectionSettings), typeof(OpenBook.Domain.Nonprofit.GiftSettings), typeof(PurchasingSettings), typeof(AchSettings), typeof(BackupSchedule),
+        typeof(CollectionSettings), typeof(OpenBook.Domain.Nonprofit.GiftSettings), typeof(PurchasingSettings), typeof(AchSettings), typeof(PlaidSettings), typeof(BackupSchedule),
         typeof(FormDesign),
     ];
 
@@ -593,6 +594,15 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 a.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(c => c.Accounts).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<PlaidSettings>(b =>
+        {
+            b.ToTable("PlaidSettings");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.ClientId).HasMaxLength(OpenBook.Domain.Banking.PlaidSettings.MaxClientIdLength);
+            b.Property(s => s.ProtectedSecret).HasMaxLength(2000);
+            b.Property(s => s.Environment).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<PettyCashFund>(b =>

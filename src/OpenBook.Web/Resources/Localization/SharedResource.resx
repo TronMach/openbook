@@ -2222,6 +2222,9 @@
   <data name="Phone" xml:space="preserve">
     <value>Phone</value>
   </data>
+  <data name="Plaid bank feeds" xml:space="preserve">
+    <value>Plaid bank feeds</value>
+  </data>
   <data name="Pledge" xml:space="preserve">
     <value>Pledge</value>
   </data>
@@ -2770,6 +2773,12 @@
   </data>
   <data name="Set up your chart of accounts" xml:space="preserve">
     <value>Set up your chart of accounts</value>
+  </data>
+  <data name="Set up: Plaid's test banks" xml:space="preserve">
+    <value>Set up: Plaid's test banks</value>
+  </data>
+  <data name="Set up: real banks" xml:space="preserve">
+    <value>Set up: real banks</value>
   </data>
   <data name="Settings" xml:space="preserve">
     <value>Settings</value>
@@ -3508,6 +3517,9 @@
   </data>
   <data name="Your company's name and contact details (printed on invoices and other forms), how its books are kept, and what the menu leads with. Saving changes nothing already entered." xml:space="preserve">
     <value>Your company's name and contact details (printed on invoices and other forms), how its books are kept, and what the menu leads with. Saving changes nothing already entered.</value>
+  </data>
+  <data name="Your company's Plaid keys, so bank and card transactions arrive in the bank feed by themselves." xml:space="preserve">
+    <value>Your company's Plaid keys, so bank and card transactions arrive in the bank feed by themselves.</value>
   </data>
   <data name="Your data" xml:space="preserve">
     <value>Your data</value>

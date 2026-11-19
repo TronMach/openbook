@@ -85,6 +85,7 @@ public static class Links
         "document_reading_settings" => "/settings/document-reading",
         "custom_field" => $"/settings/custom-fields/{id}",
         "online_payment_settings" => "/settings/online-payments",
+        "plaid_settings" => "/settings/plaid",
         "purchasing_settings" => "/purchases/approvals/settings",
         "ach_batch" => "/purchases/ach",
         "ach_settings" => $"/purchases/ach?accountId={id}",

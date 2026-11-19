@@ -32,10 +32,14 @@
         {
             <div class="alert success" role="status">@DoneMessage()</div>
         }
+        @if (Warning is not null)
+        {
+            <div class="alert error" role="alert">@Warning</div>
+        }
 
         <div class="card">
             <p>
-                @(_connection.Provider == BankConnectionProvider.SimpleFin ? "SimpleFIN Bridge" : _connection.Provider.ToString()) ·
+                @(_connection.Provider switch { BankConnectionProvider.SimpleFin => "SimpleFIN Bridge", BankConnectionProvider.Plaid => "Plaid", _ => _connection.Provider.ToString() }) ·
                 connected @_connection.CreatedAt.InCompanyTime().ToString("d") ·
                 @if (!_connection.IsActive)
                 {
@@ -55,7 +59,9 @@
         <h2>Accounts</h2>
         @if (_connection.Accounts.Count == 0)
         {
-            <div class="card"><p>The service hasn't reported any accounts yet. Connect your banks in SimpleFIN Bridge, then sync.</p></div>
+            <div class="card"><p>@(_connection.Provider == BankConnectionProvider.Plaid
+                ? "Plaid hasn't reported any accounts for this bank yet. Sync again in a few minutes."
+                : "The service hasn't reported any accounts yet. Connect your banks in SimpleFIN Bridge, then sync.")</p></div>
         }
         else
         {
@@ -129,10 +135,12 @@
                     </div>
                     <div class="actions"><button type="submit" class="secondary">Rename</button></div>
                 </PostForm>
-                <PostForm Action="@($"/banking/connections/{Id}/disconnect")" data-enhance="false" onsubmit="return confirm('Disconnect? OpenBook forgets the key and stops fetching. Transactions already fetched stay in the bank feed.')">
+                <PostForm Action="@($"/banking/connections/{Id}/disconnect")" data-enhance="false">
                     <AntiforgeryToken />
-                    <p class="muted">Disconnecting forgets the access key. Also remove OpenBook's access in SimpleFIN Bridge.</p>
-                    <button type="submit" class="danger">Disconnect</button>
+                    <p class="muted">@(_connection.Provider == BankConnectionProvider.Plaid
+                        ? "Disconnecting forgets the access key and removes the bank from your Plaid account, so Plaid stops billing for it."
+                        : "Disconnecting forgets the access key. Also remove OpenBook's access in SimpleFIN Bridge.")</p>
+                    <button type="submit" class="danger" data-confirm="Disconnect? OpenBook forgets the key and stops fetching. Transactions already fetched stay in the bank feed.">Disconnect</button>
                 </PostForm>
             </div>
         }
@@ -147,6 +155,7 @@
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery] private string? Warning { get; set; }
     [SupplyParameterFromQuery] private int? Queued { get; set; }
     [SupplyParameterFromQuery] private int? Added { get; set; }
     [SupplyParameterFromQuery] private int? Skipped { get; set; }

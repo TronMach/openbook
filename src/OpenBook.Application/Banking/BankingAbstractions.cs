@@ -93,6 +93,9 @@ public interface IBankingStore
 
     Task<BankConnection?> GetConnectionAsync(Guid id, CancellationToken ct);
 
+    /// <summary>The company's Plaid keys (one row), tracked; null before the first save.</summary>
+    Task<PlaidSettings?> GetPlaidSettingsAsync(CancellationToken ct);
+
     /// <summary>Every petty cash fund, tracked.</summary>
     Task<IReadOnlyList<PettyCashFund>> ListPettyCashFundsAsync(CancellationToken ct);
 
@@ -112,6 +115,7 @@ public interface IBankingStore
     void Add(BankTransaction transaction);
     void Add(BankFeedItem item);
     void Add(BankConnection connection);
+    void Add(PlaidSettings settings);
     void Add(PettyCashFund fund);
     void Add(RecurringExpense recurringExpense);
     void Add(CashCount count);

@@ -142,6 +142,12 @@
                     await Status("/settings/online-payments", async () => (await Get<OnlinePaymentService>().GetSettingsAsync()).IsReady
                         ? L["On: invoices can be paid online"].Value : L["Not set up"].Value),
                     Keywords: "stripe card pay online"),
+                new("/settings/plaid", L["Plaid bank feeds"],
+                    L["Your company's Plaid keys, so bank and card transactions arrive in the bank feed by themselves."],
+                    await Status("/settings/plaid", async () => (await Get<PlaidSettingsService>().GetSettingsAsync()) is { IsReady: true } plaid
+                        ? (plaid.Environment == PlaidEnvironment.Production ? L["Set up: real banks"].Value : L["Set up: Plaid's test banks"].Value)
+                        : L["Not set up"].Value),
+                    Keywords: "plaid bank feed connection keys"),
                 new("/sales-tax", L["Sales tax"],
                     L["The agencies you pay, the rates they charge and the tax codes customers and invoices use."],
                     await Status("/sales-tax", async () =>

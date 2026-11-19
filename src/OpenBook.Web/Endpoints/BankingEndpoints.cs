@@ -42,6 +42,44 @@ public static class BankingEndpoints
             }
         }).RequireAuthorization();
 
+        // Plaid Link, step one: the page's script asks for the token Link opens with (JSON back, for the script).
+        app.MapPost("/banking/connections/plaid/link-token", async (IFormCollection _, BankConnectionService connections,
+            OpenBook.Application.Companies.CompanySettingsService company, CancellationToken ct) =>
+        {
+            try
+            {
+                var token = await connections.PlaidLinkTokenAsync((await company.GetAsync(ct)).Id, ct);
+                return Results.Json(new { linkToken = token });
+            }
+            catch (DomainException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).RequireAuthorization();
+
+        // Step two: Link hands the script a one-time public token, which the script posts here as a form.
+        app.MapPost("/banking/connections/plaid", async (IFormCollection form, BankConnectionService connections, CancellationToken ct) =>
+        {
+            try
+            {
+                var connection = await connections.ConnectAsync(BankConnectionProvider.Plaid, form["publicToken"].ToString(), form["name"], CompanyTime.Zone, ct);
+                return Results.Redirect($"/banking/connections/{connection.Id}?done=connected");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/banking/connections?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/settings/plaid", async (IFormCollection form, IRecordVersions versions, PlaidSettingsService plaid, CancellationToken ct) =>
+            await Back("/settings/plaid", async () =>
+            {
+                await Components.SettingsVersions.EnsureUnchangedAsync<PlaidSettings>(versions, form, ct);
+                var environment = Enum.TryParse<PlaidEnvironment>(form["environment"], ignoreCase: false, out var e) && Enum.IsDefined(e) ? e : PlaidEnvironment.Sandbox;
+                await plaid.SaveSettingsAsync(new PlaidSettingsCommand(form["clientId"], form["secret"], environment, form["clearSecret"] == "true"), ct);
+                return "done=saved";
+            })).RequireAuthorization();
+
         app.MapPost("/banking/connections/{id:guid}/sync", async (Guid id, IFormCollection form, BankConnectionService connections, CancellationToken ct) =>
             await Back($"/banking/connections/{id}", async () =>
             {
@@ -68,8 +106,8 @@ public static class BankingEndpoints
         app.MapPost("/banking/connections/{id:guid}/disconnect", async (Guid id, IFormCollection form, BankConnectionService connections, CancellationToken ct) =>
             await Back($"/banking/connections/{id}", async () =>
             {
-                await connections.DisconnectAsync(id, ct);
-                return "done=disconnected";
+                var warning = await connections.DisconnectAsync(id, ct);
+                return warning is null ? "done=disconnected" : $"done=disconnected&warning={Uri.EscapeDataString(warning)}";
             })).RequireAuthorization();
 
         app.MapPost("/banking/positive-pay/export", async (IFormCollection form, HttpContext http, PositivePayService service, CancellationToken ct) =>

@@ -258,7 +258,7 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 
 | Item | Why it waits |
 |---|---|
-| Plaid and GoCardless bank feeds | They need developer accounts. The bank connection interface already exists (SimpleFIN uses it), so each becomes another provider behind it. |
+| Plaid and GoCardless bank feeds | **Plaid built 2026-11-19** (a second provider behind the bank connection interface, with the company's own Plaid keys under Settings → Plaid). GoCardless Bank Account Data stopped taking new sign-ups in July 2025 and covers only European and UK banks, so it isn't planned. |
 | Fixed-width positive pay | Each bank uses its own layout. Today's positive pay file is CSV. |
 | Partial and pending builds (decided and built 2026-10-26) | A build that's short can be saved as **pending** (posts nothing, touches no stock; a pending list shows what's short) and finished later with "Build now", posting on that date. When short, the build page also offers to **build what you can** now and leave the rest pending. Components are **not** reserved. |
 | Kits with their own stock (decided and built 2026-10-26) | Bundles stay stockless; pre-packed kits are **assemblies**, and the item page says so. New per-assembly option **auto-build on sale**: a sale short of finished units builds the shortfall from components in the same save. Bundles don't get their own stock. |

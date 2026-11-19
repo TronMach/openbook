@@ -21,8 +21,11 @@ public interface IBankConnectionClient
 {
     BankConnectionProvider Provider { get; }
 
-    /// <summary>Turns what the user pastes (a SimpleFIN setup token) into the long-lived access credential.</summary>
+    /// <summary>Turns what the user pastes (a SimpleFIN setup token) or Link hands back (Plaid's public token) into the long-lived access credential.</summary>
     Task<string> ConnectAsync(string setupToken, CancellationToken ct);
+
+    /// <summary>Tells the service the credential is no longer wanted (Plaid bills each bank login until it's removed).</summary>
+    Task RemoveAsync(string access, CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>Accounts and their posted transactions from <paramref name="from"/> through <paramref name="through"/>; balances only when <paramref name="from"/> is null.</summary>
     Task<RemoteSnapshot> FetchAsync(string access, DateOnly? from, DateOnly through, TimeZoneInfo zone, CancellationToken ct);

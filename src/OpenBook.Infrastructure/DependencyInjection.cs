@@ -109,6 +109,9 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.FolderBackupTarget>();
         services.AddSingleton<OpenBook.Application.Companies.IBackupTarget, Backups.S3BackupTarget>();
         services.AddSingleton<OpenBook.Application.Banking.IBankConnectionClient>(sp => new Banking.SimpleFinClient(sp.GetRequiredService<Net.OutboundPolicy>()));
+        // Plaid's keys are in the company file, so its client is scoped; the HTTP client underneath is shared.
+        services.TryAddSingleton<Banking.PlaidTransport>();
+        services.AddScoped<OpenBook.Application.Banking.IBankConnectionClient, Banking.PlaidClient>();
         services.AddSingleton<OpenBook.Application.Sales.IPaymentGateway, Payments.StripeGateway>();
         services.AddSingleton<OpenBook.Application.Channels.IChannelClient, Channels.ChannelClient>();
         services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));

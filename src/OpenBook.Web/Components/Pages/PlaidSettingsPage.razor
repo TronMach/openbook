@@ -1,0 +1,82 @@
+@page "/settings/plaid"
+@inject PlaidSettingsService Plaid
+
+<PageTitle>Plaid · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Plaid</h1>
+        <ActionLink Class="button secondary" Href="/settings">Settings</ActionLink>
+        <ActionLink Class="button secondary" Href="/audit?entityType=plaid_settings">History</ActionLink>
+    </div>
+    <p class="muted">
+        Plaid connects to most US and Canadian banks and cards, so their transactions arrive in each account's bank feed by themselves.
+        OpenBook uses your company's own Plaid account: its keys go here, and then anyone with the accountant role connects banks under
+        <ActionLink Href="/banking/connections">Banking → Bank connections</ActionLink>.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "saved")
+    {
+        <div class="alert notice" role="status">Saved.</div>
+    }
+
+    <div class="card">
+        <details class="setup-steps" open="@(!_settings.IsReady)">
+            <summary>Setting it up, step by step</summary>
+            <ol>
+                <li class="@(_settings.ClientId is not null ? "done" : null)">
+                    Sign in to the <a href="https://dashboard.plaid.com" target="_blank" rel="noopener">Plaid Dashboard</a> (or sign up there).
+                    Under <strong>Developers → Keys</strong>, copy the <strong>client_id</strong> into the form below.
+                </li>
+                <li class="@(_settings.ProtectedSecret is not null ? "done" : null)">
+                    Copy the <strong>secret</strong> for the environment you'll use: <strong>Sandbox</strong> to try everything with Plaid's test banks,
+                    or <strong>Production</strong> for your real ones (Plaid's free Trial plan covers 10 bank logins).
+                </li>
+                <li>Choose the same environment below and save. Then connect your banks under Banking → Bank connections.</li>
+            </ol>
+        </details>
+        <PostForm Action="/settings/plaid" data-enhance="false">
+            <AntiforgeryToken />
+            <SettingsVersion TRecord="PlaidSettings" />
+            <div class="row">
+                <div class="field">
+                    <label for="client">Client ID</label>
+                    <input id="client" name="clientId" value="@_settings.ClientId" maxlength="@PlaidSettings.MaxClientIdLength" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="field">
+                    <label for="secret">Secret</label>
+                    <input id="secret" name="secret" type="password" autocomplete="off" placeholder="@(_settings.ProtectedSecret is null ? "From Developers → Keys" : "Saved; enter a new one to change it")" />
+                    @if (_settings.ProtectedSecret is not null)
+                    {
+                        <label class="check"><input type="checkbox" name="clearSecret" value="true" /> <span>Remove the saved secret</span></label>
+                    }
+                </div>
+                <div class="field">
+                    <label for="environment">Environment</label>
+                    <select id="environment" name="environment">
+                        <option value="Sandbox" selected="@(_settings.Environment == PlaidEnvironment.Sandbox)">Sandbox (Plaid's test banks)</option>
+                        <option value="Production" selected="@(_settings.Environment == PlaidEnvironment.Production)">Production (your real banks)</option>
+                    </select>
+                </div>
+            </div>
+            <p class="hint">
+                Each bank you connect is billed by Plaid as one bank login until it's disconnected; disconnecting in OpenBook removes it at Plaid too.
+                Banks connected with Sandbox keys stop working when you switch to Production: disconnect them and connect the real ones.
+            </p>
+            <div class="actions"><button type="submit">Save</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private PlaidSettings _settings = PlaidSettings.Create();
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync() => _settings = await Plaid.GetSettingsAsync();
+}

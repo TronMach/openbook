@@ -324,7 +324,7 @@ public sealed class ApiAccessTests : IAsyncLifetime
         var client = Client(null);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/accounts")).StatusCode);
-        foreach (var path in new[] { "/api/settings/sign-in", "/api/settings/email", "/api/settings/online-payments", "/api/settings/document-reading" })
+        foreach (var path in new[] { "/api/settings/sign-in", "/api/settings/email", "/api/settings/online-payments", "/api/settings/document-reading", "/api/settings/plaid" })
         {
             var refused = await client.GetAsync(path);
             Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
@@ -443,6 +443,9 @@ public sealed class AccessRulesTests
     [InlineData("/api/purchases/ach/files", "GET", UserRole.Accountant)]
     [InlineData("/settings/online-payments", "GET", UserRole.Admin)]
     [InlineData("/api/settings/online-payments", "PUT", UserRole.Admin)]
+    [InlineData("/settings/plaid", "GET", UserRole.Admin)]
+    [InlineData("/settings/plaid", "POST", UserRole.Admin)]
+    [InlineData("/api/settings/plaid", "PUT", UserRole.Admin)]
     [InlineData("/settings/document-reading", "GET", UserRole.Admin)]
     [InlineData("/settings/custom-fields", "GET", UserRole.Accountant)]
     [InlineData("/settings/forms/0190a7a2-0000-7000-8000-000000000000", "POST", UserRole.Accountant)]
@@ -479,6 +482,9 @@ public sealed class AccessRulesTests
     [InlineData("/api/sales/reminders/send", "POST", UserRole.Standard)]
     [InlineData("/banking/connections", "GET", UserRole.Accountant)]
     [InlineData("/banking/connections/connect", "POST", UserRole.Accountant)]
+    [InlineData("/banking/connections/plaid", "POST", UserRole.Accountant)]
+    [InlineData("/banking/connections/plaid/link-token", "POST", UserRole.Accountant)]
+    [InlineData("/api/banking/connections/plaid", "POST", UserRole.Accountant)]
     [InlineData("/api/banking/connections", "GET", UserRole.Accountant)]
     [InlineData("/banking/positive-pay", "GET", UserRole.ViewOnly)]
     [InlineData("/banking/positive-pay/export", "POST", UserRole.Standard)]
@@ -628,7 +634,7 @@ public sealed class AccessRulesTests
             "/", "/Error", "/access-denied", "/not-found", "/login", "/setup", "/search", "/account", "/invite", "/portal", "/pay", "/give", "/help",
             "/settings", // the index only; its subpages have areas
             "/settings/api-keys", "/settings/users", "/settings/sign-in", "/settings/permission-sets", "/settings/webhooks",
-            "/settings/plugins", "/settings/system", "/settings/email", "/settings/online-payments", "/settings/document-reading",
+            "/settings/plugins", "/settings/system", "/settings/email", "/settings/online-payments", "/settings/document-reading", "/settings/plaid",
         ];
         var routes = typeof(Program).Assembly.GetTypes()
             .SelectMany(t => t.GetCustomAttributes(typeof(Microsoft.AspNetCore.Components.RouteAttribute), false).Cast<Microsoft.AspNetCore.Components.RouteAttribute>())
@@ -657,6 +663,7 @@ public sealed class AccessRulesTests
     [InlineData("/api/settings/sign-in/sso", "PUT", true)]
     [InlineData("/api/settings/email", "PUT", true)]
     [InlineData("/api/settings/online-payments", "PUT", true)]
+    [InlineData("/api/settings/plaid", "PUT", true)]
     [InlineData("/api/settings/document-reading", "PUT", true)]
     [InlineData("/api/users", "GET", true)]
     [InlineData("/api/webhooks", "GET", true)]

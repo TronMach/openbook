@@ -1,5 +1,6 @@
 @page "/banking/connections"
 @inject BankConnectionService ConnectionService
+@inject PlaidSettingsService PlaidSettings
 
 <PageTitle>Bank connections · OpenBook</PageTitle>
 
@@ -53,6 +54,35 @@
     }
 
     <div class="card">
+        <h2>Connect with Plaid</h2>
+        @if (_plaid.IsReady)
+        {
+            <p class="muted">
+                Choose your bank in Plaid's window and sign in to it there; OpenBook never sees your bank password. Plaid hands back a key
+                OpenBook stores encrypted.
+                @if (_plaid.Environment == PlaidEnvironment.Sandbox)
+                {
+                    <span>These are Sandbox keys, so only Plaid's test banks are offered.</span>
+                }
+            </p>
+            <PostForm Action="/banking/connections/plaid" data-enhance="false" data-plaid-link="/banking/connections/plaid/link-token">
+                <AntiforgeryToken />
+                <input type="hidden" name="publicToken" />
+                <input type="hidden" name="name" />
+                <div class="alert error" role="alert" data-plaid-error hidden></div>
+                <div class="actions"><button type="submit">Connect a bank</button></div>
+            </PostForm>
+        }
+        else
+        {
+            <p class="muted">
+                Plaid links to most US and Canadian banks and cards. It needs your company's own Plaid keys, which an admin enters under
+                <ActionLink Href="/settings/plaid">Settings → Plaid</ActionLink>.
+            </p>
+        }
+    </div>
+
+    <div class="card">
         <h2>Connect with SimpleFIN</h2>
         <p class="muted">
             <a href="https://beta-bridge.simplefin.org/" target="_blank" rel="noopener">SimpleFIN Bridge</a> links to thousands of US and
@@ -76,8 +106,13 @@
 
 @code {
     private IReadOnlyList<BankConnection> _connections = [];
+    private OpenBook.Domain.Banking.PlaidSettings _plaid = OpenBook.Domain.Banking.PlaidSettings.Create();
 
     [SupplyParameterFromQuery] private string? Error { get; set; }
 
-    protected override async Task OnInitializedAsync() => _connections = await ConnectionService.ListAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _connections = await ConnectionService.ListAsync();
+        _plaid = await PlaidSettings.GetSettingsAsync();
+    }
 }

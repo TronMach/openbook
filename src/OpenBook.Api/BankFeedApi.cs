@@ -108,6 +108,17 @@ internal static class BankFeedApi
 
 public sealed record ConnectRequest(string SetupToken, string? Name);
 
+public sealed record PlaidConnectRequest(string PublicToken, string? Name);
+
+public sealed record PlaidLinkTokenResponse(string LinkToken);
+
+public sealed record DisconnectWarningResponse(string Warning);
+
+public sealed record PlaidSettingsResponse(string? ClientId, bool HasSecret, PlaidEnvironment Environment)
+{
+    public static PlaidSettingsResponse From(PlaidSettings s) => new(s.ClientId, s.ProtectedSecret is not null, s.Environment);
+}
+
 public sealed record LinkConnectionAccountRequest(Guid? AccountId, DateOnly? ImportFrom);
 
 public sealed record RenameConnectionRequest(string Name);
@@ -148,6 +159,17 @@ internal static class BankingProApi
             var connection = await s.ConnectAsync(BankConnectionProvider.SimpleFin, r.SetupToken, r.Name, CompanyTime.Zone, ct);
             return Results.Created($"/api/banking/connections/{connection.Id}", BankConnectionResponse.From(connection));
         });
+        // Plaid: the token Plaid Link opens with, then the public token Link hands back.
+        banking.MapPost("/connections/plaid/link-token", async (BankConnectionService s, OpenBook.Application.Companies.CompanySettingsService company, CancellationToken ct) =>
+            new PlaidLinkTokenResponse(await s.PlaidLinkTokenAsync((await company.GetAsync(ct)).Id, ct)));
+        banking.MapPost("/connections/plaid", async (PlaidConnectRequest r, BankConnectionService s, CancellationToken ct) =>
+        {
+            var connection = await s.ConnectAsync(BankConnectionProvider.Plaid, r.PublicToken, r.Name, CompanyTime.Zone, ct);
+            return Results.Created($"/api/banking/connections/{connection.Id}", BankConnectionResponse.From(connection));
+        });
+        api.MapGet("/settings/plaid", async (PlaidSettingsService s, CancellationToken ct) => PlaidSettingsResponse.From(await s.GetSettingsAsync(ct)));
+        api.MapPut("/settings/plaid", async (PlaidSettingsCommand r, PlaidSettingsService s, CancellationToken ct) =>
+            PlaidSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));
         banking.MapPut("/connections/{id:guid}/name", async (Guid id, RenameConnectionRequest r, BankConnectionService s, CancellationToken ct) =>
             BankConnectionResponse.From(await s.RenameAsync(id, r.Name, ct)));
         banking.MapPost("/connections/{id:guid}/sync", async (Guid id, BankConnectionService s, CancellationToken ct) =>
@@ -156,8 +178,8 @@ internal static class BankingProApi
             BankConnectionResponse.From(await s.LinkAsync(id, remoteId, r.AccountId, r.ImportFrom, ct)));
         banking.MapPost("/connections/{id:guid}/disconnect", async (Guid id, BankConnectionService s, CancellationToken ct) =>
         {
-            await s.DisconnectAsync(id, ct);
-            return Results.NoContent();
+            // A warning when the service couldn't be told (Plaid may keep billing for the bank until it's removed there).
+            return await s.DisconnectAsync(id, ct) is { } warning ? Results.Ok(new DisconnectWarningResponse(warning)) : Results.NoContent();
         });
 
         banking.MapGet("/positive-pay", async (Guid accountId, DateOnly? from, DateOnly? to, PositivePayService s, CancellationToken ct) =>

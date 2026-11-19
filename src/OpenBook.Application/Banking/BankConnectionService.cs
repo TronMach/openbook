@@ -17,7 +17,7 @@ public sealed record ConnectionSyncResult(int Queued, int AutoAdded, int Skipped
 }
 
 /// <summary>
-/// Live bank feeds: a connection to a bank data service (SimpleFIN Bridge) fetches posted transactions for each linked
+/// Live bank feeds: a connection to a bank data service (SimpleFIN Bridge or Plaid) fetches posted transactions for each linked
 /// account into the bank feed's review queue, exactly as if a statement file had been imported. Lines are keyed by the
 /// service's transaction id, so overlapping fetches add nothing twice. Pending transactions wait until they post.
 /// </summary>
@@ -33,7 +33,7 @@ public sealed class BankConnectionService(
 {
     private const string EntityType = "bank_connection";
 
-    /// <summary>How often the background service fetches; SimpleFIN allows about 24 requests a day.</summary>
+    /// <summary>A quiet account's fetched-through date moves on to this many days before today.</summary>
     private const int QuietDays = 30;
 
     public static readonly TimeSpan SyncEvery = TimeSpan.FromHours(6);
@@ -112,13 +112,47 @@ public sealed class BankConnectionService(
         return connection;
     }
 
-    /// <summary>Forgets the credential and unlinks the accounts. Lines already fetched stay in the bank feed.</summary>
-    public async Task DisconnectAsync(Guid id, CancellationToken ct = default)
+    /// <summary>
+    /// Forgets the credential and unlinks the accounts. Lines already fetched stay in the bank feed. The service is told
+    /// first (Plaid bills each bank login until it's removed); when it can't be, the connection is still disconnected here
+    /// and the returned warning says what to do.
+    /// </summary>
+    public async Task<string?> DisconnectAsync(Guid id, CancellationToken ct = default)
     {
         var connection = await RequiredAsync(id, ct);
+        string? warning = null;
+        if (connection.IsActive && clients.FirstOrDefault(c => c.Provider == connection.Provider) is { } client
+            && protector.Unprotect(connection.ProtectedAccess) is { } access)
+        {
+            try
+            {
+                await client.RemoveAsync(access, ct);
+            }
+            catch (Exception ex) when (IsServiceFailure(ex, ct) || ex is DomainException)
+            {
+                warning = $"{Default(connection.Provider)} couldn't be told ({Describe(ex)}). Remove the bank there yourself, or it may keep billing for it.";
+            }
+        }
+
         var before = Snapshot(connection);
         connection.Disconnect();
         await AuditAsync(connection, before, ct);
+        return warning;
+    }
+
+    /// <summary>The short-lived token the browser opens Plaid Link with, for the company's own Plaid keys.</summary>
+    public async Task<string> PlaidLinkTokenAsync(Guid companyId, CancellationToken ct = default)
+    {
+        var link = clients.OfType<IPlaidLink>().FirstOrDefault()
+            ?? throw new DomainException("connection.provider_unavailable", "Plaid connections aren't available on this server.");
+        try
+        {
+            return await link.CreateLinkTokenAsync(companyId.ToString("N"), ct);
+        }
+        catch (Exception ex) when (IsServiceFailure(ex, ct))
+        {
+            throw new DomainException("connection.failed", $"Couldn't start Plaid: {Describe(ex)}");
+        }
     }
 
     /// <summary>Fetches every linked account's new posted lines into its bank feed. A failure is kept on the connection, not thrown.</summary>
@@ -252,6 +286,7 @@ public sealed class BankConnectionService(
     private static string Default(BankConnectionProvider provider) => provider switch
     {
         BankConnectionProvider.SimpleFin => "SimpleFIN",
+        BankConnectionProvider.Plaid => "Plaid",
         _ => provider.ToString(),
     };
 
@@ -259,7 +294,7 @@ public sealed class BankConnectionService(
     private static bool IsServiceFailure(Exception ex, CancellationToken ct) =>
         ex is HttpRequestException or JsonException
         || (ex is TaskCanceledException or OperationCanceledException && !ct.IsCancellationRequested)
-        || (ex is DomainException d && d.Code.StartsWith("simplefin.", StringComparison.Ordinal));
+        || (ex is DomainException d && (d.Code.StartsWith("simplefin.", StringComparison.Ordinal) || d.Code.StartsWith("plaid.", StringComparison.Ordinal)));
 
     private static string Describe(Exception ex) => ex switch
     {

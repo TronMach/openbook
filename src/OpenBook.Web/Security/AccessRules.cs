@@ -46,6 +46,8 @@ public static class AccessRules
 
         // Admins: people, data as a whole, outgoing connections.
         ("/settings/online-payments", UserRole.Admin, UserRole.Admin),
+        ("/settings/plaid", UserRole.Admin, UserRole.Admin),
+        ("/api/settings/plaid", UserRole.Admin, UserRole.Admin),
         ("/settings/document-reading", UserRole.Admin, UserRole.Admin),
         ("/api/settings/document-reading", UserRole.Admin, UserRole.Admin),
         ("/api/settings/online-payments", UserRole.Admin, UserRole.Admin),

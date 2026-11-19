@@ -180,6 +180,7 @@ public static class HelpTopics
     [
         ("/settings/company", "01-getting-started"),
         ("/settings/online-payments", "11-online-payments"),
+        ("/settings/plaid", "21-banking-tools"),
         ("/settings/document-reading", "16-document-inbox"),
         ("/settings/custom-fields", "25-custom-fields-notes-attachments"),
         ("/settings/forms", "27-printed-forms"),

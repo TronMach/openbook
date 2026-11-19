@@ -157,6 +157,8 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
     public Task<BankConnection?> GetConnectionAsync(Guid id, CancellationToken ct) =>
         db.BankConnections.Include(c => c.Accounts).SingleOrDefaultAsync(c => c.Id == id, ct);
 
+    public Task<PlaidSettings?> GetPlaidSettingsAsync(CancellationToken ct) => db.PlaidSettings.FirstOrDefaultAsync(ct);
+
     public async Task<IReadOnlyList<PettyCashFund>> ListPettyCashFundsAsync(CancellationToken ct) => await db.PettyCashFunds.ToListAsync(ct);
 
     public async Task<IReadOnlyList<RecurringExpense>> ListRecurringExpensesAsync(CancellationToken ct) =>
@@ -174,6 +176,8 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
         db.PositivePaySettings.SingleOrDefaultAsync(s => s.AccountId == accountId, ct);
 
     public void Add(BankConnection connection) => db.BankConnections.Add(connection);
+
+    public void Add(PlaidSettings settings) => db.PlaidSettings.Add(settings);
 
     public void Add(PettyCashFund fund) => db.PettyCashFunds.Add(fund);
 

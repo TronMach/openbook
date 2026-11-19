@@ -53,6 +53,9 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     /// <summary>Stands in for SimpleFIN Bridge behind the real HTTP client.</summary>
     public FakeSimpleFinBridge Bridge { get; } = new();
 
+    /// <summary>Stands in for Plaid behind the real HTTP client.</summary>
+    public FakePlaid Plaid { get; } = new();
+
     /// <summary>Stands in for Stripe behind the real payment gateway.</summary>
     public FakeStripe Stripe { get; } = new();
 
@@ -87,7 +90,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             provider = DatabaseProvider.Sqlite;
         }
 
-        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis, Claude, GoogleFonts);
+        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis, Claude, GoogleFonts, Plaid);
         if (setUpCompany)
             Owner = await InDb(db => db.Users.SingleAsync(u => u.Username == OwnerUsername));
     }
@@ -159,7 +162,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     private static ServiceProvider BuildServices(
         string connectionString, DatabaseProvider provider, FixedClock clock, RecordingEmailSender mail, RecordingWebhookSender webhooks,
         FakeSimpleFinBridge bridge, string backupDirectory, FakeStripe? stripe = null, FakeChannelApis? channels = null, FakeClaude? claude = null,
-        FakeGoogleFonts? googleFonts = null) =>
+        FakeGoogleFonts? googleFonts = null, FakePlaid? plaid = null) =>
         new ServiceCollection()
             .AddOpenBookApplication()
             .AddOpenBookInfrastructure(connectionString, backupDirectory, provider: provider)
@@ -173,6 +176,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Channels.IChannelClient>(new OpenBook.Infrastructure.Channels.ChannelClient(channels ?? new FakeChannelApis())))
             .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Documents.IClaudeDocumentReader>(claude ?? new FakeClaude()))
             .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Forms.IGoogleFonts>(new OpenBook.Infrastructure.Forms.GoogleFontsClient(googleFonts ?? new FakeGoogleFonts())))
+            .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Banking.PlaidTransport(plaid ?? new FakePlaid())))
             .BuildServiceProvider(validateScopes: true);
 
     /// <summary>Migrates a database (and sets up the company), exactly as each test used to do for itself.</summary>

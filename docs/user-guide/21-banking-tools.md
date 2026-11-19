@@ -4,15 +4,16 @@ More tools linked from the **Banking** page, beyond the everyday ones in [Bankin
 
 ## Bank connections
 
-Instead of downloading statement files, connect your bank accounts so new transactions arrive by themselves. OpenBook uses [SimpleFIN Bridge](https://beta-bridge.simplefin.org/), which links to thousands of US and Canadian banks for a small yearly fee.
+Instead of downloading statement files, connect your bank accounts so new transactions arrive by themselves. OpenBook works with two services: [Plaid](https://plaid.com), through your company's own Plaid account (free for up to 10 bank logins on Plaid's Trial plan), and [SimpleFIN Bridge](https://beta-bridge.simplefin.org/), which links to thousands of US and Canadian banks for a small yearly fee.
 
 **Banking → Bank connections** (accountant role):
 
-1. At SimpleFIN Bridge, connect your banks, then create a **setup token**.
-2. In OpenBook, paste it under **Connect with SimpleFIN**, give the connection a name, and **Connect**. The token works once; OpenBook swaps it for a key it stores encrypted.
+1. Connect a bank with one of the two services:
+    - **Plaid**: an admin first enters the company's Plaid keys under **Settings → Plaid**: the **Client ID** and **Secret** from the Plaid Dashboard (**Developers → Keys**), and the **Environment** they're for (**Sandbox** for Plaid's test banks, **Production** for your real ones). Then, under **Connect with Plaid**, select **Connect a bank**, choose your bank in Plaid's window and sign in to it there. OpenBook never sees your bank password; the connection is named after the bank.
+    - **SimpleFIN**: at SimpleFIN Bridge, connect your banks, then create a **setup token**. In OpenBook, paste it under **Connect with SimpleFIN**, give the connection a name, and **Connect**. The token works once; OpenBook swaps it for a key it stores encrypted.
 3. On the connection's page, each account at the bank is listed. Choose which of your accounts each one **goes to**, and the date to **fetch from**. **Save**.
 
-OpenBook then fetches posted transactions every six hours (or **Sync now**) into each account's review list, where you add or match them as with an imported file. Pending transactions wait until they post. Overlaps are recognized, so nothing arrives twice. If a sync fails, the connection's page says why. **Disconnect** stops it.
+OpenBook then fetches posted transactions every six hours (or **Sync now**) into each account's review list, where you add or match them as with an imported file. Pending transactions wait until they post. Overlaps are recognized, so nothing arrives twice. If a sync fails, the connection's page says why; when a bank wants you to sign in to it again, disconnect the connection and connect the bank again. **Disconnect** stops it. For Plaid it also removes the bank from your Plaid account, so Plaid stops billing for it; if Plaid can't be reached, the page says so, and you remove the bank in the Plaid Dashboard yourself.
 
 ## Printing checks
 

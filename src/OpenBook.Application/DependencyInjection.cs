@@ -63,6 +63,8 @@ public static class DependencyInjection
         services.AddScoped<BankRuleService>();
         services.AddScoped<CheckService>();
         services.AddScoped<BankConnectionService>();
+        services.AddScoped<PlaidSettingsService>();
+        services.AddScoped<IPlaidKeys>(sp => sp.GetRequiredService<PlaidSettingsService>());
         services.AddScoped<PositivePayService>();
         services.AddScoped<PettyCashService>();
         services.AddScoped<RecurringExpenseService>();

@@ -6,6 +6,12 @@ public enum BankConnectionProvider
 {
     /// <summary>SimpleFIN Bridge (simplefin.org): the user buys access and pastes a setup token; no developer account needed.</summary>
     SimpleFin,
+
+    /// <summary>
+    /// Plaid (plaid.com): the company's own Plaid keys (<see cref="PlaidSettings"/>), a bank chosen in Plaid Link, and the
+    /// access token Plaid swaps for Link's one-time public token.
+    /// </summary>
+    Plaid,
 }
 
 /// <summary>

@@ -316,6 +316,15 @@ internal static class Seeds
                    {"sku": "TN-12", "description": "Toner", "quantity": 2, "unit_price": 61.00, "amount": 122.00}]}
         """;
 
+    public const string Plaid = """
+        {"accounts":[{"account_id":"a1","name":"Plaid Checking","mask":"0000","type":"depository","subtype":"checking",
+          "balances":{"available":100.5,"current":110,"iso_currency_code":"USD"}},
+          {"account_id":"a2","name":"Plaid Credit Card","mask":"3333","type":"credit","balances":{"current":410.25,"iso_currency_code":"USD"}}],
+         "transactions":[{"transaction_id":"t1","account_id":"a1","amount":45.2,"date":"2026-01-05","name":"AMZN MKTP US*2K4","merchant_name":"Amazon","pending":false},
+          {"transaction_id":"t2","account_id":"a2","amount":-300,"date":"2026-01-20","name":"PAYMENT THANK YOU","pending":true}],
+         "total_transactions":2,"error_code":"ITEM_LOGIN_REQUIRED","error_type":"ITEM_ERROR","display_message":null}
+        """;
+
     public const string SimpleFin = """
         {"errors": [], "accounts": [
           {"org": {"domain": "bank.example", "name": "Example Bank"}, "id": "ACT-1", "name": "Checking", "currency": "USD",
