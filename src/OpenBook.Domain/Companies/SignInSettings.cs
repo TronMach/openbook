@@ -35,7 +35,10 @@ public sealed class SignInSettings
     public bool SsoEnabled { get; private set; }
     public SsoProvider SsoProvider { get; private set; }
 
-    /// <summary>Microsoft only: the directory (tenant) id or domain; "organizations" for any work account.</summary>
+    /// <summary>
+    /// Microsoft only: the directory (tenant) id or domain; "organizations" for any work or school account, "common" for
+    /// those and personal accounts, "consumers" for personal accounts only.
+    /// </summary>
     public string? SsoTenant { get; private set; }
 
     /// <summary>Other providers: the issuer address (its metadata is at /.well-known/openid-configuration).</summary>
@@ -95,6 +98,17 @@ public sealed class SignInSettings
         SsoProvider.Google => GoogleAuthority,
         _ => SsoAuthority,
     };
+
+    /// <summary>
+    /// Microsoft's "organizations" or "common": tokens come from whichever directory the person belongs to, so each names
+    /// its own issuer (with the person's tenant id) instead of the one the sign-in was sent to.
+    /// </summary>
+    public bool IsAnyMicrosoftDirectory => SsoProvider == SsoProvider.Microsoft
+        && (string.Equals(SsoTenant, "organizations", StringComparison.OrdinalIgnoreCase) || string.Equals(SsoTenant, "common", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A named Microsoft directory: the company's own, whose people's addresses its admins set.</summary>
+    public bool IsOwnMicrosoftDirectory => SsoProvider == SsoProvider.Microsoft && SsoTenant is not null
+        && !IsAnyMicrosoftDirectory && !string.Equals(SsoTenant, "consumers", StringComparison.OrdinalIgnoreCase);
 
     public string ButtonText => SsoButtonLabel ?? SsoProvider switch
     {

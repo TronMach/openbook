@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
 using OpenBook.Application.Companies;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Companies;
@@ -118,9 +120,11 @@ public static class SingleSignOn
     }
 
     /// <summary>
-    /// Who signed in, in OpenBook's terms. The email counts as verified when the provider says so
-    /// (<c>email_verified</c>), or when it comes from the company's own Microsoft directory (a named tenant, not
-    /// "common" or "organizations", where anyone could have set any address).
+    /// Who signed in, in OpenBook's terms. The issuer is the token's own (<see cref="SsoOptionsSetup"/> keeps the
+    /// <c>iss</c> claim), so a Microsoft login is the same whether the tenant was typed as a domain or as its id. The
+    /// email counts as verified when the provider says so (<c>email_verified</c>), or when it comes from the company's
+    /// own Microsoft directory (a named tenant, not "common", "organizations" or "consumers", where anyone could have set
+    /// any address).
     /// </summary>
     public static ExternalIdentity Identity(ClaimsPrincipal principal, SignInSettings settings)
     {
@@ -128,14 +132,34 @@ public static class SingleSignOn
         ArgumentNullException.ThrowIfNull(settings);
         var microsoft = settings.SsoProvider == SsoProvider.Microsoft;
         var email = principal.FindFirstValue("email") ?? (microsoft ? principal.FindFirstValue("preferred_username") : null);
-        var ownDirectory = microsoft && settings.SsoTenant is { } tenant
-            && !tenant.Equals("common", StringComparison.OrdinalIgnoreCase)
-            && !tenant.Equals("organizations", StringComparison.OrdinalIgnoreCase)
-            && !tenant.Equals("consumers", StringComparison.OrdinalIgnoreCase);
-        var verified = string.Equals(principal.FindFirstValue("email_verified"), "true", StringComparison.OrdinalIgnoreCase) || ownDirectory;
+        var verified = string.Equals(principal.FindFirstValue("email_verified"), "true", StringComparison.OrdinalIgnoreCase) || settings.IsOwnMicrosoftDirectory;
         // Microsoft's stable id for a person is their object id within the tenant; "sub" differs per application.
         var subject = (microsoft ? principal.FindFirstValue("oid") : null) ?? principal.FindFirstValue("sub") ?? string.Empty;
-        return new ExternalIdentity(principal.FindFirstValue("iss") ?? settings.Authority ?? string.Empty, subject, email, verified);
+        var issuer = principal.FindFirstValue("iss") ?? settings.Authority ?? string.Empty;
+        // Before the issuer claim was kept, logins were recorded under the configured authority.
+        var former = settings.Authority is { } authority && !string.Equals(authority.TrimEnd('/'), issuer.TrimEnd('/'), StringComparison.Ordinal)
+            ? authority
+            : null;
+        return new ExternalIdentity(issuer, subject, email, verified, former);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex MicrosoftIssuerPattern = new(
+        @"^https://login\.microsoftonline\.com/(?<tid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/v2\.0$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    /// <summary>
+    /// The issuer check for Microsoft's "organizations" and "common": their metadata names the issuer with a
+    /// <c>{tenantid}</c> placeholder, which no token matches, so the default check refuses every sign-in. A token is
+    /// accepted when its issuer is Microsoft's v2.0 address for the directory its own <c>tid</c> names (the signature,
+    /// audience and lifetime are still checked as usual).
+    /// </summary>
+    public static string MicrosoftAnyDirectoryIssuer(string issuer, SecurityToken token, TokenValidationParameters parameters)
+    {
+        var tid = token is JsonWebToken jwt && jwt.TryGetPayloadValue<string>("tid", out var value) ? value : null;
+        var match = issuer is null ? null : MicrosoftIssuerPattern.Match(issuer);
+        if (match is { Success: true } && tid is not null && string.Equals(match.Groups["tid"].Value, tid, StringComparison.OrdinalIgnoreCase))
+            return issuer!;
+        throw new SecurityTokenInvalidIssuerException("The token's issuer isn't Microsoft's address for the directory it names.") { InvalidIssuer = issuer };
     }
 }
 
@@ -159,6 +183,8 @@ internal sealed class SsoOptionsSetup(IServiceScopeFactory scopes) : IConfigureN
         options.ResponseMode = OpenIdConnectResponseMode.Query;
         options.UsePkce = true;
         options.MapInboundClaims = false;
+        // The handler deletes "iss" by default; logins are keyed on it (SingleSignOn.Identity).
+        options.ClaimActions.Remove("iss");
         options.SaveTokens = false;
         options.Scope.Clear();
         options.Scope.Add("openid");
@@ -180,5 +206,6 @@ internal sealed class SsoOptionsSetup(IServiceScopeFactory scopes) : IConfigureN
         options.ClientId = client?.ClientId ?? "not-configured";
         options.ClientSecret = client?.ClientSecret;
         options.RequireHttpsMetadata = !(Uri.TryCreate(options.Authority, UriKind.Absolute, out var uri) && uri.IsLoopback);
+        options.TokenValidationParameters.IssuerValidator = client?.AnyMicrosoftDirectory == true ? SingleSignOn.MicrosoftAnyDirectoryIssuer : null;
     }
 }

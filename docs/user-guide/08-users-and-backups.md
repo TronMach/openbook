@@ -79,7 +79,7 @@ The sign-in page then has a **Sign in with …** button (change its text with **
 
 Anyone else is told to ask an admin for an invitation. Users can also link their account themselves: select their username in the top bar, then **Password and sessions**, then enter your password (and code, with two-factor on) and select **link your account** under **Single sign-on**. An administrator can **Unlink** an account on the user's page.
 
-Microsoft vouches for emails only with a named directory (not "organizations" or "common"); Google always does. With another provider, people may need to link their account themselves the first time.
+For Microsoft, the directory can be typed as its ID or its domain, and changing one for the other later doesn't break anyone's link. **organizations** lets in work or school accounts from any directory, **common** those and personal Microsoft accounts, **consumers** personal accounts only. Microsoft vouches for emails only with a named directory (not "organizations", "common" or "consumers"); Google always does. With the other choices, or another provider, people link their account themselves the first time (or are signed in by a link made before).
 
 OpenBook's own two-factor code isn't asked for after single sign-on: the provider does its own checks. Inactive users and users whose access has ended are refused as usual.
 

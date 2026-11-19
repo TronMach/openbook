@@ -12,8 +12,13 @@ public sealed record SsoSettingsCommand(
     bool Enabled, SsoProvider Provider, string? Tenant, string? Authority, string? ClientId, string? ClientSecret, string? ButtonLabel, bool SsoOnly);
 
 /// <summary>What the provider says about who signed in.</summary>
+/// <param name="Issuer">The issuer the provider's token names (for Microsoft, always with the directory's id, however the tenant was typed).</param>
 /// <param name="EmailVerified">Whether the provider vouches for the email (its <c>email_verified</c> claim, or the company's own Microsoft directory).</param>
-public sealed record ExternalIdentity(string Issuer, string Subject, string? Email, bool EmailVerified);
+/// <param name="FormerIssuer">
+/// The issuer earlier versions recorded instead (the authority as configured), when it differs: a login linked that way is
+/// moved to <paramref name="Issuer"/> the first time it's used.
+/// </param>
+public sealed record ExternalIdentity(string Issuer, string Subject, string? Email, bool EmailVerified, string? FormerIssuer = null);
 
 /// <summary>Told when the single sign-on settings change, so the host rebuilds its provider connection.</summary>
 public interface ISingleSignOnHost
@@ -30,7 +35,8 @@ internal sealed class NoSingleSignOnHost : ISingleSignOnHost
 }
 
 /// <summary>What the host needs to send people to the provider; null secret when it can't be read here.</summary>
-public sealed record SsoClient(string Authority, string ClientId, string? ClientSecret);
+/// <param name="AnyMicrosoftDirectory">Microsoft's "organizations" or "common", whose tokens each name the person's own directory.</param>
+public sealed record SsoClient(string Authority, string ClientId, string? ClientSecret, bool AnyMicrosoftDirectory = false);
 
 /// <summary>
 /// Single sign-on through one OpenID Connect provider. A sign-in matches the user who signed in that way before
@@ -73,7 +79,8 @@ public sealed class SingleSignOnService(
     public async Task<SsoClient?> ClientAsync(CancellationToken ct = default) =>
         await store.GetSignInSettingsAsync(ct) is { IsSsoReady: true } s
             ? new SsoClient(s.Authority!, s.SsoClientId!, protector.Unprotect(s.ProtectedSsoClientSecret!)
-                ?? throw new DomainException("sso.secret_unreadable", "The single sign-on client secret can't be read on this computer. Enter it again under Settings, Sign-in."))
+                ?? throw new DomainException("sso.secret_unreadable", "The single sign-on client secret can't be read on this computer. Enter it again under Settings, Sign-in."),
+                s.IsAnyMicrosoftDirectory)
             : null;
 
     public async Task<SignInResult> SignInAsync(ExternalIdentity identity, CancellationToken ct = default)
@@ -86,11 +93,22 @@ public sealed class SingleSignOnService(
         var email = identity.EmailVerified ? Normalized(identity.Email) : null;
 
         var user = await store.FindUserByExternalLoginAsync(login, ct);
-        if (user is null && email is not null && await store.FindUserByEmailAsync(email, ct) is { ExternalLogin: null } byEmail)
+        if (user is null && FormerLogin(identity) is { } former && await store.FindUserByExternalLoginAsync(former, ct) is { } linkedBefore)
+        {
+            user = linkedBefore;
+            user.LinkExternalLogin(login);
+            store.Add(Audit(user, user.Username, "single sign-on link updated"));
+        }
+
+        // A verified email finds a user with no link yet, or one linked to the same person under another issuer (the
+        // provider's settings were changed since), whose link would otherwise never match again.
+        if (user is null && email is not null && await store.FindUserByEmailAsync(email, ct) is { } byEmail
+            && (byEmail.ExternalLogin is null || SameSubject(byEmail.ExternalLogin, identity.Subject)))
         {
             user = byEmail;
+            var relinked = byEmail.ExternalLogin is not null;
             user.LinkExternalLogin(login);
-            store.Add(Audit(user, user.Username, "single sign-on linked"));
+            store.Add(Audit(user, user.Username, relinked ? "single sign-on link updated" : "single sign-on linked"));
         }
 
         if (user is null && email is not null
@@ -116,7 +134,8 @@ public sealed class SingleSignOnService(
             throw new DomainException("sso.linked_elsewhere", $"That account already signs in as {other.Username}.");
         if (user.ExternalLogin == login)
             return;
-        if (user.ExternalLogin is not null)
+        // The same person under another issuer (an older link, or the provider's settings changed) may be linked again.
+        if (user.ExternalLogin is not null && !SameSubject(user.ExternalLogin, identity.Subject))
             throw new DomainException("sso.already_linked", "Your account is linked to another sign-in. Ask an admin to unlink it first.");
         user.LinkExternalLogin(login);
         store.Add(Audit(user, currentUser.Actor, "single sign-on linked"));
@@ -185,6 +204,14 @@ public sealed class SingleSignOnService(
             throw new DomainException("sso.identity_missing", "The provider didn't say who signed in.");
         return $"{identity.Issuer.TrimEnd('/')}|{identity.Subject}";
     }
+
+    private static string? FormerLogin(ExternalIdentity identity) =>
+        string.IsNullOrWhiteSpace(identity.FormerIssuer) || identity.FormerIssuer.TrimEnd('/') == identity.Issuer.TrimEnd('/')
+            ? null
+            : Login(identity with { Issuer = identity.FormerIssuer, FormerIssuer = null });
+
+    private static bool SameSubject(string externalLogin, string subject) =>
+        externalLogin.LastIndexOf('|') is var bar and >= 0 && string.Equals(externalLogin[(bar + 1)..], subject, StringComparison.Ordinal);
 
     private static string? Normalized(string? email)
     {

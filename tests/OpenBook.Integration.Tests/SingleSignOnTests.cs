@@ -139,4 +139,111 @@ public sealed class SingleSignOnTests : IAsyncLifetime
         Assert.Equal(provider == SsoProvider.Microsoft ? "o-1" : "s-1", identity.Subject);
         Assert.Equal("pat@contoso.com", identity.Email);
     }
+
+    private const string ContosoId = "6f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f";
+    private const string ContosoIssuer = $"https://login.microsoftonline.com/{ContosoId}/v2.0";
+
+    private Task<SignInSettings> TurnOnMicrosoft(string tenant) => Run(sp => sp.GetRequiredService<SingleSignOnService>().SaveAsync(
+        new SsoSettingsCommand(true, SsoProvider.Microsoft, tenant, null, "client-1", "very secret", null, false)));
+
+    private Task<SignInResult> SignInMicrosoft(SignInSettings settings, string oid, string? email) =>
+        Run(sp => sp.GetRequiredService<SingleSignOnService>().SignInAsync(SingleSignOn.Identity(new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim("iss", ContosoIssuer), new Claim("oid", oid), new Claim("tid", ContosoId), .. email is null ? Array.Empty<Claim>() : [new Claim("email", email)]],
+            "test")), settings)));
+
+    [Fact]
+    public async Task Microsoft_logins_keep_working_when_the_tenant_is_retyped()
+    {
+        // C532: the login is keyed on the token's issuer (with the directory's id), not on how the tenant was typed.
+        var byDomain = await TurnOnMicrosoft("contoso.com");
+        var pat = await AddUser("pat", email: "pat@contoso.com");
+        Assert.Equal(pat.Id, (await SignInMicrosoft(byDomain, "o-7", "pat@contoso.com")).User!.Id);
+        Assert.Equal($"{ContosoIssuer}|o-7", (await _db.InDb(db => db.Users.SingleAsync(u => u.Id == pat.Id))).ExternalLogin);
+
+        var byId = await TurnOnMicrosoft(ContosoId);
+        Assert.Equal(pat.Id, (await SignInMicrosoft(byId, "o-7", null)).User!.Id);
+    }
+
+    [Fact]
+    public async Task Logins_recorded_under_the_typed_tenant_move_to_the_tokens_issuer()
+    {
+        // Earlier versions dropped "iss" and recorded the configured authority instead.
+        var settings = await TurnOnMicrosoft("contoso.com");
+        var pat = await AddUser("pat");
+        await _db.InScope(sp => sp.GetRequiredService<SingleSignOnService>().LinkAsync(pat.Id,
+            new ExternalIdentity("https://login.microsoftonline.com/contoso.com/v2.0", "o-8", null, false)));
+
+        Assert.Equal(pat.Id, (await SignInMicrosoft(settings, "o-8", null)).User!.Id);
+        Assert.Equal($"{ContosoIssuer}|o-8", (await _db.InDb(db => db.Users.SingleAsync(u => u.Id == pat.Id))).ExternalLogin);
+    }
+
+    [Fact]
+    public async Task A_verified_email_relinks_the_same_person_but_not_someone_else()
+    {
+        var settings = await TurnOnMicrosoft("contoso.com");
+        var pat = await AddUser("pat", email: "pat@contoso.com");
+        var lee = await AddUser("lee", email: "lee@contoso.com");
+        // Linked under an issuer that will never come again (the old typed tenant, then retyped).
+        foreach (var (user, oid) in new[] { (pat, "o-1"), (lee, "o-2") })
+            await _db.InScope(sp => sp.GetRequiredService<SingleSignOnService>().LinkAsync(user.Id,
+                new ExternalIdentity("https://login.microsoftonline.com/old.example/v2.0", oid, null, false)));
+
+        Assert.Equal(pat.Id, (await SignInMicrosoft(settings, "o-1", "pat@contoso.com")).User!.Id);
+        // Lee's address with another person's id doesn't take over Lee's account.
+        Assert.Equal(SignInStatus.NotInvited, (await SignInMicrosoft(settings, "o-3", "lee@contoso.com")).Status);
+        Assert.Equal("https://login.microsoftonline.com/old.example/v2.0|o-2", (await _db.InDb(db => db.Users.SingleAsync(u => u.Id == lee.Id))).ExternalLogin);
+    }
+
+    [Theory]
+    [InlineData("organizations", true, false)]
+    [InlineData("common", true, false)]
+    [InlineData("consumers", false, false)]
+    [InlineData("contoso.com", false, true)]
+    public void Microsoft_directories_are_told_apart(string tenant, bool any, bool own)
+    {
+        var settings = SignInSettings.Create();
+        settings.ConfigureSso(false, SsoProvider.Microsoft, tenant, null, null, null, null, false);
+        Assert.Equal(any, settings.IsAnyMicrosoftDirectory);
+        Assert.Equal(own, settings.IsOwnMicrosoftDirectory);
+    }
+
+    private static Microsoft.IdentityModel.JsonWebTokens.JsonWebToken Token(string? tid) =>
+        new(new Microsoft.IdentityModel.JsonWebTokens.JsonWebTokenHandler().CreateToken(new Microsoft.IdentityModel.Tokens.SecurityTokenDescriptor
+        {
+            Claims = tid is null ? new Dictionary<string, object> { ["sub"] = "s" } : new Dictionary<string, object> { ["tid"] = tid },
+        }));
+
+    [Fact]
+    public void Any_directory_tokens_must_name_their_own_directory_as_issuer()
+    {
+        var parameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters();
+        Assert.Equal(ContosoIssuer, SingleSignOn.MicrosoftAnyDirectoryIssuer(ContosoIssuer, Token(ContosoId), parameters));
+        Assert.Equal(ContosoIssuer, SingleSignOn.MicrosoftAnyDirectoryIssuer(ContosoIssuer, Token(ContosoId.ToUpperInvariant()), parameters));
+
+        foreach (var (issuer, tid) in new[]
+        {
+            ($"https://login.microsoftonline.com/{Guid.Empty}/v2.0", ContosoId), // another directory's issuer
+            (ContosoIssuer, (string?)null),                                       // no tid
+            ("https://evil.example/" + ContosoId + "/v2.0", ContosoId),           // not Microsoft
+            ("https://login.microsoftonline.com/{tenantid}/v2.0", ContosoId),     // the placeholder itself
+        })
+            Assert.Throws<Microsoft.IdentityModel.Tokens.SecurityTokenInvalidIssuerException>(() =>
+                SingleSignOn.MicrosoftAnyDirectoryIssuer(issuer, Token(tid), parameters));
+    }
+
+    [Fact]
+    public async Task The_handler_keeps_the_issuer_and_checks_any_directory_tokens()
+    {
+        await TurnOnMicrosoft("organizations");
+        var options = new Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions();
+        new SsoOptionsSetup(_db.Services.GetRequiredService<IServiceScopeFactory>()).Configure(SingleSignOn.Scheme, options);
+        Assert.DoesNotContain(options.ClaimActions, a => a.ClaimType == "iss");
+        Assert.Contains(options.ClaimActions, a => a.ClaimType == "nonce");
+        Assert.NotNull(options.TokenValidationParameters.IssuerValidator);
+
+        await TurnOnMicrosoft("contoso.com");
+        var named = new Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions();
+        new SsoOptionsSetup(_db.Services.GetRequiredService<IServiceScopeFactory>()).Configure(SingleSignOn.Scheme, named);
+        Assert.Null(named.TokenValidationParameters.IssuerValidator);
+    }
 }
