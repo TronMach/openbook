@@ -201,6 +201,24 @@
         document.body.appendChild(frame);
     }
 
+    // Reloads once the print dialog has gone: the frame's afterprint (where the browser sends it), the window getting
+    // focus back, or the person's first key or mouse move on the page, which an open dialog keeps from reaching it.
+    // Nothing counts in the first second, while the dialog is still opening.
+    function reloadWhenBack() {
+        const since = Date.now();
+        let done = false;
+        const reload = () => {
+            if (done || Date.now() - since < 1000) return;
+            done = true;
+            location.reload();
+        };
+        const frame = document.getElementById('ob-print-frame');
+        try { frame?.contentWindow?.addEventListener('afterprint', () => setTimeout(reload, 1000)); } catch { /* a frame the browser won't let us reach */ }
+        window.addEventListener('focus', reload);
+        document.addEventListener('pointermove', reload);
+        document.addEventListener('keydown', reload);
+    }
+
     document.addEventListener('click', e => {
         const button = e.target instanceof Element ? e.target.closest('[data-print]') : null;
         if (!button) return;
@@ -250,8 +268,10 @@
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             if (response.ok && blob.type === 'application/pdf') {
-                // The queue changes once documents are printed, so the page is reloaded after the dialog.
-                printPdf(url, () => setTimeout(() => location.reload(), 1000));
+                // The queue changes once documents are printed, so the page is reloaded after the dialog. Not on a
+                // timer: a PDF in a frame may return from print() at once (C558), and a reload would take the frame
+                // away under the open dialog. The page reloads once the person is back on it.
+                printPdf(url, reloadWhenBack);
             } else {
                 window.open(url, '_blank');
             }
