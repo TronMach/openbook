@@ -1,0 +1,68 @@
+# Builds the website (website/, Astro and Starlight) with the user guide from docs/user-guide, checks its links and
+# its packages' licences, and on master publishes it to GitHub Pages (https://tronmach.github.io/openbook/).
+# Pull requests build and check only. Pages must be set to "GitHub Actions" in the repository's settings once.
+name: Website
+
+on:
+  push:
+    branches: [master]
+    paths: ['website/**', 'docs/user-guide/**', '.github/workflows/website.yml']
+  pull_request:
+    paths: ['website/**', 'docs/user-guide/**', '.github/workflows/website.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build and check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install
+        run: npm ci --no-fund --no-audit
+
+      - name: Package licences
+        run: npm run check-licences
+
+      - name: Build
+        run: npm run build
+
+      - name: Links
+        run: npm run check-links
+
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+        with:
+          path: website/dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

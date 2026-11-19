@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.astro/
+# Copied from docs/user-guide by scripts/guide.mjs on every build: edit the guide there.
+src/content/docs/guide/

@@ -5,7 +5,7 @@
 .DESCRIPTION
     Changed files are those differing from where this branch left -Base (committed, uncommitted and new), and
     artifacts\test-map.json (tools/build-test-map.ps1) says which integration test classes run each one.
-    - Text only (docs, Markdown, packaging, most of tools) needs no tests.
+    - Text only (docs, Markdown, packaging, the website, most of tools) needs no tests.
     - Migrations, build files (projects, Directory.Build.props, global.json, the solution), tools/pgtest.ps1 and
       anything the rules below can't place: everything.
     - A source file in the map: the classes that ran it. A test file: the test classes it declares (not through the
@@ -73,7 +73,7 @@ $unplaced = @()
 $noTests = 0
 foreach ($file in $changed) {
     $leaf = Split-Path $file -Leaf
-    if (($file -match '\.(md|txt)$' -and $file -notmatch '^tests/') -or $file -match '^(docs|packaging|\.github)/' -or
+    if (($file -match '\.(md|txt)$' -and $file -notmatch '^tests/') -or $file -match '^(docs|packaging|website|\.github)/' -or
         ($file -match '^tools/' -and $file -notmatch '^tools/pgtest\.ps1$') -or
         $leaf -in @('LICENSE', '.gitignore', '.gitattributes', '.editorconfig', 'Dockerfile', 'docker-compose.yml', '.dockerignore')) {
         $noTests++
