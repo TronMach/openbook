@@ -55,6 +55,7 @@ Domain (no EF/ASP.NET) → Application (use cases, `ILedgerStore`) → Infrastru
 ## Migrations (SQLite)
 
 - Trigger SQL lives frozen inside the migration that creates it (`*_InitialLedger.Triggers.cs`, `*_ChartAndSettings.cs`). Never edit an applied migration; to change a trigger, add a migration that drops and recreates it. Add new trigger names to `SqliteLedgerTriggers.Names`.
+- Migrations aren't squashed (decided 2026-11-19): older company files and backups upgrade by running each one in order, restore checks triggers by the migration that added them (`AddedBy`), and the release samples prove the path, so a squash risks upgrades for no gain at run time.
 - A new column on `JournalEntries` must be added to the `TR_JournalEntries_Immutable` condition (via a new migration). The latest copies are in `*_LedgerGaps` (2026-11-06): entries start unsealed, only 1 seals on SQLite, a line needs an unsealed entry, void details change only with the void; PostgreSQL also refuses TRUNCATE on the journal tables.
 - A trigger added after the first goes in `SqliteLedgerTriggers.Names` and `AddedBy` (its migration), or older backups are refused before they can be migrated. Restore checks trigger names, not their text.
 - `IX_Accounts_SiblingName` (raw SQL in both projects, on the parent and lower-case name, not in the EF model) stops two first uses making one account twice: an EF rebuild of `Accounts` would lose it.
