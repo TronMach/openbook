@@ -1,0 +1,189 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import Screen from '../components/Screen.astro';
+import { inRepo, latestRelease, local, repo } from '../lib/links';
+
+// A few areas, the way the guide's contents name them; the guide has the rest.
+const areas = [
+	['04', 'sales', 'Customers and sales', 'Invoices, receiving payments, deposits, sales receipts, batch invoicing'],
+	['05', 'purchases', 'Vendors and purchases', 'Bills, paying bills, expenses, vendor credits'],
+	['06', 'banking', 'Banking', 'Importing statements, reviewing transactions, bank rules, reconciling'],
+	['07', 'reports', 'Reports', 'The main statements, accrual and cash basis, exporting and saving reports'],
+	['12', 'sales-tax', 'Sales tax', 'Agencies, rates and codes, exempt customers, the liability report'],
+	['14', 'inventory', 'Inventory', 'Warehouses and bins, lots and serials, bundles and assemblies, landed costs'],
+	['18', 'projects-and-time', 'Projects, time and mileage', 'Timers and timesheets, the rate card, billing work'],
+	['19', 'assets-and-loans', 'Fixed assets and loans', 'Depreciation, including MACRS, disposals, loan payments'],
+	['23', 'nonprofits', 'Nonprofits', 'Donor restrictions, functional expenses, gifts, pledges, grants'],
+	['27', 'printed-forms', 'Printed forms', 'Invoice designs with your logo and columns, printing in batches'],
+];
+---
+
+<StarlightPage
+	frontmatter={{
+		title: 'Open-source bookkeeping',
+		description:
+			'Open-source bookkeeping for small businesses and nonprofits: invoices, bills, banking, inventory, sales tax, projects and reports, with your books in a file or database you control.',
+		template: 'splash',
+		hero: { title: 'OpenBook' },
+		pagefind: false,
+	}}
+>
+	<div class="home not-content">
+		<section class="home-section" aria-labelledby="covers">
+			<div class="home-section-head">
+				<h2 id="covers">What it covers</h2>
+				<p>
+					The user guide has a chapter for each part of OpenBook. Here are some of them, as the guide numbers
+					them.
+				</p>
+			</div>
+			<ol class="contents">
+				{
+					areas.map(([number, slug, title, text]) => (
+						<li>
+							<a href={local(`/guide/${slug}/`)}>
+								<span class="contents-title">{title}</span>
+								<span class="contents-leader" aria-hidden="true" />
+								<span class="contents-number">
+									<span class="sr-only">chapter </span>
+									{number}
+								</span>
+							</a>
+							<span class="contents-text">{text}</span>
+						</li>
+					))
+				}
+			</ol>
+			<p class="home-more">
+				<a href={local('/guide/')}>All 32 chapters of the guide</a>, from setting up a company to year-end.
+			</p>
+		</section>
+
+		<section class="home-section" aria-labelledby="looks">
+			<div class="home-section-head">
+				<h2 id="looks">What it looks like</h2>
+				<p>The same demo company. Every page has a light and a dark theme, and works on a phone.</p>
+			</div>
+			<div class="home-shots">
+				<figure>
+					<Screen
+						name="invoice"
+						sizes="(min-width: 68rem) 33rem, 100vw"
+						alt="An open invoice for 190.00 with buttons to receive a payment, email, print, copy or change it."
+					/>
+					<figcaption>
+						An invoice and what comes next: receive a payment, email it, print it, copy it or change it.
+					</figcaption>
+				</figure>
+				<figure>
+					<Screen
+						name="pnl"
+						sizes="(min-width: 68rem) 33rem, 100vw"
+						alt="A profit and loss report for the year to date, with income, cost of goods sold and gross profit, and buttons to export it."
+					/>
+					<figcaption>
+						The profit and loss for any period, on the accrual or cash basis, exported to CSV, Excel or PDF.
+					</figcaption>
+				</figure>
+			</div>
+		</section>
+
+		<section class="home-section" aria-labelledby="trust">
+			<div class="home-section-head">
+				<h2 id="trust">Books you can hand to an accountant</h2>
+				<p>Three things OpenBook always does, whichever page the work was done on.</p>
+			</div>
+			<ol class="rules">
+				<li>
+					<h3>Nothing posted is ever edited or deleted</h3>
+					<p>
+						A correction voids the entry with an opposite one on the same date and posts the new one. The original
+						stays on record, marked voided.
+					</p>
+				</li>
+				<li>
+					<h3>Every change is recorded</h3>
+					<p>
+						The audit log keeps who did what and when, and each record is chained to the one before it, so a
+						rewritten history shows.
+					</p>
+				</li>
+				<li>
+					<h3>Everything balances</h3>
+					<p>
+						Every transaction ends up as a balanced journal entry, and the database itself refuses one that
+						doesn't add up.
+					</p>
+				</li>
+			</ol>
+			<p class="home-more">
+				<a href={local('/guide/for-accountants/')}>For accountants and bookkeepers</a>: the books check, access, month-end and
+				year-end.
+			</p>
+		</section>
+
+		<section class="home-section" aria-labelledby="install">
+			<div class="home-section-head">
+				<h2 id="install">Two ways to run it</h2>
+				<p>The same program, installed for one computer or for a team. You can start on Desktop and move to a server later.</p>
+			</div>
+			<div class="installs">
+				<div class="install">
+					<h3>Desktop</h3>
+					<p class="install-for">For one computer, on Windows.</p>
+					<ul>
+						<li>An installer that needs no administrator rights</li>
+						<li>The company file in your Documents folder</li>
+						<li>Backups every day, and an icon in the system tray</li>
+						<li>A simple view, by task, for a business one person runs</li>
+					</ul>
+					<p><a class="home-button" href={latestRelease}>Download for Windows</a></p>
+					<p class="home-small">
+						The installer isn't code-signed yet, so Windows may warn before it runs: choose <b>More info</b>, then{' '}
+						<b>Run anyway</b>.
+					</p>
+				</div>
+				<div class="install">
+					<h3>Server</h3>
+					<p class="install-for">For several people, on your own server.</p>
+					<ul>
+						<li>A Docker image, with PostgreSQL</li>
+						<li>Behind your own HTTPS proxy</li>
+						<li>Users and roles, two-factor sign-in, single sign-on</li>
+						<li>An API, webhooks and a command-line client</li>
+					</ul>
+					<pre class="home-code"><code>docker compose up -d</code></pre>
+					<p class="home-small">
+						Change the passwords in <code>docker-compose.yml</code> first. The{' '}
+						<a href={inRepo('docs/admin/server.md')}>server admin guide</a> covers the rest.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		<section class="home-section home-pair" aria-label="Moving in, and taking part">
+			<div>
+				<h2>Coming from QuickBooks?</h2>
+				<p>
+					Bring your lists and history from QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks. The
+					guide shows where each QuickBooks screen and task is in OpenBook, and which words differ.
+				</p>
+				<p>
+					<a href={local('/guide/coming-from-quickbooks/')}>Coming from QuickBooks</a> ·{' '}
+					<a href={local('/guide/moving-in/')}>Moving in</a>
+				</p>
+			</div>
+			<div>
+				<h2>Free software</h2>
+				<p>
+					OpenBook is under the GNU Affero General Public License, version 3 or later: use it, study it, change it
+					and share it. Bug reports, ideas and pull requests are welcome.
+				</p>
+				<p>
+					<a href={repo}>Source on GitHub</a> · <a href={inRepo('CONTRIBUTING.md')}>Contributing</a> ·{' '}
+					<a href={inRepo('SECURITY.md')}>Reporting a security problem</a>
+				</p>
+			</div>
+		</section>
+	</div>
+</StarlightPage>

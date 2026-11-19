@@ -1,0 +1,22 @@
+{
+  "name": "openbook-website",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check-links": "node scripts/check-links.mjs",
+    "check-licences": "node scripts/check-licences.mjs",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.43.1",
+    "@fontsource-variable/source-serif-4": "5.3.1",
+    "astro": "7.4.13"
+  },
+  "devDependencies": {
+    "playwright-core": "1.65.1"
+  }
+}

@@ -1,0 +1,24 @@
+---
+// A screenshot of the app in the site's current theme: both are in the page, CSS shows the one that matches.
+// Made by scripts/screenshots.mjs from a demo company.
+import { Picture } from 'astro:assets';
+
+interface Props {
+	name: 'dashboard' | 'invoice' | 'pnl';
+	alt: string;
+	eager?: boolean;
+	sizes?: string;
+}
+
+const shots = import.meta.glob<{ default: ImageMetadata }>('../assets/screens/*.png', { eager: true });
+const { name, alt, eager = false, sizes = '(min-width: 68rem) 66rem, 100vw' } = Astro.props;
+const light = shots[`../assets/screens/${name}-light.png`].default;
+const dark = shots[`../assets/screens/${name}-dark.png`].default;
+const loading = eager ? 'eager' : 'lazy';
+const widths = [640, 960, 1280, 1920];
+---
+
+<div class="screen">
+	<Picture class="screen-light" src={light} {alt} {loading} {sizes} {widths} formats={['avif', 'webp']} />
+	<Picture class="screen-dark" src={dark} {alt} {loading} {sizes} {widths} formats={['avif', 'webp']} />
+</div>
