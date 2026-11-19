@@ -168,7 +168,7 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
     {
         // Minimal APIs check the token only when a form is bound: a post that takes nothing from its form takes IFormCollection all the same.
         string[] checkedByHand = ["logout", "account/sessions/{id:guid}/end"];
-        string[] anonymous = ["hooks/stripe", "portal/{token}/invoices/{id:guid}/pay"];
+        string[] anonymous = ["hooks/stripe", "hooks/paypal", "hooks/square", "portal/{token}/invoices/{id:guid}/pay"];
         var open = _app.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
             .Where(e => !e.RoutePattern.RawText!.TrimStart('/').StartsWith("api/", StringComparison.Ordinal)
                         && e.Metadata.GetMetadata<ComponentTypeMetadata>() is null

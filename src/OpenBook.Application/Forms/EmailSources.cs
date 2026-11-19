@@ -127,7 +127,8 @@ internal sealed class SalesEmailSource(
             return null;
         try
         {
-            return (await online.LinkForInvoiceAsync(source.Id, ct)).Url;
+            var link = await online.LinkForInvoiceAsync(source.Id, ct);
+            return OnlinePaymentService.ShareUrl(link, await online.GetSettingsAsync(ct));
         }
         catch (DomainException)
         {

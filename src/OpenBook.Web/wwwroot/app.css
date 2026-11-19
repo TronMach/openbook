@@ -769,6 +769,13 @@ a.flow-box:hover, a.flow-box:focus { border-color: var(--accent); }
     .help-contents { position: static; max-height: none; }
     .help-contents nav { grid-template-columns: 1fr; max-height: 12rem; overflow-y: auto; }
 }
+/* Online payments: only the chosen provider's fields (all of them in a browser without :has). */
+.online-payments-form:has(input[name="provider"][value="Stripe"]:checked) .provider-panel:not(.provider-Stripe),
+.online-payments-form:has(input[name="provider"][value="PayPal"]:checked) .provider-panel:not(.provider-PayPal),
+.online-payments-form:has(input[name="provider"][value="Square"]:checked) .provider-panel:not(.provider-Square) { display: none; }
+.provider-panel { margin-bottom: 1.25rem; }
+.provider-choice { display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem; margin-bottom: 0.5rem; }
+.provider-choice legend { width: 100%; font-weight: 600; margin-bottom: 0.35rem; }
 details.setup-steps { margin: 0 0 1.25rem; border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.9rem; }
 details.setup-steps summary { cursor: pointer; font-weight: 600; color: var(--accent); }
 details.setup-steps ol { margin: 0.6rem 0 0; padding-left: 1.4rem; display: grid; gap: 0.45rem; }

@@ -5,6 +5,7 @@
 @inject OpenBook.Application.Nonprofit.OnlineGivingService Giving
 @inject OpenBook.Application.Companies.CompanySettingsService Company
 @inject NavigationManager Navigation
+@inject OpenBook.Web.Security.OnlinePaymentActor Actor
 
 <PageTitle>@L["Give"] · @_name</PageTitle>
 
@@ -61,10 +62,28 @@
     [SupplyParameterFromQuery] private bool? Cancelled { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
 
+    /// <summary>The order PayPal sends the donor back with; its gift is taken now, if the webhook hasn't already.</summary>
+    [SupplyParameterFromQuery(Name = "token")] private string? Token { get; set; }
+
+    /// <summary>The order Square sends the donor back with; its gift is recorded now, if the webhook hasn't already.</summary>
+    [SupplyParameterFromQuery(Name = "orderId")] private string? OrderId { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         var company = await Company.GetAsync();
         _name = company.LegalName ?? company.Name;
         _open = await Giving.OpenAsync();
+        if ((Token ?? OrderId) is { Length: > 0 and <= 100 } order && Navigation.Uri.Contains("/give/thanks", StringComparison.Ordinal))
+        {
+            Actor.Use();
+            try
+            {
+                await Giving.CompleteAsync(order, default);
+            }
+            catch (DomainException)
+            {
+                // The provider's webhook (or, at PayPal, OpenBook's own check) takes it; the donor needn't see why this try failed.
+            }
+        }
     }
 }

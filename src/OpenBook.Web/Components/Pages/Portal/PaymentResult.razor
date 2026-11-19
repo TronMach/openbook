@@ -1,5 +1,6 @@
 @page "/pay/done"
 @page "/pay/cancelled"
+@page "/pay/unavailable"
 @attribute [AllowAnonymous]
 @layout OpenBook.Web.Components.Layout.PortalLayout
 @inject OnlinePaymentService Online
@@ -14,6 +15,16 @@
         <h1>Payment cancelled</h1>
         <p>Nothing was charged. You can pay from the link again whenever you're ready.</p>
     }
+    else if (Navigation.Uri.Contains("/pay/unavailable", StringComparison.Ordinal))
+    {
+        <h1>@(Paid == true ? "Already paid" : "Can't pay online just now")</h1>
+        <p>@(Paid == true ? "This invoice has been paid. Thank you." : "Paying online isn't available at the moment. Please try again later, or get in touch with us to pay another way.")</p>
+    }
+    else if (_outdated && !_recorded)
+    {
+        <h1>Nothing was charged</h1>
+        <p>The invoice changed after this payment link was made, so the payment wasn't taken. Open the invoice's link again to pay what's owed now.</p>
+    }
     else
     {
         <h1>Thank you</h1>
@@ -23,12 +34,15 @@
 
 @code {
     private bool _recorded;
+    private bool _outdated;
+
+    [SupplyParameterFromQuery] private bool? Paid { get; set; }
 
     [SupplyParameterFromQuery] private Guid? Invoice { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        if (Invoice is not { } invoiceId || Navigation.Uri.Contains("/pay/cancelled", StringComparison.Ordinal))
+        if (Invoice is not { } invoiceId || !Navigation.Uri.Contains("/pay/done", StringComparison.Ordinal))
             return;
         // Records the payment now if the provider's webhook hasn't (or can't reach this server).
         Actor.Use();
@@ -36,7 +50,12 @@
         {
             foreach (var link in await Online.LinksAsync(invoiceId))
                 if (link.Status == PaymentLinkStatus.Open)
-                    _recorded |= (await Online.CheckAsync(link.Id)).Status == PaymentLinkStatus.Paid;
+                {
+                    // At PayPal this is where an approved payment is taken, unless the invoice changed meanwhile.
+                    var status = (await Online.CheckAsync(link.Id)).Status;
+                    _recorded |= status == PaymentLinkStatus.Paid;
+                    _outdated |= status == PaymentLinkStatus.Expired;
+                }
                 else
                     _recorded |= link.Status == PaymentLinkStatus.Paid;
         }

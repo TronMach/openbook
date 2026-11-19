@@ -109,7 +109,7 @@
         Add(waitingPayouts, L["Channel payouts waiting to be posted"], "/sales/channels", L["Their sales and fees aren't in the books until they are"]);
         var notices = await Get<OnlinePaymentService>().NoticesAsync(openOnly: true);
         if (notices.Count > 0)
-            Add(notices.Count, L["Refunds and disputes made at Stripe"], $"/sales/invoices/{notices[0].InvoiceId}#online", L["On invoices paid online: record them in the books"], urgent: true);
+            Add(notices.Count, L["Refunds and disputes made at your payment provider"], $"/sales/invoices/{notices[0].InvoiceId}#online", L["On invoices paid online: record them in the books"], urgent: true);
         foreach (var account in banking)
         {
             Add(await feed.PendingCountAsync(account.Account.Id), L["Bank lines to review in {0}", account.FullName], $"/banking/{account.Account.Id}/feed");

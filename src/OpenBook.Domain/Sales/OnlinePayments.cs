@@ -7,47 +7,109 @@ namespace OpenBook.Domain.Sales;
 public enum PaymentProvider
 {
     Stripe,
+
+    /// <summary>PayPal Checkout (Orders v2): the customer approves at PayPal, and OpenBook then captures the money.</summary>
+    PayPal,
+
+    /// <summary>Square's online checkout (payment links), paid into the business's main Square location.</summary>
+    Square,
 }
 
 /// <summary>
-/// Taking card payments online for invoices (one row). The provider's secret key and webhook signing secret are stored
-/// encrypted by the host's secret protector and never shown or exported. Payments are deposited to
-/// <see cref="DepositAccountId"/> (a bank or other current asset account, usually Undeposited Funds).
+/// Taking card payments online for invoices (one row), through one provider at a time. The provider's secret (Stripe's
+/// secret key, PayPal's secret or Square's access token) and its webhook signing secret (Stripe's, or Square's
+/// signature key) are stored encrypted by the host's secret protector and never shown or exported. Payments are deposited to <see cref="DepositAccountId"/> (a bank or other
+/// current asset account, usually Undeposited Funds).
 /// </summary>
 public sealed class OnlinePaymentSettings
 {
+    public const int MaxClientIdLength = 100;
+    public const int MaxWebhookIdLength = 50;
+
     private OnlinePaymentSettings() { }
 
     public Guid Id { get; private set; }
     public PaymentProvider Provider { get; private set; }
     public bool Enabled { get; private set; }
+
+    /// <summary>Stripe's secret key, PayPal's secret or Square's access token: the one that belongs with <see cref="Provider"/>.</summary>
     public string? ProtectedSecretKey { get; private set; }
+
+    /// <summary>Stripe's webhook signing secret, or Square's webhook signature key (PayPal checks its own calls).</summary>
     public string? ProtectedWebhookSecret { get; private set; }
+
+    /// <summary>PayPal's client ID (not a secret: PayPal shows it in the browser too).</summary>
+    public string? ClientId { get; private set; }
+
+    /// <summary>PayPal's id for the webhook it calls OpenBook with; PayPal checks each call's signature against it.</summary>
+    public string? WebhookId { get; private set; }
+
+    /// <summary>PayPal's or Square's sandbox (test money) rather than live payments (Stripe tells them apart by its key).</summary>
+    public bool Sandbox { get; private set; }
+
     public Guid? DepositAccountId { get; private set; }
 
     /// <summary>The address customers reach OpenBook at (https://books.example.com), for links back from the provider and the portal.</summary>
     public string? PublicUrl { get; private set; }
 
-    public bool IsReady => Enabled && ProtectedSecretKey is not null && DepositAccountId is not null && PublicUrl is not null;
+    public bool IsReady => Enabled && HasKeys && DepositAccountId is not null && PublicUrl is not null;
+
+    /// <summary>The provider's keys are all entered.</summary>
+    public bool HasKeys => ProtectedSecretKey is not null && (Provider != PaymentProvider.PayPal || ClientId is not null);
 
     public static OnlinePaymentSettings Create() => new() { Id = Guid.CreateVersion7(), Provider = PaymentProvider.Stripe };
 
-    /// <param name="protectedSecretKey">Null keeps the saved key; "" clears it.</param>
+    /// <param name="protectedSecretKey">Null keeps the saved key; "" clears it. A change of provider drops the old provider's key.</param>
     /// <param name="protectedWebhookSecret">Null keeps the saved secret; "" clears it.</param>
-    public void Update(bool enabled, Guid? depositAccountId, string? publicUrl, string? protectedSecretKey, string? protectedWebhookSecret)
+    public void Update(bool enabled, Guid? depositAccountId, string? publicUrl, string? protectedSecretKey, string? protectedWebhookSecret,
+        PaymentProvider? provider = null, string? clientId = null, string? webhookId = null, bool? sandbox = null)
     {
         var url = Text.Optional(publicUrl, 200, "online.url_too_long", "Public address")?.TrimEnd('/');
         if (url is not null && (!Uri.TryCreate(url, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("https" or "http") || parsed.Query.Length > 0))
             throw new DomainException("online.url_invalid", "The public address is a web address like https://books.example.com.");
+        var chosen = provider ?? Provider;
+        if (!Enum.IsDefined(chosen))
+            throw new DomainException("online.provider_invalid", "Choose Stripe, PayPal or Square.");
+        if (chosen == PaymentProvider.PayPal)
+        {
+            ClientId = Code(clientId, MaxClientIdLength, "online.client_id_invalid", "PayPal's client ID is letters, digits, dashes and underscores, as PayPal shows it.");
+            WebhookId = Code(webhookId, MaxWebhookIdLength, "online.webhook_id_invalid", "PayPal's webhook ID is letters and digits, as PayPal shows it.");
+        }
+
+        if (chosen != PaymentProvider.Stripe)
+            Sandbox = sandbox ?? Sandbox;
+        if (chosen != Provider)
+        {
+            // The old provider's keys mean nothing to the new one.
+            ProtectedSecretKey = null;
+            ProtectedWebhookSecret = null;
+            Provider = chosen;
+        }
+
         if (protectedSecretKey is not null)
             ProtectedSecretKey = protectedSecretKey.Length == 0 ? null : protectedSecretKey;
         if (protectedWebhookSecret is not null)
             ProtectedWebhookSecret = protectedWebhookSecret.Length == 0 ? null : protectedWebhookSecret;
         DepositAccountId = depositAccountId == Guid.Empty ? null : depositAccountId;
         PublicUrl = url;
-        if (enabled && (ProtectedSecretKey is null || DepositAccountId is null || PublicUrl is null))
-            throw new DomainException("online.incomplete", "Enter the secret key, the account payments are deposited to and the public address before switching online payments on.");
+        if (enabled && (!HasKeys || DepositAccountId is null || PublicUrl is null))
+            throw new DomainException("online.incomplete", Provider switch
+            {
+                PaymentProvider.PayPal => "Enter PayPal's client ID and secret, the account payments are deposited to and the public address before switching online payments on.",
+                PaymentProvider.Square => "Enter Square's access token, the account payments are deposited to and the public address before switching online payments on.",
+                _ => "Enter the secret key, the account payments are deposited to and the public address before switching online payments on.",
+            });
         Enabled = enabled;
+    }
+
+    private static string? Code(string? value, int max, string code, string message)
+    {
+        var text = value?.Trim();
+        if (string.IsNullOrEmpty(text))
+            return null;
+        if (text.Length > max || !text.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))
+            throw new DomainException(code, message);
+        return text;
     }
 }
 
@@ -71,8 +133,11 @@ public sealed class PaymentLink
     public Guid InvoiceId { get; private set; }
     public PaymentProvider Provider { get; private set; }
 
-    /// <summary>The provider's id for the checkout (Stripe: the Checkout Session id).</summary>
+    /// <summary>The provider's id for the checkout (Stripe: the Checkout Session id; PayPal and Square: the order id).</summary>
     public string SessionId { get; private set; }
+
+    /// <summary>The provider's id for the link itself, where it differs from the checkout's (Square: deleting it cancels the order).</summary>
+    public string? ProviderLinkId { get; private set; }
 
     public string Url { get; private set; }
     public decimal Amount { get; private set; }
@@ -81,15 +146,17 @@ public sealed class PaymentLink
     public DateTimeOffset? ExpiresAt { get; private set; }
     public DateTimeOffset? PaidAt { get; private set; }
 
-    /// <summary>The provider's payment reference (Stripe: the PaymentIntent id).</summary>
+    /// <summary>The provider's payment reference (Stripe: the PaymentIntent id; PayPal: the capture id; Square: the payment id).</summary>
     public string? PaymentReference { get; private set; }
 
     public Guid? CustomerPaymentId { get; private set; }
 
     public bool IsUsable(DateTimeOffset now) => Status == PaymentLinkStatus.Open && (ExpiresAt is not { } e || e > now);
 
-    public static PaymentLink Create(Guid invoiceId, PaymentProvider provider, string sessionId, string url, decimal amount, DateTimeOffset now, DateTimeOffset? expiresAt) => new()
+    public static PaymentLink Create(Guid invoiceId, PaymentProvider provider, string sessionId, string url, decimal amount, DateTimeOffset now, DateTimeOffset? expiresAt,
+        string? providerLinkId = null) => new()
     {
+        ProviderLinkId = providerLinkId,
         Id = Guid.CreateVersion7(),
         InvoiceId = invoiceId,
         Provider = provider,
@@ -119,10 +186,10 @@ public sealed class PaymentLink
 
 public enum OnlineNoticeKind
 {
-    /// <summary>Money given back at the provider (Stripe: <c>charge.refunded</c>).</summary>
+    /// <summary>Money given back at the provider (Stripe: <c>charge.refunded</c>; PayPal: <c>PAYMENT.CAPTURE.REFUNDED</c>).</summary>
     Refund,
 
-    /// <summary>The customer disputed the charge with their card company (<c>charge.dispute.created</c>).</summary>
+    /// <summary>The customer disputed the charge (Stripe: <c>charge.dispute.created</c>; PayPal: <c>CUSTOMER.DISPUTE.CREATED</c>).</summary>
     Dispute,
 }
 

@@ -263,7 +263,7 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | Partial and pending builds (decided and built 2026-10-26) | A build that's short can be saved as **pending** (posts nothing, touches no stock; a pending list shows what's short) and finished later with "Build now", posting on that date. When short, the build page also offers to **build what you can** now and leave the rest pending. Components are **not** reserved. |
 | Kits with their own stock (decided and built 2026-10-26) | Bundles stay stockless; pre-packed kits are **assemblies**, and the item page says so. New per-assembly option **auto-build on sale**: a sale short of finished units builds the shortfall from components in the same save. Bundles don't get their own stock. |
 | 1099 e-filing through IRIS (from L6) | The IRS's CSV templates are only downloadable inside the IRIS portal and must match exactly, and the A2A XML interface needs a transmitter control code. OpenBook exports the filing data to copy into the template. |
-| Square and PayPal payment links (from L3) | They need developer accounts. Stripe uses the payment gateway interface, so each becomes another provider behind it. |
+| Square and PayPal payment links (from L3) | **Built 2026-11-19**: both behind the payment gateway interface, chosen under Settings → Online card payments (one provider at a time). PayPal's approval is taken by OpenBook, never for an amount no longer owed; PayPal was checked end to end in its sandbox. Square was checked only against a stand-in, since its sandbox credentials weren't in hand yet. |
 
 ---
 

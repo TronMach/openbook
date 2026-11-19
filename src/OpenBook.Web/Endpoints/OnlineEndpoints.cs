@@ -17,8 +17,8 @@ namespace OpenBook.Web.Endpoints;
 /// </summary>
 public static class OnlineEndpoints
 {
-    private static readonly Action<ILogger, string, string, Exception?> HookRefused =
-        LoggerMessage.Define<string, string>(LogLevel.Warning, new EventId(1, "StripeWebhookRefused"), "A Stripe webhook was refused ({Code}): {Reason}");
+    private static readonly Action<ILogger, string, string, string, Exception?> HookRefused =
+        LoggerMessage.Define<string, string, string>(LogLevel.Warning, new EventId(1, "PaymentWebhookRefused"), "A {Provider} webhook was refused ({Code}): {Reason}");
 
     public static IEndpointRouteBuilder MapOnlineEndpoints(this IEndpointRouteBuilder app)
     {
@@ -38,22 +38,38 @@ public static class OnlineEndpoints
             }
         }).AllowAnonymous();
 
-        app.MapPost("/hooks/stripe", async (HttpRequest request, OnlinePaymentService online, OnlinePaymentActor actor, ILoggerFactory logs, CancellationToken ct) =>
+        app.MapPost("/hooks/stripe", (HttpRequest request, OnlinePaymentService online, OnlinePaymentActor actor, ILoggerFactory logs, CancellationToken ct) =>
+            Hook("Stripe", request, actor, logs, payload => online.HandleWebhookAsync(payload, request.Headers["Stripe-Signature"], ct), ct))
+            .AllowAnonymous().DisableAntiforgery();
+
+        // PayPal's signature is checked by PayPal itself, from the headers it sent.
+        app.MapPost("/hooks/paypal", (HttpRequest request, OnlinePaymentService online, OnlinePaymentActor actor, ILoggerFactory logs, CancellationToken ct) =>
+            Hook("PayPal", request, actor, logs, payload => online.HandlePayPalWebhookAsync(payload,
+                request.Headers.Where(h => h.Key.StartsWith("paypal-", StringComparison.OrdinalIgnoreCase))
+                    .ToDictionary(h => h.Key.ToLowerInvariant(), h => h.Value.ToString(), StringComparer.Ordinal), ct), ct))
+            .AllowAnonymous().DisableAntiforgery();
+
+        app.MapPost("/hooks/square", (HttpRequest request, OnlinePaymentService online, OnlinePaymentActor actor, ILoggerFactory logs, CancellationToken ct) =>
+            Hook("Square", request, actor, logs, payload => online.HandleSquareWebhookAsync(payload, request.Headers["x-square-hmacsha256-signature"], ct), ct))
+            .AllowAnonymous().DisableAntiforgery();
+
+        // A payment link as sent to the customer, for providers whose own pages don't last (PayPal): the current page, or a new one.
+        app.MapGet("/pay/{linkId:guid}", async (Guid linkId, OnlinePaymentService online, OnlinePaymentActor actor, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
-            var payload = await reader.ReadToEndAsync(ct);
             actor.Use();
             try
             {
-                return Results.Ok(new { outcome = (await online.HandleWebhookAsync(payload, request.Headers["Stripe-Signature"], ct)).ToString() });
+                return Results.Redirect(await online.OpenAsync(linkId, ct));
+            }
+            catch (EntityNotFoundException)
+            {
+                return Results.NotFound();
             }
             catch (DomainException ex)
             {
-                // Money may have moved: the System page should show it wasn't recorded.
-                HookRefused(logs.CreateLogger("OpenBook.OnlinePayments"), ex.Code, ex.Message, null);
-                return Results.BadRequest(new { code = ex.Code, message = ex.Message });
+                return Results.Redirect($"/pay/unavailable?paid={(ex.Code == "online.nothing_to_pay" ? "true" : "false")}");
             }
-        }).AllowAnonymous().DisableAntiforgery();
+        }).AllowAnonymous();
 
         app.MapGet("/portal/{token}/invoices/{id:guid}/pdf", async (string token, Guid id, HttpContext http, CustomerPortalService portal, FormService forms, CancellationToken ct) =>
         {
@@ -139,9 +155,23 @@ public static class OnlineEndpoints
             await Back("/settings/online-payments", "", async () =>
             {
                 await Components.SettingsVersions.EnsureUnchangedAsync<OpenBook.Domain.Sales.OnlinePaymentSettings>(versions, form, ct);
-                await online.SaveSettingsAsync(new OnlinePaymentSettingsCommand(
-                    form["enabled"] == "true", Guid.TryParse(form["depositAccountId"], out var account) ? account : null, form["publicUrl"],
-                    form["secretKey"], form["webhookSecret"], form["clearSecretKey"] == "true", form["clearWebhookSecret"] == "true"), ct);
+                // Each provider has its own fields; only the chosen one's count.
+                OpenBook.Domain.Sales.PaymentProvider? provider = Enum.TryParse<OpenBook.Domain.Sales.PaymentProvider>(form["provider"], out var p) && Enum.IsDefined(p) ? p : null;
+                var command = provider switch
+                {
+                    OpenBook.Domain.Sales.PaymentProvider.PayPal => new OnlinePaymentSettingsCommand(false, null, null, form["paypalSecret"], null,
+                        form["clearPayPalSecret"] == "true", false, provider, form["paypalClientId"], form["paypalWebhookId"], form["paypalSandbox"] == "true"),
+                    OpenBook.Domain.Sales.PaymentProvider.Square => new OnlinePaymentSettingsCommand(false, null, null, form["squareToken"], form["squareSignatureKey"],
+                        form["clearSquareToken"] == "true", form["clearSquareSignatureKey"] == "true", provider, Sandbox: form["squareSandbox"] == "true"),
+                    _ => new OnlinePaymentSettingsCommand(false, null, null, form["secretKey"], form["webhookSecret"],
+                        form["clearSecretKey"] == "true", form["clearWebhookSecret"] == "true", provider),
+                };
+                await online.SaveSettingsAsync(command with
+                {
+                    Enabled = form["enabled"] == "true",
+                    DepositAccountId = Guid.TryParse(form["depositAccountId"], out var account) ? account : null,
+                    PublicUrl = form["publicUrl"],
+                }, ct);
                 return "done=saved";
             })).RequireAuthorization();
 
@@ -214,6 +244,24 @@ public static class OnlineEndpoints
             })).RequireAuthorization();
 
         return app;
+    }
+
+    private static async Task<IResult> Hook(string provider, HttpRequest request, OnlinePaymentActor actor, ILoggerFactory logs,
+        Func<string, Task<WebhookOutcome>> handle, CancellationToken ct)
+    {
+        using var reader = new StreamReader(request.Body);
+        var payload = await reader.ReadToEndAsync(ct);
+        actor.Use();
+        try
+        {
+            return Results.Ok(new { outcome = (await handle(payload)).ToString() });
+        }
+        catch (DomainException ex)
+        {
+            // Money may have moved: the System page should show it wasn't recorded.
+            HookRefused(logs.CreateLogger("OpenBook.OnlinePayments"), provider, ex.Code, ex.Message, null);
+            return Results.BadRequest(new { code = ex.Code, message = ex.Message });
+        }
     }
 
     private static async Task<IResult> Back(string page, string anchor, Func<Task<string>> change)

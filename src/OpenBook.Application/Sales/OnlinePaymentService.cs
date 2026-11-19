@@ -15,23 +15,60 @@ public sealed record CheckoutRequest(decimal Amount, string Currency, string Des
 
 /// <param name="Paid">The customer has paid.</param>
 /// <param name="AmountPaid">What was paid, in the major unit; null until paid.</param>
-public sealed record CheckoutSession(string Id, string Url, bool Paid, string? PaymentReference, decimal? AmountPaid, DateTimeOffset? ExpiresAt, bool Expired = false);
+/// <param name="Approved">The customer has approved the payment, and the money moves once OpenBook captures it (PayPal).</param>
+/// <param name="LinkId">The provider's id for the link itself, where it isn't the checkout's (Square).</param>
+public sealed record CheckoutSession(string Id, string Url, bool Paid, string? PaymentReference, decimal? AmountPaid, DateTimeOffset? ExpiresAt, bool Expired = false,
+    bool Approved = false, string? LinkId = null);
 
-/// <summary>A card payment provider's checkout pages (Stripe Checkout).</summary>
+/// <summary>The company's keys at the provider, unprotected for a call.</summary>
+/// <param name="Secret">Stripe's secret key, PayPal's secret or Square's access token.</param>
+/// <param name="ClientId">PayPal's client ID.</param>
+/// <param name="Sandbox">PayPal's or Square's sandbox rather than live payments.</param>
+public sealed record GatewayKeys(string Secret, string? ClientId = null, bool Sandbox = false);
+
+/// <summary>A payment provider's checkout pages (Stripe Checkout, PayPal Checkout, Square payment links).</summary>
 public interface IPaymentGateway
 {
     PaymentProvider Provider { get; }
 
-    Task<CheckoutSession> CreateCheckoutAsync(string secretKey, CheckoutRequest request, CancellationToken ct);
+    /// <summary>How long a checkout lasts, when the provider doesn't say on each one.</summary>
+    TimeSpan? CheckoutLifetime => null;
 
-    Task<CheckoutSession> GetCheckoutAsync(string secretKey, string sessionId, CancellationToken ct);
+    Task<CheckoutSession> CreateCheckoutAsync(GatewayKeys keys, CheckoutRequest request, CancellationToken ct);
+
+    Task<CheckoutSession> GetCheckoutAsync(GatewayKeys keys, string sessionId, CancellationToken ct);
+
+    /// <summary>Takes the money for a checkout the customer approved (<see cref="CheckoutSession.Approved"/>); a provider whose checkouts take it themselves just reads it.</summary>
+    Task<CheckoutSession> CaptureAsync(GatewayKeys keys, string sessionId, CancellationToken ct) => GetCheckoutAsync(keys, sessionId, ct);
 
     /// <summary>Closes an open checkout, so it can't be paid. Refused once it's been paid.</summary>
-    Task<CheckoutSession> ExpireCheckoutAsync(string secretKey, string sessionId, CancellationToken ct);
+    /// <param name="sessionId">The link's own id at the provider where it has one (<see cref="CheckoutSession.LinkId"/>), else the checkout's.</param>
+    Task<CheckoutSession> ExpireCheckoutAsync(GatewayKeys keys, string sessionId, CancellationToken ct);
+}
+
+/// <summary>PayPal's check of a webhook call: PayPal itself says whether the headers' signature fits the body and the webhook.</summary>
+public interface IPayPalWebhooks
+{
+    /// <param name="headers">The call's headers, by lower-case name.</param>
+    Task<bool> VerifyAsync(GatewayKeys keys, string webhookId, IReadOnlyDictionary<string, string> headers, string payload, CancellationToken ct);
 }
 
 public sealed record OnlinePaymentSettingsCommand(bool Enabled, Guid? DepositAccountId, string? PublicUrl, string? SecretKey = null, string? WebhookSecret = null,
-    bool ClearSecretKey = false, bool ClearWebhookSecret = false);
+    bool ClearSecretKey = false, bool ClearWebhookSecret = false, PaymentProvider? Provider = null, string? ClientId = null, string? WebhookId = null, bool? Sandbox = null);
+
+/// <summary>Reads the company's provider keys.</summary>
+public static class OnlineKeys
+{
+    /// <summary>The keys for the settings' provider; null when they aren't all entered or can't be read on this computer.</summary>
+    public static GatewayKeys? For(OnlinePaymentSettings settings, ISecretProtector secrets)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(secrets);
+        if (!settings.HasKeys || secrets.Unprotect(settings.ProtectedSecretKey!) is not { } secret)
+            return null;
+        return new GatewayKeys(secret, settings.ClientId, settings.Sandbox);
+    }
+}
 
 /// <summary>
 /// Checkouts other than invoice payment links (the giving page's, C091): the payment webhook offers each session it
@@ -39,7 +76,11 @@ public sealed record OnlinePaymentSettingsCommand(bool Enabled, Guid? DepositAcc
 /// </summary>
 public interface IOnlineCheckoutHandler
 {
+    /// <param name="eventType">Stripe's event name; PayPal's events come as <c>checkout.session.completed</c> once the money is taken.</param>
     Task<WebhookOutcome?> HandleAsync(string eventType, string sessionId, bool paid, string? paymentReference, decimal? amount, CancellationToken ct);
+
+    /// <summary>Takes the money for a checkout the customer approved at PayPal and records it; false when the checkout isn't this handler's.</summary>
+    Task<bool> CompleteAsync(string sessionId, CancellationToken ct) => Task.FromResult(false);
 }
 
 /// <summary>What a webhook call amounted to.</summary>
@@ -53,15 +94,34 @@ public enum WebhookOutcome
 }
 
 /// <summary>
-/// Online card payments for invoices: checkout links at the provider (Stripe) for an invoice's balance; paying one
+/// Online payments for invoices: checkout links at the provider (Stripe, PayPal or Square) for an invoice's balance; paying one
 /// records an ordinary customer payment into the chosen deposit account, through the provider's webhook or by
-/// checking the link. Each link is recorded once, however often the provider reports it.
+/// checking the link. Each link is recorded once, however often the provider reports it. At PayPal the customer only
+/// approves the payment: OpenBook takes the money (captures it) when it hears of the approval, and not at all when the
+/// invoice no longer owes the link's amount.
 /// </summary>
 public sealed class OnlinePaymentService(
-    ISalesStore store, ICompanyStore companies, IPaymentGateway gateway, ISecretProtector secrets, PaymentService payments, SalesAccounts salesAccounts,
-    IUnitOfWork unit, IClock clock, ICurrentUser user, IEnumerable<IOnlineCheckoutHandler> others)
+    ISalesStore store, ICompanyStore companies, IEnumerable<IPaymentGateway> gateways, IPayPalWebhooks payPalWebhooks, ISecretProtector secrets,
+    PaymentService payments, SalesAccounts salesAccounts, IUnitOfWork unit, IClock clock, ICurrentUser user, IEnumerable<IOnlineCheckoutHandler> others)
 {
     public const string SettingsEntity = "online_payment_settings";
+
+    /// <summary>How long after its order lapses at PayPal a link is checked one last time and closed.</summary>
+    public static readonly TimeSpan PayPalGrace = TimeSpan.FromHours(1);
+
+    /// <summary>How often the background job asks PayPal about a link no webhook or return has settled yet.</summary>
+    public const int PayPalCheckMinutes = 10;
+
+    /// <summary>
+    /// The address to give the customer: the provider's page, or for PayPal, whose orders last only a few hours,
+    /// OpenBook's own <c>/pay/{id}</c>, which opens the current order or makes a new one.
+    /// </summary>
+    public static string ShareUrl(PaymentLink link, OnlinePaymentSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        ArgumentNullException.ThrowIfNull(settings);
+        return link.Provider == PaymentProvider.PayPal && settings.PublicUrl is { } url ? $"{url}/pay/{link.Id}" : link.Url;
+    }
 
     public async Task<OnlinePaymentSettings> GetSettingsAsync(CancellationToken ct = default) =>
         await store.GetOnlinePaymentSettingsAsync(ct) ?? OnlinePaymentSettings.Create();
@@ -84,7 +144,10 @@ public sealed class OnlinePaymentService(
         var before = Snapshot(settings);
         var key = command.ClearSecretKey ? "" : string.IsNullOrWhiteSpace(command.SecretKey) ? null : secrets.Protect(command.SecretKey.Trim());
         var hook = command.ClearWebhookSecret ? "" : string.IsNullOrWhiteSpace(command.WebhookSecret) ? null : secrets.Protect(command.WebhookSecret.Trim());
-        settings.Update(command.Enabled, command.DepositAccountId, command.PublicUrl, key, hook);
+        // A command that doesn't name the provider (an older API client) keeps PayPal's ids as they are.
+        var keep = command.Provider is null && settings.Provider == PaymentProvider.PayPal;
+        settings.Update(command.Enabled, command.DepositAccountId, command.PublicUrl, key, hook, command.Provider,
+            keep ? settings.ClientId : command.ClientId, keep ? settings.WebhookId : command.WebhookId, command.Sandbox);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SettingsEntity, company.Id, before, Snapshot(settings)));
         await store.SaveChangesAsync(ct);
         return settings;
@@ -113,13 +176,14 @@ public sealed class OnlinePaymentService(
         if (!invoice.IsOpen)
             throw new DomainException("online.nothing_to_pay", $"Invoice {invoice.Number} has nothing left to pay.");
         var now = clock.UtcNow;
-        if ((await store.ListPaymentLinksAsync(invoice.Id, ct)).FirstOrDefault(l => l.IsUsable(now) && l.Amount == invoice.Balance) is { } existing)
+        if ((await store.ListPaymentLinksAsync(invoice.Id, ct)).FirstOrDefault(l => l.IsUsable(now) && l.Amount == invoice.Balance && l.Provider == settings.Provider) is { } existing)
             return existing;
 
         var company = await companies.GetRequiredCompanyAsync(ct);
         EnsureCurrency(company);
         var customer = await store.GetCustomerAsync(invoice.CustomerId, ct);
-        var session = await gateway.CreateCheckoutAsync(SecretKey(settings), new CheckoutRequest(
+        var gateway = Gateway(settings.Provider);
+        var session = await gateway.CreateCheckoutAsync(Keys(settings), new CheckoutRequest(
             invoice.Balance,
             company.HomeCurrency.Code.ToLowerInvariant(),
             $"Invoice {invoice.Number} from {company.Name}",
@@ -127,19 +191,63 @@ public sealed class OnlinePaymentService(
             customer?.Email,
             $"{settings.PublicUrl}/pay/done?invoice={invoice.Id}",
             $"{settings.PublicUrl}/pay/cancelled?invoice={invoice.Id}"), ct);
-        var link = PaymentLink.Create(invoice.Id, gateway.Provider, session.Id, session.Url, invoice.Balance, now, session.ExpiresAt);
+        var link = PaymentLink.Create(invoice.Id, gateway.Provider, session.Id, session.Url, invoice.Balance, now,
+            session.ExpiresAt ?? (gateway.CheckoutLifetime is { } lifetime ? now + lifetime : null), session.LinkId);
         store.Add(link);
         await store.SaveChangesAsync(ct);
         return link;
     }
 
-    /// <summary>Asks the provider about a link (for when its webhook can't reach this server) and records the payment if it's paid.</summary>
+    /// <summary>
+    /// Where a shared link (<see cref="ShareUrl"/>) sends the customer: the link's page while it's current, or a new
+    /// one for what the invoice owes now. Refused once it's paid.
+    /// </summary>
+    public async Task<string> OpenAsync(Guid linkId, CancellationToken ct = default)
+    {
+        var link = await store.GetPaymentLinkAsync(linkId, ct) ?? throw new EntityNotFoundException("payment_link", linkId);
+        if (link.Status == PaymentLinkStatus.Paid)
+            throw new DomainException("online.nothing_to_pay", "This has been paid. Thank you.");
+        return (await LinkForInvoiceAsync(link.InvoiceId, ct)).Url;
+    }
+
+    /// <summary>
+    /// Asks the provider about a link (for when its webhook can't reach this server) and records the payment if it's
+    /// paid. A payment approved at PayPal is taken now, if the invoice still owes the link's amount.
+    /// </summary>
     public async Task<PaymentLink> CheckAsync(Guid linkId, CancellationToken ct = default)
     {
         var link = await store.GetPaymentLinkAsync(linkId, ct) ?? throw new EntityNotFoundException("payment_link", linkId);
         if (link.Status != PaymentLinkStatus.Open)
             return link;
-        var session = await gateway.GetCheckoutAsync(SecretKey(await GetSettingsAsync(ct)), link.SessionId, ct);
+        var settings = await GetSettingsAsync(ct);
+        if (link.Provider != settings.Provider)
+            throw new DomainException("online.other_provider", $"This link was made at {link.Provider}, and online payments now go through {settings.Provider}. Look it up in {link.Provider}'s dashboard.");
+        await SettleAsync(link, settings, ct);
+        return link;
+    }
+
+    /// <summary>
+    /// Records an open link once paid and closes it once lapsed. An approved one (PayPal) is captured if its invoice
+    /// still owes the link's amount; otherwise it's closed, and PayPal lets the approval lapse with nothing taken.
+    /// </summary>
+    private async Task SettleAsync(PaymentLink link, OnlinePaymentSettings settings, CancellationToken ct)
+    {
+        var gateway = Gateway(link.Provider);
+        var keys = Keys(settings);
+        var session = await gateway.GetCheckoutAsync(keys, link.SessionId, ct);
+        if (session.Approved)
+        {
+            var invoice = await store.GetInvoiceAsync(link.InvoiceId, ct);
+            if (invoice is not { IsOpen: true } || invoice.Balance != link.Amount)
+            {
+                link.Expire();
+                await store.SaveChangesAsync(ct);
+                return;
+            }
+
+            session = await gateway.CaptureAsync(keys, link.SessionId, ct);
+        }
+
         if (session.Paid)
             await RecordAsync(link, session.PaymentReference, session.AmountPaid ?? link.Amount, ct);
         else if (session.Expired)
@@ -147,8 +255,6 @@ public sealed class OnlinePaymentService(
             link.Expire();
             await store.SaveChangesAsync(ct);
         }
-
-        return link;
     }
 
     /// <summary>
@@ -157,28 +263,50 @@ public sealed class OnlinePaymentService(
     /// settling an invoice comes to, and none of them then waits on the provider. A link found paid meanwhile is recorded.
     /// </summary>
     /// <returns>Why one couldn't be closed, if any couldn't; it's tried again next time.</returns>
+    /// <remarks>
+    /// PayPal's links are looked after here too, since nothing is taken until OpenBook captures it: every
+    /// <see cref="PayPalCheckMinutes"/> minutes while the order lasts, for an approval no webhook or return reported,
+    /// and once more when it's lapsed, before the link is closed.
+    /// </remarks>
     public async Task<string?> ExpireOutdatedAsync(CancellationToken ct = default)
     {
         var settings = await GetSettingsAsync(ct);
-        if (settings.ProtectedSecretKey is null)
+        if (!settings.HasKeys)
             return null;
         var now = clock.UtcNow;
-        var open = (await store.ListOpenPaymentLinksAsync(ct)).Where(l => l.IsUsable(now)).ToList();
-        if (open.Count == 0)
+        var all = (await store.ListOpenPaymentLinksAsync(ct)).Where(l => l.Provider == settings.Provider).ToList();
+        if (all.Count == 0)
             return null;
-        var invoices = (await store.GetInvoicesAsync(open.Select(l => l.InvoiceId).Distinct().ToList(), ct)).ToDictionary(i => i.Id);
-        var outdated = open.Where(l => invoices.GetValueOrDefault(l.InvoiceId) is not { IsOpen: true } invoice || invoice.Balance != l.Amount).Select(l => l.Id).ToList();
-        if (outdated.Count == 0)
+        var invoices = (await store.GetInvoicesAsync(all.Select(l => l.InvoiceId).Distinct().ToList(), ct)).ToDictionary(i => i.Id);
+        bool Outdated(PaymentLink l) => invoices.GetValueOrDefault(l.InvoiceId) is not { IsOpen: true } invoice || invoice.Balance != l.Amount;
+        var due = settings.Provider == PaymentProvider.PayPal
+            ? all.Where(l => Outdated(l) || !l.IsUsable(now) || (long)(now - l.CreatedAt).TotalMinutes % PayPalCheckMinutes == 0).Select(l => l.Id).ToList()
+            : all.Where(l => l.IsUsable(now) && Outdated(l)).Select(l => l.Id).ToList();
+        if (due.Count == 0)
             return null;
 
-        var key = SecretKey(settings);
+        var keys = Keys(settings);
+        var gateway = Gateway(settings.Provider);
         string? failure = null;
-        foreach (var id in outdated)
+        foreach (var id in due)
         {
             try
             {
                 var link = await store.GetPaymentLinkAsync(id, ct) ?? throw new EntityNotFoundException("payment_link", id);
-                var session = await gateway.GetCheckoutAsync(key, link.SessionId, ct);
+                if (link.Provider == PaymentProvider.PayPal)
+                {
+                    // Captures an approval the invoice still owes; closes it if it no longer does.
+                    await SettleAsync(link, settings, ct);
+                    if (link.Status == PaymentLinkStatus.Open && (Outdated(link) || link.ExpiresAt is { } lapsed && now > lapsed + PayPalGrace))
+                    {
+                        link.Expire();
+                        await store.SaveChangesAsync(ct);
+                    }
+
+                    continue;
+                }
+
+                var session = await gateway.GetCheckoutAsync(keys, link.SessionId, ct);
                 if (session.Paid)
                 {
                     await RecordAsync(link, session.PaymentReference, session.AmountPaid ?? link.Amount, ct);
@@ -186,7 +314,7 @@ public sealed class OnlinePaymentService(
                 }
 
                 if (!session.Expired)
-                    await gateway.ExpireCheckoutAsync(key, link.SessionId, ct);
+                    await gateway.ExpireCheckoutAsync(keys, link.ProviderLinkId ?? link.SessionId, ct);
                 link.Expire();
                 await store.SaveChangesAsync(ct);
             }
@@ -208,6 +336,8 @@ public sealed class OnlinePaymentService(
     {
         ArgumentNullException.ThrowIfNull(payload);
         var settings = await GetSettingsAsync(ct);
+        if (settings.Provider != PaymentProvider.Stripe)
+            throw new DomainException("online.no_webhook_secret", "Online payments don't go through Stripe.");
         var secret = settings.ProtectedWebhookSecret is { } stored
             ? secrets.Unprotect(stored) ?? throw new DomainException("online.secret_unreadable", "The webhook signing secret can't be read on this computer. Enter it again.")
             : throw new DomainException("online.no_webhook_secret", "No webhook signing secret is set.");
@@ -262,24 +392,127 @@ public sealed class OnlinePaymentService(
     {
         var eventId = root.TryGetProperty("id", out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
         var intent = charge.TryGetProperty("payment_intent", out var i) && i.ValueKind == JsonValueKind.String ? i.GetString() : null;
-        if (eventId is null || intent is null || await store.FindPaidLinkByReferenceAsync(intent, ct) is not { } link)
+        var refund = type == "charge.refunded";
+        var cents = charge.TryGetProperty(refund ? "amount_refunded" : "amount", out var a) && a.ValueKind == JsonValueKind.Number ? a.GetInt64() : 0L;
+        var reason = !refund && charge.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null;
+        return await NoticeAsync(eventId, refund ? OnlineNoticeKind.Refund : OnlineNoticeKind.Dispute, intent, cents / 100m, reason, ct);
+    }
+
+    /// <summary>A refund or dispute at the provider on the payment <paramref name="reference"/>, kept once per event; ignored for payments OpenBook didn't take.</summary>
+    private async Task<WebhookOutcome> NoticeAsync(string? eventId, OnlineNoticeKind kind, string? reference, decimal amount, string? reason, CancellationToken ct)
+    {
+        if (eventId is null || reference is null || await store.FindPaidLinkByReferenceAsync(reference, ct) is not { } link)
             return WebhookOutcome.Ignored;
         if (await store.OnlineNoticeExistsAsync(eventId, ct))
             return WebhookOutcome.Handled;
 
-        var refund = type == "charge.refunded";
-        var cents = charge.TryGetProperty(refund ? "amount_refunded" : "amount", out var a) && a.ValueKind == JsonValueKind.Number ? a.GetInt64() : 0L;
-        var reason = !refund && charge.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null;
-        var notice = OnlinePaymentNotice.Create(eventId, refund ? OnlineNoticeKind.Refund : OnlineNoticeKind.Dispute, link, cents / 100m, reason, clock.UtcNow);
+        var notice = OnlinePaymentNotice.Create(eventId, kind, link, amount, reason, clock.UtcNow);
         store.Add(notice);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", link.InvoiceId, null, JsonSerializer.Serialize(new
         {
-            OnlinePayment = refund ? "Refunded at Stripe" : "Disputed at Stripe",
+            OnlinePayment = kind == OnlineNoticeKind.Refund ? $"Refunded at {link.Provider}" : $"Disputed at {link.Provider}",
             notice.Amount,
             notice.Reason,
         })));
         await store.SaveChangesAsync(ct);
         return WebhookOutcome.Handled;
+    }
+
+    /// <summary>
+    /// A Square webhook call: checks the <c>x-square-hmacsha256-signature</c> header against the signature key and the
+    /// webhook's address, then records completed payments and keeps completed refunds and new disputes as notices.
+    /// </summary>
+    public async Task<WebhookOutcome> HandleSquareWebhookAsync(string payload, string? signature, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        var settings = await GetSettingsAsync(ct);
+        if (settings.Provider != PaymentProvider.Square || settings.ProtectedWebhookSecret is not { } stored || settings.PublicUrl is not { } url)
+            throw new DomainException("online.no_webhook_secret", "No Square webhook signature key is set.");
+        var key = secrets.Unprotect(stored) ?? throw new DomainException("online.secret_unreadable", "The webhook signature key can't be read on this computer. Enter it again.");
+        if (!Square.IsValid(payload, signature, $"{url}/hooks/square", key))
+            throw new DomainException("online.bad_signature", "The webhook signature doesn't match.");
+        if (Square.Event(payload) is not { } squareEvent)
+            return WebhookOutcome.Ignored;
+
+        switch (squareEvent.Type)
+        {
+            case "payment.created" or "payment.updated" when squareEvent is { Completed: true, OrderId: { } orderId }:
+                if (await store.FindPaymentLinkAsync(orderId, ct) is { } link)
+                {
+                    if (link.Status != PaymentLinkStatus.Open)
+                        return WebhookOutcome.Ignored;
+                    await RecordAsync(link, squareEvent.PaymentId, squareEvent.Amount ?? link.Amount, ct);
+                    return WebhookOutcome.Handled;
+                }
+
+                foreach (var handler in others)
+                    if (await handler.HandleAsync("checkout.session.completed", orderId, true, squareEvent.PaymentId, squareEvent.Amount, ct) is { } outcome)
+                        return outcome;
+                return WebhookOutcome.Ignored;
+            case "refund.created" or "refund.updated" when squareEvent.Completed:
+                return await NoticeAsync(squareEvent.NoticeId, OnlineNoticeKind.Refund, squareEvent.PaymentId, squareEvent.Amount ?? 0m, null, ct);
+            case "dispute.created":
+                return await NoticeAsync(squareEvent.NoticeId, OnlineNoticeKind.Dispute, squareEvent.PaymentId, squareEvent.Amount ?? 0m, squareEvent.Reason, ct);
+            default:
+                return WebhookOutcome.Ignored;
+        }
+    }
+
+    /// <summary>
+    /// A PayPal webhook call: PayPal confirms the signature against the webhook ID, then an approved order is captured
+    /// (when its invoice still owes it), a completed capture recorded, and a refund or dispute kept as a notice.
+    /// </summary>
+    /// <param name="headers">The call's headers, by lower-case name.</param>
+    public async Task<WebhookOutcome> HandlePayPalWebhookAsync(string payload, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        ArgumentNullException.ThrowIfNull(headers);
+        var settings = await GetSettingsAsync(ct);
+        if (settings.Provider != PaymentProvider.PayPal || settings.WebhookId is not { } webhookId)
+            throw new DomainException("online.no_webhook_id", "No PayPal webhook ID is set.");
+        // Read first: PayPal is sent the body as the JSON object it must be.
+        var paypalEvent = PayPal.Event(payload);
+        if (!await payPalWebhooks.VerifyAsync(Keys(settings), webhookId, headers, payload, ct))
+            throw new DomainException("online.bad_signature", "PayPal says the webhook signature doesn't match.");
+        if (paypalEvent is null)
+            return WebhookOutcome.Ignored;
+
+        switch (paypalEvent.Type)
+        {
+            case "CHECKOUT.ORDER.APPROVED" when paypalEvent.ResourceId is { } orderId:
+                if (await store.FindPaymentLinkAsync(orderId, ct) is { } link)
+                {
+                    if (link.Status != PaymentLinkStatus.Open)
+                        return WebhookOutcome.Ignored;
+                    await SettleAsync(link, settings, ct);
+                    return WebhookOutcome.Handled;
+                }
+
+                foreach (var handler in others)
+                    if (await handler.CompleteAsync(orderId, ct))
+                        return WebhookOutcome.Handled;
+                return WebhookOutcome.Ignored;
+            case "PAYMENT.CAPTURE.COMPLETED" when paypalEvent.OrderId is { } orderId:
+                if (await store.FindPaymentLinkAsync(orderId, ct) is { } paid)
+                {
+                    // OpenBook never captures a link it closed, so a capture can only follow an open one.
+                    if (paid.Status != PaymentLinkStatus.Open)
+                        return WebhookOutcome.Ignored;
+                    await RecordAsync(paid, paypalEvent.CaptureId, paypalEvent.Amount ?? paid.Amount, ct);
+                    return WebhookOutcome.Handled;
+                }
+
+                foreach (var handler in others)
+                    if (await handler.HandleAsync("checkout.session.completed", orderId, true, paypalEvent.CaptureId, paypalEvent.Amount, ct) is { } outcome)
+                        return outcome;
+                return WebhookOutcome.Ignored;
+            case "PAYMENT.CAPTURE.REFUNDED":
+                return await NoticeAsync(paypalEvent.Id, OnlineNoticeKind.Refund, paypalEvent.CaptureId, paypalEvent.Amount ?? 0m, null, ct);
+            case "CUSTOMER.DISPUTE.CREATED":
+                return await NoticeAsync(paypalEvent.Id, OnlineNoticeKind.Dispute, paypalEvent.CaptureId, paypalEvent.Amount ?? 0m, paypalEvent.Reason, ct);
+            default:
+                return WebhookOutcome.Ignored;
+        }
     }
 
     public Task<IReadOnlyList<OnlinePaymentNotice>> NoticesAsync(Guid? invoiceId = null, bool openOnly = false, CancellationToken ct = default) =>
@@ -289,9 +522,10 @@ public sealed class OnlinePaymentService(
     public async Task<OnlinePaymentNotice> ResolveNoticeAsync(Guid id, CancellationToken ct = default)
     {
         var notice = await store.GetOnlineNoticeAsync(id, ct) ?? throw new EntityNotFoundException("online_payment_notice", id);
+        var provider = (await store.GetPaymentLinkAsync(notice.PaymentLinkId, ct))?.Provider ?? PaymentProvider.Stripe;
         notice.Resolve(clock.UtcNow, user.Actor);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", notice.InvoiceId, null,
-            JsonSerializer.Serialize(new { OnlinePayment = $"{(notice.Kind == OnlineNoticeKind.Refund ? "Refund" : "Dispute")} at Stripe dealt with", notice.Amount })));
+            JsonSerializer.Serialize(new { OnlinePayment = $"{(notice.Kind == OnlineNoticeKind.Refund ? "Refund" : "Dispute")} at {provider} dealt with", notice.Amount })));
         await store.SaveChangesAsync(ct);
         return notice;
     }
@@ -323,10 +557,14 @@ public sealed class OnlinePaymentService(
         await transaction.CommitAsync(ct);
     }
 
-    private string SecretKey(OnlinePaymentSettings settings) =>
-        settings.ProtectedSecretKey is { } stored
-            ? secrets.Unprotect(stored) ?? throw new DomainException("online.secret_unreadable", "The secret key can't be read on this computer. Enter it again.")
-            : throw new DomainException("online.not_set_up", "Enter the payment provider's secret key.");
+    private GatewayKeys Keys(OnlinePaymentSettings settings) =>
+        !settings.HasKeys
+            ? throw new DomainException("online.not_set_up", "Enter the payment provider's keys.")
+            : OnlineKeys.For(settings, secrets) ?? throw new DomainException("online.secret_unreadable", "The secret key can't be read on this computer. Enter it again.");
+
+    private IPaymentGateway Gateway(PaymentProvider provider) =>
+        gateways.FirstOrDefault(g => g.Provider == provider)
+            ?? throw new DomainException("online.provider_missing", $"This copy of OpenBook can't take payments through {provider}.");
 
     private static string Snapshot(OnlinePaymentSettings s) => JsonSerializer.Serialize(new
     {
@@ -334,6 +572,9 @@ public sealed class OnlinePaymentService(
         s.Enabled,
         s.DepositAccountId,
         s.PublicUrl,
+        s.ClientId,
+        s.WebhookId,
+        s.Sandbox,
         HasSecretKey = s.ProtectedSecretKey is not null,
         HasWebhookSecret = s.ProtectedWebhookSecret is not null,
     });

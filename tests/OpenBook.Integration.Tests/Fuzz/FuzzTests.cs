@@ -66,6 +66,14 @@ public sealed class FuzzTests
         new("claude-answer", b => ClaudeDocumentReader.Parse(Text(b)), Seeds.ClaudeAnswer),
         new("simplefin", b => SimpleFin.Parse(Text(b), TimeZoneInfo.Utc), Seeds.SimpleFin),
         new("plaid", b => { Plaid.TransactionsPage(Text(b)); Plaid.Accounts(Text(b)); _ = Plaid.Error(Text(b), 400); }, Seeds.Plaid),
+        new("paypal", b =>
+        {
+            OpenBook.Application.Sales.PayPal.Order(Text(b));
+        }, Seeds.PayPalOrder),
+        new("paypal-event", b => { OpenBook.Application.Sales.PayPal.Event(Text(b)); _ = OpenBook.Application.Sales.PayPal.Error(Text(b), 422); _ = OpenBook.Application.Sales.PayPal.Issue(Text(b)); },
+            Seeds.PayPalEvent),
+        new("square", b => { OpenBook.Application.Sales.Square.Order(Text(b), ""); }, Seeds.SquareOrder),
+        new("square-event", b => { OpenBook.Application.Sales.Square.Event(Text(b)); _ = OpenBook.Application.Sales.Square.Error(Text(b), 400); }, Seeds.SquareEvent),
         new("update-manifest", b => UpdateManifest.Parse(Text(b)), Seeds.Manifest),
         new("report-query", b => BuilderOptions.Parse(ReportParameters.Parse(Text(b))), Seeds.ReportQuery),
         new("address", b => AddressParts.Parse(Text(b)), Seeds.Address),

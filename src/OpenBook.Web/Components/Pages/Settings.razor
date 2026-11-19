@@ -138,10 +138,10 @@
                     }),
                     Keywords: "email wording message template subject body preview"),
                 new("/settings/online-payments", L["Online card payments"],
-                    L["A \"Pay now\" link on invoices so customers pay by card through Stripe; payments are recorded by themselves."],
+                    L["A \"Pay now\" link on invoices so customers pay by card through Stripe, PayPal or Square; payments are recorded by themselves."],
                     await Status("/settings/online-payments", async () => (await Get<OnlinePaymentService>().GetSettingsAsync()).IsReady
                         ? L["On: invoices can be paid online"].Value : L["Not set up"].Value),
-                    Keywords: "stripe card pay online"),
+                    Keywords: "stripe paypal square card pay online"),
                 new("/settings/plaid", L["Plaid bank feeds"],
                     L["Your company's Plaid keys, so bank and card transactions arrive in the bank feed by themselves."],
                     await Status("/settings/plaid", async () => (await Get<PlaidSettingsService>().GetSettingsAsync()) is { IsReady: true } plaid

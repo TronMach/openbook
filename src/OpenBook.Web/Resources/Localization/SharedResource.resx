@@ -98,8 +98,8 @@
   <data name="90% or more used" xml:space="preserve">
     <value>90% or more used</value>
   </data>
-  <data name="A &quot;Pay now&quot; link on invoices so customers pay by card through Stripe; payments are recorded by themselves." xml:space="preserve">
-    <value>A "Pay now" link on invoices so customers pay by card through Stripe; payments are recorded by themselves.</value>
+  <data name="A &quot;Pay now&quot; link on invoices so customers pay by card through Stripe, PayPal or Square; payments are recorded by themselves." xml:space="preserve">
+    <value>A "Pay now" link on invoices so customers pay by card through Stripe, PayPal or Square; payments are recorded by themselves.</value>
   </data>
   <data name="a copy of your books every day, kept somewhere safe" xml:space="preserve">
     <value>a copy of your books every day, kept somewhere safe</value>
@@ -2483,8 +2483,8 @@
   <data name="Refunds" xml:space="preserve">
     <value>Refunds</value>
   </data>
-  <data name="Refunds and disputes made at Stripe" xml:space="preserve">
-    <value>Refunds and disputes made at Stripe</value>
+  <data name="Refunds and disputes made at your payment provider" xml:space="preserve">
+    <value>Refunds and disputes made at your payment provider</value>
   </data>
   <data name="Region" xml:space="preserve">
     <value>Region</value>

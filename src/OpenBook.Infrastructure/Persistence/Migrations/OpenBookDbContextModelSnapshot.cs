@@ -6696,6 +6696,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ClientId")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("DepositAccountId")
                         .HasColumnType("TEXT");
 
@@ -6719,9 +6723,16 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Sandbox")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("WebhookId")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -6762,6 +6773,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderLinkId")
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SessionId")

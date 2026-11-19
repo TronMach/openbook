@@ -2246,7 +2246,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(s => s.ProtectedSecretKey).HasMaxLength(2000);
             b.Property(s => s.ProtectedWebhookSecret).HasMaxLength(2000);
             b.Property(s => s.PublicUrl).HasMaxLength(200);
+            b.Property(s => s.ClientId).HasMaxLength(OpenBook.Domain.Sales.OnlinePaymentSettings.MaxClientIdLength);
+            b.Property(s => s.WebhookId).HasMaxLength(OpenBook.Domain.Sales.OnlinePaymentSettings.MaxWebhookIdLength);
             b.Ignore(s => s.IsReady);
+            b.Ignore(s => s.HasKeys);
             b.HasOne<Account>().WithMany().HasForeignKey(s => s.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -2267,6 +2270,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
 
         modelBuilder.Entity<PaymentLink>(b =>
         {
+            b.Property(l => l.ProviderLinkId).HasMaxLength(100);
             b.ToTable("PaymentLinks");
             b.HasKey(l => l.Id);
             b.Property(l => l.Provider).HasConversion<string>().HasMaxLength(20);

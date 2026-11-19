@@ -8,7 +8,7 @@
         @foreach (var notice in _notices)
         {
             <div class="alert @(notice.ResolvedAt is null ? "error" : "notice")" role="status">
-                @(notice.Kind == OnlineNoticeKind.Refund ? "Refunded at Stripe" : "Disputed by the customer at Stripe"): @Labels.Amount(notice.Amount)
+                @(notice.Kind == OnlineNoticeKind.Refund ? $"Refunded at {ProviderOf(notice)}" : $"Disputed by the customer at {ProviderOf(notice)}"): @Labels.Amount(notice.Amount)
                 @(notice.Reason is { } reason ? $"({reason})" : "") on @notice.ReceivedAt.InCompanyTime().ToString("d").
                 @if (notice.ResolvedAt is { } done)
                 {
@@ -53,7 +53,7 @@
                             <td>
                                 @if (link.Status == PaymentLinkStatus.Open)
                                 {
-                                    <input readonly value="@link.Url" aria-label="Payment link" onclick="this.select()" />
+                                    <input readonly value="@OnlinePaymentService.ShareUrl(link, _settings)" aria-label="Payment link" onclick="this.select()" />
                                 }
                             </td>
                             <td>
@@ -85,14 +85,18 @@
     private IReadOnlyList<PaymentLink> _links = [];
     private IReadOnlyList<OnlinePaymentNotice> _notices = [];
     private bool _ready;
+    private OnlinePaymentSettings _settings = default!;
 
     [Parameter, EditorRequired] public Guid InvoiceId { get; set; }
     [Parameter] public bool IsOpen { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
-        _ready = (await Online.GetSettingsAsync()).IsReady;
+        _settings = await Online.GetSettingsAsync();
+        _ready = _settings.IsReady;
         _links = await Online.LinksAsync(InvoiceId);
         _notices = await Online.NoticesAsync(InvoiceId);
     }
+
+    private PaymentProvider ProviderOf(OnlinePaymentNotice notice) => _links.FirstOrDefault(l => l.Id == notice.PaymentLinkId)?.Provider ?? PaymentProvider.Stripe;
 }

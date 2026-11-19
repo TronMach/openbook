@@ -325,6 +325,32 @@ internal static class Seeds
          "total_transactions":2,"error_code":"ITEM_LOGIN_REQUIRED","error_type":"ITEM_ERROR","display_message":null}
         """;
 
+    public const string PayPalOrder = """
+        {"id":"5O190127TN364715T","status":"COMPLETED","links":[{"href":"https://www.sandbox.paypal.com/checkoutnow?token=5O190127TN364715T","rel":"payer-action","method":"GET"}],
+         "purchase_units":[{"reference_id":"inv","amount":{"currency_code":"USD","value":"300.00"},
+           "payments":{"captures":[{"id":"3C679366HH908993F","status":"COMPLETED","amount":{"currency_code":"USD","value":"300.00"}}]}}]}
+        """;
+
+    public const string PayPalEvent = """
+        {"id":"WH-58D329510W468432D","event_type":"PAYMENT.CAPTURE.REFUNDED","resource":{"id":"1Y107995YT783435V","status":"COMPLETED",
+          "amount":{"currency_code":"USD","value":"50.00"},"seller_payable_breakdown":{"total_refunded_amount":{"currency_code":"USD","value":"50.00"}},
+          "supplementary_data":{"related_ids":{"order_id":"5O190127TN364715T"}},"disputed_transactions":[{"seller_transaction_id":"3C679366HH908993F"}],
+          "links":[{"rel":"up","href":"https://api.paypal.com/v2/payments/captures/3C679366HH908993F"}]},
+         "name":"UNPROCESSABLE_ENTITY","details":[{"issue":"INSTRUMENT_DECLINED","description":"The instrument presented was declined."}]}
+        """;
+
+    public const string SquareOrder = """
+        {"order":{"id":"ord1","state":"COMPLETED","total_money":{"amount":30000,"currency":"USD"},"net_amount_due_money":{"amount":0,"currency":"USD"},
+          "tenders":[{"id":"t1","payment_id":"pay1","type":"CARD","amount_money":{"amount":30000,"currency":"USD"}}]}}
+        """;
+
+    public const string SquareEvent = """
+        {"merchant_id":"M1","type":"payment.updated","event_id":"e1","data":{"type":"payment","id":"pay1","object":{"payment":{"id":"pay1","order_id":"ord1",
+          "status":"COMPLETED","total_money":{"amount":30000,"currency":"USD"}},"refund":{"id":"r1","payment_id":"pay1","status":"COMPLETED","amount_money":{"amount":500}},
+          "dispute":{"dispute_id":"d1","reason":"NOT_AS_DESCRIBED","amount_money":{"amount":30000},"disputed_payment":{"payment_id":"pay1"}}}},
+         "errors":[{"category":"INVALID_REQUEST_ERROR","code":"NOT_FOUND","detail":"Not found."}]}
+        """;
+
     public const string SimpleFin = """
         {"errors": [], "accounts": [
           {"org": {"domain": "bank.example", "name": "Example Bank"}, "id": "ACT-1", "name": "Checking", "currency": "USD",

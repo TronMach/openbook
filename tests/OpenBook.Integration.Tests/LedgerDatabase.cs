@@ -59,6 +59,12 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     /// <summary>Stands in for Stripe behind the real payment gateway.</summary>
     public FakeStripe Stripe { get; } = new();
 
+    /// <summary>Stands in for PayPal behind the real payment gateway.</summary>
+    public FakePayPal PayPal { get; } = new();
+
+    /// <summary>Stands in for Square behind the real payment gateway.</summary>
+    public FakeSquare Square { get; } = new();
+
     /// <summary>Stands in for Stripe's and Shopify's payout APIs behind the real channel client.</summary>
     public FakeChannelApis ChannelApis { get; } = new();
 
@@ -90,7 +96,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             provider = DatabaseProvider.Sqlite;
         }
 
-        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis, Claude, GoogleFonts, Plaid);
+        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis, Claude, GoogleFonts, Plaid, PayPal, Square);
         if (setUpCompany)
             Owner = await InDb(db => db.Users.SingleAsync(u => u.Username == OwnerUsername));
     }
@@ -162,7 +168,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     private static ServiceProvider BuildServices(
         string connectionString, DatabaseProvider provider, FixedClock clock, RecordingEmailSender mail, RecordingWebhookSender webhooks,
         FakeSimpleFinBridge bridge, string backupDirectory, FakeStripe? stripe = null, FakeChannelApis? channels = null, FakeClaude? claude = null,
-        FakeGoogleFonts? googleFonts = null, FakePlaid? plaid = null) =>
+        FakeGoogleFonts? googleFonts = null, FakePlaid? plaid = null, FakePayPal? payPal = null, FakeSquare? square = null) =>
         new ServiceCollection()
             .AddOpenBookApplication()
             .AddOpenBookInfrastructure(connectionString, backupDirectory, provider: provider)
@@ -177,6 +183,8 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Documents.IClaudeDocumentReader>(claude ?? new FakeClaude()))
             .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Forms.IGoogleFonts>(new OpenBook.Infrastructure.Forms.GoogleFontsClient(googleFonts ?? new FakeGoogleFonts())))
             .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Banking.PlaidTransport(plaid ?? new FakePlaid())))
+            .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Payments.PayPalGateway(payPal ?? new FakePayPal())))
+            .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Payments.SquareGateway(square ?? new FakeSquare())))
             .BuildServiceProvider(validateScopes: true);
 
     /// <summary>Migrates a database (and sets up the company), exactly as each test used to do for itself.</summary>

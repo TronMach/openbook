@@ -30,7 +30,7 @@ public sealed class StripeGateway : IPaymentGateway, IDisposable
 
     public PaymentProvider Provider => PaymentProvider.Stripe;
 
-    public async Task<CheckoutSession> CreateCheckoutAsync(string secretKey, CheckoutRequest request, CancellationToken ct)
+    public async Task<CheckoutSession> CreateCheckoutAsync(GatewayKeys keys, CheckoutRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
         var cents = (long)decimal.Round(request.Amount * 100m, 0, MidpointRounding.AwayFromZero);
@@ -49,19 +49,19 @@ public sealed class StripeGateway : IPaymentGateway, IDisposable
         if (request.CustomerEmail is { } email)
             form.Add(new("customer_email", email));
         using var message = new HttpRequestMessage(HttpMethod.Post, Api) { Content = new FormUrlEncodedContent(form) };
-        return await SendAsync(message, secretKey, ct);
+        return await SendAsync(message, keys.Secret, ct);
     }
 
-    public async Task<CheckoutSession> GetCheckoutAsync(string secretKey, string sessionId, CancellationToken ct)
+    public async Task<CheckoutSession> GetCheckoutAsync(GatewayKeys keys, string sessionId, CancellationToken ct)
     {
         using var message = new HttpRequestMessage(HttpMethod.Get, $"{Api}/{Uri.EscapeDataString(sessionId)}");
-        return await SendAsync(message, secretKey, ct);
+        return await SendAsync(message, keys.Secret, ct);
     }
 
-    public async Task<CheckoutSession> ExpireCheckoutAsync(string secretKey, string sessionId, CancellationToken ct)
+    public async Task<CheckoutSession> ExpireCheckoutAsync(GatewayKeys keys, string sessionId, CancellationToken ct)
     {
         using var message = new HttpRequestMessage(HttpMethod.Post, $"{Api}/{Uri.EscapeDataString(sessionId)}/expire");
-        return await SendAsync(message, secretKey, ct);
+        return await SendAsync(message, keys.Secret, ct);
     }
 
     public void Dispose() => _client.Dispose();

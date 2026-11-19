@@ -112,7 +112,13 @@ public static class DependencyInjection
         // Plaid's keys are in the company file, so its client is scoped; the HTTP client underneath is shared.
         services.TryAddSingleton<Banking.PlaidTransport>();
         services.AddScoped<OpenBook.Application.Banking.IBankConnectionClient, Banking.PlaidClient>();
+        // Stripe first: tests put their stand-in in place of the first gateway.
         services.AddSingleton<OpenBook.Application.Sales.IPaymentGateway, Payments.StripeGateway>();
+        services.TryAddSingleton<Payments.PayPalGateway>();
+        services.AddSingleton<OpenBook.Application.Sales.IPaymentGateway>(sp => sp.GetRequiredService<Payments.PayPalGateway>());
+        services.AddSingleton<OpenBook.Application.Sales.IPayPalWebhooks>(sp => sp.GetRequiredService<Payments.PayPalGateway>());
+        services.TryAddSingleton<Payments.SquareGateway>();
+        services.AddSingleton<OpenBook.Application.Sales.IPaymentGateway>(sp => sp.GetRequiredService<Payments.SquareGateway>());
         services.AddSingleton<OpenBook.Application.Channels.IChannelClient, Channels.ChannelClient>();
         services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));
         services.TryAddSingleton<OpenBook.Application.Documents.IClaudeDocumentReader, Documents.ClaudeDocumentReader>();

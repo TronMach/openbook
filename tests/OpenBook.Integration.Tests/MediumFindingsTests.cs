@@ -565,7 +565,7 @@ public sealed class MediumFindingsTests : IAsyncLifetime
         foreach (var failure in failures)
         {
             using var gateway = new OpenBook.Infrastructure.Payments.StripeGateway(new StripeAnswers(failure));
-            Assert.Equal("online.provider_unreachable", await Refused(() => gateway.GetCheckoutAsync("sk_test", "cs_1", default)));
+            Assert.Equal("online.provider_unreachable", await Refused(() => gateway.GetCheckoutAsync(new OpenBook.Application.Sales.GatewayKeys("sk_test"), "cs_1", default)));
         }
     }
 

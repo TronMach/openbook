@@ -101,10 +101,14 @@ public sealed record BillableExpenseResponse(
         new(b.Id, b.Kind, b.DocumentId, b.LineNumber, b.CustomerId, b.Date, b.Description, b.Cost, b.MarkupPercent, b.Amount, b.InvoiceId, b.IsBillable);
 }
 
-public sealed record OnlinePaymentSettingsResponse(PaymentProvider Provider, bool Enabled, Guid? DepositAccountId, string? PublicUrl, bool HasSecretKey, bool HasWebhookSecret)
+/// <param name="ClientId">PayPal's client ID (not a secret).</param>
+/// <param name="WebhookId">PayPal's webhook ID.</param>
+/// <param name="Sandbox">PayPal's sandbox rather than live payments.</param>
+public sealed record OnlinePaymentSettingsResponse(PaymentProvider Provider, bool Enabled, Guid? DepositAccountId, string? PublicUrl, bool HasSecretKey, bool HasWebhookSecret,
+    string? ClientId = null, string? WebhookId = null, bool Sandbox = false)
 {
     public static OnlinePaymentSettingsResponse From(OnlinePaymentSettings s) =>
-        new(s.Provider, s.Enabled, s.DepositAccountId, s.PublicUrl, s.ProtectedSecretKey is not null, s.ProtectedWebhookSecret is not null);
+        new(s.Provider, s.Enabled, s.DepositAccountId, s.PublicUrl, s.ProtectedSecretKey is not null, s.ProtectedWebhookSecret is not null, s.ClientId, s.WebhookId, s.Sandbox);
 }
 
 public sealed record PaymentLinkResponse(Guid Id, Guid InvoiceId, PaymentProvider Provider, string Url, decimal Amount, PaymentLinkStatus Status, DateTimeOffset CreatedAt, Guid? CustomerPaymentId)
@@ -294,7 +298,7 @@ internal static class ReceivablesApi
             PaymentLinkResponse.From(await s.LinkForInvoiceAsync(id, ct)));
         sales.MapPost("/payment-links/{id:guid}/check", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
             PaymentLinkResponse.From(await s.CheckAsync(id, ct)));
-        // Refunds and disputes made at Stripe, waiting to be dealt with in the books.
+        // Refunds and disputes made at Stripe or PayPal, waiting to be dealt with in the books.
         sales.MapGet("/online-notices", async (Guid? invoiceId, bool? open, OnlinePaymentService s, CancellationToken ct) => await s.NoticesAsync(invoiceId, open ?? false, ct));
         sales.MapPost("/online-notices/{id:guid}/resolve", async (Guid id, OnlinePaymentService s, CancellationToken ct) => await s.ResolveNoticeAsync(id, ct));
         api.MapGet("/settings/online-payments", async (OnlinePaymentService s, CancellationToken ct) => OnlinePaymentSettingsResponse.From(await s.GetSettingsAsync(ct)));

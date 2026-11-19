@@ -12,9 +12,9 @@
         <ActionLink Class="button secondary" Href="/audit?entityType=online_payment_settings">History</ActionLink>
     </div>
     <p class="muted">
-        Let customers pay invoices by card through Stripe Checkout: from a link on the invoice, its email, or their portal. Each payment is
-        recorded as a customer payment into the account below, usually Undeposited Funds, so Stripe's payouts can be grouped into bank deposits.
-        Stripe's fees aren't recorded automatically; enter them as an expense from its payout statement.
+        Let customers pay invoices online through Stripe, PayPal or Square: from a link on the invoice, its email, or their portal. Each payment is
+        recorded as a customer payment into the account below, usually Undeposited Funds, so the provider's payouts can be grouped into bank deposits.
+        The provider's fees aren't recorded automatically; enter them as an expense from its payout statement.
     </p>
 
     @if (Error is not null)
@@ -27,48 +27,156 @@
     }
 
     <div class="card">
-        <details class="setup-steps" open="@(!_settings.IsReady)">
-            <summary>Setting it up, step by step</summary>
-            <ol>
-                <li class="@(_settings.ProtectedSecretKey is not null ? "done" : null)">
-                    Sign in to Stripe (or open an account at stripe.com). Under <strong>Developers → API keys</strong>, copy the <strong>secret key</strong>
-                    and paste it below. A key starting <code>sk_test_</code> lets you try everything with Stripe's test cards first.
-                </li>
-                <li class="@(_settings.DepositAccountId is not null ? "done" : null)">Choose where payments go: Undeposited Funds, unless Stripe pays out to one bank account and you'd rather skip deposits.</li>
-                <li class="@(_settings.PublicUrl is not null ? "done" : null)">Enter the address customers use to reach OpenBook (the one in your browser's address bar, if they reach it the same way).</li>
-                <li class="@(_settings.ProtectedWebhookSecret is not null ? "done" : null)">
-                    So payments are recorded the moment they're made: in Stripe under <strong>Developers → Webhooks</strong>, add an endpoint with the
-                    address shown below the form, then copy its <strong>signing secret</strong> (<code>whsec_…</code>) into the form. Without it, use
-                    "Check if paid" on the invoice.
-                </li>
-                <li class="@(_settings.Enabled ? "done" : null)">Tick <strong>Take payments online</strong> and save. Invoices then get a "Pay now" link, in their emails too.</li>
-            </ol>
-        </details>
-        <PostForm Action="/settings/online-payments" data-enhance="false">
+        <PostForm Action="/settings/online-payments" data-enhance="false" class="online-payments-form">
             <AntiforgeryToken />
             <SettingsVersion TRecord="OpenBook.Domain.Sales.OnlinePaymentSettings" />
-            <label class="check">
-                <input type="checkbox" name="enabled" value="true" checked="@_settings.Enabled" />
-                <span>Take payments online</span>
-            </label>
-            <div class="row">
-                <div class="field">
-                    <label for="secret">Stripe secret key</label>
-                    <input id="secret" name="secretKey" type="password" autocomplete="off" placeholder="@(_settings.ProtectedSecretKey is null ? "sk_live_… or sk_test_…" : "Saved; enter a new one to change it")" />
-                    @if (_settings.ProtectedSecretKey is not null)
-                    {
-                        <label class="check"><input type="checkbox" name="clearSecretKey" value="true" /> <span>Remove the saved key</span></label>
-                    }
+            <fieldset class="provider-choice">
+                <legend>Take payments through</legend>
+                @foreach (var provider in Enum.GetValues<PaymentProvider>())
+                {
+                    <label class="check">
+                        <input type="radio" name="provider" value="@provider" checked="@(provider == _settings.Provider)" />
+                        <span>@provider</span>
+                    </label>
+                }
+            </fieldset>
+            <p class="hint">Changing the provider removes the old provider's saved keys.</p>
+
+            <div class="provider-panel provider-Stripe">
+                <details class="setup-steps" open="@(!_settings.IsReady)">
+                    <summary>Setting up Stripe, step by step</summary>
+                    <ol>
+                        <li class="@(Saved(PaymentProvider.Stripe) ? "done" : null)">
+                            Sign in to Stripe (or open an account at stripe.com). Under <strong>Developers → API keys</strong>, copy the <strong>secret key</strong>
+                            and paste it below. A key starting <code>sk_test_</code> lets you try everything with Stripe's test cards first.
+                        </li>
+                        <li>Choose where payments go and enter OpenBook's public address, below.</li>
+                        <li class="@(SavedHook(PaymentProvider.Stripe) ? "done" : null)">
+                            So payments are recorded the moment they're made: in Stripe under <strong>Developers → Webhooks</strong>, add an endpoint at
+                            <code>@(Address)/hooks/stripe</code> for the events <code>checkout.session.completed</code>,
+                            <code>checkout.session.async_payment_succeeded</code>, <code>checkout.session.expired</code>, <code>charge.refunded</code> and
+                            <code>charge.dispute.created</code>, then copy its <strong>signing secret</strong> (<code>whsec_…</code>) into the form. Without it,
+                            payments are recorded when the customer comes back to the thank-you page or when you check the link on the invoice.
+                        </li>
+                        <li>Tick <strong>Take payments online</strong> and save. Invoices then get a "Pay now" link, in their emails too.</li>
+                    </ol>
+                </details>
+                <div class="row">
+                    <div class="field">
+                        <label for="secret">Stripe secret key</label>
+                        <input id="secret" name="secretKey" type="password" autocomplete="off" placeholder="@(Saved(PaymentProvider.Stripe) ? "Saved; enter a new one to change it" : "sk_live_… or sk_test_…")" />
+                        @if (Saved(PaymentProvider.Stripe))
+                        {
+                            <label class="check"><input type="checkbox" name="clearSecretKey" value="true" /> <span>Remove the saved key</span></label>
+                        }
+                    </div>
+                    <div class="field">
+                        <label for="hook">Webhook signing secret</label>
+                        <input id="hook" name="webhookSecret" type="password" autocomplete="off" placeholder="@(SavedHook(PaymentProvider.Stripe) ? "Saved; enter a new one to change it" : "whsec_…")" />
+                        @if (SavedHook(PaymentProvider.Stripe))
+                        {
+                            <label class="check"><input type="checkbox" name="clearWebhookSecret" value="true" /> <span>Remove the saved secret</span></label>
+                        }
+                    </div>
                 </div>
-                <div class="field">
-                    <label for="hook">Webhook signing secret</label>
-                    <input id="hook" name="webhookSecret" type="password" autocomplete="off" placeholder="@(_settings.ProtectedWebhookSecret is null ? "whsec_…" : "Saved; enter a new one to change it")" />
-                    @if (_settings.ProtectedWebhookSecret is not null)
-                    {
-                        <label class="check"><input type="checkbox" name="clearWebhookSecret" value="true" /> <span>Remove the saved secret</span></label>
-                    }
-                </div>
+                <DesktopNote>OpenBook Desktop can't be reached from the internet: Stripe can't call it and customers return to a thank-you page they can't open, so leave the webhook secret empty and record payments by checking the link on the invoice.</DesktopNote>
             </div>
+
+            <div class="provider-panel provider-PayPal">
+                <details class="setup-steps" open="@(!_settings.IsReady)">
+                    <summary>Setting up PayPal, step by step</summary>
+                    <ol>
+                        <li class="@(Saved(PaymentProvider.PayPal) ? "done" : null)">
+                            Sign in at developer.paypal.com with your PayPal business account. Under <strong>Apps &amp; Credentials</strong>, choose
+                            <strong>Sandbox</strong> to try it with test accounts first or <strong>Live</strong> for real payments, create an app, and copy its
+                            <strong>client ID</strong> and <strong>secret</strong> below. Tick <strong>Sandbox</strong> for sandbox keys.
+                        </li>
+                        <li>Choose where payments go and enter OpenBook's public address, below.</li>
+                        <li class="@(_settings.Provider == PaymentProvider.PayPal && _settings.WebhookId is not null ? "done" : null)">
+                            In the app's settings, add a webhook at <code>@(Address)/hooks/paypal</code> for <strong>Checkout order approved</strong>,
+                            <strong>Payment capture completed</strong>, <strong>Payment capture refunded</strong> and <strong>Customer dispute created</strong>,
+                            and copy its <strong>webhook ID</strong> into the form.
+                        </li>
+                        <li>Tick <strong>Take payments online</strong> and save.</li>
+                    </ol>
+                </details>
+                <p class="hint">
+                    At PayPal the customer only approves a payment: OpenBook takes the money when they come back to the thank-you page, when PayPal's
+                    webhook tells it, or within ten minutes from its own check. It never takes money for a link the invoice no longer owes. PayPal drops
+                    an approval nobody takes within about three hours, so OpenBook must be running and reachable then.
+                </p>
+                <div class="row">
+                    <div class="field">
+                        <label for="paypal-client">PayPal client ID</label>
+                        <input id="paypal-client" name="paypalClientId" value="@(_settings.Provider == PaymentProvider.PayPal ? _settings.ClientId : null)" maxlength="@OnlinePaymentSettings.MaxClientIdLength" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label for="paypal-secret">PayPal secret</label>
+                        <input id="paypal-secret" name="paypalSecret" type="password" autocomplete="off" placeholder="@(Saved(PaymentProvider.PayPal) ? "Saved; enter a new one to change it" : null)" />
+                        @if (Saved(PaymentProvider.PayPal))
+                        {
+                            <label class="check"><input type="checkbox" name="clearPayPalSecret" value="true" /> <span>Remove the saved secret</span></label>
+                        }
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="paypal-hook">PayPal webhook ID</label>
+                        <input id="paypal-hook" name="paypalWebhookId" value="@(_settings.Provider == PaymentProvider.PayPal ? _settings.WebhookId : null)" maxlength="@OnlinePaymentSettings.MaxWebhookIdLength" autocomplete="off" />
+                    </div>
+                    <div class="field">
+                        <label class="check">
+                            <input type="checkbox" name="paypalSandbox" value="true" checked="@(_settings.Provider != PaymentProvider.PayPal || _settings.Sandbox)" />
+                            <span>Sandbox (test accounts, no real money)</span>
+                        </label>
+                    </div>
+                </div>
+                <DesktopNote>OpenBook Desktop can't be reached from the internet, so PayPal can't call it and customers can't come back to it: a payment is only taken while OpenBook is open, within about three hours of the customer approving it. Stripe or Square suit Desktop better.</DesktopNote>
+            </div>
+
+            <div class="provider-panel provider-Square">
+                <details class="setup-steps" open="@(!_settings.IsReady)">
+                    <summary>Setting up Square, step by step</summary>
+                    <ol>
+                        <li class="@(Saved(PaymentProvider.Square) ? "done" : null)">
+                            Sign in at developer.squareup.com with your Square account and open (or create) an application. Under <strong>Credentials</strong>,
+                            choose <strong>Sandbox</strong> to try it first or <strong>Production</strong> for real payments, and copy the <strong>access token</strong>
+                            below. Tick <strong>Sandbox</strong> for a sandbox token. Payments go to your main Square location.
+                        </li>
+                        <li>Choose where payments go and enter OpenBook's public address, below.</li>
+                        <li class="@(SavedHook(PaymentProvider.Square) ? "done" : null)">
+                            Under <strong>Webhooks → Subscriptions</strong>, add one with the address <code>@(Address)/hooks/square</code> for
+                            <code>payment.created</code>, <code>payment.updated</code>, <code>refund.created</code>, <code>refund.updated</code> and <code>dispute.created</code>,
+                            and copy its <strong>signature key</strong> into the form. Without it, payments are recorded when the customer comes back or when you check the link.
+                        </li>
+                        <li>Tick <strong>Take payments online</strong> and save.</li>
+                    </ol>
+                </details>
+                <div class="row">
+                    <div class="field">
+                        <label for="square-token">Square access token</label>
+                        <input id="square-token" name="squareToken" type="password" autocomplete="off" placeholder="@(Saved(PaymentProvider.Square) ? "Saved; enter a new one to change it" : null)" />
+                        @if (Saved(PaymentProvider.Square))
+                        {
+                            <label class="check"><input type="checkbox" name="clearSquareToken" value="true" /> <span>Remove the saved token</span></label>
+                        }
+                    </div>
+                    <div class="field">
+                        <label for="square-hook">Webhook signature key</label>
+                        <input id="square-hook" name="squareSignatureKey" type="password" autocomplete="off" placeholder="@(SavedHook(PaymentProvider.Square) ? "Saved; enter a new one to change it" : null)" />
+                        @if (SavedHook(PaymentProvider.Square))
+                        {
+                            <label class="check"><input type="checkbox" name="clearSquareSignatureKey" value="true" /> <span>Remove the saved key</span></label>
+                        }
+                    </div>
+                </div>
+                <label class="check">
+                    <input type="checkbox" name="squareSandbox" value="true" checked="@(_settings.Provider != PaymentProvider.Square || _settings.Sandbox)" />
+                    <span>Sandbox (test cards, no real money)</span>
+                </label>
+                <DesktopNote>OpenBook Desktop can't be reached from the internet: Square can't call it and customers return to a page they can't open, so leave the signature key empty and record payments by checking the link on the invoice.</DesktopNote>
+            </div>
+
             <div class="row">
                 <div class="field">
                     <label for="deposit">Deposit payments to</label>
@@ -82,17 +190,14 @@
                 </div>
                 <div class="field">
                     <label for="url">Public address of OpenBook</label>
-                    <input id="url" name="publicUrl" value="@(_settings.PublicUrl ?? _here)" maxlength="200" />
-                    <span class="hint">Where customers come back to after paying, and the start of portal links.</span>
+                    <input id="url" name="publicUrl" value="@Address" maxlength="200" />
+                    <span class="hint">Where customers come back to after paying, the start of portal links, and the start of the webhook addresses above.</span>
                 </div>
             </div>
-            <p class="hint">
-                In Stripe's dashboard, add a webhook endpoint at <code>@(_settings.PublicUrl ?? _here)/hooks/stripe</code> for the events
-                <code>checkout.session.completed</code>, <code>checkout.session.async_payment_succeeded</code> and <code>checkout.session.expired</code>,
-                and paste its signing secret above. Without it (say, OpenBook isn't reachable from the internet), payments are recorded when
-                the customer comes back to the thank-you page or when you check the link on the invoice.
-            </p>
-            <DesktopNote>OpenBook Desktop can't be reached from the internet: Stripe can't call it and customers return to a thank-you page they can't open, so leave the webhook secret empty and record payments by checking the link on the invoice.</DesktopNote>
+            <label class="check">
+                <input type="checkbox" name="enabled" value="true" checked="@_settings.Enabled" />
+                <span>Take payments online</span>
+            </label>
             <div class="actions"><button type="submit">Save</button></div>
         </PostForm>
     </div>
@@ -106,6 +211,12 @@
 
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    private string Address => _settings.PublicUrl ?? _here;
+
+    private bool Saved(PaymentProvider provider) => _settings.Provider == provider && _settings.ProtectedSecretKey is not null;
+
+    private bool SavedHook(PaymentProvider provider) => _settings.Provider == provider && _settings.ProtectedWebhookSecret is not null;
 
     protected override async Task OnInitializedAsync()
     {
