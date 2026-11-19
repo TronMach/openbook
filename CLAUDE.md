@@ -2,7 +2,7 @@
 
 Open-source QuickBooks alternative in .NET 10. Plan and milestones: `ROADMAP.md`.
 
-Licence: AGPL-3.0-or-later (`LICENSE`; decided 2026-11-01, when the repository went public). Dependencies must be compatible: MIT, BSD, Apache-2.0 or similar permissive licences (bundled fonts are OFL); never add a proprietary or GPL-incompatible package. The one exception is for the tests only: axe-core's MPL-2.0 (`Deque.AxeCore.Commons`, decided 2026-11-13), listed in `$TestsOnly` in `tools/check-licences.ps1`. It never ships, and the check fails if anything under `src/` uses it.
+Licence: AGPL-3.0-or-later (`LICENSE`; decided 2026-11-01, when the repository went public). Dependencies must be compatible: MIT, BSD, Apache-2.0 or similar permissive licences (bundled fonts are OFL); never add a proprietary or GPL-incompatible package. The one exception is for the tests only: axe-core's MPL-2.0 (`Deque.AxeCore.Commons`, decided 2026-11-13), listed in `$TestsOnly` in `tools/check-licences.ps1`. It never ships, and the check fails if anything under `src/` uses it. The website's build tools have their own two exceptions (Website, below).
 
 ## Commands
 
@@ -45,7 +45,7 @@ Licence: AGPL-3.0-or-later (`LICENSE`; decided 2026-11-01, when the repository w
 - `website/` (2026-11-19): Astro 7 and Starlight, published by `.github/workflows/website.yml` to GitHub Pages at `https://tronmach.github.io/openbook/` on each push to master that touches it or the guide. `npm ci`, then `npm run dev` (or `website` in `.claude/launch.json`, port 4321) / `npm run build`, `npm run check-links`, `npm run check-licences`. No .NET; the test workflow and `-Changed` skip it.
 - The guide section is `docs/user-guide` copied at build by `website/scripts/guide.mjs` (chapter title from its `#` line, `04-sales.md` → `/guide/sales/`, sidebar from the guide's README sections): write chapters there only; the copies in `website/src/content/docs/guide` are gitignored. A chapter's links to other chapters must name the `.md` file, as now.
 - The homepage (`src/pages/index.astro`, `src/components/Hero.astro`) says only what the README and guide say; change it with them. Its screenshots come from a demo company (`npm run screenshots`, header of `scripts/screenshots.mjs`); retake them when those pages change. Colours follow the app's tokens (`src/styles/site.css`).
-- npm licences: permissive only, except lightningcss (MPL-2.0) and sharp's libvips (LGPL-3.0), which Astro builds with and which never ship (`buildOnly` in `scripts/check-licences.mjs`).
+- npm licences: permissive only, except lightningcss (MPL-2.0) and sharp's libvips (LGPL-3.0), which Astro builds with and which never ship (decided 2026-11-19; `buildOnly` in `scripts/check-licences.mjs`).
 
 ## Layout
 

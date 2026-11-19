@@ -23,7 +23,7 @@ const permissive = new Set([
 ]);
 
 // Not permissive, but GPL-compatible tools Astro builds with, whose output (HTML, CSS, images) carries none of their
-// code; each has a package per platform. Proposed 2026-11-19: allowed for the website only, never in src/.
+// code; each has a package per platform. Decided 2026-11-19: allowed for the website only, never in src/.
 const buildOnly = [
 	// MPL-2.0: the CSS minifier Vite and Astro use
 	/^lightningcss(-[a-z0-9-]+)?$/,
