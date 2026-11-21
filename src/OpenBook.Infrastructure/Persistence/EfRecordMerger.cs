@@ -20,7 +20,7 @@ internal sealed class EfRecordMerger(OpenBookDbContext db) : IRecordMerger
 {
     private static readonly HashSet<string> Untouched = new(StringComparer.Ordinal)
     {
-        "JournalEntries", "JournalLines", "AuditRecords", "SentEmails", "IdempotentRequests", "LineSegments", "EntryTags",
+        "JournalEntries", "JournalLines", "AuditRecords", "SentEmails", "SentTexts", "IdempotentRequests", "LineSegments", "EntryTags",
     };
 
     /// <summary>Owner columns shared by every kind of record (EntityType + EntityId).</summary>

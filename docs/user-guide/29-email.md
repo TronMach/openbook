@@ -78,6 +78,42 @@ Each document's page (and the customer's page, for statements) lists **Emails se
 
 Every send is also in the audit log (**Emailed**), and a changed wording is recorded there as well.
 
+## Sending by text message
+
+Invoices, estimates, credit memos and sales receipts can also go to the customer as a text message with a link to view the document (and, for an open invoice that can be paid online, a link to pay it). Texts go through your company's own Twilio account, which charges for each one.
+
+### Setting it up
+
+An administrator opens **Settings → Text messages** and enters, from the [Twilio Console](https://console.twilio.com):
+
+- **Account SID** and **Auth token**, from **Account Info**. The token is stored encrypted and never shown again; enter a new one to change it, or tick **Remove the saved auth token**.
+- **Send from**: one of your Twilio numbers that can send texts (written with + and the country code, or as you'd dial it at home), or a messaging service SID (it starts with MG).
+
+**Send a test** sends a short text to the number you type, to check the settings. Texts carry a link, so they also need the address customers open OpenBook at (**Settings → Email**, see [Customers' email preferences](#customers-email-preferences)).
+
+In the US, carriers block business texts from numbers that aren't registered: register yours for A2P 10DLC in the Twilio Console (**Messaging → Regulatory compliance**), or verify a toll-free number. Other countries have their own rules; Twilio's console lists them.
+
+### The customer's agreement
+
+A customer is texted only once someone has recorded that they agreed to get texts. On the customer's page, **Text messages**:
+
+- **Mobile number**: the number texts go to. It starts with their phone number when that reads as a number texts can go to. Numbers from abroad start with + and the country code.
+- **They agreed to get texts at this number**: tick it only once they've said yes (in writing is best). The card shows when it was recorded. Changing the number clears it: the new number needs agreeing to again.
+
+Every text ends with "Reply STOP to opt out." A customer who replies STOP gets no more texts from your Twilio account; the next time OpenBook tries, Twilio refuses it, the tick is taken off the customer and the page says why. If they reply START later, tick it again.
+
+A sub-customer billed with its parent is texted at the parent's number, as its emails go to the parent.
+
+### Sending a text
+
+Open the document and select **Text**. The page shows who it goes to and the message, filled in from the usual wording, with what the customer will get beside it. It changes as you type, and shows how long the text is: Twilio charges for each part, 160 characters long (70 when the text has an emoji or another character outside the usual text alphabet, such as a curly quote). The customer sees one message.
+
+The message can use the same fill-ins as the email for that document ({customer}, {number}, {balance} and so on), plus **{link}**, which opens the document and must stay in, and on invoices **{pay_link}**. A line whose fill-ins are all empty is left out, so "Pay online: {pay_link}" disappears when the invoice can't be paid online. Changes are for this text only.
+
+When something stops the text going (texts aren't set up, the customer hasn't agreed, they have no mobile number), the page lists it, links to the customer's text settings, and **Send text** is greyed out.
+
+**Send text** sends it. The document's page lists it under **Texts sent**: the number, when and by whom, the message as sent (the link shows as "(link)"), Twilio's id for it, and whether the link has been opened, with **Turn the link off**. Every text is also in the audit log (**Texted**). Texting a document doesn't mark it as emailed.
+
 ## Sending to many at once
 
 **Email statements** on the Print page ([Printed forms](27-printed-forms.md)) and **email every donor with an address** for giving statements ([Nonprofits](23-nonprofits.md)) send each one the usual wording for that kind of email, with their copies, in their own design (giving statements in the default design). Those without an email address are listed, not sent.

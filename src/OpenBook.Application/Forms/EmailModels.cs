@@ -107,10 +107,18 @@ public interface IEmailStore
     /// <summary>Tracked.</summary>
     Task<DocumentLink?> FindLinkAsync(string tokenHash, CancellationToken ct);
 
+    /// <summary>Tracked; null until first saved.</summary>
+    Task<TextSettings?> GetTextSettingsAsync(CancellationToken ct);
+
+    /// <summary>Newest first.</summary>
+    Task<IReadOnlyList<SentText>> ListSentTextsAsync(string entityType, Guid entityId, CancellationToken ct);
+
     void Add(EmailTemplate emailTemplate);
     void Remove(EmailTemplate emailTemplate);
     void Add(SentEmail email);
     void Add(DocumentLink link);
+    void Add(TextSettings settings);
+    void Add(SentText text);
     void Add(AuditRecord record);
 
     Task SaveChangesAsync(CancellationToken ct);

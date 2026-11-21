@@ -338,6 +338,7 @@ app.MapCustomFieldEndpoints();
 app.MapFormDesignEndpoints();
 app.MapPrintEndpoints();
 app.MapEmailEndpoints();
+app.MapTextEndpoints();
 app.MapPortabilityEndpoints();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

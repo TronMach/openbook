@@ -128,6 +128,7 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Inventory.ILabelRenderer, Forms.LabelRenderer>();
         services.AddSingleton<OpenBook.Application.Reporting.IReportExporter, ReportExporter>();
         services.AddSingleton<IEmailSender, MailKitEmailSender>();
+        services.AddSingleton<ITextSender, Forms.TwilioTextSender>();
         return services;
     }
 

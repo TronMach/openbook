@@ -339,6 +339,17 @@ internal static class Seeds
          "name":"UNPROCESSABLE_ENTITY","details":[{"issue":"INSTRUMENT_DECLINED","description":"The instrument presented was declined."}]}
         """;
 
+    public const string TwilioMessage = """
+        {"account_sid":"ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx","body":"Invoice 1001: https://books.example.com/view/obd_x","direction":"outbound-api",
+         "error_code":null,"num_segments":"1","sid":"SM0123456789abcdef0123456789abcdef","status":"queued","to":"+15550102030","price":null}
+        """;
+
+    public const string TwilioError = """
+        {"code":21610,"message":"Attempt to send to unsubscribed recipient","more_info":"https://www.twilio.com/docs/errors/21610","status":400}
+        """;
+
+    public const string PhoneNumber = "+44 (0)20 7946-0000 · 00353 1 555 0100 · 555.010.2030";
+
     public const string SquareOrder = """
         {"order":{"id":"ord1","state":"COMPLETED","total_money":{"amount":30000,"currency":"USD"},"net_amount_due_money":{"amount":0,"currency":"USD"},
           "tenders":[{"id":"t1","payment_id":"pay1","type":"CARD","amount_money":{"amount":30000,"currency":"USD"}}]}}

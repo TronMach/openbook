@@ -1,0 +1,189 @@
+@page "/sales/text/{Kind}/{Id:guid}"
+@using System.ComponentModel.DataAnnotations
+@inject TextMessageService Texts
+@inject OpenBook.Application.Sales.ISalesStore SalesStore
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Text"] @_what · OpenBook</PageTitle>
+
+<div class="wide email-page">
+    <h1>@L["Text"] @_what</h1>
+
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+    @if (Sent is not null)
+    {
+        <div class="alert notice" role="status">@L["The text has gone."] <a href="@_backLink">@L["Back"]</a></div>
+    }
+
+    @if (Sent is null && _source is not null && _preview is not null)
+    {
+        @if (_blocked.Count > 0)
+        {
+            <div class="alert notice" role="status" data-text-problems>
+                <p><strong>@L["It can't be sent yet:"]</strong></p>
+                <ul>
+                    @foreach (var problem in _blocked)
+                    {
+                        <li>@problem</li>
+                    }
+                </ul>
+                @if (_customerId is { } customer)
+                {
+                    <p><ActionLink Href="@($"/customers/{customer}#text-settings")">@L["Open the customer's text settings"]</ActionLink></p>
+                }
+            </div>
+        }
+
+        <div class="email-editor">
+            <EditForm Model="Input" FormName="text" OnValidSubmit="SendAsync" method="post" class="card email-form"
+                      data-text-preview="@($"{_path}/preview")" data-enhance="false">
+                <DataAnnotationsValidator />
+                <dl class="facts compact">
+                    <dt>@L["To"]</dt>
+                    <dd>@(_customerName ?? "—")@(_preview.To is { } number ? $" · {number}" : "")</dd>
+                </dl>
+                <div class="field">
+                    <label for="body">@L["Message"]</label>
+                    <InputTextArea id="body" rows="6" @bind-Value="Input.Body" maxlength="@TextTemplates.MaxBody" />
+                    <ValidationMessage For="() => Input.Body" />
+                    <span class="hint">@L["Fill-ins:"] @string.Join(", ", TextTemplates.Placeholders(_source.Kind).Select(p => "{" + p.Key + "}")). @L["Keep {link}: it opens the document. \"Reply STOP to opt out.\" goes under every text."]</span>
+                </div>
+                <div class="actions">
+                    <button type="submit" disabled="@(_blocked.Count > 0)">@L["Send text"]</button>
+                    <a href="@_backLink">@L["Cancel"]</a>
+                </div>
+                <p class="hint">@L["Each text gets its own link to view the document as it stands, which you can turn off in the history below. Twilio charges for each part it's split into."]</p>
+            </EditForm>
+
+            <section class="card text-preview" aria-labelledby="text-preview-heading" data-text-pane>
+                <h2 id="text-preview-heading">@L["What they'll get"]</h2>
+                <div class="text-phone">
+                    <p class="text-bubble" data-text-message>@_preview.Text</p>
+                </div>
+                <p class="muted" data-text-length aria-live="polite">@Length(_preview.Length)</p>
+                <ul class="email-notes" data-text-notes>
+                    @foreach (var note in _preview.Notes.Concat(_preview.Problems.Except(_blocked)))
+                    {
+                        <li>@note</li>
+                    }
+                </ul>
+                <p class="hint">@L["The link here is a stand-in: the real one is made when the text goes."]</p>
+            </section>
+        </div>
+    }
+
+    @if (_source is not null && _known)
+    {
+        <TextHistory EntityType="@EmailService.EntityTypeOf(_source.Kind)" EntityId="Id" />
+    }
+</div>
+
+@code {
+    private EmailSource? _source;
+    private TextPreview? _preview;
+    private List<string> _blocked = [];
+    private string _what = "";
+    private string _backLink = "/";
+    private string _path = "";
+    private string? _customerName;
+    private Guid? _customerId;
+    private bool _known;
+    private string? _error;
+
+    [Parameter]
+    public string? Kind { get; set; }
+
+    [Parameter]
+    public Guid Id { get; set; }
+
+    /// <summary>Set after sending: the page comes back by a redirect, so a refresh can't send it again.</summary>
+    [SupplyParameterFromQuery] private string? Sent { get; set; }
+
+    [SupplyParameterFromForm(FormName = "text")]
+    private TextModel Input { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
+        var kind = TextKinds.FromRoute(Kind);
+        if (kind is not { } k)
+        {
+            _error = L["Only invoices, estimates, credit memos and sales receipts can be sent by text."];
+            return;
+        }
+
+        _source = new EmailSource(k, Id);
+        _what = EmailTemplates.Label(k).ToLowerInvariant();
+        _backLink = $"/sales/{Kind}/{Id}";
+        try
+        {
+            Input ??= new TextModel { Body = TextMessageService.Draft(k) };
+            _preview = await Texts.PreviewAsync(_source, Input.Body);
+            _known = true;
+            // Wording mistakes show as notes and can be fixed here; the rest (setup, the customer's agreement) stops the button.
+            var wordingOnly = (await Texts.PreviewAsync(_source, TextMessageService.Draft(k))).Problems;
+            _blocked = [.. wordingOnly];
+            _customerId = await CustomerIdAsync(k);
+            if (_customerId is { } customerId && await SalesStore.GetCustomerAsync(customerId, default) is { } customer)
+                _customerName = customer.DisplayName;
+        }
+        catch (EntityNotFoundException)
+        {
+            _error = $"There's no such {_what}.";
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    /// <summary>Whose texts settings to change: the one billed (a sub-customer billed with its parent is texted through the parent).</summary>
+    private async Task<Guid?> CustomerIdAsync(EmailKind kind)
+    {
+        Guid? id = kind switch
+        {
+            EmailKind.Invoice => (await SalesStore.GetInvoiceAsync(Id, default))?.CustomerId,
+            EmailKind.Estimate => (await SalesStore.GetEstimateAsync(Id, default))?.CustomerId,
+            EmailKind.CreditMemo => (await SalesStore.GetCreditMemoAsync(Id, default))?.CustomerId,
+            _ => (await SalesStore.GetReceiptAsync(Id, default))?.CustomerId,
+        };
+        if (id is not { } customerId)
+            return null;
+        var all = (await SalesStore.ListCustomersAsync(default)).ToDictionary(c => c.Id);
+        return all.ContainsKey(customerId) ? CustomerTree.BillTo(customerId, all) : customerId;
+    }
+
+    private string Length(TextLength length) => length.Parts == 1
+        ? L["{0} characters · 1 part", length.Characters]
+        : L["{0} characters · {1} parts", length.Characters, length.Parts];
+
+    private async Task SendAsync()
+    {
+        if (_source is null)
+            return;
+        try
+        {
+            await Texts.SendAsync(_source, Input.Body);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            // What stops it may have changed with the refusal (a STOP reply switches the customer off).
+            _preview = await Texts.PreviewAsync(_source, Input.Body);
+            _blocked = [.. (await Texts.PreviewAsync(_source, TextMessageService.Draft(_source.Kind))).Problems];
+            return;
+        }
+
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("sent", "1"));
+    }
+
+    private sealed class TextModel
+    {
+        [Required(ErrorMessage = "Write the message.")]
+        [StringLength(TextTemplates.MaxBody)]
+        public string Body { get; set; } = "";
+    }
+}

@@ -61,6 +61,8 @@ public static class AccessRules
         ("/settings/webhooks", UserRole.Admin, UserRole.Admin),
         ("/api/webhooks", UserRole.Admin, UserRole.Admin),
         ("/settings/email", UserRole.Admin, UserRole.Admin),
+        ("/settings/texts", UserRole.Admin, UserRole.Admin),
+        ("/api/settings/texts", UserRole.Admin, UserRole.Admin),
         ("/api/settings/email", UserRole.Admin, UserRole.Admin),
         ("/backup", UserRole.Admin, UserRole.Admin),
         ("/api/backup", UserRole.Admin, UserRole.Admin),
@@ -145,7 +147,7 @@ public static class AccessRules
     /// <summary>Path segments of pages that exist to change something (forms, imports, interactive editors).</summary>
     private static readonly HashSet<string> WritePageSegments = new(StringComparer.OrdinalIgnoreCase)
     {
-        "new", "edit", "import", "apply", "pay", "pay-bills", "transfer", "reconcile", "feed", "record", "opening-balances", "opening-stock", "email", "batch",
+        "new", "edit", "import", "apply", "pay", "pay-bills", "transfer", "reconcile", "feed", "record", "opening-balances", "opening-stock", "email", "text", "batch",
     };
 
     /// <summary>

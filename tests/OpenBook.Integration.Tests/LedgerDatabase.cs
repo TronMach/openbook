@@ -56,6 +56,9 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     /// <summary>Stands in for Plaid behind the real HTTP client.</summary>
     public FakePlaid Plaid { get; } = new();
 
+    /// <summary>Stands in for Twilio behind the real text sender.</summary>
+    public FakeTwilio Twilio { get; } = new();
+
     /// <summary>Stands in for Stripe behind the real payment gateway.</summary>
     public FakeStripe Stripe { get; } = new();
 
@@ -96,7 +99,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             provider = DatabaseProvider.Sqlite;
         }
 
-        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis, Claude, GoogleFonts, Plaid, PayPal, Square);
+        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis, Claude, GoogleFonts, Plaid, PayPal, Square, Twilio);
         if (setUpCompany)
             Owner = await InDb(db => db.Users.SingleAsync(u => u.Username == OwnerUsername));
     }
@@ -168,7 +171,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     private static ServiceProvider BuildServices(
         string connectionString, DatabaseProvider provider, FixedClock clock, RecordingEmailSender mail, RecordingWebhookSender webhooks,
         FakeSimpleFinBridge bridge, string backupDirectory, FakeStripe? stripe = null, FakeChannelApis? channels = null, FakeClaude? claude = null,
-        FakeGoogleFonts? googleFonts = null, FakePlaid? plaid = null, FakePayPal? payPal = null, FakeSquare? square = null) =>
+        FakeGoogleFonts? googleFonts = null, FakePlaid? plaid = null, FakePayPal? payPal = null, FakeSquare? square = null, FakeTwilio? twilio = null) =>
         new ServiceCollection()
             .AddOpenBookApplication()
             .AddOpenBookInfrastructure(connectionString, backupDirectory, provider: provider)
@@ -185,6 +188,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Banking.PlaidTransport(plaid ?? new FakePlaid())))
             .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Payments.PayPalGateway(payPal ?? new FakePayPal())))
             .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Payments.SquareGateway(square ?? new FakeSquare())))
+            .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Forms.ITextSender>(new OpenBook.Infrastructure.Forms.TwilioTextSender(twilio ?? new FakeTwilio())))
             .BuildServiceProvider(validateScopes: true);
 
     /// <summary>Migrates a database (and sets up the company), exactly as each test used to do for itself.</summary>

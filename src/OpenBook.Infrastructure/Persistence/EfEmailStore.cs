@@ -23,6 +23,16 @@ internal sealed class EfEmailStore(OpenBookDbContext db) : IEmailStore
 
     public Task<DocumentLink?> FindLinkAsync(string tokenHash, CancellationToken ct) => db.DocumentLinks.FirstOrDefaultAsync(l => l.TokenHash == tokenHash, ct);
 
+    public Task<TextSettings?> GetTextSettingsAsync(CancellationToken ct) => db.TextSettings.FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<SentText>> ListSentTextsAsync(string entityType, Guid entityId, CancellationToken ct) =>
+        [.. (await db.SentTexts.AsNoTracking().Where(t => t.EntityType == entityType && t.EntityId == entityId).ToListAsync(ct))
+            .OrderByDescending(t => t.SentAt).ThenByDescending(t => t.Id)];
+
+    public void Add(TextSettings settings) => db.TextSettings.Add(settings);
+
+    public void Add(SentText text) => db.SentTexts.Add(text);
+
     public void Add(EmailTemplate emailTemplate) => db.EmailTemplates.Add(emailTemplate);
 
     public void Remove(EmailTemplate emailTemplate) => db.EmailTemplates.Remove(emailTemplate);

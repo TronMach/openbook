@@ -1,0 +1,109 @@
+@page "/settings/texts"
+@inject TextMessageService Texts
+@inject EmailService Email
+
+<PageTitle>@L["Text messages"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Text messages"]</h1>
+        <ActionLink Class="button secondary" Href="/settings">@L["Settings"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/audit?entityType=text_settings">@L["History"]</ActionLink>
+    </div>
+    <p class="muted">
+        @L["Invoices, estimates, credit memos and sales receipts can go to customers as a text with a link to view them (and, for invoices, to pay online). OpenBook sends them through your company's own Twilio account: its details go here."]
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "saved")
+    {
+        <div class="alert notice" role="status">@L["Saved."]</div>
+    }
+    @if (Done == "tested")
+    {
+        <div class="alert notice" role="status">@L["The test text has gone. If it doesn't arrive within a minute, look it up in the Twilio Console under Monitor, Messaging."]</div>
+    }
+    @if (!_linksPossible)
+    {
+        <div class="alert notice" role="status">
+            @L["Texts carry a link, which needs the address customers open OpenBook at."] <ActionLink Href="/settings/email">@L["Set it in the email settings"]</ActionLink>
+        </div>
+    }
+
+    <div class="card">
+        <details class="setup-steps" open="@(!_settings.IsReady)">
+            <summary>@L["Setting it up, step by step"]</summary>
+            <ol>
+                <li class="@(_settings.AccountSid is not null && _settings.ProtectedAuthToken is not null ? "done" : null)">
+                    Sign in to the <a href="https://console.twilio.com" target="_blank" rel="noopener">Twilio Console</a> (or sign up there).
+                    Under <strong>Account Info</strong>, copy the <strong>Account SID</strong> and the <strong>Auth token</strong> into the form below.
+                </li>
+                <li class="@(_settings.Sender is not null ? "done" : null)">
+                    Buy a phone number that can send texts (<strong>Phone Numbers → Buy a number</strong>), or set up a messaging service, and enter it below.
+                </li>
+                <li>
+                    In the US, carriers block business texts from numbers that aren't registered: register yours for A2P 10DLC under
+                    <strong>Messaging → Regulatory compliance</strong>, or verify a toll-free number. Other countries have their own rules; Twilio's console says which.
+                </li>
+                <li>Save, send yourself a test, then record on each customer who has agreed to get texts (the customer's page, Text messages).</li>
+            </ol>
+        </details>
+        <PostForm Action="/settings/texts" data-enhance="false">
+            <AntiforgeryToken />
+            <SettingsVersion TRecord="TextSettings" />
+            <div class="row">
+                <div class="field">
+                    <label for="account">@L["Account SID"]</label>
+                    <input id="account" name="accountSid" value="@_settings.AccountSid" maxlength="@TextSettings.MaxSidLength" autocomplete="off" spellcheck="false" placeholder="AC…" />
+                </div>
+                <div class="field">
+                    <label for="token">@L["Auth token"]</label>
+                    <input id="token" name="authToken" type="password" autocomplete="off" placeholder="@(_settings.ProtectedAuthToken is null ? L["From Account Info"] : L["Saved; enter a new one to change it"])" />
+                    @if (_settings.ProtectedAuthToken is not null)
+                    {
+                        <label class="check"><input type="checkbox" name="clearAuthToken" value="true" /> <span>@L["Remove the saved auth token"]</span></label>
+                    }
+                </div>
+                <div class="field">
+                    <label for="sender">@L["Send from"]</label>
+                    <input id="sender" name="sender" value="@_settings.Sender" maxlength="40" autocomplete="off" spellcheck="false" placeholder="+15551234567 or MG…" />
+                    <span class="hint">@L["One of your Twilio numbers, or a messaging service SID."]</span>
+                </div>
+            </div>
+            <p class="hint">@L["Twilio charges per text part (160 characters, or 70 with an emoji or other special character), at the price it lists for each country."]</p>
+            <div class="actions"><button type="submit">@L["Save"]</button></div>
+        </PostForm>
+    </div>
+
+    @if (_settings.IsReady)
+    {
+        <section class="card">
+            <h2>@L["Send a test"]</h2>
+            <PostForm Action="/settings/texts/test" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="test-to">@L["Your mobile number"]</label>
+                    <input id="test-to" name="to" type="tel" maxlength="40" autocomplete="tel" />
+                </div>
+                <div class="actions"><button type="submit" class="secondary">@L["Send a test text"]</button></div>
+            </PostForm>
+        </section>
+    }
+</div>
+
+@code {
+    private TextSettings _settings = TextSettings.Create();
+    private bool _linksPossible = true;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await Texts.GetSettingsAsync();
+        _linksPossible = await Email.LinkBaseAsync() is not null;
+    }
+}

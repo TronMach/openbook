@@ -1,0 +1,56 @@
+@inject TextMessageService Texts
+@* A customer's mobile number for texts and whether they agreed to get them. Posts to /customers/{id}/text-settings. *@
+
+<section class="card no-print" id="text-settings">
+    <h2>@L["Text messages"]</h2>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    <PostForm Action="@($"/customers/{Customer.Id}/text-settings")" data-enhance="false">
+        <AntiforgeryToken />
+        <div class="field">
+            <label for="text-number">@L["Mobile number"]</label>
+            <input id="text-number" name="number" type="tel" value="@_number" maxlength="40" autocomplete="off" placeholder="+1 555 123 4567" />
+            <span class="hint">@L["Their invoices, estimates, credit memos and receipts can be texted here. Numbers from abroad start with + and the country code."]</span>
+        </div>
+        <div class="field">
+            <label class="check">
+                <input type="checkbox" name="allowed" value="true" checked="@(Customer.TextsAllowedAt is not null)" />
+                <span>@L["They agreed to get texts at this number"]</span>
+            </label>
+            <span class="hint">
+                @if (Customer.TextsAllowedAt is { } since)
+                {
+                    @L["Recorded {0}. If they reply STOP, texts are switched off here the next time one is refused.", since.InCompanyTime().ToString("d")]
+                }
+                else
+                {
+                    @L["Tick it only once they've said yes (in writing is best): texting people who haven't agreed breaks carriers' rules and, in many places, the law."]
+                }
+                @if (!_ready)
+                {
+                    <br />@L["Texts need the company's Twilio account first:"] <ActionLink Href="/settings/texts">@L["Settings, Text messages"]</ActionLink>
+                }
+            </span>
+        </div>
+        <button type="submit" class="secondary">@L["Save"]</button>
+    </PostForm>
+</section>
+
+@code {
+    private string? _number;
+    private bool _ready = true;
+
+    [Parameter, EditorRequired]
+    public Customer Customer { get; set; } = default!;
+
+    [Parameter]
+    public string? Error { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _number = await Texts.SuggestedNumberAsync(Customer);
+        _ready = await Texts.CanSendAsync();
+    }
+}

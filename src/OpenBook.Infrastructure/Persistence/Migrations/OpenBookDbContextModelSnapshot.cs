@@ -2663,6 +2663,86 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.ToTable("SentEmails", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Email.SentText", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(1600)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DocumentLinkId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProviderId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SentBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentLinkId");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.ToTable("SentTexts", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Email.TextSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccountSid")
+                        .HasMaxLength(34)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedAuthToken")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sender")
+                        .HasMaxLength(34)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("TextSettings", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Inventory.AssemblyBuild", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6062,6 +6142,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("TaxCodeId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TextNumber")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("TextsAllowedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("TimeBillingFormat")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -8745,6 +8832,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasForeignKey("DesignId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OpenBook.Domain.Email.DocumentLink", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentLinkId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Email.SentText", b =>
+                {
                     b.HasOne("OpenBook.Domain.Email.DocumentLink", null)
                         .WithMany()
                         .HasForeignKey("DocumentLinkId")

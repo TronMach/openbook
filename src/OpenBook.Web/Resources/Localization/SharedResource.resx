@@ -152,6 +152,9 @@
   <data name="Account for line {0}" xml:space="preserve">
     <value>Account for line {0}</value>
   </data>
+  <data name="Account SID" xml:space="preserve">
+    <value>Account SID</value>
+  </data>
   <data name="Accountant" xml:space="preserve">
     <value>Accountant</value>
   </data>
@@ -367,6 +370,9 @@
   </data>
   <data name="Audit requests for {0}" xml:space="preserve">
     <value>Audit requests for {0}</value>
+  </data>
+  <data name="Auth token" xml:space="preserve">
+    <value>Auth token</value>
   </data>
   <data name="Automatic backups aren't working" xml:space="preserve">
     <value>Automatic backups aren't working</value>
@@ -965,6 +971,9 @@
   <data name="Each row comes back from the posted order it names; a condition such as damaged or unsellable leaves it off the shelf. Rows already recorded are skipped, and if any row can't be matched nothing is recorded." xml:space="preserve">
     <value>Each row comes back from the posted order it names; a condition such as damaged or unsellable leaves it off the shelf. Rows already recorded are skipped, and if any row can't be matched nothing is recorded.</value>
   </data>
+  <data name="Each text gets its own link to view the document as it stands, which you can turn off in the history below. Twilio charges for each part it's split into." xml:space="preserve">
+    <value>Each text gets its own link to view the document as it stands, which you can turn off in the history below. Twilio charges for each part it's split into.</value>
+  </data>
   <data name="each with its price" xml:space="preserve">
     <value>each with its price</value>
   </data>
@@ -1133,6 +1142,9 @@
   <data name="Figures in the books that don't agree" xml:space="preserve">
     <value>Figures in the books that don't agree</value>
   </data>
+  <data name="Fill-ins:" xml:space="preserve">
+    <value>Fill-ins:</value>
+  </data>
   <data name="Find a customer" xml:space="preserve">
     <value>Find a customer</value>
   </data>
@@ -1216,6 +1228,9 @@
   </data>
   <data name="From" xml:space="preserve">
     <value>From</value>
+  </data>
+  <data name="From Account Info" xml:space="preserve">
+    <value>From Account Info</value>
   </data>
   <data name="Full view" xml:space="preserve">
     <value>Full view</value>
@@ -1448,6 +1463,12 @@
   <data name="Invoice {0}" xml:space="preserve">
     <value>Invoice {0}</value>
   </data>
+  <data name="Invoices, estimates, credit memos and sales receipts can go to customers as a text with a link to view them (and, for invoices, to pay online). OpenBook sends them through your company's own Twilio account: its details go here." xml:space="preserve">
+    <value>Invoices, estimates, credit memos and sales receipts can go to customers as a text with a link to view them (and, for invoices, to pay online). OpenBook sends them through your company's own Twilio account: its details go here.</value>
+  </data>
+  <data name="It can't be sent yet:" xml:space="preserve">
+    <value>It can't be sent yet:</value>
+  </data>
   <data name="It only changes the menu, the home page and which reports come first; everything stays available." xml:space="preserve">
     <value>It only changes the menu, the home page and which reports come first; everything stays available.</value>
   </data>
@@ -1486,6 +1507,9 @@
   </data>
   <data name="Keep a copy somewhere safe" xml:space="preserve">
     <value>Keep a copy somewhere safe</value>
+  </data>
+  <data name="Keep {link}: it opens the document. &quot;Reply STOP to opt out.&quot; goes under every text." xml:space="preserve">
+    <value>Keep {link}: it opens the document. "Reply STOP to opt out." goes under every text.</value>
   </data>
   <data name="Kept in the invoice's history and the audit log." xml:space="preserve">
     <value>Kept in the invoice's history and the audit log.</value>
@@ -1574,6 +1598,9 @@
   <data name="Lines from the sales order" xml:space="preserve">
     <value>Lines from the sales order</value>
   </data>
+  <data name="Link" xml:space="preserve">
+    <value>Link</value>
+  </data>
   <data name="link your account" xml:space="preserve">
     <value>link your account</value>
   </data>
@@ -1640,6 +1667,9 @@
   <data name="Menu" xml:space="preserve">
     <value>Menu</value>
   </data>
+  <data name="Message" xml:space="preserve">
+    <value>Message</value>
+  </data>
   <data name="Message to customer" xml:space="preserve">
     <value>Message to customer</value>
   </data>
@@ -1666,6 +1696,9 @@
   </data>
   <data name="Mine" xml:space="preserve">
     <value>Mine</value>
+  </data>
+  <data name="Mobile number" xml:space="preserve">
+    <value>Mobile number</value>
   </data>
   <data name="Money in the bank" xml:space="preserve">
     <value>Money in the bank</value>
@@ -1997,6 +2030,9 @@
   <data name="One link per area across the top" xml:space="preserve">
     <value>One link per area across the top</value>
   </data>
+  <data name="One of your Twilio numbers, or a messaging service SID." xml:space="preserve">
+    <value>One of your Twilio numbers, or a messaging service SID.</value>
+  </data>
   <data name="One place (Main)" xml:space="preserve">
     <value>One place (Main)</value>
   </data>
@@ -2005,6 +2041,9 @@
   </data>
   <data name="Online giving isn't open right now. Please get in touch with us to give another way." xml:space="preserve">
     <value>Online giving isn't open right now. Please get in touch with us to give another way.</value>
+  </data>
+  <data name="Only invoices, estimates, credit memos and sales receipts can be sent by text." xml:space="preserve">
+    <value>Only invoices, estimates, credit memos and sales receipts can be sent by text.</value>
   </data>
   <data name="Only on a computer or phone that's yours. Changing your password or signing out everywhere forgets it." xml:space="preserve">
     <value>Only on a computer or phone that's yours. Changing your password or signing out everywhere forgets it.</value>
@@ -2023,6 +2062,9 @@
   </data>
   <data name="Open the capture page" xml:space="preserve">
     <value>Open the capture page</value>
+  </data>
+  <data name="Open the customer's text settings" xml:space="preserve">
+    <value>Open the customer's text settings</value>
   </data>
   <data name="Open the difference" xml:space="preserve">
     <value>Open the difference</value>
@@ -2447,6 +2489,9 @@
   <data name="Record what was spent from the box as spending from its account (keep the receipts)." xml:space="preserve">
     <value>Record what was spent from the box as spending from its account (keep the receipts).</value>
   </data>
+  <data name="Recorded {0}. If they reply STOP, texts are switched off here the next time one is refused." xml:space="preserve">
+    <value>Recorded {0}. If they reply STOP, texts are switched off here the next time one is refused.</value>
+  </data>
   <data name="Records" xml:space="preserve">
     <value>Records</value>
   </data>
@@ -2521,6 +2566,9 @@
   </data>
   <data name="Remove access" xml:space="preserve">
     <value>Remove access</value>
+  </data>
+  <data name="Remove the saved auth token" xml:space="preserve">
+    <value>Remove the saved auth token</value>
   </data>
   <data name="Removed" xml:space="preserve">
     <value>Removed</value>
@@ -2702,6 +2750,9 @@
   <data name="Saved. People with this set are signed out, so their next sign-in uses it." xml:space="preserve">
     <value>Saved. People with this set are signed out, so their next sign-in uses it.</value>
   </data>
+  <data name="Saved; enter a new one to change it" xml:space="preserve">
+    <value>Saved; enter a new one to change it</value>
+  </data>
   <data name="saved; leave empty to keep it" xml:space="preserve">
     <value>saved; leave empty to keep it</value>
   </data>
@@ -2750,6 +2801,21 @@
   <data name="See what will change" xml:space="preserve">
     <value>See what will change</value>
   </data>
+  <data name="Send a test" xml:space="preserve">
+    <value>Send a test</value>
+  </data>
+  <data name="Send a test text" xml:space="preserve">
+    <value>Send a test text</value>
+  </data>
+  <data name="Send from" xml:space="preserve">
+    <value>Send from</value>
+  </data>
+  <data name="Send text" xml:space="preserve">
+    <value>Send text</value>
+  </data>
+  <data name="Sending from {0}" xml:space="preserve">
+    <value>Sending from {0}</value>
+  </data>
   <data name="Sending through {0}, from {1}" xml:space="preserve">
     <value>Sending through {0}, from {1}</value>
   </data>
@@ -2764,6 +2830,9 @@
   </data>
   <data name="Service of budget line {0}" xml:space="preserve">
     <value>Service of budget line {0}</value>
+  </data>
+  <data name="Set it in the email settings" xml:space="preserve">
+    <value>Set it in the email settings</value>
   </data>
   <data name="Set it up" xml:space="preserve">
     <value>Set it up</value>
@@ -2780,6 +2849,9 @@
   <data name="Set up: real banks" xml:space="preserve">
     <value>Set up: real banks</value>
   </data>
+  <data name="Setting it up, step by step" xml:space="preserve">
+    <value>Setting it up, step by step</value>
+  </data>
   <data name="Settings" xml:space="preserve">
     <value>Settings</value>
   </data>
@@ -2788,6 +2860,9 @@
   </data>
   <data name="Settings saved." xml:space="preserve">
     <value>Settings saved.</value>
+  </data>
+  <data name="Settings, Text messages" xml:space="preserve">
+    <value>Settings, Text messages</value>
   </data>
   <data name="Shipping" xml:space="preserve">
     <value>Shipping</value>
@@ -2990,6 +3065,21 @@
   <data name="Terms and everything else can be added on their page later." xml:space="preserve">
     <value>Terms and everything else can be added on their page later.</value>
   </data>
+  <data name="Text" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Text messages" xml:space="preserve">
+    <value>Text messages</value>
+  </data>
+  <data name="Texts carry a link, which needs the address customers open OpenBook at." xml:space="preserve">
+    <value>Texts carry a link, which needs the address customers open OpenBook at.</value>
+  </data>
+  <data name="Texts need the company's Twilio account first:" xml:space="preserve">
+    <value>Texts need the company's Twilio account first:</value>
+  </data>
+  <data name="Texts sent" xml:space="preserve">
+    <value>Texts sent</value>
+  </data>
   <data name="Thank donors" xml:space="preserve">
     <value>Thank donors</value>
   </data>
@@ -3044,6 +3134,9 @@
   <data name="The last good one was {0}" xml:space="preserve">
     <value>The last good one was {0}</value>
   </data>
+  <data name="The link here is a stand-in: the real one is made when the text goes." xml:space="preserve">
+    <value>The link here is a stand-in: the real one is made when the text goes.</value>
+  </data>
   <data name="The list of schedules and documents your auditor or reviewer asks for (often called the PBC, “prepared by client”, list): who prepares each one, when it's due and when it went over. Nothing here posts to the books." xml:space="preserve">
     <value>The list of schedules and documents your auditor or reviewer asks for (often called the PBC, “prepared by client”, list): who prepares each one, when it's due and when it went over. Nothing here posts to the books.</value>
   </data>
@@ -3068,6 +3161,12 @@
   <data name="The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept." xml:space="preserve">
     <value>The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept.</value>
   </data>
+  <data name="The test text has gone. If it doesn't arrive within a minute, look it up in the Twilio Console under Monitor, Messaging." xml:space="preserve">
+    <value>The test text has gone. If it doesn't arrive within a minute, look it up in the Twilio Console under Monitor, Messaging.</value>
+  </data>
+  <data name="The text has gone." xml:space="preserve">
+    <value>The text has gone.</value>
+  </data>
   <data name="The user guide's chapter about this page" xml:space="preserve">
     <value>The user guide's chapter about this page</value>
   </data>
@@ -3079,6 +3178,9 @@
   </data>
   <data name="Their code" xml:space="preserve">
     <value>Their code</value>
+  </data>
+  <data name="Their invoices, estimates, credit memos and receipts can be texted here. Numbers from abroad start with + and the country code." xml:space="preserve">
+    <value>Their invoices, estimates, credit memos and receipts can be texted here. Numbers from abroad start with + and the country code.</value>
   </data>
   <data name="Their product codes ({0})" xml:space="preserve">
     <value>Their product codes ({0})</value>
@@ -3100,6 +3202,9 @@
   </data>
   <data name="These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again." xml:space="preserve">
     <value>These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again.</value>
+  </data>
+  <data name="They agreed to get texts at this number" xml:space="preserve">
+    <value>They agreed to get texts at this number</value>
   </data>
   <data name="They go to the active admins who have an email address (Settings &gt; Users and invitations)." xml:space="preserve">
     <value>They go to the active admins who have an email address (Settings &gt; Users and invitations).</value>
@@ -3143,6 +3248,9 @@
   <data name="Tick every item shown" xml:space="preserve">
     <value>Tick every item shown</value>
   </data>
+  <data name="Tick it only once they've said yes (in writing is best): texting people who haven't agreed breaks carriers' rules and, in many places, the law." xml:space="preserve">
+    <value>Tick it only once they've said yes (in writing is best): texting people who haven't agreed breaks carriers' rules and, in many places, the law.</value>
+  </data>
   <data name="Tick {0}" xml:space="preserve">
     <value>Tick {0}</value>
   </data>
@@ -3175,6 +3283,9 @@
   </data>
   <data name="To move to a new phone, turn it off and set it up again. Browsers remembered for 30 days are forgotten." xml:space="preserve">
     <value>To move to a new phone, turn it off and set it up again. Browsers remembered for 30 days are forgotten.</value>
+  </data>
+  <data name="to {0}" xml:space="preserve">
+    <value>to {0}</value>
   </data>
   <data name="Total" xml:space="preserve">
     <value>Total</value>
@@ -3218,8 +3329,20 @@
   <data name="Turn on two-factor sign-in" xml:space="preserve">
     <value>Turn on two-factor sign-in</value>
   </data>
+  <data name="Turn the link off" xml:space="preserve">
+    <value>Turn the link off</value>
+  </data>
+  <data name="turned off {0}" xml:space="preserve">
+    <value>turned off {0}</value>
+  </data>
   <data name="turned on" xml:space="preserve">
     <value>turned on</value>
+  </data>
+  <data name="Twilio charges per text part (160 characters, or 70 with an emoji or other special character), at the price it lists for each country." xml:space="preserve">
+    <value>Twilio charges per text part (160 characters, or 70 with an emoji or other special character), at the price it lists for each country.</value>
+  </data>
+  <data name="Twilio id" xml:space="preserve">
+    <value>Twilio id</value>
   </data>
   <data name="Two-factor optional" xml:space="preserve">
     <value>Two-factor optional</value>
@@ -3374,6 +3497,9 @@
   <data name="What the box should hold once it's replenished." xml:space="preserve">
     <value>What the box should hold once it's replenished.</value>
   </data>
+  <data name="What they'll get" xml:space="preserve">
+    <value>What they'll get</value>
+  </data>
   <data name="What You Owe" xml:space="preserve">
     <value>What You Owe</value>
   </data>
@@ -3521,6 +3647,9 @@
   <data name="Your company's Plaid keys, so bank and card transactions arrive in the bank feed by themselves." xml:space="preserve">
     <value>Your company's Plaid keys, so bank and card transactions arrive in the bank feed by themselves.</value>
   </data>
+  <data name="Your company's Twilio account, so invoices, estimates, credit memos and receipts can be texted to customers with a link." xml:space="preserve">
+    <value>Your company's Twilio account, so invoices, estimates, credit memos and receipts can be texted to customers with a link.</value>
+  </data>
   <data name="Your data" xml:space="preserve">
     <value>Your data</value>
   </data>
@@ -3545,6 +3674,9 @@
   <data name="Your language and region" xml:space="preserve">
     <value>Your language and region</value>
   </data>
+  <data name="Your mobile number" xml:space="preserve">
+    <value>Your mobile number</value>
+  </data>
   <data name="Your name" xml:space="preserve">
     <value>Your name</value>
   </data>
@@ -3568,6 +3700,12 @@
   </data>
   <data name="{0} changed" xml:space="preserve">
     <value>{0} changed</value>
+  </data>
+  <data name="{0} characters · 1 part" xml:space="preserve">
+    <value>{0} characters · 1 part</value>
+  </data>
+  <data name="{0} characters · {1} parts" xml:space="preserve">
+    <value>{0} characters · {1} parts</value>
   </data>
   <data name="{0} connections" xml:space="preserve">
     <value>{0} connections</value>

@@ -133,6 +133,31 @@ public sealed class Customer
         EmailPdf = pdf;
     }
 
+    /// <summary>The mobile number their documents are texted to, in international form; null = none.</summary>
+    public string? TextNumber { get; private set; }
+
+    /// <summary>
+    /// When someone recorded that the customer agreed to get texts; null = they haven't (or they replied STOP since).
+    /// Nothing is texted without it: carriers and the law require the customer's agreement.
+    /// </summary>
+    public DateTimeOffset? TextsAllowedAt { get; private set; }
+
+    public bool CanBeTexted => TextNumber is not null && TextsAllowedAt is not null;
+
+    /// <param name="region">The company's region, for a number typed without its country code.</param>
+    public void SetTextPreferences(string? number, bool allowed, DateTimeOffset now, string? region)
+    {
+        var clean = Domain.Email.PhoneNumbers.Normalize(number, "Mobile number", region);
+        if (allowed && clean is null)
+            throw new DomainException("customer.text_number_required", "Enter the mobile number they agreed to get texts at.");
+        // A new number needs agreeing to again; the same one keeps the date it was agreed.
+        TextsAllowedAt = !allowed ? null : TextsAllowedAt is not null && clean == TextNumber ? TextsAllowedAt : now.ToUniversalTime();
+        TextNumber = clean;
+    }
+
+    /// <summary>The customer replied STOP (Twilio says so when a text is refused): no more texts until they agree again.</summary>
+    public void StopTexts() => TextsAllowedAt = null;
+
     public bool IsActive { get; private set; }
 
     public static Customer Create(CustomerDetails details)

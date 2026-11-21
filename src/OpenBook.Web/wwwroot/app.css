@@ -274,6 +274,10 @@ html.preview-full { overflow: hidden; }
 .email-history-list summary { cursor: pointer; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; }
 .email-history-subject { font-weight: 600; }
 .email-history-body { white-space: pre-wrap; font-family: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin: 0.5rem 0 0; }
+.text-preview h2 { margin-top: 0; }
+.email-form button[type="submit"]:disabled { opacity: 0.55; cursor: not-allowed; }
+.text-phone { border: 1px solid var(--border); border-radius: 18px; background: var(--bg); padding: 1rem; max-width: 26rem; }
+.text-bubble { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; padding: 0.6rem 0.85rem; border-radius: 16px 16px 16px 4px; background: var(--surface); border: 1px solid var(--border); color: var(--text); }
 @media (max-width: 900px) {
     .email-editor { grid-template-columns: minmax(0, 1fr); }
     .email-preview { position: static; height: 80vh; }

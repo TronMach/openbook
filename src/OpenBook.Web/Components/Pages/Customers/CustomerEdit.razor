@@ -340,6 +340,7 @@
         }
         <ResponsibleCard CustomerId="_customer.Id" />
         <CustomerEmailCard Customer="_customer" Error="@EmailError" />
+        <CustomerTextCard Customer="_customer" Error="@TextError" />
 
         @if (_giving is { } giving && (giving.Any || _household is not null))
         {
@@ -432,6 +433,8 @@
 
     [SupplyParameterFromQuery] private string? DesignError { get; set; }
     [SupplyParameterFromQuery] private string? EmailError { get; set; }
+
+    [SupplyParameterFromQuery] private string? TextError { get; set; }
     private IReadOnlyList<Invoice> _invoices = [];
     private IReadOnlyList<CustomerPayment> _payments = [];
     private IReadOnlyList<TaxCode> _taxCodes = [];

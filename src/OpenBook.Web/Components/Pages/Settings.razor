@@ -137,6 +137,12 @@
                         return changed == 0 ? L["The usual wording"].Value : L["{0} changed", changed].Value;
                     }),
                     Keywords: "email wording message template subject body preview"),
+                new("/settings/texts", L["Text messages"],
+                    L["Your company's Twilio account, so invoices, estimates, credit memos and receipts can be texted to customers with a link."],
+                    await Status("/settings/texts", async () => (await Get<TextMessageService>().GetSettingsAsync()) is { IsReady: true } texts
+                        ? L["Sending from {0}", texts.Sender ?? ""].Value
+                        : L["Not set up"].Value),
+                    Keywords: "sms text message twilio phone mobile"),
                 new("/settings/online-payments", L["Online card payments"],
                     L["A \"Pay now\" link on invoices so customers pay by card through Stripe, PayPal or Square; payments are recorded by themselves."],
                     await Status("/settings/online-payments", async () => (await Get<OnlinePaymentService>().GetSettingsAsync()).IsReady

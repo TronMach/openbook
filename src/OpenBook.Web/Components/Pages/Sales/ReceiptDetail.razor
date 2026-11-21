@@ -28,6 +28,7 @@
         @if (_receipt.Status == DocumentStatus.Posted)
         {
             <ActionLink Class="button secondary" Href="@($"/sales/email/receipts/{_receipt.Id}")">Email</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/sales/text/receipts/{_receipt.Id}")">@L["Text"]</ActionLink>
         }
         <ActionLink Class="button secondary" Href="@($"/sales/receipts/new?copy={_receipt.Id}")">Copy</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_receipt.Id}")">History</ActionLink>
@@ -127,6 +128,7 @@
     <CustomFieldPanel EntityType="sales_receipt" EntityId="_receipt.Id" />
 
     <EmailHistory EntityType="sales_receipt" EntityId="_receipt.Id" />
+    <TextHistory EntityType="sales_receipt" EntityId="_receipt.Id" />
 
     <Notes EntityType="sales_receipt" EntityId="_receipt.Id" />
 </div>

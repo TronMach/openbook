@@ -72,6 +72,19 @@ public sealed class FuzzTests
         }, Seeds.PayPalOrder),
         new("paypal-event", b => { OpenBook.Application.Sales.PayPal.Event(Text(b)); _ = OpenBook.Application.Sales.PayPal.Error(Text(b), 422); _ = OpenBook.Application.Sales.PayPal.Issue(Text(b)); },
             Seeds.PayPalEvent),
+        new("twilio", b =>
+        {
+            try
+            {
+                OpenBook.Application.Forms.Twilio.MessageId(Text(b));
+            }
+            catch (DomainException)
+            {
+            }
+
+            _ = OpenBook.Application.Forms.Twilio.Error(Text(b), 400);
+        }, Seeds.TwilioMessage, Seeds.TwilioError),
+        new("phone-number", b => { _ = PhoneNumbers.TryNormalize(Text(b), "en-GB"); _ = TextTemplates.Measure(Text(b)); }, Seeds.PhoneNumber),
         new("square", b => { OpenBook.Application.Sales.Square.Order(Text(b), ""); }, Seeds.SquareOrder),
         new("square-event", b => { OpenBook.Application.Sales.Square.Event(Text(b)); _ = OpenBook.Application.Sales.Square.Error(Text(b), 400); }, Seeds.SquareEvent),
         new("update-manifest", b => UpdateManifest.Parse(Text(b)), Seeds.Manifest),

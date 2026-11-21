@@ -31,6 +31,9 @@ public enum AuditAction
 
     /// <summary>Data taken out of OpenBook in a file (the accountant's package, with taxpayer IDs).</summary>
     Exported,
+
+    /// <summary>A document sent to a customer by text message.</summary>
+    Texted,
 }
 
 /// <summary>Append-only change history. The database rejects updates and deletes on this table.</summary>

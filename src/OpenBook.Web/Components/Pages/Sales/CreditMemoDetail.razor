@@ -32,6 +32,7 @@
         @if (_credit.Status == DocumentStatus.Posted)
         {
             <ActionLink Class="button secondary" Href="@($"/sales/email/credit-memos/{_credit.Id}")">Email</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/sales/text/credit-memos/{_credit.Id}")">@L["Text"]</ActionLink>
         }
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_credit.Id}")">History</ActionLink>
         @if (_credit.Status == DocumentStatus.Posted)
@@ -134,6 +135,7 @@
     <CustomFieldPanel EntityType="credit_memo" EntityId="_credit.Id" />
 
     <EmailHistory EntityType="credit_memo" EntityId="_credit.Id" />
+    <TextHistory EntityType="credit_memo" EntityId="_credit.Id" />
 
     <Notes EntityType="credit_memo" EntityId="_credit.Id" />
 </div>

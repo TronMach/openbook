@@ -57,6 +57,7 @@ public static class OpenBookApi
         api.MapLedgerToolsApi();
         api.MapReceivablesApi();
         api.MapEmailApi();
+        api.MapTextApi();
         api.MapPayablesApi();
         api.MapBankFeedApi();
         api.MapBankingProApi();

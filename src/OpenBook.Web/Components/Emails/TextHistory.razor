@@ -1,0 +1,67 @@
+@inject TextMessageService Texts
+@inject NavigationManager Navigation
+@* The texts sent about a record, newest first: the number, what it said, and whether its link has been opened (with a
+   button to turn the link off). Put it beside <EmailHistory> on record pages. *@
+
+@if (_sent.Count > 0)
+{
+    <section class="card email-history no-print" id="texts">
+        <h2>@L["Texts sent"]</h2>
+        <ul class="email-history-list">
+            @foreach (var entry in _sent)
+            {
+                var t = entry.Text;
+                <li>
+                    <details>
+                        <summary>
+                            <span class="email-history-subject">@EmailTemplates.Label(t.Kind)</span>
+                            <span class="muted">@L["to {0}", t.To] · @t.SentAt.InCompanyTime().ToString("g") · @t.SentBy</span>
+                        </summary>
+                        <dl class="facts compact">
+                            @if (t.ProviderId is { } id) { <dt>@L["Twilio id"]</dt><dd>@id</dd> }
+                            @if (entry.Link is { } link)
+                            {
+                                <dt>@L["Link"]</dt>
+                                <dd>
+                                    @(link.LastOpenedAt is { } last
+                                        ? $"Opened {link.FirstOpenedAt!.Value.InCompanyTime():g}" + (last > link.FirstOpenedAt ? $", last {last.InCompanyTime():g}" : "")
+                                        : "Not opened yet")
+                                    @if (link.IsActive)
+                                    {
+                                        <PostForm Action="@($"/sales/email-links/{link.Id}/revoke")" class="inline-form" data-enhance="false">
+                                            <AntiforgeryToken />
+                                            <input type="hidden" name="returnUrl" value="@_returnUrl" />
+                                            <button type="submit" class="link">@L["Turn the link off"]</button>
+                                        </PostForm>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted"> · @L["turned off {0}", link.RevokedAt!.Value.InCompanyTime().ToString("d")]</span>
+                                    }
+                                </dd>
+                            }
+                        </dl>
+                        <pre class="email-history-body">@t.Body</pre>
+                    </details>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    private IReadOnlyList<SentTextEntry> _sent = [];
+    private string _returnUrl = "/";
+
+    [Parameter, EditorRequired]
+    public string EntityType { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public Guid EntityId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _sent = await Texts.HistoryAsync(EntityType, EntityId);
+        _returnUrl = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('#')[0] + "#texts";
+    }
+}

@@ -91,6 +91,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
     public DbSet<SentEmail> SentEmails => Set<SentEmail>();
     public DbSet<DocumentLink> DocumentLinks => Set<DocumentLink>();
+    public DbSet<SentText> SentTexts => Set<SentText>();
+    public DbSet<TextSettings> TextSettings => Set<TextSettings>();
     public DbSet<OpenBook.Domain.CustomFields.CustomFieldValue> CustomFieldValues => Set<OpenBook.Domain.CustomFields.CustomFieldValue>();
     public DbSet<PurchasingSettings> PurchasingSettings => Set<PurchasingSettings>();
     public DbSet<VendorBankAccount> VendorBankAccounts => Set<VendorBankAccount>();
@@ -202,7 +204,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         typeof(Item), typeof(Customer), typeof(Vendor), typeof(BankTransaction), typeof(BankDeposit),
         // Settings pages note the version when they open and check it when they save (2026-11-14).
         typeof(Company), typeof(EmailSettings), typeof(SignInSettings), typeof(OnlinePaymentSettings), typeof(OpenBook.Domain.Documents.DocumentReadingSettings),
-        typeof(CollectionSettings), typeof(OpenBook.Domain.Nonprofit.GiftSettings), typeof(PurchasingSettings), typeof(AchSettings), typeof(PlaidSettings), typeof(BackupSchedule),
+        typeof(CollectionSettings), typeof(OpenBook.Domain.Nonprofit.GiftSettings), typeof(PurchasingSettings), typeof(AchSettings), typeof(PlaidSettings), typeof(TextSettings), typeof(BackupSchedule),
         typeof(FormDesign),
     ];
 
@@ -1756,6 +1758,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.HasOne<FormDesign>().WithMany().HasForeignKey(c => c.FormDesignId).OnDelete(DeleteBehavior.Restrict);
             b.Property(c => c.EmailCc).HasMaxLength(1000);
             b.Property(c => c.EmailPdf).HasConversion<string>().HasMaxLength(10);
+            b.Property(c => c.TextNumber).HasMaxLength(PhoneNumbers.MaxLength);
+            b.Ignore(c => c.CanBeTexted);
             b.Property(c => c.TimeBillingFormat).HasConversion<string>().HasMaxLength(20);
             b.Property(c => c.DefaultMarkupPercent).HasColumnName("DefaultMarkupTenThousandths").HasConversion(TenThousandths);
             b.HasOne<Customer>().WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Restrict);
@@ -2400,6 +2404,31 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(e => e.Attachment).HasMaxLength(255);
             b.HasOne<DocumentLink>().WithMany().HasForeignKey(e => e.DocumentLinkId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<FormDesign>().WithMany().HasForeignKey(e => e.DesignId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SentText>(b =>
+        {
+            b.ToTable("SentTexts");
+            b.HasKey(t => t.Id);
+            b.Property(t => t.Kind).HasConversion<string>().HasMaxLength(30);
+            b.Property(t => t.EntityType).HasMaxLength(50);
+            b.HasIndex(t => new { t.EntityType, t.EntityId });
+            b.Property(t => t.SentBy).HasMaxLength(200);
+            b.Property(t => t.To).HasMaxLength(PhoneNumbers.MaxLength);
+            b.Property(t => t.Body).HasMaxLength(TextTemplates.MaxBody);
+            b.Property(t => t.ProviderId).HasMaxLength(64);
+            b.HasOne<DocumentLink>().WithMany().HasForeignKey(t => t.DocumentLinkId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TextSettings>(b =>
+        {
+            b.ToTable("TextSettings");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.AccountSid).HasMaxLength(OpenBook.Domain.Email.TextSettings.MaxSidLength);
+            b.Property(s => s.ProtectedAuthToken).HasMaxLength(2000);
+            b.Property(s => s.Sender).HasMaxLength(OpenBook.Domain.Email.TextSettings.MaxSidLength);
+            b.Ignore(s => s.IsReady);
+            b.Ignore(s => s.SendsThroughService);
         });
 
         modelBuilder.Entity<DocumentLink>(b =>

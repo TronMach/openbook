@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.AddScoped<PrintService>();
         services.AddScoped<OpenBook.Application.Purchases.PurchaseOrderForms>();
         services.AddScoped<EmailService>();
+        services.AddScoped<TextMessageService>();
         services.AddScoped<IEmailSource, SalesEmailSource>();
         services.AddScoped<IEmailSource, PurchaseOrderEmailSource>();
         services.AddScoped<IEmailSource, GiftEmailSource>();

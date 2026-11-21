@@ -33,6 +33,7 @@
         @if (_invoice.Status == DocumentStatus.Posted)
         {
             <ActionLink Class="button secondary" Href="@($"/sales/email/invoices/{_invoice.Id}")">@L["Email"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/sales/text/invoices/{_invoice.Id}")">@L["Text"]</ActionLink>
         }
         <ActionLink Class="button secondary" Href="@($"/sales/invoices/new?copy={_invoice.Id}")">@L["Copy"]</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_invoice.Id}")">@L["History"]</ActionLink>
@@ -316,6 +317,7 @@
     <CustomFieldPanel EntityType="invoice" EntityId="_invoice.Id" />
 
     <EmailHistory EntityType="invoice" EntityId="_invoice.Id" />
+    <TextHistory EntityType="invoice" EntityId="_invoice.Id" />
 
     <Notes EntityType="invoice" EntityId="_invoice.Id" />
 </div>

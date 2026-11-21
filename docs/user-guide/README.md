@@ -25,7 +25,7 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 6. [Banking](06-banking.md): importing statements, reviewing transactions, bank rules, reconciling.
 7. [Reports](07-reports.md): the main statements, accrual and cash basis, exporting and saving reports.
 
-29) [Email](29-email.md): writing emails beside a live preview, formatting, test sends, the wording of each email, how emails look, customers' copies and links, and what was sent.
+29) [Email](29-email.md): writing emails beside a live preview, formatting, test sends, the wording of each email, how emails look, customers' copies and links, what was sent, and sending documents by text message through Twilio.
 
 ## Running the books
 
