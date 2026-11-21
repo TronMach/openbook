@@ -2213,6 +2213,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("HideIcons")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Menu")
                         .IsRequired()
                         .HasMaxLength(20)

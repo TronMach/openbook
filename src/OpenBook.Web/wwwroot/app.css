@@ -611,7 +611,15 @@ input.copy-link { width: 100%; font-family: ui-monospace, SFMono-Regular, Consol
 }
 .shortcuts a:hover { background: var(--bg); color: var(--text); }
 .shortcuts a.active { background: var(--notice-bg); color: var(--text); font-weight: 600; }
-.shortcuts svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Each area's picture (AreaIcons), beside its name in the menus. */
+.area-icon { flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.area-link { display: inline-flex; align-items: center; gap: 0.35rem; }
+/* With pictures the longest menus no longer fit beside the brand and search on a laptop's width: rather than wrap
+   raggedly, the menu takes a row of its own under them, as on phones. */
+@media (max-width: 1440px) {
+    .topbar:has(> nav .area-icon) > nav { order: 10; flex-basis: 100%; }
+    .topbar:has(> nav .area-icon) .search { margin-left: auto; }
+}
 
 @media (max-width: 760px) {
     .simple-shell { grid-template-columns: minmax(0, 1fr); }
@@ -835,7 +843,7 @@ details.company-facts[open] > summary { margin-bottom: 0.75rem; }
     .topbar { gap: 0.6rem 1rem; padding: 0.6rem 1rem; }
     .topbar .search { flex: 1 1 10rem; }
     /* The menu gets a row of its own under the brand, search and account menu, wrapping across it. */
-    .topbar nav { order: 10; flex-basis: 100%; gap: 0.35rem 0.9rem; }
+    .topbar > nav { order: 10; flex-basis: 100%; gap: 0.35rem 0.9rem; }
     .full-menu .menu-list, .topbar .menu-list { max-width: calc(100vw - 2rem); }
 }
 .skip-link { position: absolute; left: 0.5rem; top: -3rem; z-index: 100; background: var(--surface); padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 6px; }

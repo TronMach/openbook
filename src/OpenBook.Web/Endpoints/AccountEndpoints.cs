@@ -60,6 +60,21 @@ public static class AccountEndpoints
             return Results.Redirect(WebSecurity.SafeReturnUrl(form["returnUrl"]));
         }).RequireAuthorization();
 
+        // Each area's picture beside its name in the menus ("show", the default) or names only ("hide").
+        app.MapPost("/account/icons", async (IFormCollection form, ViewModeService views, CancellationToken ct) =>
+        {
+            bool? show = form["icons"].ToString() switch
+            {
+                "show" => true,
+                "hide" => false,
+                _ => null,
+            };
+            if (show is null)
+                return Results.BadRequest();
+            await views.SetIconsAsync(show.Value, ct);
+            return Results.Redirect(WebSecurity.SafeReturnUrl(form["returnUrl"]));
+        }).RequireAuthorization();
+
         app.MapGet("/backup/download",async (IBackupService backups, CancellationToken ct) =>
         {
             BackupFile file;

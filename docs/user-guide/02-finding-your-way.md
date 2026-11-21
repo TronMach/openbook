@@ -4,10 +4,10 @@
 
 Every page has the same bar across the top:
 
-- **The menu**: Home, Accounts, Banking, Sales, Purchases, Inventory, Projects, Journal, Reports and Dashboard (the order depends on your edition, below), then **Settings**.
+- **The menu**: Home, Accounts, Banking, Sales, Purchases, Inventory, Projects, Journal, Reports and Dashboard (the order depends on your edition, below), then **Settings**. Each has a small picture beside its name (a bank for **Banking**, a box for **Inventory**, a chart for **Reports**), the same picture wherever that area appears, so you can spot it at a glance.
 - **Search** finds customers, vendors, products, accounts and transactions.
 - **Help** opens the chapter of this guide about the page you're on (see [Help inside OpenBook](#help-inside-openbook)).
-- **Your username** opens a menu of your own things: who you're signed in as and your role, **Password and sessions**, **Two-factor sign-in**, **Offline capture on your phone**, **Language and region**, **Theme** (automatic, light or dark), **Switch to simple view** (a menu bar by task and a home page that walks through each step; see [The simple view](28-simple-view.md)), **Show the menu as drop-downs**, and **Sign out**.
+- **Your username** opens a menu of your own things: who you're signed in as and your role, **Password and sessions**, **Two-factor sign-in**, **Offline capture on your phone**, **Language and region**, **Theme** (automatic, light or dark), **Switch to simple view** (a menu bar by task and a home page that walks through each step; see [The simple view](28-simple-view.md)), **Show the menu as drop-downs**, **Hide the menu pictures** (names only; **Show the menu pictures** brings them back, and the choice is remembered wherever you sign in), and **Sign out**.
 
 ### The menu as a bar or as drop-downs
 

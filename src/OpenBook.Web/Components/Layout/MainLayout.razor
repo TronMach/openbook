@@ -13,7 +13,7 @@
                 @* The simple view's menus are in the bar below; here the nav only keeps the space. *@
                 @if (!_simple && _menu == MenuStyle.DropDowns)
                 {
-                    <FullMenu User="context.User" Edition="_edition" />
+                    <FullMenu User="context.User" Edition="_edition" Icons="_icons" />
                 }
                 else if (!_simple)
                 {
@@ -24,7 +24,7 @@
                 }
                 @if (!_simple)
                 {
-                    <NavLink href="/settings">@L["Settings"]</NavLink>
+                    @Area("/settings", L["Settings"])
                 }
             </nav>
             <form class="search" method="get" action="/search" data-enhance="false" role="search" aria-label="@L["Search the books"]">
@@ -73,6 +73,19 @@
                             }
                         </form>
                     }
+                    <form method="post" action="/account/icons">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="icons" value="@(_icons ? "hide" : "show")" />
+                        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                        @if (_icons)
+                        {
+                            <button type="submit" class="link" title="@L["Only the names in the menus, without a picture beside each area"]">@L["Hide the menu pictures"]</button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="link" title="@L["A picture beside each area's name in the menus, to help find it again"]">@L["Show the menu pictures"]</button>
+                        }
+                    </form>
                     <hr />
                     <form method="post" action="/logout">
                         <AntiforgeryToken />
@@ -92,7 +105,7 @@
 {
     <div class="simple-shell">
         <AuthorizeView>
-            <SimpleShortcuts User="context.User" Edition="_edition" />
+            <SimpleShortcuts User="context.User" Edition="_edition" Icons="_icons" />
         </AuthorizeView>
         <main class="page" id="main" tabindex="-1">
             <ClosingPasswordBox />
@@ -118,6 +131,7 @@ else
     private Edition _edition;
     private bool _simple;
     private MenuStyle _menu;
+    private bool _icons = true;
 
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
@@ -137,28 +151,33 @@ else
         _edition = view.Edition;
         _simple = view.Mode == ViewMode.Simple;
         _menu = view.Menu;
+        _icons = view.Icons;
     }
 
     // Each label is written out so the string catalog finds it.
     private RenderFragment MenuLink(string href) => href switch
     {
-        "/" => @<NavLink href="/" Match="NavLinkMatch.All">@L["Home"]</NavLink>,
-        "/accounts" => @<NavLink href="/accounts">@L["Accounts"]</NavLink>,
-        "/banking" => @<NavLink href="/banking">@L["Banking"]</NavLink>,
-        "/sales" => @<NavLink href="/sales">@L["Sales"]</NavLink>,
-        "/purchases" => @<NavLink href="/purchases">@L["Purchases"]</NavLink>,
-        "/inventory" => @<NavLink href="/inventory">@L["Inventory"]</NavLink>,
-        "/projects" => @<NavLink href="/projects">@L["Projects"]</NavLink>,
-        "/time" => @<NavLink href="/time">@L["Time"]</NavLink>,
-        "/nonprofit" => @<NavLink href="/nonprofit">@L["Nonprofit"]</NavLink>,
+        "/" => Area("/", L["Home"], NavLinkMatch.All),
+        "/accounts" => Area("/accounts", L["Accounts"]),
+        "/banking" => Area("/banking", L["Banking"]),
+        "/sales" => Area("/sales", L["Sales"]),
+        "/purchases" => Area("/purchases", L["Purchases"]),
+        "/inventory" => Area("/inventory", L["Inventory"]),
+        "/projects" => Area("/projects", L["Projects"]),
+        "/time" => Area("/time", L["Time"]),
+        "/nonprofit" => Area("/nonprofit", L["Nonprofit"]),
         "/customers" => _edition switch
         {
-            Edition.Nonprofit => @<NavLink href="/customers">@L["Donors"]</NavLink>,
-            Edition.ProfessionalServices => @<NavLink href="/customers">@L["Clients"]</NavLink>,
-            _ => @<NavLink href="/customers">@L["Customers"]</NavLink>,
+            Edition.Nonprofit => Area("/customers", L["Donors"]),
+            Edition.ProfessionalServices => Area("/customers", L["Clients"]),
+            _ => Area("/customers", L["Customers"]),
         },
-        "/journal" => @<NavLink href="/journal">@L["Journal"]</NavLink>,
-        "/reports" => @<NavLink href="/reports">@L["Reports"]</NavLink>,
-        _ => @<NavLink href="/dashboard">@L["Dashboard"]</NavLink>,
+        "/journal" => Area("/journal", L["Journal"]),
+        "/reports" => Area("/reports", L["Reports"]),
+        _ => Area("/dashboard", L["Dashboard"]),
     };
+
+    // An area's link in the top bar: its picture (unless the person turned them off), then its name.
+    private RenderFragment Area(string href, string label, NavLinkMatch match = NavLinkMatch.Prefix) =>
+        @<NavLink href="@href" class="area-link" Match="match">@if (_icons) { @AreaIcons.Svg(AreaIcons.For(href)) }<span>@label</span></NavLink>;
 }

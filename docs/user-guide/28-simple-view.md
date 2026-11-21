@@ -31,7 +31,7 @@ Links you aren't allowed to use are left out of the menus. A menu with nothing y
 
 ## The shortcut column
 
-The column down the left side holds the places you'll go every day: **Home**, **Customers**, **Vendors**, **Items** (the three centers, below), **Banking** and **Reports**, plus **Time**, **Gifts** or **Sales channels** in those editions. On a phone it becomes a row you can scroll sideways, above the page.
+The column down the left side holds the places you'll go every day: **Home**, **Customers**, **Vendors**, **Items** (the three centers, below), **Banking** and **Reports**, plus **Time**, **Gifts** or **Sales channels** in those editions. Each has a picture above its name, the same one the full view's menu uses for that area; your username, then **Hide the menu pictures**, leaves only the names. On a phone it becomes a row you can scroll sideways, above the page.
 
 ## Customer, Vendor and Item Centers
 

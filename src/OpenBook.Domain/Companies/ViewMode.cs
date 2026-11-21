@@ -24,7 +24,8 @@ public enum MenuStyle
 
 /// <summary>
 /// A person's own choices of how the screens look, one row per user (not audited, like dashboard panels): their view
-/// (null = the company's default) and the full view's menu style.
+/// (null = the company's default), the full view's menu style, and whether
+/// the menus show each area's picture beside its name.
 /// </summary>
 public sealed class ViewPreference
 {
@@ -39,6 +40,9 @@ public sealed class ViewPreference
     public ViewMode? Mode { get; private set; }
 
     public MenuStyle Menu { get; private set; }
+
+    /// <summary>True when they'd rather the menus showed only names, without each area's picture.</summary>
+    public bool HideIcons { get; private set; }
 
     public static ViewPreference Create(string username) => new()
     {
@@ -57,4 +61,6 @@ public sealed class ViewPreference
 
     public void Set(MenuStyle menu) =>
         Menu = Enum.IsDefined(menu) ? menu : throw new DomainException("view.menu_invalid", $"Unknown menu style {menu}.");
+
+    public void ShowIcons(bool show) => HideIcons = !show;
 }

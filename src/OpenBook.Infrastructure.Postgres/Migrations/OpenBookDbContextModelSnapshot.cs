@@ -2220,6 +2220,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<bool>("HideIcons")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Menu")
                         .IsRequired()
                         .HasMaxLength(20)

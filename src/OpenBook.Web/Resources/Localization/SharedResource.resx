@@ -125,6 +125,9 @@
   <data name="A petty cash box holds a fixed float. Open a box to work through it, in this order:" xml:space="preserve">
     <value>A petty cash box holds a fixed float. Open a box to work through it, in this order:</value>
   </data>
+  <data name="A picture beside each area's name in the menus, to help find it again" xml:space="preserve">
+    <value>A picture beside each area's name in the menus, to help find it again</value>
+  </data>
   <data name="A product, not counted in stock" xml:space="preserve">
     <value>A product, not counted in stock</value>
   </data>
@@ -1334,6 +1337,9 @@
   <data name="Hide inactive" xml:space="preserve">
     <value>Hide inactive</value>
   </data>
+  <data name="Hide the menu pictures" xml:space="preserve">
+    <value>Hide the menu pictures</value>
+  </data>
   <data name="History" xml:space="preserve">
     <value>History</value>
   </data>
@@ -2050,6 +2056,9 @@
   </data>
   <data name="Only posted invoices can be changed." xml:space="preserve">
     <value>Only posted invoices can be changed.</value>
+  </data>
+  <data name="Only the names in the menus, without a picture beside each area" xml:space="preserve">
+    <value>Only the names in the menus, without a picture beside each area</value>
   </data>
   <data name="Open" xml:space="preserve">
     <value>Open</value>
@@ -2884,6 +2893,9 @@
   </data>
   <data name="Show the menu as drop-downs" xml:space="preserve">
     <value>Show the menu as drop-downs</value>
+  </data>
+  <data name="Show the menu pictures" xml:space="preserve">
+    <value>Show the menu pictures</value>
   </data>
   <data name="Show {0} more" xml:space="preserve">
     <value>Show {0} more</value>

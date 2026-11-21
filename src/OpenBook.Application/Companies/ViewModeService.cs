@@ -7,7 +7,8 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Application.Companies;
 
 /// <summary>What the screens need to know about the person's view: theirs, else the company's default.</summary>
-public sealed record ViewState(ViewMode Mode, Edition Edition, bool OwnChoice, MenuStyle Menu = MenuStyle.Bar);
+/// <param name="Icons">Whether the menus show each area's picture beside its name (the default).</param>
+public sealed record ViewState(ViewMode Mode, Edition Edition, bool OwnChoice, MenuStyle Menu = MenuStyle.Bar, bool Icons = true);
 
 /// <summary>Which view a person sees, and switching it. A preference only: nothing is audited and no rule depends on it.</summary>
 public sealed class ViewModeService(ICompanyStore store, ICurrentUser user)
@@ -18,7 +19,8 @@ public sealed class ViewModeService(ICompanyStore store, ICurrentUser user)
         if (company is null)
             return new ViewState(ViewMode.Full, Edition.General, false);
         var own = await store.GetViewPreferenceAsync(user.Actor, ct);
-        return new ViewState(own?.Mode ?? company.DefaultViewMode, company.Edition, own?.Mode is not null, own?.Menu ?? MenuStyle.Bar);
+        return new ViewState(own?.Mode ?? company.DefaultViewMode, company.Edition, own?.Mode is not null, own?.Menu ?? MenuStyle.Bar,
+            own?.HideIcons != true);
     }
 
     /// <summary>Remembers the current person's view.</summary>
@@ -43,6 +45,20 @@ public sealed class ViewModeService(ICompanyStore store, ICurrentUser user)
         }
 
         own.Set(menu);
+        await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Remembers whether the current person wants each area's picture beside its name in the menus.</summary>
+    public async Task SetIconsAsync(bool show, CancellationToken ct = default)
+    {
+        var own = await store.GetViewPreferenceAsync(user.Actor, ct);
+        if (own is null)
+        {
+            own = ViewPreference.Create(user.Actor);
+            store.Add(own);
+        }
+
+        own.ShowIcons(show);
         await store.SaveChangesAsync(ct);
     }
 }

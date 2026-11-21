@@ -272,6 +272,45 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Menu_pictures_show_in_both_views_until_the_person_hides_them()
+    {
+        var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        await SetUp(browser);
+        Task<HttpResponseMessage> Icons(string page, string icons) =>
+            browser.PostAsync("/account/icons", new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = TokenIn(page),
+                ["icons"] = icons,
+                ["returnUrl"] = "/banking",
+            }));
+
+        // The simple view's shortcut column, then the full view's bar.
+        var home = await browser.GetStringAsync("/");
+        Assert.Contains("class=\"area-icon\"", home, StringComparison.Ordinal);
+        Assert.Contains("Hide the menu pictures", home, StringComparison.Ordinal);
+        await Switch(browser, home, "Full", "/");
+        home = await browser.GetStringAsync("/");
+        Assert.Contains("class=\"area-icon\"", home, StringComparison.Ordinal);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await Icons(home, "maybe")).StatusCode);
+        var hidden = await Icons(home, "hide");
+        Assert.Equal("/banking", hidden.Headers.Location?.OriginalString);
+        home = await browser.GetStringAsync("/");
+        Assert.DoesNotContain("area-icon", home, StringComparison.Ordinal);
+        Assert.Contains("Show the menu pictures", home, StringComparison.Ordinal);
+        await Switch(browser, home, "Simple", "/");
+        home = await browser.GetStringAsync("/");
+        Assert.DoesNotContain("area-icon", home, StringComparison.Ordinal);
+        Assert.Contains("class=\"shortcuts\"", home, StringComparison.Ordinal);
+
+        await Icons(home, "show");
+        Assert.Contains("class=\"area-icon\"", await browser.GetStringAsync("/"), StringComparison.Ordinal);
+        await using var scope = _app.Services.CreateAsyncScope();
+        var own = await scope.ServiceProvider.GetRequiredService<OpenBookDbContext>().ViewPreferences.SingleAsync();
+        Assert.Equal((ViewMode.Simple, false), (own.Mode, own.HideIcons));
+    }
+
+    [Fact]
     public async Task A_customer_form_left_open_is_told_someone_else_changed_it()
     {
         var browser = _app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
