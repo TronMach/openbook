@@ -292,7 +292,13 @@ public sealed partial class SimpleViewWebTests : IAsyncLifetime
         home = await browser.GetStringAsync("/");
         Assert.Contains("class=\"area-icon\"", home, StringComparison.Ordinal);
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await Icons(home, "maybe")).StatusCode);
+        // A value it doesn't know is refused: nothing saved, and not sent on to the return address. (The refusal arrives
+        // as a 400 or, once the status page has run for the form post, a redirect back: which one depends on timing.)
+        var refused = await Icons(home, "maybe");
+        Assert.NotEqual(HttpStatusCode.OK, refused.StatusCode);
+        Assert.NotEqual("/banking", refused.Headers.Location?.OriginalString);
+        home = await browser.GetStringAsync("/");
+        Assert.Contains("class=\"area-icon\"", home, StringComparison.Ordinal);
         var hidden = await Icons(home, "hide");
         Assert.Equal("/banking", hidden.Headers.Location?.OriginalString);
         home = await browser.GetStringAsync("/");
