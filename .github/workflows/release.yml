@@ -1,7 +1,8 @@
 # Publishes an OpenBook Desktop release: tests, builds the Windows installer, signs latest.json with the release key and
 # puts both on the GitHub release, where installed copies look for updates, with the package list (SBOM). Run it by
 # pushing a tag like v1.2.0, or by hand with a version (and "publish" unticked to only build and sign, as a trial).
-# Needs the OPENBOOK_UPDATE_KEY secret (the private release key, PEM). See docs/admin/releasing.md.
+# Needs the OPENBOOK_UPDATE_KEY secret (the private release key, PEM). Code-signs the installer through SignPath once the
+# SIGNPATH_* variables and the SIGNPATH_API_TOKEN secret are set. See docs/admin/releasing.md.
 name: Release
 
 on:
@@ -19,6 +20,8 @@ on:
 
 permissions:
   contents: write
+  # SignPath's action reads the uploaded installer through the run's token.
+  actions: read
 
 jobs:
   release:
@@ -58,6 +61,64 @@ jobs:
         shell: pwsh
         run: ./tools/package-desktop.ps1 -Version ${{ steps.version.outputs.version }}
 
+      # Code signing through SignPath Foundation (docs/admin/releasing.md, "Code signing"). Off until the repository has
+      # the SIGNPATH_ORGANIZATION_ID variable; a trial run signs only with SIGNPATH_TEST_POLICY set. Each request waits
+      # (up to an hour) for an approver to approve it on SignPath.
+      - name: Code signing
+        id: signing
+        shell: pwsh
+        env:
+          ORGANIZATION: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          PUBLISHING: ${{ github.event_name == 'push' || inputs.publish }}
+          RELEASE_POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY }}
+          TEST_POLICY: ${{ vars.SIGNPATH_TEST_POLICY }}
+        run: |
+          $policy = if ($env:PUBLISHING -eq 'true') { if ($env:RELEASE_POLICY) { $env:RELEASE_POLICY } else { 'release-signing' } } else { $env:TEST_POLICY }
+          $sign = [bool]$env:ORGANIZATION -and [bool]$policy
+          "sign=$($sign.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "policy=$policy" >> $env:GITHUB_OUTPUT
+          if ($sign) { Write-Host "Signing with the '$policy' policy." } else { Write-Host 'Not signing: SignPath is not set up for this run.' }
+          if ($sign) {
+            # One fixed name, which the artifact configuration names.
+            New-Item -ItemType Directory -Force artifacts/signing/unsigned | Out-Null
+            Copy-Item "artifacts/desktop/OpenBook-Setup-${{ steps.version.outputs.version }}.exe" artifacts/signing/unsigned/OpenBook-Setup.exe
+          }
+
+      - name: Upload the installer for signing
+        id: unsigned
+        if: steps.signing.outputs.sign == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-installer
+          path: artifacts/signing/unsigned/OpenBook-Setup.exe
+          retention-days: 1
+
+      - name: Sign the installer
+        if: steps.signing.outputs.sign == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'openbook' }}
+          signing-policy-slug: ${{ steps.signing.outputs.policy }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: artifacts/signing/signed
+          parameters: |
+            version: ${{ toJSON(steps.version.outputs.version) }}
+
+      - name: Check the signature
+        if: steps.signing.outputs.sign == 'true'
+        shell: pwsh
+        run: |
+          $signed = 'artifacts/signing/signed/OpenBook-Setup.exe'
+          $signature = Get-AuthenticodeSignature $signed
+          if ($signature.Status -ne 'Valid') { throw "The signed installer's signature is $($signature.Status): $($signature.StatusMessage)" }
+          Write-Host "Signed by $($signature.SignerCertificate.Subject)"
+          # The manifest's hash and size are worked out below, from the signed file.
+          Copy-Item $signed "artifacts/desktop/OpenBook-Setup-${{ steps.version.outputs.version }}.exe" -Force
+
       - name: Package list (SBOM)
         shell: pwsh
         run: ./tools/make-sbom.ps1 -Version ${{ steps.version.outputs.version }}
@@ -93,7 +154,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = '${{ steps.version.outputs.version }}'
+          $repo = 'https://github.com/${{ github.repository }}'
+          # SignPath Foundation asks for the code signing policy on every download page.
+          $notes = "[Code signing policy]($repo#code-signing-policy) · [Privacy]($repo/blob/master/PRIVACY.md)"
           gh release create "v$version" "artifacts/desktop/OpenBook-Setup-$version.exe" artifacts/desktop/latest.json `
             "artifacts/desktop/OpenBook-$version.cdx.json" `
-            --title "OpenBook $version" --generate-notes --target '${{ github.sha }}'
+            --title "OpenBook $version" --notes $notes --generate-notes --target '${{ github.sha }}'
           if ($LASTEXITCODE -ne 0) { throw 'Creating the release failed.' }

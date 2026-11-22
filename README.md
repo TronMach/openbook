@@ -19,6 +19,7 @@ Moving in from QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks i
 
 - [User guide](docs/user-guide/README.md): every area, written for bookkeepers.
 - [Desktop admin guide](docs/admin/desktop.md) and [server admin guide](docs/admin/server.md).
+- [Privacy](PRIVACY.md): what OpenBook sends to other services, and when.
 - [Roadmap](ROADMAP.md): what's built and what's planned.
 - [CLAUDE.md](CLAUDE.md): how the code is organized and the rules it keeps, for contributors, with each area's notes in [docs/dev](docs/dev).
 
@@ -37,6 +38,20 @@ powershell -File tools/run-tests.ps1
 ```
 
 `tools/run-tests.ps1 -Postgres` runs the integration tests on PostgreSQL too, on a test-only server it sets up from an installed PostgreSQL (`tools/pgtest.ps1`; see CLAUDE.md). `tools/package-desktop.ps1 -Version x.y.z` builds the Windows installer (needs Inno Setup 6).
+
+## Code signing policy
+
+OpenBook is applying to [SignPath Foundation](https://signpath.org) for free code signing of its Windows installer. Until the project is accepted, releases aren't code-signed.
+
+- **What is signed:** the installer, `OpenBook-Setup-<version>.exe`, of each release on the [Releases](https://github.com/TronMach/openbook/releases) page. Nothing else is signed with the project's certificate.
+- **How:** only the [Release workflow](.github/workflows/release.yml) signs. It runs on GitHub Actions from a version tag of this repository, tests the code, builds the installer from the tagged source and sends it for signing. Nothing built on anyone's own computer is signed.
+- **Approval:** a person on the team approves every signing request by hand, release by release, after checking that it comes from the expected tag.
+- **Team:**
+  - Committers and reviewers: [TronMach](https://github.com/TronMach) (maintainer). Changes from anyone else come in as pull requests, which a reviewer reads before merging.
+  - Approvers: [TronMach](https://github.com/TronMach).
+- **Accounts:** everyone on the team uses two-factor authentication on GitHub and on SignPath.
+- **Libraries:** third-party libraries inside the installer keep their own publishers' signatures, or none. They're listed with their licences in each release's package list (`OpenBook-<version>.cdx.json`).
+- **Privacy:** what OpenBook sends to other services, and when, is in [PRIVACY.md](PRIVACY.md).
 
 ## Licence
 

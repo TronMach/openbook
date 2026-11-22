@@ -26,6 +26,11 @@ AppName=OpenBook
 AppVerName=OpenBook {#AppVersion}
 #endif
 AppVersion={#AppVersion}
+; The setup's file details. Code signing (docs/admin/releasing.md) checks the product name and version.
+VersionInfoProductName=OpenBook
+VersionInfoVersion={#AppVersion}
+VersionInfoProductVersion={#AppVersion}
+VersionInfoProductTextVersion={#AppVersion}
 AppPublisher=OpenBook
 AppComments=Open-source bookkeeping for small businesses.
 DefaultDirName={localappdata}\Programs\OpenBook

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the OpenBook Desktop installer. Paste it into the SignPath project's artifact
+  configuration (docs/admin/releasing.md, "Code signing"); SignPath reads it from there, not from this file, so keep the two
+  the same.
+
+  The release workflow uploads the installer as OpenBook-Setup.exe (one fixed name) in a GitHub artifact, which reaches
+  SignPath as a ZIP, so the ZIP is the outer element. The product name and version must match the setup's file details
+  (VersionInfo* in OpenBook.iss); the workflow passes the version as a parameter.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="OpenBook-Setup.exe" product-name="OpenBook" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

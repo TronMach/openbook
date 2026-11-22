@@ -6,7 +6,33 @@ Installed copies of OpenBook Desktop update themselves from the latest release o
 
 Each release has two files: the installer, `OpenBook-Setup-<version>.exe`, and `latest.json`. The manifest names the version, the installer's address, its size and its SHA-256, and carries a signature made with the **release key**. Copies of OpenBook have the public half of that key built in (`src/OpenBook.Application/Updates/UpdateKeys.cs`). They ignore a manifest the key didn't sign, and throw away a download whose size or hash doesn't match. So a fake release, or a changed file on the download host, is never installed.
 
-The installer itself isn't code-signed yet: Windows SmartScreen warns on a first install downloaded from the web. Updates OpenBook downloads itself don't show that warning.
+The installer itself isn't code-signed yet: Windows SmartScreen warns on a first install downloaded from the web. Updates OpenBook downloads itself don't show that warning. The project is applying to SignPath Foundation for code signing, and the release workflow is ready for it ([Code signing](#code-signing)).
+
+## Code signing
+
+SignPath Foundation signs open-source projects' releases for free, with a certificate in its own name: Windows shows the publisher as **SignPath Foundation**. Their conditions are at [signpath.org/terms](https://signpath.org/terms). What they ask of the project is already in place: the **Code signing policy** section of the README (the project's home page), [PRIVACY.md](../../PRIVACY.md), the policy and privacy links at the top of every release's notes, and installers built only by the release workflow on GitHub-hosted runners. Everyone on the team uses two-factor authentication on GitHub and SignPath.
+
+The workflow signs nothing until the repository has the SignPath settings. Once the project is accepted:
+
+1. On SignPath, link the **GitHub.com** trusted build system to the OpenBook project, and install the SignPath GitHub App on the repository (<https://github.com/apps/signpath>).
+2. Paste [`packaging/windows/signpath-artifact-configuration.xml`](../../packaging/windows/signpath-artifact-configuration.xml) into the project's artifact configuration and make it the default. It signs the installer only, with Authenticode, and checks its product name (OpenBook) and version, which `OpenBook.iss` sets in the setup's file details. Inno Setup pads the setup's product name and version with trailing spaces (to 60 and 50 characters; `(Get-Item <setup>).VersionInfo.ProductVersion.Length` shows it). If SignPath refuses the name or version on the first request because of that, ask SignPath support how they compare these values. Don't drop the restriction: their terms require it.
+3. Check the signing policies: `release-signing` with yourself as approver, and, if SignPath set one up, `test-signing`. Make a CI user with submitter rights on them and an API token for it.
+4. Give the repository the token and the ids (the organization id is on SignPath's organization page):
+
+```bash
+gh secret set SIGNPATH_API_TOKEN --repo TronMach/openbook
+```
+
+```bash
+gh variable set SIGNPATH_ORGANIZATION_ID --repo TronMach/openbook --body "<organization id>"
+```
+
+`SIGNPATH_PROJECT_SLUG` (default `openbook`) and `SIGNPATH_SIGNING_POLICY` (default `release-signing`) need setting only when SignPath's names differ. `SIGNPATH_TEST_POLICY` signs trial runs (publish unticked) with that policy; without it, trial runs stay unsigned.
+
+5. Try it with a trial run of the workflow, then check the installer on the run (**Properties → Digital Signatures**).
+6. Change the README's code signing policy: replace its first paragraph with "Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)." Remove the "isn't code-signed yet" sentences from the README, this page, `docs/admin/desktop.md` and `docs/admin/threat-model.md`.
+
+With signing on, each release stops at **Sign the installer** until an approver approves the request on SignPath (the run waits up to an hour; a run that times out can be run again). The workflow checks the signature, puts the signed installer in place of the unsigned one, and only then works out `latest.json`'s hash and size, so installed copies get the file that was signed. The programs inside the installer aren't signed separately. Windows checks the signature of the file people download, and OpenBook checks the installers it downloads itself against `latest.json`.
 
 ## The release key
 

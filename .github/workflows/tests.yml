@@ -10,9 +10,9 @@ name: Tests
 on:
   push:
     branches: [master]
-    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'docs/dev/**', 'docs/admin/**', 'website/**', '.github/workflows/website.yml', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
+    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'PRIVACY.md', 'docs/dev/**', 'docs/admin/**', 'website/**', '.github/workflows/website.yml', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
   pull_request:
-    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'docs/dev/**', 'docs/admin/**', 'website/**', '.github/workflows/website.yml', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
+    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'PRIVACY.md', 'docs/dev/**', 'docs/admin/**', 'website/**', '.github/workflows/website.yml', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
   workflow_dispatch:
 
 permissions:
