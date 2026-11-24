@@ -204,7 +204,7 @@ public sealed record EmailMessage(
 /// <summary>Sends email with the company's settings. Implemented with MailKit in Infrastructure.</summary>
 public interface IEmailSender
 {
-    /// <param name="password">The SMTP password, already decrypted.</param>
+    /// <param name="password">The SMTP password, already decrypted; with Microsoft's sign-in, the access token.</param>
     Task SendAsync(EmailSettings settings, string? password, EmailMessage message, CancellationToken ct);
 }
 

@@ -33,6 +33,24 @@ public sealed class FakePayPal : HttpMessageHandler
     public List<string> Captures { get; } = [];
     public int TokensIssued { get; private set; }
 
+    /// <summary>The next refund is made, but its answer never arrives.</summary>
+    public bool LoseNextAnswer { get; set; }
+
+    public sealed record MadeRefund(string Id, string CaptureId, string Value, string Key);
+
+    public List<MadeRefund> Refunds { get; } = [];
+
+    /// <summary>PayPal's report of a refund OpenBook made.</summary>
+    public static string Refunded(MadeRefund refund, string total) => Event("PAYMENT.CAPTURE.REFUNDED", new
+    {
+        id = refund.Id,
+        status = "COMPLETED",
+        custom_id = refund.Key,
+        amount = new { currency_code = "USD", value = refund.Value },
+        seller_payable_breakdown = new { total_refunded_amount = new { currency_code = "USD", value = total } },
+        links = new[] { new { rel = "up", href = $"https://api.sandbox.paypal.com/v2/payments/captures/{refund.CaptureId}", method = "GET" } },
+    });
+
     /// <summary>The next capture is declined, as a card PayPal won't charge.</summary>
     public bool DeclineCapture { get; set; }
 
@@ -121,6 +139,27 @@ public sealed class FakePayPal : HttpMessageHandler
             return Answer(HttpStatusCode.OK, new { verification_status = good ? "SUCCESS" : "FAILURE" });
         }
 
+        const string captures = "/v2/payments/captures/";
+        if (request.Method == HttpMethod.Post && path.StartsWith(captures, StringComparison.Ordinal) && path.EndsWith("/refund", StringComparison.Ordinal))
+        {
+            var key = request.Headers.GetValues("PayPal-Request-Id").Single();
+            if (Refunds.FirstOrDefault(r => r.Key == key) is not { } refund)
+            {
+                var json = JsonNode.Parse(body)!;
+                Assert.Equal(key, (string?)json["custom_id"]);
+                refund = new MadeRefund("1JU" + key[^12..], path[captures.Length..^"/refund".Length], (string)json["amount"]!["value"]!, key);
+                Refunds.Add(refund);
+            }
+
+            if (LoseNextAnswer)
+            {
+                LoseNextAnswer = false;
+                throw new HttpRequestException("Connection reset before the answer came.");
+            }
+
+            return Answer(HttpStatusCode.Created, new { id = refund.Id, status = "COMPLETED", custom_id = refund.Key });
+        }
+
         const string orders = "/v2/checkout/orders/";
         if (!path.StartsWith(orders, StringComparison.Ordinal))
             return Answer(HttpStatusCode.NotFound, new { name = "NOT_FOUND" });
@@ -150,7 +189,7 @@ public sealed class FakePayPal : HttpMessageHandler
             : Answer(HttpStatusCode.NotFound, new { name = "RESOURCE_NOT_FOUND", details = new[] { new { issue = "INVALID_RESOURCE_ID", description = "Specified resource ID does not exist." } } });
     }
 
-    private static object Json(Order o) => new
+    private object Json(Order o) => new
     {
         id = o.Id,
         status = o.Status,
@@ -163,6 +202,7 @@ public sealed class FakePayPal : HttpMessageHandler
                 payments = o.CaptureId is null ? null : new
                 {
                     captures = new[] { new { id = o.CaptureId, status = "COMPLETED", amount = new { currency_code = "USD", value = o.Amount } } },
+                    refunds = Refunds.Where(r => r.CaptureId == o.CaptureId).Select(r => new { id = r.Id, status = "COMPLETED", custom_id = r.Key }).ToArray(),
                 },
             },
         },

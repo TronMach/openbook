@@ -105,6 +105,11 @@
         </table>
     </div>
 
+    @if (_transaction.Kind == BankTransactionKind.Spend)
+    {
+        <UseTaxSummary DocumentId="_transaction.Id" />
+    }
+
     @if (_transaction.Status == BankTransactionStatus.Posted)
     {
         <div class="card" style="margin-top: 1.5rem">

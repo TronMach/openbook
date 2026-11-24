@@ -83,6 +83,8 @@ public sealed class ConsoleCommandTests : IAsyncLifetime
 
         // A backup's chain is all there, and a fingerprint noted from it still fits.
         var backup = Path.Combine(_folder, "backup.db");
+        SqliteConnection.ClearAllPools();
+        await ExecuteAsync("PRAGMA wal_checkpoint(TRUNCATE);");
         File.Copy(CompanyFile, backup);
         var compared = await RunAsync(["verify-audit", "--against", backup]);
         Assert.True(compared.Code == 0, compared.Output);

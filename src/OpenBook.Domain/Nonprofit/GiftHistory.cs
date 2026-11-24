@@ -44,6 +44,8 @@ public sealed class GiftHistory
             throw new DomainException("gift_history.amount", "An amount is zero or more, in cents.");
         if (goodsValue < 0m || goodsValue > Money.MaxAmount || decimal.Round(goodsValue, 2) != goodsValue || (kind == GiftKind.Cash && goodsValue > amount))
             throw new DomainException("gift_history.goods_value", "What the donor received is valued from zero up to the gift, in cents.");
+        if (goodsValue > 0m && string.IsNullOrWhiteSpace(goodsDescription))
+            throw new DomainException("gift_history.goods_description", "Say what the donor received in return.");
         return new GiftHistory
         {
             Id = Guid.CreateVersion7(),

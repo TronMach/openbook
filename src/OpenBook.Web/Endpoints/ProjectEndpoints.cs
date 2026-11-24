@@ -1,8 +1,11 @@
 using System.Globalization;
+using System.Security.Claims;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Projects;
 using OpenBook.Application;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Companies;
 using OpenBook.Domain.Projects;
 using OpenBook.Web.Security;
 
@@ -53,8 +56,10 @@ public static class ProjectEndpoints
             })).RequireAuthorization();
         app.MapPost("/projects/{id:guid}/milestones/{line:int}/remove", async (Guid id, int line, IFormCollection _, ProjectMilestoneService milestones, CancellationToken ct) =>
             await Back($"/projects/{id}#milestones", async () => await milestones.RemoveAsync(id, line, ct))).RequireAuthorization();
-        app.MapPost("/projects/{id:guid}/milestones/{line:int}/bill", async (Guid id, int line, IFormCollection form, ProjectMilestoneService milestones, CancellationToken ct) =>
+        app.MapPost("/projects/{id:guid}/milestones/{line:int}/bill", async (Guid id, int line, IFormCollection form, ProjectMilestoneService milestones, ClaimsPrincipal user, CancellationToken ct) =>
         {
+            if (NoInvoices(user, $"/projects/{id}") is { } refused)
+                return refused;
             try
             {
                 var invoice = await milestones.BillAsync(id, line, Id(form["itemId"]) ?? throw new DomainException("project.milestone_item", "Choose the product or service to bill it with."),
@@ -154,6 +159,10 @@ public static class ProjectEndpoints
             }
         }).RequireAuthorization();
 
+        // Takes a write-down off: the time is billed as worked again.
+        app.MapPost("/time/{id:guid}/put-back", async (IFormCollection _, Guid id, TimeService time, CancellationToken ct) =>
+            await Back($"/time/{id}/edit", async () => await time.ClearWriteDownAsync(id, ct))).RequireAuthorization();
+
         app.MapPost("/time/{id:guid}/stop", async (IFormCollection _, Guid id, TimeService time, CancellationToken ct) =>
             await Back("/time", async () => await time.StopAsync(id, ct))).RequireAuthorization();
 
@@ -225,7 +234,8 @@ public static class ProjectEndpoints
             }
             catch (DomainException ex)
             {
-                return Results.Redirect($"/mileage?error={Uri.EscapeDataString(ex.Message)}#pay-back");
+                var password = OpenBook.Web.Security.ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
+                return Results.Redirect($"/mileage?error={Uri.EscapeDataString(ex.Message)}{password}#pay-back");
             }
         }).RequireAuthorization();
 
@@ -341,8 +351,10 @@ public static class ProjectEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/time/billing/post", async (IFormCollection form, PreBillService billing, CancellationToken ct) =>
+        app.MapPost("/time/billing/post", async (IFormCollection form, PreBillService billing, ClaimsPrincipal user, CancellationToken ct) =>
         {
+            if (NoInvoices(user, "/time/billing") is { } refused)
+                return refused;
             List<Guid> drafts = [.. form["draft"].Select(c => Guid.TryParse(c, out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty)];
             var run = await billing.PostManyAsync(drafts, Date(form["date"]) ?? Today(), form["send"] == "true", ct);
             var note = $"{run.Posted} posted, {run.Emailed} emailed.{(run.Problems.Count == 0 ? "" : " " + string.Join(" ", run.Problems))}";
@@ -362,8 +374,10 @@ public static class ProjectEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/time/billing/{id:guid}/post", async (Guid id, IFormCollection form, PreBillService billing, CancellationToken ct) =>
+        app.MapPost("/time/billing/{id:guid}/post", async (Guid id, IFormCollection form, PreBillService billing, ClaimsPrincipal user, CancellationToken ct) =>
         {
+            if (NoInvoices(user, $"/time/billing/{id}") is { } refused)
+                return refused;
             try
             {
                 await SaveDraftAsync(billing, id, form, ct);
@@ -384,6 +398,10 @@ public static class ProjectEndpoints
 
         return app;
     }
+
+    /// <summary>An invoice is a sales record whichever page makes it, so this needs the sales area too; null when the user has it.</summary>
+    private static IResult? NoInvoices(ClaimsPrincipal user, string back) =>
+        AuthClaims.MayWrite(user, "sales") ? null : Results.Redirect(AccessRules.DeniedUrl(user, "/sales/invoices", UserRole.Standard, back));
 
     private static async Task SaveDraftAsync(PreBillService billing, Guid id, IFormCollection form, CancellationToken ct)
     {

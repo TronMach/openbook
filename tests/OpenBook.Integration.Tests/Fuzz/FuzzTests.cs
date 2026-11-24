@@ -65,6 +65,29 @@ public sealed class FuzzTests
         new("receipt-text", b => ReceiptParser.Parse(Text(b), ["Corner Cafe", "Paper Co"]), Seeds.Receipt),
         new("claude-answer", b => ClaudeDocumentReader.Parse(Text(b)), Seeds.ClaudeAnswer),
         new("simplefin", b => SimpleFin.Parse(Text(b), TimeZoneInfo.Utc), Seeds.SimpleFin),
+        new("passkey", b =>
+        {
+            var parts = Text(b).Split('|');
+            OpenBook.Application.Companies.WebAuthn.Register(new OpenBook.Application.Companies.NewPasskey(parts[0], parts.ElementAtOrDefault(1), parts.ElementAtOrDefault(2), -7), "c", "https://b.test", "b.test");
+        }, Seeds.Passkey),
+        new("microsoft-mail", b => { _ = OpenBook.Application.Forms.MicrosoftMail.Token(Text(b)); }, Seeds.MicrosoftToken),
+        new("microsoft-mail-error", b => { _ = OpenBook.Application.Forms.MicrosoftMail.Error(Text(b), 400); }, Seeds.MicrosoftToken),
+        new("mailbox-message", b =>
+        {
+            MimeKit.MimeMessage message;
+            try
+            {
+                using var stream = new MemoryStream(b);
+                message = MimeKit.MimeMessage.Load(stream);
+            }
+            catch (FormatException)
+            {
+                // MimeKit's own refusal; the mail server has read the message by then.
+                return;
+            }
+
+            OpenBook.Infrastructure.Documents.MailboxFiles.Read(1, message);
+        }, Seeds.BillMessage),
         new("plaid", b => { Plaid.TransactionsPage(Text(b)); Plaid.Accounts(Text(b)); _ = Plaid.Error(Text(b), 400); }, Seeds.Plaid),
         new("paypal", b =>
         {
@@ -85,6 +108,22 @@ public sealed class FuzzTests
             _ = OpenBook.Application.Forms.Twilio.Error(Text(b), 400);
         }, Seeds.TwilioMessage, Seeds.TwilioError),
         new("phone-number", b => { _ = PhoneNumbers.TryNormalize(Text(b), "en-GB"); _ = TextTemplates.Measure(Text(b)); }, Seeds.PhoneNumber),
+        new("paypal-refund", b => { OpenBook.Application.Sales.PayPal.Refund(Text(b)); OpenBook.Application.Sales.PayPal.FindRefund(Text(b), "obr-1"); }, Seeds.PayPalRefund),
+        new("square-refund", b =>
+        {
+            OpenBook.Application.Sales.Square.Refund(Text(b));
+            OpenBook.Application.Sales.Square.RefundReason(Text(b));
+            OpenBook.Application.Sales.Square.RefundIds(Text(b));
+        }, Seeds.SquareRefund),
+        new("stripe-refund", b => { OpenBook.Application.Sales.StripeAnswers.Refund(Text(b)); OpenBook.Application.Sales.StripeAnswers.FindRefund(Text(b), "obr-1"); }, Seeds.StripeRefund),
+        new("stripe-charge", b =>
+        {
+            _ = OpenBook.Application.Sales.StripeAnswers.Error(Text(b), 400);
+            OpenBook.Application.Sales.StripeAnswers.ChargeEvent(Text(b));
+            OpenBook.Application.Sales.StripeAnswers.Declined(Text(b));
+            OpenBook.Application.Sales.StripeAnswers.FindIntent(Text(b), "obc-1");
+        }, Seeds.StripeCharge),
+        new("stripe-setup", b => { OpenBook.Application.Sales.StripeAnswers.Setup(Text(b)); }, Seeds.StripeSetup),
         new("square", b => { OpenBook.Application.Sales.Square.Order(Text(b), ""); }, Seeds.SquareOrder),
         new("square-event", b => { OpenBook.Application.Sales.Square.Event(Text(b)); _ = OpenBook.Application.Sales.Square.Error(Text(b), 400); }, Seeds.SquareEvent),
         new("update-manifest", b => UpdateManifest.Parse(Text(b)), Seeds.Manifest),

@@ -30,6 +30,8 @@ public sealed class AllocationService(INonprofitStore store, AccountService acco
         ArgumentNullException.ThrowIfNull(details);
         await CheckAsync(details, ct);
         var existing = id is { } known ? await store.GetAllocationRuleAsync(known, ct) ?? throw new EntityNotFoundException(RuleEntity, known) : null;
+        if (existing is not { IsActive: false })
+            await EnsurePoolFreeAsync(details.AccountId, details.PoolClassId, existing?.Id, ct);
         var rule = existing ?? AllocationRule.Create(details);
         var before = existing is null ? null : Snapshot(existing);
         existing?.Update(details);
@@ -43,11 +45,21 @@ public sealed class AllocationService(INonprofitStore store, AccountService acco
     public async Task<AllocationRule> SetActiveAsync(Guid id, bool active, CancellationToken ct = default)
     {
         var rule = await store.GetAllocationRuleAsync(id, ct) ?? throw new EntityNotFoundException(RuleEntity, id);
+        if (active && !rule.IsActive)
+            await EnsurePoolFreeAsync(rule.AccountId, rule.PoolClassId, rule.Id, ct);
         var before = Snapshot(rule);
         rule.SetActive(active);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, RuleEntity, id, before, Snapshot(rule)));
         await store.SaveChangesAsync(ct);
         return rule;
+    }
+
+    /// <summary>A rule moves all of what's in its pool, so two on one pool would move it twice.</summary>
+    private async Task EnsurePoolFreeAsync(Guid accountId, Guid? poolClassId, Guid? except, CancellationToken ct)
+    {
+        var pool = poolClassId == Guid.Empty ? null : poolClassId;
+        if ((await store.ListAllocationRulesAsync(ct)).FirstOrDefault(r => r.Id != except && r.IsActive && r.AccountId == accountId && r.PoolClassId == pool) is { } other)
+            throw new DomainException("allocation.pool_taken", $"\"{other.Name}\" already spreads that account from the same pool, and each would move all of it. Change that rule, or switch it off first.");
     }
 
     private async Task CheckAsync(AllocationRuleDetails details, CancellationToken ct)
@@ -76,9 +88,13 @@ public sealed class AllocationService(INonprofitStore store, AccountService acco
         if (to < from)
             throw new DomainException("report.range_invalid", "The start date is after the end date.");
         var runs = new List<AllocationRun>();
+        var moved = new HashSet<(Guid, Guid?)>();
         foreach (var preview in await PreviewAsync(from, to, ct))
         {
             if (preview.Amount <= 0m || ruleIds?.Contains(preview.Rule.Id) == false)
+                continue;
+            // Two rules on one pool, from before they were refused: the first one empties it.
+            if (!moved.Add((preview.Rule.AccountId, preview.Rule.PoolClassId)))
                 continue;
             var rule = preview.Rule;
             var shares = Shares.ByWeight(preview.Amount, rule.Shares.Select(s => s.Percent).ToList());

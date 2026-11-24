@@ -211,11 +211,17 @@ public sealed class OnlinePaymentNotice
     public string EventId { get; private set; }
 
     public OnlineNoticeKind Kind { get; private set; }
-    public Guid PaymentLinkId { get; private set; }
+
+    /// <summary>The link it was paid on; null for a charge to a saved card.</summary>
+    public Guid? PaymentLinkId { get; private set; }
+
+    /// <summary>The charge to a saved card; null for a payment link.</summary>
+    public Guid? CardChargeId { get; private set; }
+
     public Guid InvoiceId { get; private set; }
     public Guid? CustomerPaymentId { get; private set; }
 
-    /// <summary>What was refunded in all so far, or what's disputed.</summary>
+    /// <summary>What was refunded in all so far (refunds made from OpenBook left out), or what's disputed.</summary>
     public decimal Amount { get; private set; }
 
     public string? Reason { get; private set; }
@@ -226,19 +232,29 @@ public sealed class OnlinePaymentNotice
     public static OnlinePaymentNotice Create(string eventId, OnlineNoticeKind kind, PaymentLink link, decimal amount, string? reason, DateTimeOffset at)
     {
         ArgumentNullException.ThrowIfNull(link);
-        return new OnlinePaymentNotice
-        {
-            Id = Guid.CreateVersion7(),
-            EventId = Common.Text.Optional(eventId, 200, "notice.event_too_long", "Event id") ?? throw new Common.DomainException("notice.event_required", "The event has no id."),
-            Kind = kind,
-            PaymentLinkId = link.Id,
-            InvoiceId = link.InvoiceId,
-            CustomerPaymentId = link.CustomerPaymentId,
-            Amount = amount,
-            Reason = reason is { Length: > 200 } long_ ? long_[..200] : reason,
-            ReceivedAt = at.ToUniversalTime(),
-        };
+        return Create(eventId, kind, link.Id, null, link.InvoiceId, link.CustomerPaymentId, amount, reason, at);
     }
+
+    public static OnlinePaymentNotice Create(string eventId, OnlineNoticeKind kind, CardCharge charge, decimal amount, string? reason, DateTimeOffset at)
+    {
+        ArgumentNullException.ThrowIfNull(charge);
+        return Create(eventId, kind, null, charge.Id, charge.InvoiceId, charge.CustomerPaymentId, amount, reason, at);
+    }
+
+    private static OnlinePaymentNotice Create(
+        string eventId, OnlineNoticeKind kind, Guid? linkId, Guid? chargeId, Guid invoiceId, Guid? paymentId, decimal amount, string? reason, DateTimeOffset at) => new()
+    {
+        Id = Guid.CreateVersion7(),
+        EventId = Common.Text.Optional(eventId, 200, "notice.event_too_long", "Event id") ?? throw new Common.DomainException("notice.event_required", "The event has no id."),
+        Kind = kind,
+        PaymentLinkId = linkId,
+        CardChargeId = chargeId,
+        InvoiceId = invoiceId,
+        CustomerPaymentId = paymentId,
+        Amount = amount,
+        Reason = reason is { Length: > 200 } long_ ? long_[..200] : reason,
+        ReceivedAt = at.ToUniversalTime(),
+    };
 
     public void Resolve(DateTimeOffset at, string by) => (ResolvedAt, ResolvedBy) = (ResolvedAt ?? at.ToUniversalTime(), ResolvedBy ?? by);
 }

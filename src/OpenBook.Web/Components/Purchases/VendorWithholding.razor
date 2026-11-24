@@ -1,0 +1,51 @@
+@using System.Globalization
+
+@* Whether backup withholding applies to a vendor (accountants change it). Posts to /purchases/backup-withholding/vendors/{id}. *@
+<div class="card" id="backup-withholding" style="margin-top: 1.5rem">
+    <h2>Backup withholding</h2>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Vendor.BackupWithholdingFrom is { } since)
+    {
+        <p>
+            Applies to payments from @Labels.Date(since)@(Vendor.BackupWithholdingNote is { } note ? $": {note}" : "").
+            Paying their bills holds back @Rate of what's reportable on a 1099, owed to the IRS instead.
+            <ActionLink Href="/reports/backup-withholding">Backup withholding report</ActionLink>
+        </p>
+    }
+    else
+    {
+        <p class="muted">Doesn't apply. Turn it on when the IRS says to (a B notice), or the vendor gave no tax ID: @Rate of what they're paid is then held back for the IRS.</p>
+    }
+    @if (CanEdit)
+    {
+        <PostForm Action="@($"/purchases/backup-withholding/vendors/{Vendor.Id}")" data-enhance="false">
+            <AntiforgeryToken />
+            <label class="check">
+                <input type="checkbox" name="applies" value="true" checked="@(Vendor.BackupWithholdingFrom is not null)" />
+                <span>Backup withholding applies</span>
+            </label>
+            <div class="row">
+                <div class="field">
+                    <label for="withholding-from">To payments from</label>
+                    <input id="withholding-from" name="from" type="date" value="@((Vendor.BackupWithholdingFrom ?? CompanyTime.Today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
+                </div>
+                <div class="field">
+                    <label for="withholding-note">Why <span class="muted">(optional)</span></label>
+                    <input id="withholding-note" name="note" maxlength="500" value="@Vendor.BackupWithholdingNote" placeholder="First B notice, no W-9…" />
+                </div>
+            </div>
+            <div class="actions"><button type="submit" class="secondary">Save backup withholding</button></div>
+        </PostForm>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Vendor Vendor { get; set; } = null!;
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    private static string Rate => $"{(BackupWithholding.RateOn(CompanyTime.Today) * 100m).ToString("0.##", CultureInfo.CurrentCulture)}%";
+}

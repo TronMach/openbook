@@ -64,7 +64,7 @@ public sealed class AssetReports(IAssetStore store, ICompanyStore companies)
         var yearStart = new DateOnly(year, 1, 1);
         var yearEnd = new DateOnly(year, 12, 31);
         var assets = (await store.ListAssetsAsync(ct))
-            .Where(a => a.Method != DepreciationMethod.None && a.InServiceDate <= yearEnd && !(a.DisposedOn is { } d && d < yearStart))
+            .Where(a => !a.IsRemoved && a.Method != DepreciationMethod.None && a.InServiceDate <= yearEnd && !(a.DisposedOn is { } d && d < yearStart))
             .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var rows = new List<ReportTableRow>();
@@ -103,7 +103,7 @@ public sealed class AssetReports(IAssetStore store, ICompanyStore companies)
                 new("Year", ColumnFormat.Money), new("Accumulated at year end", ColumnFormat.Money), new("Book value", ColumnFormat.Money),
             ],
             rows,
-            Note: "MACRS uses the IRS half-year (or mid-month for real property) tables with calendar tax years; the mid-quarter convention, section 179 and bonus depreciation aren't applied.");
+            Note: "MACRS uses the IRS half-year (or mid-month for real property) tables with calendar tax years, on what's left after a section 179 or bonus amount entered on the asset; the mid-quarter convention isn't applied.");
     }
 
     /// <summary>Every loan's balance, rate, payment and next scheduled payment.</summary>
@@ -117,19 +117,19 @@ public sealed class AssetReports(IAssetStore store, ICompanyStore companies)
         IEnumerable<LoanPayment> Paid(Loan l) => l.PaymentsMade.Where(p => !p.IsVoided && p.Date <= asOf);
         var rows = loans.Select(l =>
         {
-            var next = LoanService.RemainingSchedule(l);
+            var next = LoanService.RemainingSchedule(l, asOf);
             return new ReportTableRow(
             [
                 new ReportCell(l.Name, new ReportLink("loan", l.Id)),
-                new ReportCell(l.AnnualRatePercent),
-                l.PaymentAmount,
+                new ReportCell(l.RateOn(asOf)),
+                l.PaymentOn(asOf),
                 next.Count > 0 ? new ReportCell(next[0].Date) : ReportCell.Empty,
                 new ReportCell(next.Count),
                 Paid(l).Sum(p => p.Interest),
-                l.Principal - Paid(l).Sum(p => p.Principal),
+                l.BalanceOn(asOf),
             ]);
         }).ToList();
-        rows.Add(new ReportTableRow(["Total", null, null, null, null, loans.Sum(l => Paid(l).Sum(p => p.Interest)), loans.Sum(l => l.Principal - Paid(l).Sum(p => p.Principal))], 0, ReportRowStyle.Total));
+        rows.Add(new ReportTableRow(["Total", null, null, null, null, loans.Sum(l => Paid(l).Sum(p => p.Interest)), loans.Sum(l => l.BalanceOn(asOf))], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Loans",
             [company.Name, $"As of {asOf:MMM d, yyyy}"],

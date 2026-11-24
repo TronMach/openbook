@@ -23,12 +23,13 @@ public sealed record VendorResponse(
     decimal? Balance = null,
     bool Track1099 = false,
     string? TaxId = null,
-    Form1099Box Form1099Box = Form1099Box.NecNonemployeeCompensation)
+    Form1099Box Form1099Box = Form1099Box.NecNonemployeeCompensation,
+    DateOnly? BackupWithholdingFrom = null)
 {
     /// <summary>The tax ID is masked: the API never returns it in full.</summary>
     public static VendorResponse From(Vendor v, decimal? balance = null) =>
         new(v.Id, v.DisplayName, v.CompanyName, v.Email, v.Phone, v.Address, v.AccountNumber, v.PaymentTermsDays,
-            v.DefaultExpenseAccountId, v.Notes, v.IsActive, balance, v.Track1099, v.MaskedTaxId, v.Form1099Box);
+            v.DefaultExpenseAccountId, v.Notes, v.IsActive, balance, v.Track1099, v.MaskedTaxId, v.Form1099Box, v.BackupWithholdingFrom);
 }
 
 public sealed record BillResponse(
@@ -86,6 +87,12 @@ public sealed record AchBatchResponse(Guid Id, Guid AccountId, DateOnly Effectiv
 
 public sealed record WithdrawAchRequest(string? Reason);
 
+/// <param name="From">The date it applies from; null stops it.</param>
+/// <param name="Note">Why: the IRS's notice, or no tax ID given.</param>
+public sealed record BackupWithholdingRequest(DateOnly? From, string? Note = null);
+
+/// <param name="Amount">What it pays on the bills; the vendor gets <paramref name="NetPaid"/>.</param>
+
 public sealed record BillPaymentResponse(
     Guid Id,
     Guid VendorId,
@@ -96,11 +103,13 @@ public sealed record BillPaymentResponse(
     string? Memo,
     DocumentStatus Status,
     Guid JournalEntryId,
-    IReadOnlyList<ApplyToBill> Applications)
+    IReadOnlyList<ApplyToBill> Applications,
+    decimal Withheld = 0m,
+    decimal NetPaid = 0m)
 {
     public static BillPaymentResponse From(BillPayment p) => new(
         p.Id, p.VendorId, p.Date, p.Amount, p.PaymentAccountId, p.Reference, p.Memo, p.Status, p.JournalEntryId,
-        p.Applications.Select(a => new ApplyToBill(a.BillId, a.Amount)).ToList());
+        p.Applications.Select(a => new ApplyToBill(a.BillId, a.Amount)).ToList(), p.Withheld, p.NetPaid);
 }
 
 internal static class PurchasesApi
@@ -187,6 +196,11 @@ internal static class PurchasesApi
         purchases.MapGet("/approvals/settings", async (BillApprovalService s, CancellationToken ct) => await s.GetSettingsAsync(ct));
         purchases.MapPut("/approvals/settings", async (PurchasingSettingsCommand r, BillApprovalService s, CancellationToken ct) => await s.SaveSettingsAsync(r, ct));
 
+        purchases.MapPut("/backup-withholding/vendors/{vendorId:guid}", async (Guid vendorId, BackupWithholdingRequest r, BackupWithholdingService s, CancellationToken ct) =>
+            VendorResponse.From(await s.SetAsync(vendorId, r.From, r.Note, ct)));
+        purchases.MapGet("/backup-withholding", async (int? year, BackupWithholdingService s, CancellationToken ct) =>
+            await s.ReportAsync(year ?? CompanyTime.Today.Year, ct));
+
         // A vendor's bank details as the page shows them: the account number only as its last four.
         purchases.MapGet("/ach/vendors/{vendorId:guid}", async (Guid vendorId, AchService s, CancellationToken ct) =>
             await s.GetVendorBankAccountAsync(vendorId, ct) is { } b
@@ -207,7 +221,7 @@ internal static class PurchasesApi
         purchases.MapPut("/ach/{accountId:guid}/settings", async (Guid accountId, AchSettingsCommand r, AchService s, CancellationToken ct) =>
             await s.SaveSettingsAsync(accountId, r, ct));
         purchases.MapGet("/ach/{accountId:guid}/payments", async (Guid accountId, AchService s, CancellationToken ct) =>
-            (await s.CandidatesAsync(accountId, ct)).Select(c => new { PaymentId = c.Payment.Id, c.Payment.Date, c.Payment.Amount, c.Vendor.DisplayName, c.BankAccount.AccountLast4 }));
+            (await s.CandidatesAsync(accountId, ct)).Select(c => new { PaymentId = c.Payment.Id, c.Payment.Date, Amount = c.Payment.NetPaid, c.Payment.Withheld, c.Vendor.DisplayName, c.BankAccount.AccountLast4 }));
         purchases.MapGet("/ach/{accountId:guid}/files", async (Guid accountId, AchService s, CancellationToken ct) =>
             (await s.FilesAsync(accountId, ct)).Select(f => AchBatchResponse.From(f)));
         purchases.MapPost("/ach/files/{id:guid}/withdraw", async (Guid id, WithdrawAchRequest r, AchService s, CancellationToken ct) =>

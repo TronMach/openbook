@@ -38,6 +38,15 @@ public interface IDocumentStore
     /// <summary>Tracked; null until the settings are first saved.</summary>
     Task<DocumentReadingSettings?> GetReadingSettingsAsync(CancellationToken ct);
 
+    /// <summary>Tracked; null until first saved.</summary>
+    Task<BillsMailbox?> GetBillsMailboxAsync(CancellationToken ct);
+
+    /// <summary>Tracked; null until first checked.</summary>
+    Task<BillsMailboxProgress?> GetBillsMailboxProgressAsync(CancellationToken ct);
+
+    void Add(BillsMailbox mailbox);
+    void Add(BillsMailboxProgress progress);
+
     /// <summary>Tracked; the codes learned for one vendor or customer.</summary>
     Task<IReadOnlyList<DocumentItemCode>> ListItemCodesAsync(Guid partyId, CancellationToken ct);
 
@@ -135,8 +144,9 @@ public sealed class DocumentCaptureService(
     /// </summary>
     /// <param name="useClaude">Null: Claude reads it when switched on. False keeps this file on the server.</param>
     /// <param name="purchaseOrderId">Our purchase order it belongs to, when it's uploaded from the order: used when reading doesn't find one.</param>
+    /// <param name="receivedFrom">Who emailed it (bills by email).</param>
     public async Task<CapturedDocument> UploadAsync(
-        DocumentKind kind, string fileName, Stream content, bool? useClaude = null, Guid? purchaseOrderId = null, CancellationToken ct = default)
+        DocumentKind kind, string fileName, Stream content, bool? useClaude = null, Guid? purchaseOrderId = null, string? receivedFrom = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(content);
         using var buffer = new MemoryStream();
@@ -149,6 +159,7 @@ public sealed class DocumentCaptureService(
 
         var document = CapturedDocument.Create(kind, fileName, clock.UtcNow, user.Actor);
         document.SetFileHash(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length))));
+        document.SetReceivedFrom(receivedFrom);
         store.Add(document);
         store.Add(Audit(AuditAction.Created, document, null));
         await store.SaveChangesAsync(ct);

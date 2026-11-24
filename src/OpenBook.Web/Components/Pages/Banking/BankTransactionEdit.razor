@@ -100,6 +100,14 @@
                     </tfoot>
                 </table>
             </div>
+            @if (_transaction.Kind == BankTransactionKind.Spend)
+            {
+                @if (Withholding is { } held)
+                {
+                    <WithholdingNotice Vendor="@held.Vendor.DisplayName" Amount="held.Amount" Date="_date" @bind-HoldBack="_holdBack" />
+                }
+                <UseTaxField Model="_useTax" Date="_date" Taxable="Taxable" DocumentId="Id" />
+            }
             @if (_marked.Count > 0)
             {
                 <p class="hint">
@@ -159,6 +167,24 @@
     private string? _memo;
     private string? _reason;
     private List<LineModel> _lines = [];
+    private UseTaxModel _useTax = new();
+    private bool _holdBack;
+    private Guid? _withholdingAccount;
+    private decimal Taxable => UseTaxService.TaxableAmount(_chart, _lines.Select(l => (l.AccountId ?? Guid.Empty, (Guid?)null, l.Amount ?? 0m)));
+
+    /// <summary>What to hold back for the IRS from a vendor marked for it, when no line does yet.</summary>
+    private (Vendor Vendor, decimal Amount)? Withholding
+    {
+        get
+        {
+            if (!IsCheck || _lines.Any(l => l.AccountId is not null && l.AccountId == _withholdingAccount)
+                || _vendors.FirstOrDefault(v => v.Id == _vendorId) is not { } vendor || !vendor.WithholdsOn(_date))
+                return null;
+            var amount = BackupWithholdingService.OnExpense(_chart, _date, Filled.Where(l => l.AccountId is not null)
+                .Select(l => new BankSplit(l.AccountId!.Value, l.Amount ?? 0m, l.Memo, l.ClassId)).ToList());
+            return amount > 0m ? (vendor, amount) : null;
+        }
+    }
     private bool _loaded;
     private bool _busy;
     private string? _error;
@@ -195,6 +221,8 @@
             foreach (var used in splits.Select(s => s.AccountId).Where(a => _categories.All(c => c.Id != a)).Distinct())
                 _categories.Add(_chart.Get(used));
 
+            _useTax = UseTaxModel.From(await Ops.RunAsync<UseTaxService, UseTax?>(s => s.ForAsync(Id)));
+            _withholdingAccount = (await Ops.RunAsync<BackupWithholdingService, Account?>(s => s.AccountAsync()))?.Id;
             _date = _transaction.Date;
             _payee = _transaction.Payee;
             _vendorId = _transaction.VendorId;
@@ -226,7 +254,8 @@
         {
             var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo, l.ClassId)).ToList();
             var command = new ChangeBankTransactionCommand(_date, splits, _reason!, _payee, _reference, _memo,
-                _transaction!.Kind == BankTransactionKind.Spend ? _vendorId : null, _locationId);
+                _transaction!.Kind == BankTransactionKind.Spend ? _vendorId : null, _locationId,
+                UseTax: _transaction.Kind == BankTransactionKind.Spend ? _useTax.ForChange : null, HoldBack: Withholding is not null && _holdBack);
             await Ops.ChangeAsync<BankTransaction, BankingService, BankTransaction>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/banking/transactions/{Id}");
         }

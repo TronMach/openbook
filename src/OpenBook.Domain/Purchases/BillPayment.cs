@@ -18,7 +18,8 @@ public sealed class BillPaymentApplication
 
 /// <summary>
 /// Paying a vendor's bills from a bank or card account: debits accounts payable, credits the payment
-/// account. One payment per vendor, fully applied to that vendor's bills.
+/// account. One payment per vendor, fully applied to that vendor's bills. Backup withholding held back is credited
+/// to the account it's owed to the IRS on: the bills are paid in full, the vendor gets the rest.
 /// </summary>
 public sealed class BillPayment
 {
@@ -31,7 +32,16 @@ public sealed class BillPayment
     public Guid Id { get; private set; }
     public Guid VendorId { get; private set; }
     public DateOnly Date { get; private set; }
+
+    /// <summary>What it pays on the bills, with what's withheld.</summary>
     public decimal Amount { get; private set; }
+
+    /// <summary>Backup withholding held back for the IRS.</summary>
+    public decimal Withheld { get; private set; }
+
+    /// <summary>What the vendor gets: the check's, transfer's or card's amount.</summary>
+    public decimal NetPaid => Amount - Withheld;
+
     public Guid PaymentAccountId { get; private set; }
     public Guid PayableAccountId { get; private set; }
 
@@ -81,6 +91,14 @@ public sealed class BillPayment
 
     public void FromDeposit(Guid depositId) => VendorDepositId = depositId;
 
+    /// <summary>
+    /// The import of the bank line it was recorded from (<c>FeedDocumentService</c>): its money has left already, and its
+    /// reference is the bank's, so it's no check to print, tell the bank of, or count in the check numbers.
+    /// </summary>
+    public Guid? ImportBatchId { get; private set; }
+
+    public void FromBankLine(Guid importBatchId) => ImportBatchId = importBatchId;
+
     /// <summary>The ACH file it was sent in; null if it hasn't been.</summary>
     public Guid? AchBatchId { get; private set; }
 
@@ -104,7 +122,8 @@ public sealed class BillPayment
         Guid journalEntryId,
         DateTimeOffset createdAt,
         string? reference = null,
-        string? memo = null)
+        string? memo = null,
+        decimal withheld = 0m)
     {
         ArgumentNullException.ThrowIfNull(applications);
         if (applications.Count == 0)
@@ -116,12 +135,16 @@ public sealed class BillPayment
         if (applications.Select(a => a.BillId).Distinct().Count() != applications.Count)
             throw new DomainException("payment.duplicate_bill", "Each bill can appear only once in a payment.");
 
+        if (withheld < 0m || withheld >= applications.Sum(a => a.Amount))
+            throw new DomainException("payment.withheld_invalid", "What's held back has to be less than the payment.");
+
         var payment = new BillPayment
         {
             Id = id,
             VendorId = vendorId,
             Date = date,
             Amount = applications.Sum(a => a.Amount),
+            Withheld = withheld,
             PaymentAccountId = paymentAccountId,
             PayableAccountId = payableAccountId,
             Reference = Text.Optional(reference, 30, "payment.reference_too_long", "Reference"),
@@ -136,14 +159,16 @@ public sealed class BillPayment
 
     /// <summary>Takes a correction: the new applications and the entry posted for them (the old one voided by the caller).</summary>
     public void Change(
-        DateOnly date, Guid paymentAccountId, IReadOnlyCollection<(Guid BillId, decimal Amount)> applications, Guid journalEntryId, string? reference, string? memo)
+        DateOnly date, Guid paymentAccountId, IReadOnlyCollection<(Guid BillId, decimal Amount)> applications, Guid journalEntryId, string? reference, string? memo,
+        decimal withheld = 0m)
     {
         if (Status == DocumentStatus.Voided)
             throw new DomainException("payment.voided", "This payment is voided, so it can't be changed.");
-        var checkedPayment = Create(Id, VendorId, date, paymentAccountId, PayableAccountId, applications, journalEntryId, CreatedAt, reference, memo);
+        var checkedPayment = Create(Id, VendorId, date, paymentAccountId, PayableAccountId, applications, journalEntryId, CreatedAt, reference, memo, withheld);
 
         Date = date;
         Amount = checkedPayment.Amount;
+        Withheld = checkedPayment.Withheld;
         PaymentAccountId = paymentAccountId;
         JournalEntryId = journalEntryId;
         Reference = checkedPayment.Reference;

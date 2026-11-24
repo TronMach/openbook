@@ -4,6 +4,7 @@
 @inject AccountService AccountService
 @inject CustomerService CustomerService
 @inject BillApprovalService ApprovalService
+@inject OpenBook.Application.IRecordVersions Versions
 
 <PageTitle>@L["Expense claim"] · OpenBook</PageTitle>
 
@@ -93,6 +94,7 @@
                     <p class="muted">@L["Makes a bill to {0}'s vendor record for the claim, already approved, with the receipts copied to it. Billable lines go on to their customers' next invoices.", _view.Worker.Name]</p>
                     <PostForm Action="@($"/time/review/claims/{_view.Claim.Id}/approve")" data-enhance="false">
                         <AntiforgeryToken />
+                        <input type="hidden" name="version" value="@_version" />
                         <div class="field">
                             <label for="bill-date">@L["Bill date"]</label>
                             <input id="bill-date" name="billDate" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
@@ -111,6 +113,7 @@
                 <p class="muted">@L["Sends the claim back to be fixed and handed in again."]</p>
                 <PostForm Action="@($"/time/review/claims/{_view.Claim.Id}/return")" data-enhance="false">
                     <AntiforgeryToken />
+                    <input type="hidden" name="version" value="@_version" />
                     <div class="field">
                         <label for="return-note">@L["What needs fixing"]</label>
                         <input id="return-note" name="note" maxlength="@ExpenseClaim.MaxNoteLength" required />
@@ -131,6 +134,9 @@
     private bool _canChange;
     private bool _ownClaim;
 
+    // Noted before the claim is read, so approving or returning can tell if it was handed in again changed.
+    private int? _version;
+
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private bool? Submitted { get; set; }
@@ -138,6 +144,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _version = await Versions.GetAsync<ExpenseClaim>(Id);
         _view = await Claims.GetAsync(Id);
         if (_view is null)
             return;

@@ -13,7 +13,7 @@
     @if (Navigation.Uri.Contains("/give/thanks", StringComparison.Ordinal))
     {
         <h1>@L["Thank you"]</h1>
-        <p>@L["Your gift to {0} went through. A receipt comes by email once it's recorded.", _name]</p>
+        <p>@(_recorded ? L["Your gift to {0} went through.", _name] : L["Thank you for giving to {0}. Your gift is recorded once the payment is confirmed.", _name])</p>
     }
     else if (!_open)
     {
@@ -57,6 +57,7 @@
 
 @code {
     private bool _open;
+    private bool _recorded;
     private string _name = "";
 
     [SupplyParameterFromQuery] private bool? Cancelled { get; set; }
@@ -68,12 +69,15 @@
     /// <summary>The order Square sends the donor back with; its gift is recorded now, if the webhook hasn't already.</summary>
     [SupplyParameterFromQuery(Name = "orderId")] private string? OrderId { get; set; }
 
+    /// <summary>The session Stripe sends the donor back with; its gift is recorded now, if the webhook hasn't already.</summary>
+    [SupplyParameterFromQuery(Name = "session")] private string? Session { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         var company = await Company.GetAsync();
         _name = company.LegalName ?? company.Name;
         _open = await Giving.OpenAsync();
-        if ((Token ?? OrderId) is { Length: > 0 and <= 100 } order && Navigation.Uri.Contains("/give/thanks", StringComparison.Ordinal))
+        if ((Token ?? OrderId ?? Session) is { Length: > 0 and <= 200 } order && Navigation.Uri.Contains("/give/thanks", StringComparison.Ordinal))
         {
             Actor.Use();
             try
@@ -82,8 +86,10 @@
             }
             catch (DomainException)
             {
-                // The provider's webhook (or, at PayPal, OpenBook's own check) takes it; the donor needn't see why this try failed.
+                // The provider's webhook or OpenBook's own check records it; the donor needn't see why this try failed.
             }
+
+            _recorded = await Giving.IsRecordedAsync(order);
         }
     }
 }

@@ -46,14 +46,25 @@ internal static class PayablesApi
         static DateOnly Today() => CompanyTime.Today;
 
         purchases.MapGet("/vendor-deposits", async (Guid? vendorId, VendorDepositService s, CancellationToken ct) =>
-            (await s.ListAsync(vendorId, ct)).Select(d => new { d.Deposit.Id, d.Deposit.VendorId, d.Deposit.Date, d.Deposit.Amount, d.Applied, d.Remaining, Status = d.Deposit.Status.ToString() }));
+            (await s.ListAsync(vendorId, ct)).Select(d => new { d.Deposit.Id, d.Deposit.VendorId, d.Deposit.Date, d.Deposit.Amount, d.Applied, d.Deposit.Refunded, d.Remaining, Status = d.Deposit.Status.ToString(),
+                Refunds = d.Deposit.Refunds.Select(r => new { r.Id, r.Date, r.Amount, r.AccountId, r.Reference, r.JournalEntryId, r.IsVoided }) }));
         purchases.MapPost("/vendor-deposits", async (CreateVendorDepositCommand r, VendorDepositService s, CancellationToken ct) =>
         {
             var d = await s.CreateAsync(r, ct);
             return Results.Created($"/api/purchases/vendor-deposits/{d.Id}", new { d.Id, d.JournalEntryId });
         });
         purchases.MapPost("/vendor-deposits/{id:guid}/apply", async (Guid id, VendorDepositApplyRequest r, VendorDepositService s, CancellationToken ct) =>
-            (await s.ApplyAsync(id, r.Date, r.Applications ?? [], ct)).Select(p => new { p.Id, p.Amount }));
+            (await s.ApplyAsync(id, r.Date, r.Applications ?? [], ct)).Select(p => new { p.Id, p.Amount, p.Withheld }));
+        purchases.MapPost("/vendor-deposits/{id:guid}/refunds", async (Guid id, RefundVendorDepositCommand r, VendorDepositService s, CancellationToken ct) =>
+        {
+            var refund = await s.RefundAsync(id, r, ct);
+            return Results.Created($"/api/purchases/vendor-deposits/{id}", new { refund.Id, refund.JournalEntryId });
+        });
+        purchases.MapPost("/vendor-deposits/{id:guid}/refunds/{refundId:guid}/void", async (Guid id, Guid refundId, VoidDepositRequest r, VendorDepositService s, CancellationToken ct) =>
+        {
+            var d = await s.VoidRefundAsync(id, refundId, r.Reason ?? "", ct);
+            return new { d.Id, d.Refunded };
+        });
         purchases.MapPost("/vendor-deposits/{id:guid}/void", async (Guid id, VoidDepositRequest r, VendorDepositService s, CancellationToken ct) =>
         {
             var d = await s.VoidAsync(id, r.Reason ?? "", ct);
@@ -151,6 +162,7 @@ internal static class PayablesApi
                     v.Total,
                     v.CardPayments,
                     v.Refunds,
+                    v.Withheld,
                     v.MeetsThreshold,
                 }),
             };
@@ -169,14 +181,14 @@ internal static class PayablesApi
             var content = attachment is null ? null : await s.GetContentAsync(id, ct);
             if (attachment is null || content is null)
                 return Results.NotFound();
-            if (Application.Companies.AuthClaims.LevelIn(http.User, Application.Companies.RecordAreas.Of(attachment.EntityType)) is null)
+            if (!Application.Companies.AuthClaims.MayRead(http.User, Application.Companies.RecordAreas.Of(attachment.EntityType)))
                 return Results.Forbid();
             http.Response.Headers.XContentTypeOptions = "nosniff";
             http.Response.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
             return Results.File(content, attachment.ContentType, attachment.FileName);
         });
         api.MapGet("/attachments", async (string entityType, Guid entityId, System.Security.Claims.ClaimsPrincipal user, AttachmentService s, CancellationToken ct) =>
-            Application.Companies.AuthClaims.LevelIn(user, Application.Companies.RecordAreas.Of(entityType)) is null
+            !Application.Companies.AuthClaims.MayRead(user, Application.Companies.RecordAreas.Of(entityType))
                 ? Results.Forbid()
                 : Results.Ok((await s.ListAsync(entityType, entityId, ct)).Select(a => new { a.Id, a.FileName, a.ContentType, a.Size, a.AddedAt, a.AddedBy })));
         api.MapDelete("/attachments/{id:guid}", async (Guid id, AttachmentService s, CancellationToken ct) =>

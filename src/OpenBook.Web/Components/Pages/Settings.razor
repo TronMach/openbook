@@ -182,6 +182,10 @@
                         return (c.RemindersEnabled ? L["Reminders are on"].Value : L["Reminders are off"].Value) + " · " + (c.LateFeesEnabled ? L["late fees are on"].Value : L["late fees are off"].Value);
                     }),
                     Keywords: "collections overdue dunning late fee reminder"),
+                new("/sales/commissions/settings", L["Sales commissions"],
+                    L["What sales reps earn on what they sell, and whether it's earned when invoiced or when paid."],
+                    await Status("/sales/commissions/settings", async () => Count((await Get<CommissionService>().ListRatesAsync()).Count, L["No rates"], L["1 rate"], L["{0} rates"])),
+                    Keywords: "sales rep commission salesperson percent"),
             ]),
             new(L["Purchases and stock"], null,
             [
@@ -277,6 +281,11 @@
                     await Status("/settings/document-reading", async () => (await Get<DocumentCaptureService>().GetSettingsAsync()).IsReady
                         ? L["Claude reads documents"].Value : L["Read on this server"].Value),
                     Keywords: "claude ocr scan inbox ai"),
+                new("/settings/bills-mailbox", L["Bills by email"],
+                    L["A mailbox bills are forwarded to: what's attached goes in the document inbox by itself."],
+                    await Status("/settings/bills-mailbox", async () => (await Get<BillsMailboxService>().GetAsync()) is { Enabled: true } mailbox
+                        ? L["Reading {0}", mailbox.Username ?? ""].Value : L["Off"].Value),
+                    Keywords: "forward email inbox imap invoices receipts mailbox"),
                 new("/settings/api-keys", L["API keys"], L["Keys that let other programs use OpenBook as you."],
                     await Status("/settings/api-keys", async () =>
                     {

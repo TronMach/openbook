@@ -3,6 +3,7 @@
 @inject SalesReceiptService Receipts
 @inject CustomerService CustomerService
 @inject AccountService AccountService
+@inject WorkerService WorkerService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
@@ -64,6 +65,7 @@
                 @if (_customer is not null) { <dt>Customer</dt><dd><a href="/customers/@_customer.Id">@_customer.DisplayName</a></dd> }
                 @if (_receipt.Reference is not null) { <dt>Reference</dt><dd>@_receipt.Reference</dd> }
                 @if (_receipt.Method is { } method) { <dt>Payment method</dt><dd>@PaymentMethods.Label(method)</dd> }
+                @if (_salesRep is not null) { <dt class="no-print">@L["Sales rep"]</dt><dd class="no-print">@_salesRep</dd> }
                 <dt class="no-print">Deposited to</dt><dd class="no-print">@_chart.FullName(_receipt.DepositAccountId)</dd>
             </dl>
         </div>
@@ -135,6 +137,7 @@
 
 @code {
     private SalesReceipt? _receipt;
+    private string? _salesRep;
     private Customer? _customer;
     private OpenBook.Domain.Companies.Company? _company;
     private ChartOfAccounts _chart = new([]);
@@ -155,6 +158,7 @@
         if (_receipt is null)
             return;
         _customer = _receipt.CustomerId is { } c ? await CustomerService.GetAsync(c) : null;
+        _salesRep = _receipt.SalesRepId is { } rep ? (await WorkerService.GetAsync(rep))?.Name : null;
         _company = await Settings.GetAsync();
         _chart = await AccountService.GetChartAsync();
         _changes = await Receipts.ChangesAsync(Id);

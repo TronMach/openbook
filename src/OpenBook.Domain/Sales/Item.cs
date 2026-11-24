@@ -255,8 +255,7 @@ public sealed class Item
     public void Update(ItemDetails details)
     {
         ArgumentNullException.ThrowIfNull(details);
-        if (IsRetainage && (details.Type != Type || details.IncomeAccountId != IncomeAccountId))
-            throw new DomainException("item.retainage_locked", $"{Name} holds retainage back on progress invoices, so its type and account can't change. Its name can.");
+        EnsureRetainageKept(details);
         Name = NormalizeName(details.Name);
         Type = Enum.IsDefined(details.Type) ? details.Type : throw new DomainException("item.type_invalid", $"Unknown item type {details.Type}.");
         Description = Text.Optional(details.Description, 1000, "item.description_too_long", "Description");
@@ -338,6 +337,14 @@ public sealed class Item
             < 0 or > 365 => throw new DomainException("item.lead_time_invalid", "The lead time is from 0 to 365 days."),
             { } d => d,
         };
+    }
+
+    /// <summary>The item retainage is held with stays a service on its account.</summary>
+    public void EnsureRetainageKept(ItemDetails details)
+    {
+        ArgumentNullException.ThrowIfNull(details);
+        if (IsRetainage && (details.Type != Type || details.IncomeAccountId != IncomeAccountId))
+            throw new DomainException("item.retainage_locked", $"{Name} holds retainage back on progress invoices, so its type and account can't change. Its name can.");
     }
 
     /// <summary>Only the name (a merged duplicate's "(merged)"); other details go through Update.</summary>

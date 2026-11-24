@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
@@ -51,7 +53,7 @@ public sealed class PartnerService(
     /// <summary>Adds a partner; with no capital account, "{name} Capital" (equity) is made for them.</summary>
     public async Task<Partner> CreateAsync(string name, decimal sharePercent, Guid? capitalAccountId, CancellationToken ct = default)
     {
-        var accountId = capitalAccountId is { } id && id != Guid.Empty ? await CapitalAccountAsync(id, ct)
+        var accountId = capitalAccountId is { } id && id != Guid.Empty ? await CapitalAccountAsync(id, except: null, ct)
             : (await accounts.CreateAsync(new CreateAccountCommand($"{name?.Trim()} Capital", AccountType.Equity, Description: "A partner's capital: what they put in and their share of profit, less what they take out."), ct)).Id;
         var partner = Partner.Create(name ?? "", sharePercent, accountId);
         store.Add(partner);
@@ -64,7 +66,7 @@ public sealed class PartnerService(
     {
         var partner = await store.GetPartnerAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(partner);
-        partner.Update(name, sharePercent, await CapitalAccountAsync(capitalAccountId, ct));
+        partner.Update(name, sharePercent, capitalAccountId == partner.CapitalAccountId ? capitalAccountId : await CapitalAccountAsync(capitalAccountId, id, ct));
         partner.SetActive(active);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, partner.Id, before, Snapshot(partner)));
         await store.SaveChangesAsync(ct);
@@ -96,7 +98,8 @@ public sealed class PartnerService(
     public async Task<PartnerAllocation> AllocateAsync(DateOnly date, CancellationToken ct = default)
     {
         var (_, yearEnd) = await FiscalYearAsync(date, ct);
-        if ((await store.ListAllocationsAsync(ct)).Any(a => !a.IsVoided && a.YearEnd == yearEnd))
+        var earlier = (await store.ListAllocationsAsync(ct)).Where(a => a.YearEnd == yearEnd).ToList();
+        if (earlier.Any(a => !a.IsVoided))
             throw new DomainException("partners.already_allocated", $"The year ending {yearEnd:MMM d, yyyy} is already allocated. Void that allocation to redo it.");
         var partners = (await store.ListPartnersAsync(ct)).Where(p => p.IsActive).OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
         if (partners.Count == 0)
@@ -118,7 +121,8 @@ public sealed class PartnerService(
                 lines.Add(net > 0m ? JournalLineDraft.Cr(partners[i].CapitalAccountId, shares[i], partners[i].Name) : JournalLineDraft.Dr(partners[i].CapitalAccountId, shares[i], partners[i].Name));
         }
 
-        var id = Guid.CreateVersion7();
+        // The same id for anyone allocating this year now: of two at once, the second is refused by the database.
+        var id = AllocationId(yearEnd, earlier.Count);
         var entry = await engine.StageAsync(new PostJournalEntryCommand(yearEnd, lines, memo, PartnerAllocation.Source, id), ct);
         var allocation = PartnerAllocation.Create(id, yearEnd, net, entry.Id, clock.UtcNow);
         store.Add(allocation);
@@ -155,11 +159,20 @@ public sealed class PartnerService(
         })];
     }
 
-    private async Task<Guid> CapitalAccountAsync(Guid id, CancellationToken ct)
+    private static Guid AllocationId(DateOnly yearEnd, int earlier) =>
+        new(SHA256.HashData(Encoding.UTF8.GetBytes(FormattableString.Invariant($"partner-allocation:{yearEnd:yyyy-MM-dd}:{earlier}"))).AsSpan(0, 16));
+
+    private async Task<Guid> CapitalAccountAsync(Guid id, Guid? except, CancellationToken ct)
     {
-        var account = (await accounts.GetChartAsync(ct)).Get(id);
+        var chart = await accounts.GetChartAsync(ct);
+        var account = chart.Get(id);
         if (account.Type != AccountType.Equity)
             throw new DomainException("partner.account_type", $"'{account.Name}' isn't an equity account.");
+        if (account.Id == FinancialReports.RetainedEarningsAccount(chart)?.Id)
+            throw new DomainException("partner.account_retained", $"The year's profit moves out of '{account.Name}', so it can't be a partner's capital account.");
+        // One account between two partners would show each of them the capital of both.
+        if ((await store.ListPartnersAsync(ct)).FirstOrDefault(p => p.Id != except && p.CapitalAccountId == id) is { } other)
+            throw new DomainException("partner.account_taken", $"'{account.Name}' is {other.Name}'s capital account. Each partner needs their own.");
         return account.Id;
     }
 

@@ -204,7 +204,7 @@ internal static class EveryRecordKind
         await Do<PermissionSetService>(s => s.CreateAsync("Sales clerk", null, new Dictionary<string, UserRole> { ["sales"] = UserRole.Standard }));
         await Do<WebhookService>(s => s.CreateAsync("https://example.com/hook", null, null));
         var invite = await In<InviteService, SentInvite>(s => s.InviteAsync(new InviteCommand("sam@example.com", UserRole.Accountant, SendEmail: false), "http://localhost"));
-        return ([invite.Link["http://localhost".Length..], $"/portal/{portal.Token}"],
+        return ([invite.Link["http://localhost".Length..], $"/portal/{portal.Token}", $"/portal/{portal.Token}/card"],
             [$"/banking/transactions/{expense.Id}/edit", $"/nonprofit/statements/{d.Year}/{donor.Id}/email", $"/projects/{fixedFee.Id}", $"/time/claims/{claim.Id}/edit"]);
     }
 }

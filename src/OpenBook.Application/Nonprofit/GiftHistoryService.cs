@@ -8,9 +8,14 @@ using OpenBook.Domain.Nonprofit;
 
 namespace OpenBook.Application.Nonprofit;
 
+/// <param name="Skipped">Rows there already, in the history or recorded here as a gift.</param>
+public sealed record GiftHistoryImport(int Added, int Skipped);
+
 /// <summary>
 /// Gifts from before the move (C080): imported from the old system's gift list as a CSV, kept per donor for their
-/// history and giving statements, never posted. All or nothing; a row whose donor isn't a customer stops the file.
+/// history and giving statements, never posted. All or nothing; a row whose donor isn't a customer stops the file. A gift
+/// already there with the same donor, date, amount and reference answers for one row, so a file can be imported again
+/// without doubling anyone's statement.
 /// </summary>
 public sealed class GiftHistoryService(INonprofitStore store, ISalesStore sales, IClock clock, ICurrentUser user)
 {
@@ -20,18 +25,42 @@ public sealed class GiftHistoryService(INonprofitStore store, ISalesStore sales,
     public async Task<IReadOnlyList<GiftHistory>> ListAsync(Guid donorId, CancellationToken ct = default) =>
         [.. (await store.ListGiftHistoryAsync(donorId, ct)).OrderByDescending(g => g.Date)];
 
-    public async Task<int> ImportCsvAsync(string csv, CancellationToken ct = default)
+    public async Task<int> ImportCsvAsync(string csv, CancellationToken ct = default) => (await ImportAsync(csv, ct)).Added;
+
+    public async Task<GiftHistoryImport> ImportAsync(string csv, CancellationToken ct = default)
     {
         var donors = (await sales.ListCustomersAsync(ct)).GroupBy(c => c.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
-        var gifts = Read(csv, donors, clock.UtcNow);
-        foreach (var gift in gifts)
+        var read = Read(csv, donors, clock.UtcNow);
+        var (first, last) = (read.Min(g => g.Date), read.Max(g => g.Date));
+        // Given in kind, a gift is known by what it was: the history keeps no value for it.
+        var standing = (await store.ListGiftHistoryAsync(null, ct)).Select(Key)
+            .Concat((await store.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= first && d.Date <= last, ct))
+                .Select(d => (d.DonorId, d.Date, d.Kind, d.Kind == GiftKind.InKind ? 0m : d.Amount, d.Reference, d.Kind == GiftKind.InKind ? d.Description : null)))
+            .GroupBy(k => k).ToDictionary(g => g.Key, g => g.Count());
+        var gifts = new List<GiftHistory>();
+        foreach (var gift in read)
+        {
+            if (standing.TryGetValue(Key(gift), out var held) && held > 0)
+            {
+                standing[Key(gift)] = held - 1;
+                continue;
+            }
+
+            gifts.Add(gift);
             store.Add(gift);
+        }
+
+        if (gifts.Count == 0)
+            return new GiftHistoryImport(0, read.Count);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, EntityType, Guid.Empty, null,
             JsonSerializer.Serialize(new { Imported = gifts.Count, Total = gifts.Sum(g => g.Amount) })));
         await store.SaveChangesAsync(ct);
-        return gifts.Count;
+        return new GiftHistoryImport(gifts.Count, read.Count - gifts.Count);
     }
+
+    private static (Guid DonorId, DateOnly Date, GiftKind Kind, decimal Amount, string? Reference, string? Description) Key(GiftHistory g) =>
+        (g.DonorId, g.Date, g.Kind, g.Amount, g.Reference, g.Kind == GiftKind.InKind ? g.Description : null);
 
     /// <summary>
     /// The CSV reader on its own (fuzzed): a Donor (or Name) column, Date and Amount, and if there are, Description
@@ -69,7 +98,8 @@ public sealed class GiftHistoryService(INonprofitStore store, ISalesStore sales,
             if (!StatementValues.TryParseDate(F(dateCol), order, out var date))
                 throw new DomainException("import.bad_date", $"Line {line}: \"{Clip(F(dateCol) ?? "")}\" isn't a date.");
             var kindText = Csv.Normalize(F(kindCol) ?? "");
-            var inKind = kindText is "yes" or "y" or "true" or "inkind" or "noncash" or "goods";
+            var inKind = kindText is "yes" or "y" or "true" or "goods"
+                || kindText.StartsWith("inkind", StringComparison.Ordinal) || kindText.StartsWith("noncash", StringComparison.Ordinal);
             decimal amount = 0m;
             if (F(amountCol) is { } amountText && !StatementValues.TryParseAmount(amountText, out amount))
                 throw new DomainException("import.bad_amount", $"Line {line}: \"{Clip(amountText)}\" isn't an amount.");

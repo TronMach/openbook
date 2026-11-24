@@ -84,7 +84,7 @@
                                                     }
                                                 </select>
                                                 <input type="date" name="date" aria-label="@L["Invoice date"]" value="@OpenBook.Application.CompanyTime.Today.ToString("yyyy-MM-dd")" />
-                                                <button type="submit" class="secondary">@L["Bill it"]</button>
+                                                <button type="submit" class="secondary" disabled="@(_needs is not null)" title="@_needs">@L["Bill it"]</button>
                                             </PostForm>
                                             <PostForm Action="@($"/projects/{p.Id}/milestones/{ms.Milestone.LineNumber}/remove")" data-enhance="false" class="inline">
                                                 <AntiforgeryToken />
@@ -283,6 +283,11 @@
 @code {
     private decimal _worked;
 
+    /// <summary>What billing a milestone needs when the person hasn't got it: an invoice is a sales record.</summary>
+    private string? _needs;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private ProjectSummary? _project;
     private ProjectFigures? _figures;
     private ProjectFigures? _withSubProjects;
@@ -304,6 +309,8 @@
         _project = await ProjectService.GetAsync(Id);
         if (_project is null)
             return;
+        if (AuthState is not null && (await AuthState).User is var user && !user.CanPost("/sales/invoices"))
+            _needs = AccessRules.NeedsText(user, "/sales/invoices", HttpMethods.Post);
         _figures = await Reports.FiguresAsync(_project, null, DateOnly.MaxValue);
         _withSubProjects = await Reports.WithSubProjectsAsync(_figures, null, DateOnly.MaxValue);
         _worked = (await TimeService.ListAsync(new TimeFilter(CustomerId: _project.Customer.Id))).Where(t => !t.IsRunning).Sum(t => t.Worked);

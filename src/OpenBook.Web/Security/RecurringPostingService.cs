@@ -131,6 +131,16 @@ internal sealed partial class RecurringPostingService(
             return true;
         }, ct);
 
+        // Before late fees and reminders: an invoice paid now needs neither.
+        await StepAsync("Automatic card payments", async services =>
+        {
+            var run = await services.GetRequiredService<AutomaticPaymentService>().RunAsync(ct);
+            if (run.Charged.Count + run.Declined > 0)
+                LogCardsCharged(run.Charged.Count, run.Declined);
+            EnsureNone([.. run.Failures.Distinct(StringComparer.Ordinal)]);
+            return true;
+        }, ct);
+
         await StepAsync("Late fees", async services =>
         {
             if ((await services.GetRequiredService<CollectionService>().GetAsync(ct)).LateFeesAutomatic)
@@ -254,6 +264,9 @@ internal sealed partial class RecurringPostingService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Made {Username} inactive: their access ended.")]
     private partial void LogAccessEnded(string username);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Charged {Count} invoices to saved cards ({Declined} declined).")]
+    private partial void LogCardsCharged(int count, int declined);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Charged {Count} late fees.")]
     private partial void LogFeesCharged(int count);

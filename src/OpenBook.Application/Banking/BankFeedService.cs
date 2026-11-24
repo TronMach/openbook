@@ -114,7 +114,10 @@ public sealed class BankFeedService(
         };
     }
 
-    /// <summary>Queues new lines (skipping ones imported before) and runs the bank rules over them.</summary>
+    /// <summary>
+    /// Queues new lines (skipping ones imported before) and runs the bank rules over them. A line under a new id that the
+    /// feed may hold already from another source is flagged and left for review.
+    /// </summary>
     public async Task<FeedImportResult> QueueAsync(Guid accountId, IReadOnlyCollection<FeedLine> lines, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(lines);
@@ -130,7 +133,7 @@ public sealed class BankFeedService(
         int queued = 0, autoAdded = 0, skipped = 0;
         string? notAdded = null;
         var seen = new Dictionary<string, int>(StringComparer.Ordinal);
-        List<FeedMatch>? inTheBooks = null;
+        var fresh = new List<BankFeedItem>();
         foreach (var line in lines)
         {
             // Which repeat it is in the file, as the preview counted: the page sends only the rows chosen.
@@ -141,17 +144,30 @@ public sealed class BankFeedService(
                 item.IdReused();
             if (!known.Add(key))
             {
+                known.CameAgain(key);
                 skipped++;
                 continue;
             }
 
+            fresh.Add(item);
+        }
+
+        List<FeedMatch>? inTheBooks = null;
+        foreach (var item in fresh)
+        {
+            // A bank connected again, or through another service, numbers its lines afresh: one the feed holds already
+            // looks new, and the entry it was added as no longer shows as a match. Only once every line is known to be new
+            // or not, because a held line that came again in this import answers for itself.
+            if (known.AnswersElsewhere(item))
+                item.FlagPossibleDuplicate();
             bank.Add(item);
             var rule = rules.FirstOrDefault(r => r.Fits(item));
             item.SuggestedBy(rule?.Id);
             // A line that looks like something already entered waits for review, as the page's bulk Add holds it back:
             // added, it would be in the books twice.
             inTheBooks ??= rule is { AutoAdd: true } ? await MatchCandidatesAsync(accountId, ct) : null;
-            if (rule is { AutoAdd: true } && !inTheBooks!.Any(c => c.Amount == item.Amount && Math.Abs(c.Date.DayNumber - item.Date.DayNumber) <= MatchWindowDays))
+            if (rule is { AutoAdd: true } && !item.PossibleDuplicate
+                && !inTheBooks!.Any(c => c.Amount == item.Amount && Math.Abs(c.Date.DayNumber - item.Date.DayNumber) <= MatchWindowDays))
             {
                 // One line a rule can't post (a closed period, a category switched off since) waits for review and stops nothing else.
                 try
@@ -333,6 +349,9 @@ public sealed class BankFeedService(
         private readonly Dictionary<string, (DateOnly Date, decimal Amount)> _idHolders = new(StringComparer.Ordinal);
         private readonly HashSet<(DateOnly, decimal)> _stored = [];
 
+        /// <summary>Stored lines that haven't come again in this import, by date and amount: each can answer for one new line.</summary>
+        private readonly Dictionary<(DateOnly, decimal), List<string>> _unanswered = [];
+
         public FeedKeys(IReadOnlyList<FeedIdentity> lines)
         {
             foreach (var line in lines)
@@ -340,7 +359,43 @@ public sealed class BankFeedService(
                 _keys.Add(line.Key);
                 _idHolders.TryAdd(line.Key, (line.Date, line.Amount));
                 _stored.Add((line.Date, line.Amount));
+                if (!_unanswered.TryGetValue((line.Date, line.Amount), out var keys))
+                    _unanswered[(line.Date, line.Amount)] = keys = [];
+                keys.Add(line.Key);
             }
+
+            // A line flagged when it came in has had its answer: the line it may be doesn't answer for another.
+            var flagged = lines.Where(l => l.PossibleDuplicate).ToList();
+            var flaggedKeys = flagged.Select(l => l.Key).ToHashSet(StringComparer.Ordinal);
+            foreach (var line in flagged)
+            {
+                var keys = _unanswered[(line.Date, line.Amount)];
+                if (keys.FindIndex(k => !flaggedKeys.Contains(k)) is var at and >= 0)
+                    keys.RemoveAt(at);
+            }
+        }
+
+        /// <summary>The stored line with this key came in again, so it isn't what another line is.</summary>
+        public void CameAgain(string key)
+        {
+            if (_idHolders.TryGetValue(key, out var holder) && _unanswered.TryGetValue(holder, out var keys))
+                keys.Remove(key);
+        }
+
+        /// <summary>
+        /// Whether a line stored before, from another source, has the new line's date and amount and hasn't answered for
+        /// another. Two lines known by their text alone are told apart by it, so one of them has the bank's id.
+        /// </summary>
+        public bool AnswersElsewhere(BankFeedItem item)
+        {
+            if (!_unanswered.TryGetValue((item.Date, item.Amount), out var keys))
+                return false;
+            var hasId = !string.IsNullOrEmpty(item.FitId);
+            var at = keys.FindIndex(k => hasId || k.StartsWith("fit:", StringComparison.Ordinal));
+            if (at < 0)
+                return false;
+            keys.RemoveAt(at);
+            return true;
         }
 
         public bool Holds(DateOnly date, decimal amount) => _stored.Contains((date, amount));

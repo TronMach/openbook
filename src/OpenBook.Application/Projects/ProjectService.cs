@@ -419,12 +419,16 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
         return entry;
     }
 
-    public async Task<TimeEntry> CreateAsync(TimeEntryDetails details, CancellationToken ct = default)
+    public Task<TimeEntry> CreateAsync(TimeEntryDetails details, CancellationToken ct = default) => CreateAsync(details, round: true, ct);
+
+    /// <param name="round">False keeps the hours as they are: time brought in from another program was rounded there, or not.</param>
+    internal async Task<TimeEntry> CreateAsync(TimeEntryDetails details, bool round, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(details);
         var (billRate, costRate, source) = await RatesAsync(details, ct);
         var entry = TimeEntry.Create(details, billRate, costRate, clock.UtcNow, source);
-        entry.RoundUpTo((await companies.GetRequiredCompanyAsync(ct)).TimeIncrementMinutes);
+        if (round)
+            entry.RoundUpTo((await companies.GetRequiredCompanyAsync(ct)).TimeIncrementMinutes);
         store.Add(entry);
         store.Add(Audit(AuditAction.Created, entry, null));
         await store.SaveChangesAsync(ct);
@@ -722,7 +726,7 @@ public sealed class TimeService(IProjectStore store, ISalesStore sales, IClock c
 public sealed record MileageYear(int Year, decimal Rate, decimal Miles, decimal Deduction, IReadOnlyList<MileageTrip> Trips);
 
 /// <summary>The mileage log, standard rates per year and billable mileage.</summary>
-public sealed class MileageService(IProjectStore store, ISalesStore sales, IClock clock, ICurrentUser user)
+public sealed class MileageService(IProjectStore store, ISalesStore sales, Purchases.IPurchasesStore purchases, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "mileage_trip";
     public const string RatesEntityType = "mileage_rate";
@@ -791,6 +795,8 @@ public sealed class MileageService(IProjectStore store, ISalesStore sales, ICloc
         ArgumentNullException.ThrowIfNull(details);
         var trip = await store.GetMileageAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         await CheckAsync(details, trip, ct);
+        if ((details.Date, details.Miles, details.WorkerId) != (trip.Date, trip.Miles, trip.WorkerId))
+            await EnsureNotPaidBackAsync(trip, ct);
         var before = Snapshot(trip);
         trip.Update(details);
         store.Add(Audit(AuditAction.Updated, trip, before));
@@ -803,9 +809,17 @@ public sealed class MileageService(IProjectStore store, ISalesStore sales, ICloc
         var trip = await store.GetMileageAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (trip.InvoiceId is not null)
             throw new DomainException("mileage.invoiced", "This trip is on an invoice. Void the invoice first.");
+        await EnsureNotPaidBackAsync(trip, ct);
         store.Remove(trip);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, EntityType, trip.Id, Snapshot(trip), null));
         await store.SaveChangesAsync(ct);
+    }
+
+    /// <summary>A trip paid back stays as its bill says it was: changed or entered again, it would be paid back twice.</summary>
+    private async Task EnsureNotPaidBackAsync(MileageTrip trip, CancellationToken ct)
+    {
+        if (trip.ReimbursedBillId is { } billId && await purchases.GetBillAsync(billId, ct) is { Status: DocumentStatus.Posted })
+            throw new DomainException("mileage.paid_back", "This trip was paid back by a bill, so its date, miles and driver stay. Void that bill first.");
     }
 
     private async Task CheckAsync(MileageDetails details, MileageTrip? existing, CancellationToken ct)

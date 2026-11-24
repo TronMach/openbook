@@ -135,7 +135,7 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
             var changed = details.AssetAccountId != asset.AssetAccountId || details.AccumulatedAccountId != asset.AccumulatedAccountId
                 || details.ExpenseAccountId != asset.ExpenseAccountId || details.InServiceDate != asset.InServiceDate || details.Cost != asset.Cost
                 || details.Method != asset.Method || details.LifeMonths != asset.LifeMonths || details.Salvage != asset.Salvage
-                || details.PriorDepreciation != asset.PriorDepreciation || (details.PriorDepreciation > 0m && details.PriorThrough != asset.PriorThrough)
+                || details.FirstYearAmount != asset.FirstYearAmount || details.PriorDepreciation != asset.PriorDepreciation || (details.PriorDepreciation > 0m && details.PriorThrough != asset.PriorThrough)
                 || (details.Method == DepreciationMethod.Macrs && details.MacrsClass != asset.MacrsClass)
                 || (details.Method == DepreciationMethod.DecliningBalance && details.DecliningPercent != asset.DecliningPercent);
             if (changed)
@@ -163,6 +163,8 @@ public sealed class FixedAssetService(IAssetStore store, AssetAccounts accounts,
         var asset = await store.GetAssetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (asset.IsDisposed)
             throw new DomainException("asset.disposed", $"{asset.Name} is already disposed.");
+        if (asset.IsRemoved)
+            throw new DomainException("asset.removed", $"{asset.Name} is removed from the register. Put it back first.");
         if (command.Date < asset.InServiceDate)
             throw new DomainException("asset.disposal_date", "An asset can't be disposed of before it was placed in service.");
         Money.EnsureCents(command.Proceeds);
@@ -391,6 +393,8 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         ArgumentNullException.ThrowIfNull(loan);
         var made = loan.PaymentsMade.Where(p => !p.IsVoided).ToList();
         var on = asOf ?? CompanyTime.Today;
+        if (loan.FactorFee is not null)
+            return loan.IsVoided ? [] : Amortization.AdvanceSchedule(loan, loan.PaymentOn(on), made.Count + 1, made.Count);
         // Counted from the first date, so a loan due on the 31st comes back to it after a short month or a late payment.
         return Amortization.Schedule(loan.Balance, loan.RateOn(on), loan.PaymentOn(on), loan.FirstPaymentDate, made.Count + 1, made.Count);
     }
@@ -458,7 +462,7 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         var loan = await store.GetLoanAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         var before = Snapshot(loan);
         loan.Update(new LoanDetails(name, loan.LiabilityAccountId, loan.InterestAccountId, loan.Principal, loan.AnnualRatePercent, loan.Payments,
-            loan.FirstPaymentDate, loan.PaymentAmount, loan.LenderVendorId, notes, classId is null ? loan.ClassId : classId == Guid.Empty ? null : classId));
+            loan.FirstPaymentDate, loan.PaymentAmount, loan.LenderVendorId, notes, classId is null ? loan.ClassId : classId == Guid.Empty ? null : classId, loan.CreditLimit, loan.FactorFee));
         store.Add(Audit(AuditAction.Updated, loan, before));
         await store.SaveChangesAsync(ct);
         return loan;
@@ -574,6 +578,8 @@ public sealed class LoanService(IAssetStore store, AssetAccounts accounts, Posti
         l.FirstPaymentDate,
         l.PaymentAmount,
         l.LenderVendorId,
+        l.CreditLimit,
+        l.FactorFee,
         l.Balance,
         PaymentsMade = l.PaymentsMade.Select(p => new { p.Id, p.Date, p.Amount, p.Interest, p.Principal, p.IsVoided }),
         RateChanges = l.RateChanges.Select(c => new { c.EffectiveFrom, c.RatePercent, c.PaymentAmount }),

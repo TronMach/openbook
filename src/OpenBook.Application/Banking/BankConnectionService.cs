@@ -44,6 +44,12 @@ public sealed class BankConnectionService(
     /// <summary>Each fetch starts this many days before the last posted date seen, for lines the bank posts late.</summary>
     public const int OverlapDays = 10;
 
+    /// <summary>
+    /// Plaid hands over the last month first and gathers the rest of a new bank's history after: until this long after
+    /// connecting, each sync goes back to the start again (lines already fetched are skipped by their ids).
+    /// </summary>
+    public static readonly TimeSpan PlaidHistory = TimeSpan.FromDays(2);
+
     public async Task<IReadOnlyList<BankConnection>> ListAsync(CancellationToken ct = default) =>
         (await bank.ListConnectionsAsync(ct)).OrderByDescending(c => c.IsActive).ThenBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 
@@ -104,6 +110,15 @@ public sealed class BankConnectionService(
                 throw new DomainException("connection.account_inactive", "That account is inactive.");
             if ((await bank.ListConnectionsAsync(ct)).Any(c => c.Id != id && c.IsActive && c.Accounts.Any(a => a.AccountId == target)))
                 throw new DomainException("connection.account_linked", "Another bank connection already fetches into that account.");
+        }
+
+        // An account whose feed has lines already (from files, or a connection before this one) starts after them, or the
+        // last month would come in again under this connection's ids.
+        if (accountId is { } linked && importFrom is null && connection.Find(remoteId) is { } remote && remote.AccountId != linked
+            && (await bank.ListFeedIdentitiesAsync(linked, ct)).Select(i => (DateOnly?)i.Date).Max() is { } latest)
+        {
+            var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
+            importFrom = latest >= today ? today : latest.AddDays(1);
         }
 
         var before = Snapshot(connection);
@@ -208,6 +223,10 @@ public sealed class BankConnectionService(
                     if (result.NotAdded is { } note)
                         problems.Add(note);
                 }
+
+                // Not while history may still be arriving: the next sync has to look at all of it again.
+                if (connection.Provider == BankConnectionProvider.Plaid && now - connection.CreatedAt < PlaidHistory)
+                    continue;
 
                 // A quiet account mustn't hold back the range fetched for every account: it moves on a month behind today.
                 var quiet = today.AddDays(-QuietDays);

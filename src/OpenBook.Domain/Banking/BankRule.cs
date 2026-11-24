@@ -130,7 +130,8 @@ public sealed class BankRule
     public bool Fits(BankFeedItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        if (!IsActive || (AccountId is { } account && account != item.AccountId) || CategoryAccountId == item.AccountId)
+        if (!IsActive || (AccountId is { } account && account != item.AccountId) || CategoryAccountId == item.AccountId
+            || _splits.Any(s => s.AccountId == item.AccountId))
             return false;
         if ((Direction == RuleDirection.MoneyIn && !item.IsMoneyIn) || (Direction == RuleDirection.MoneyOut && item.IsMoneyIn))
             return false;

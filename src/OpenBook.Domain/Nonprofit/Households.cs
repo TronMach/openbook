@@ -126,6 +126,15 @@ public sealed class SoftCredit
 
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>The gift's amount came down: no more than all of it is credited. False when it already wasn't.</summary>
+    public bool LimitTo(decimal giftAmount)
+    {
+        if (Amount <= giftAmount)
+            return false;
+        Amount = giftAmount;
+        return true;
+    }
+
     public static SoftCredit Create(Donation gift, Guid donorId, decimal? amount, string? note, DateTimeOffset createdAt)
     {
         ArgumentNullException.ThrowIfNull(gift);

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Import;
+using OpenBook.Application.SalesTax;
 using OpenBook.Domain.Banking;
 
 namespace OpenBook.Api;
@@ -18,7 +19,9 @@ public sealed record RecordBankTransactionRequest(
     string? Reference = null,
     string? Memo = null,
     Guid? VendorId = null,
-    Guid? LocationId = null);
+    Guid? LocationId = null,
+    UseTaxInput? UseTax = null,
+    bool HoldBack = false);
 
 public sealed record TransferRequest(Guid FromAccountId, Guid ToAccountId, DateOnly Date, decimal Amount, string? Memo = null);
 
@@ -134,7 +137,7 @@ internal static class BankingApi
         {
             var t = await s.RecordAsync(new RecordBankTransactionCommand(
                 r.Kind, r.AccountId, r.Date, (r.Splits ?? []).Select(x => new BankSplit(x.AccountId, x.Amount, x.Memo, x.ClassId)).ToList(),
-                r.Payee, r.Reference, r.Memo, r.VendorId, r.LocationId), ct);
+                r.Payee, r.Reference, r.Memo, r.VendorId, r.LocationId, UseTax: r.UseTax, HoldBack: r.HoldBack), ct);
             return Results.Created($"/api/banking/transactions/{t.Id}", BankTransactionResponse.From(t));
         });
 

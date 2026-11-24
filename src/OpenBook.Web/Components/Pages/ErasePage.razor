@@ -1,0 +1,124 @@
+@page "/erase/customers/{Id:guid}"
+@page "/erase/vendors/{Id:guid}"
+@using OpenBook.Application.Lists
+@inject ErasureService Erasure
+@inject OpenBook.Application.IRecordVersions Versions
+@inject NavigationManager Navigation
+
+@* What erasing somebody's personal details takes away, what stays and why, and the confirmation (admins only). Posts to
+   /erase/{customers|vendors}/{id}/confirm. *@
+<PageTitle>@L["Erase personal details"] · OpenBook</PageTitle>
+
+<h1>@L["Erase personal details"]</h1>
+@if (_review is null)
+{
+    <div class="card"><p>@L["There's no such record."] <a href="/">@L["Home page"]</a></p></div>
+}
+else
+{
+    <p><a href="@RecordPath">@_review.Name</a></p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (_review.ErasedAt is { } erasedAt)
+    {
+        <div class="alert notice" role="status">@L["The personal details were erased on {0}.", erasedAt.InCompanyTime().ToString("d")]</div>
+    }
+    else
+    {
+        <p>@L["For someone who asks for their data to be erased, once you're done with them. It can't be undone: nobody can bring the details back, and the record can't be changed or used again."]</p>
+        @if (_review.Blockers.Count > 0)
+        {
+            <div class="alert notice" role="status">
+                @L["Not yet. Settle these first:"]
+                <ul>
+                    @foreach (var blocker in _review.Blockers)
+                    {
+                        <li>@blocker</li>
+                    }
+                </ul>
+            </div>
+        }
+        <div class="split-grid">
+            <section class="card">
+                <h2>@L["What is erased"]</h2>
+                <ul>
+                    @if (IsVendor)
+                    {
+                        <li>@L["The name (lists and reports show a placeholder, such as Erased vendor 4F2A91), company, email, phone, address, account number, notes, tax ID and bank account."]</li>
+                    }
+                    else
+                    {
+                        <li>@L["The name (lists and reports show a placeholder, such as Erased customer 4F2A91), company, email addresses, phone, mobile number and their agreement to texts, addresses and notes."]</li>
+                    }
+                    <li>@L["The notes, files and custom fields on the record itself."]</li>
+                    <li>@L["Who emails and texts about them and their documents went to, and what they said. That one was sent, when and by whom stays. Scheduled emails not sent yet are cancelled."]</li>
+                    @if (!IsVendor)
+                    {
+                        <li>@L["Their portal links and the links to documents sent to them, which stop working."]</li>
+                        <li>@L["Their place in a household, which is then named after a member who's still in it, and what they typed on the giving page."]</li>
+                    }
+                </ul>
+            </section>
+            <section class="card">
+                <h2>@L["What stays, and why"]</h2>
+                <ul>
+                    <li>@L["Their documents, with their numbers, dates, amounts, lines, memos, files and the addresses printed on them, because tax law makes you keep them. Printed again, they show the placeholder as the name."]</li>
+                    <li>@L["The journal entries, with the memos written when they were posted: posted entries never change."]</li>
+                    @if (IsVendor)
+                    {
+                        <li>@L["The 1099s recorded as filed, ACH files already made (encrypted), and what the person is called as someone whose time is entered."]</li>
+                    }
+                    else
+                    {
+                        <li>@L["The sales tax exemption certificate's number, reason and dates, which show why sales weren't taxed. A copy of the certificate attached to the record is erased with its files: save it first."]</li>
+                    }
+                    <li>@L["The audit log, and webhooks already sent from it, with what was written at the time: it can't be changed, so that nobody can rewrite history. This erasure is recorded there without the details."]</li>
+                    <li>@L["Backups, exports and emails made or sent before now, and what other services you use keep. Delete the copies you don't have to keep."]</li>
+                </ul>
+            </section>
+        </div>
+        @if (_review.Blockers.Count == 0)
+        {
+            <PostForm Action="@EraseAction" data-enhance="false" class="card">
+                <AntiforgeryToken />
+                <input type="hidden" name="@SettingsVersions.Field" value="@_version" />
+                <div class="field">
+                    <label for="confirm">@L["To confirm, type the name: {0}", _review.Name]</label>
+                    <input id="confirm" name="confirm" required maxlength="200" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="actions">
+                    <button type="submit" class="danger">@L["Erase personal details"]</button>
+                    <a href="@RecordPath">@L["Cancel"]</a>
+                </div>
+            </PostForm>
+        }
+        else
+        {
+            <p><a class="button secondary" href="@RecordPath">@L["Back"]</a></p>
+        }
+    }
+}
+
+@code {
+    private ErasureReview? _review;
+    private int? _version;
+
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    private bool IsVendor => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("erase/vendors/", StringComparison.OrdinalIgnoreCase);
+
+    private string RecordPath => IsVendor ? $"/vendors/{Id}" : $"/customers/{Id}";
+
+    private string EraseAction => $"/erase{RecordPath}/confirm";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Noted before the record is read: a change in between then refuses rather than slips through.
+        _version = IsVendor ? await Versions.GetAsync<Vendor>(Id) : await Versions.GetAsync<Customer>(Id);
+        _review = await Erasure.ReviewAsync(IsVendor ? ErasureKind.Vendor : ErasureKind.Customer, Id);
+    }
+}

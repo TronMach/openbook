@@ -113,7 +113,7 @@
     {
         try
         {
-            var details = new TaxAgencyDetails(Input.Name, Input.FilingFrequency, Input.RegistrationNumber, Input.Region, Input.DueDays);
+            var details = new TaxAgencyDetails(Input.Name, Input.FilingFrequency, Input.RegistrationNumber, Input.Region ?? "", Input.DueDays);
             if (Id is { } id)
                 await Taxes.UpdateAgencyAsync(id, details);
             else

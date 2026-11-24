@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using OpenBook.Application.Accounts;
 using OpenBook.Application.Ledger;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
@@ -34,11 +35,14 @@ public sealed record ChangeBillPaymentCommand(
 
 /// <summary>
 /// Pay bills: choose any open bills, in full or part, across vendors. Writes one payment per vendor
-/// (one check each), all in one save.
+/// (one check each), all in one save. Backup withholding is held back from vendors marked for it
+/// (<see cref="BackupWithholdingService"/>): the bills are paid in full, the bank pays the rest.
 /// </summary>
 public sealed class BillPaymentService(
     IPurchasesStore store,
     PurchaseAccounts purchaseAccounts,
+    AccountService accounts,
+    BackupWithholdingService withholding,
     PostingEngine engine,
     Banking.IBankingStore bank,
     ILedgerStore ledger,
@@ -56,7 +60,10 @@ public sealed class BillPaymentService(
         (await store.ListOpenBillsAsync(vendorId, ct)).OrderBy(b => b.DueDate).ThenBy(b => b.Date).ToList();
 
     /// <returns>The payments written, one per vendor, in vendor name order.</returns>
-    public async Task<IReadOnlyList<BillPayment>> PayAsync(PayBillsCommand command, CancellationToken ct = default)
+    public Task<IReadOnlyList<BillPayment>> PayAsync(PayBillsCommand command, CancellationToken ct = default) => PayAsync(command, null, ct);
+
+    /// <param name="importBatchId">For a payment recorded from a bank line, the line's import.</param>
+    internal async Task<IReadOnlyList<BillPayment>> PayAsync(PayBillsCommand command, Guid? importBatchId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Applications);
@@ -70,14 +77,17 @@ public sealed class BillPaymentService(
             throw new DomainException("payment.duplicate_bill", "Each bill can appear only once.");
 
         var account = await purchaseAccounts.GetPaymentAccountAsync(command.PaymentAccountId, ct);
-        return await PayCoreAsync(command, applications, account.Id, null, ct);
+        return await PayCoreAsync(command, applications, account.Id, null, importBatchId, null, ct);
     }
 
     /// <summary>
     /// Pays the vendor's bills from a deposit already paid to them: the payment comes from the deposit's asset account
-    /// and records the deposit, so it uses it up. Saved with everything else.
+    /// and records the deposit, so it uses it up. Saved with everything else. Backup withholding is held back from a
+    /// deposit paid from a bank as it's used: it stays in the deposit, since the vendor has had it.
     /// </summary>
-    internal async Task<IReadOnlyList<BillPayment>> PayFromDepositAsync(VendorDeposit deposit, DateOnly date, IReadOnlyList<ApplyToBill> applications, CancellationToken ct)
+    /// <param name="remaining">What's left of the deposit, which the payments can't go over.</param>
+    internal async Task<IReadOnlyList<BillPayment>> PayFromDepositAsync(
+        VendorDeposit deposit, DateOnly date, IReadOnlyList<ApplyToBill> applications, decimal remaining, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(deposit);
         var given = applications.Where(a => a.Amount != 0m).ToList();
@@ -88,11 +98,13 @@ public sealed class BillPaymentService(
         var bills = await store.GetBillsAsync(given.Select(a => a.BillId).ToList(), ct);
         if (bills.Any(b => b.VendorId != deposit.VendorId))
             throw new DomainException("vendordeposit.other_vendor", "A deposit pays only that vendor's bills.");
-        return await PayCoreAsync(new PayBillsCommand(date, deposit.DepositAccountId, given, deposit.Reference is { } r ? $"Deposit {r}" : "Deposit"),
-            given, deposit.DepositAccountId, deposit.Id, ct);
+        // A deposit's reference can be longer than a payment's.
+        return await PayCoreAsync(new PayBillsCommand(date, deposit.DepositAccountId, given, deposit.Reference is { } r ? TextCleaning.Cut($"Deposit {r}", 30) : "Deposit"),
+            given, deposit.DepositAccountId, deposit, null, remaining, ct);
     }
 
-    private async Task<IReadOnlyList<BillPayment>> PayCoreAsync(PayBillsCommand command, List<ApplyToBill> applications, Guid accountId, Guid? depositId, CancellationToken ct)
+    private async Task<IReadOnlyList<BillPayment>> PayCoreAsync(
+        PayBillsCommand command, List<ApplyToBill> applications, Guid accountId, VendorDeposit? deposit, Guid? importBatchId, decimal? limit, CancellationToken ct)
     {
         var bills = (await store.GetBillsAsync(applications.Select(a => a.BillId).ToList(), ct)).ToDictionary(b => b.Id);
         var vendors = (await store.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
@@ -117,25 +129,35 @@ public sealed class BillPaymentService(
             .OrderBy(g => vendors[g.Key.VendorId].DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
+        var chart = await accounts.GetChartAsync(ct);
+        var withheld = groups.ToDictionary(g => g.Key, g => BackupWithholdingService.OnBills(chart, vendors[g.Key.VendorId], command.Date,
+            deposit?.PaidFromAccountId ?? accountId, g.Select(a => (bills[a.BillId], a.Amount)).ToList()));
+        if (limit is { } most && applications.Sum(a => a.Amount) - withheld.Values.Sum() > most)
+            throw new DomainException("vendordeposit.too_much", $"Only {most:N2} of this deposit is left to use.");
+        Guid? withholdingAccount = withheld.Values.Any(w => w > 0m) ? (await withholding.GetOrCreateAccountAsync(ct)).Id : null;
+
         var payments = new List<BillPayment>();
         var reference = command.FirstReference?.Trim();
         foreach (var group in groups)
         {
             var vendor = vendors[group.Key.VendorId];
             var total = group.Sum(a => a.Amount);
+            var held = withheld[group.Key];
             var id = Guid.CreateVersion7();
             var memo = string.IsNullOrEmpty(reference) ? $"Bill payment to {vendor.DisplayName}" : $"Bill payment to {vendor.DisplayName} · {reference}";
             var entry = await engine.StageAsync(new PostJournalEntryCommand(
                 command.Date,
-                [JournalLineDraft.Dr(group.Key.PayableAccountId, total), JournalLineDraft.Cr(accountId, total)],
+                Postings(group.Key.PayableAccountId, accountId, total, held, withholdingAccount),
                 memo,
                 BillPayment.Source,
                 id), ct);
 
             var payment = BillPayment.Create(id, vendor.Id, command.Date, accountId, group.Key.PayableAccountId,
-                group.Select(a => (a.BillId, a.Amount)).ToList(), entry.Id, clock.UtcNow, reference, command.Memo ?? vendor.AccountNumber);
-            if (depositId is { } fromDeposit)
-                payment.FromDeposit(fromDeposit);
+                group.Select(a => (a.BillId, a.Amount)).ToList(), entry.Id, clock.UtcNow, reference, command.Memo ?? vendor.AccountNumber, held);
+            if (deposit is not null)
+                payment.FromDeposit(deposit.Id);
+            if (importBatchId is { } import)
+                payment.FromBankLine(import);
             foreach (var application in payment.Applications)
                 bills[application.BillId].ApplyPayment(application.Amount);
 
@@ -149,11 +171,22 @@ public sealed class BillPaymentService(
         return payments;
     }
 
+    /// <summary>Payables debited with all of it; the payment account credited with what the vendor gets, and the rest owed to the IRS.</summary>
+    private static List<JournalLineDraft> Postings(Guid payableAccountId, Guid accountId, decimal total, decimal withheld, Guid? withholdingAccountId)
+    {
+        List<JournalLineDraft> lines = [JournalLineDraft.Dr(payableAccountId, total), JournalLineDraft.Cr(accountId, total - withheld)];
+        if (withheld > 0m && withholdingAccountId is { } owed)
+            lines.Add(JournalLineDraft.Cr(owed, withheld, BackupWithholdingService.LineMemo));
+        return lines;
+    }
+
     /// <summary>
     /// Corrects a posted bill payment in place, in one save: its entry is voided (the reversal dated the original date)
     /// and a new one posted, and the bills it pays are put back and paid again. Refused once reconciled (as a void is).
     /// A check already issued (printed, sent by ACH, or within a positive pay file) keeps its amount, account and number;
     /// one a bank feed line stands for keeps its amount and account (matched lines follow the new entry).
+    /// What's withheld is worked out again when the date, the account or the bills change; a payment that held back keeps
+    /// doing so though the vendor's mark has gone since.
     /// </summary>
     public async Task<BillPayment> ChangeAsync(Guid id, ChangeBillPaymentCommand command, CancellationToken ct = default)
     {
@@ -198,7 +231,12 @@ public sealed class BillPaymentService(
         // Validates the amounts before anything is staged.
         var draft = BillPayment.Create(payment.Id, payment.VendorId, command.Date, accountId, payment.PayableAccountId,
             applications.Select(a => (a.BillId, a.Amount)).ToList(), Guid.Empty, clock.UtcNow, reference, memo);
-        var moneyChanged = draft.Amount != payment.Amount || accountId != payment.PaymentAccountId;
+        var sameBills = applications.Count == old.Count && applications.All(a => old.GetValueOrDefault(a.BillId) == a.Amount);
+        var held = sameBills && command.Date == payment.Date && accountId == payment.PaymentAccountId
+            ? payment.Withheld
+            : BackupWithholdingService.OnBills(await accounts.GetChartAsync(ct), vendor, command.Date, accountId,
+                applications.Select(a => (bills[a.BillId], a.Amount)).ToList(), always: payment.Withheld > 0m);
+        var moneyChanged = draft.Amount - held != payment.NetPaid || accountId != payment.PaymentAccountId;
         if (IsIssued(payment) && (moneyChanged || !string.Equals(reference, payment.Reference, StringComparison.Ordinal)))
             throw new DomainException("payment.check_issued",
                 "This payment has been printed as a check, sent by ACH or in a positive pay file, so its amount, account and number stay. Void it and pay again instead.");
@@ -207,6 +245,7 @@ public sealed class BillPaymentService(
         if (feed.Count > 0 && moneyChanged)
             throw new DomainException("payment.feed_matched", "This payment is matched to a line from the bank feed, so its amount and account stay. Undo the match first to change them.");
 
+        Guid? withholdingAccount = held > 0m ? (await withholding.GetOrCreateAccountAsync(ct)).Id : null;
         var before = Snapshot(payment);
         var billsBefore = bills.Values.ToDictionary(b => b.Id, BillService.Snapshot);
         var (location, tags) = await engine.SegmentsOfAsync(payment.JournalEntryId, ct);
@@ -214,7 +253,7 @@ public sealed class BillPaymentService(
         var entryMemo = string.IsNullOrEmpty(reference) ? $"Bill payment to {vendor.DisplayName}" : $"Bill payment to {vendor.DisplayName} · {reference}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date,
-            [JournalLineDraft.Dr(payment.PayableAccountId, draft.Amount), JournalLineDraft.Cr(accountId, draft.Amount)],
+            Postings(payment.PayableAccountId, accountId, draft.Amount, held, withholdingAccount),
             entryMemo,
             BillPayment.Source,
             payment.Id,
@@ -223,7 +262,7 @@ public sealed class BillPaymentService(
 
         foreach (var (billId, amount) in old)
             bills[billId].RemovePayment(amount);
-        payment.Change(command.Date, accountId, applications.Select(a => (a.BillId, a.Amount)).ToList(), entry.Id, reference, memo);
+        payment.Change(command.Date, accountId, applications.Select(a => (a.BillId, a.Amount)).ToList(), entry.Id, reference, memo, held);
         foreach (var application in payment.Applications)
             bills[application.BillId].ApplyPayment(application.Amount);
         foreach (var item in feed)
@@ -278,6 +317,7 @@ public sealed class BillPaymentService(
         p.VendorId,
         p.Date,
         p.Amount,
+        p.Withheld,
         p.PaymentAccountId,
         p.Reference,
         p.Memo,

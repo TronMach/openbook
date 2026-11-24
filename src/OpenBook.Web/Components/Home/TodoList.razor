@@ -110,6 +110,12 @@
         var notices = await Get<OnlinePaymentService>().NoticesAsync(openOnly: true);
         if (notices.Count > 0)
             Add(notices.Count, L["Refunds and disputes made at your payment provider"], $"/sales/invoices/{notices[0].InvoiceId}#online", L["On invoices paid online: record them in the books"], urgent: true);
+        var declined = await Get<OnlinePaymentService>().GivenUpAsync();
+        if (declined.Count > 0)
+            Add(declined.Count, L["Invoices whose saved card keeps being declined"], $"/sales/invoices/{declined[0].Id}#online", L["Ask the customer for another card, or to pay another way"], urgent: true);
+        var refundsWaiting = await Get<OnlineRefundService>().PendingAsync();
+        if (refundsWaiting.Count > 0)
+            Add(refundsWaiting.Count, L["Online refunds still waiting"], $"/sales/payments/{refundsWaiting[0].CustomerPaymentId}#refunds", L["Your payment provider gave no answer, or the books couldn't take them"], urgent: true);
         foreach (var account in banking)
         {
             Add(await feed.PendingCountAsync(account.Account.Id), L["Bank lines to review in {0}", account.FullName], $"/banking/{account.Account.Id}/feed");

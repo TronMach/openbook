@@ -10,13 +10,15 @@ namespace OpenBook.Api;
 public sealed record FixedAssetResponse(
     Guid Id, string Name, string? Number, Guid AssetAccountId, Guid AccumulatedAccountId, Guid ExpenseAccountId, DateOnly InServiceDate, decimal Cost,
     decimal Salvage, DepreciationMethod Method, int LifeMonths, decimal DecliningPercent, MacrsClass? MacrsClass, decimal PriorDepreciation,
-    DateOnly? PriorThrough, FixedAssetStatus Status, DateOnly? DisposedOn, decimal Proceeds, decimal Accumulated, decimal BookValue, string? Description = null)
+    DateOnly? PriorThrough, FixedAssetStatus Status, DateOnly? DisposedOn, decimal Proceeds, decimal Accumulated, decimal BookValue, string? Description = null,
+    decimal FirstYearAmount = 0m, Guid? ClassId = null)
 {
     public static FixedAssetResponse From(AssetPosition p)
     {
         var a = p.Asset;
         return new(a.Id, a.Name, a.Number, a.AssetAccountId, a.AccumulatedAccountId, a.ExpenseAccountId, a.InServiceDate, a.Cost, a.Salvage, a.Method,
-            a.LifeMonths, a.DecliningPercent, a.MacrsClass, a.PriorDepreciation, a.PriorThrough, a.Status, a.DisposedOn, a.Proceeds, p.Accumulated, p.BookValue, a.Description);
+            a.LifeMonths, a.DecliningPercent, a.MacrsClass, a.PriorDepreciation, a.PriorThrough, a.Status, a.DisposedOn, a.Proceeds, p.Accumulated, p.BookValue, a.Description,
+            a.FirstYearAmount, a.ClassId);
     }
 }
 
@@ -35,9 +37,19 @@ public sealed record LoanResponse(
     /// <summary>A variable rate's changes: the rate (and payment, when it changed) from each date.</summary>
     public IReadOnlyList<LoanRateChangeResponse> RateChanges { get; init; } = [];
 
+    /// <summary>A line of credit's limit; null for other loans.</summary>
+    public decimal? CreditLimit { get; init; }
+
+    /// <summary>A merchant advance's fixed fee; null for other loans.</summary>
+    public decimal? FactorFee { get; init; }
+
+    /// <summary>The class its interest is posted to.</summary>
+    public Guid? ClassId { get; init; }
+
     public static LoanResponse From(Loan l) => new(
         l.Id, l.Name, l.LiabilityAccountId, l.InterestAccountId, l.Principal, l.AnnualRatePercent, l.Payments, l.FirstPaymentDate, l.PaymentAmount, l.Balance,
         l.PaymentsMade.Select(p => new LoanPaymentResponse(p.Id, p.Date, p.Amount, p.Interest, p.Principal, p.PaymentAccountId, p.JournalEntryId, p.IsVoided)).ToList()) { LenderVendorId = l.LenderVendorId, Notes = l.Notes, IsVoided = l.IsVoided,
+            CreditLimit = l.CreditLimit, FactorFee = l.FactorFee, ClassId = l.ClassId,
             RateChanges = [.. l.RateChanges.Select(c => new LoanRateChangeResponse(c.EffectiveFrom, c.RatePercent, c.PaymentAmount))] };
 }
 
@@ -68,11 +80,22 @@ public static class AssetsApi
             var asset = await s.CreateAsync(r, ct);
             return Results.Created($"/api/assets/{asset.Id}", FixedAssetResponse.From((await s.GetAsync(asset.Id, ct))!));
         });
-        assets.MapPut("/{id:guid}", async (Guid id, FixedAssetDetails r, FixedAssetService s, CancellationToken ct) =>
+        // The first-year write-off and the class stay when they're left out; 0 and null clear them.
+        assets.MapPut("/{id:guid}", async (Guid id, HttpRequest request, FixedAssetService s, CancellationToken ct) =>
         {
+            var (r, sent) = await ApiKeep.ReadAsync<FixedAssetDetails>(request, ct);
+            if (await s.GetAsync(id, ct) is { Asset: var a })
+            {
+                r = r with
+                {
+                    FirstYearAmount = sent.Contains(nameof(r.FirstYearAmount)) ? r.FirstYearAmount : a.FirstYearAmount,
+                    ClassId = sent.Contains(nameof(r.ClassId)) ? r.ClassId : a.ClassId,
+                };
+            }
+
             await s.UpdateAsync(id, r, ct);
             return FixedAssetResponse.From((await s.GetAsync(id, ct))!);
-        });
+        }).Accepts<FixedAssetDetails>("application/json");
         // An asset entered by mistake, before anything posted for it: off the register, and back.
         assets.MapPost("/{id:guid}/remove", async (Guid id, FixedAssetService s, CancellationToken ct) =>
         {
@@ -116,7 +139,22 @@ public static class AssetsApi
             var loan = await s.CreateAsync(r, ct);
             return Results.Created($"/api/assets/loans/{loan.Id}", LoanResponse.From(loan));
         });
-        assets.MapPut("/loans/{id:guid}", async (Guid id, LoanDetails r, LoanService s, CancellationToken ct) => LoanResponse.From(await s.UpdateAsync(id, r, ct)));
+        // A line of credit's limit, an advance's fee and the class stay when they're left out; null clears them.
+        assets.MapPut("/loans/{id:guid}", async (Guid id, HttpRequest request, LoanService s, CancellationToken ct) =>
+        {
+            var (r, sent) = await ApiKeep.ReadAsync<LoanDetails>(request, ct);
+            if (await s.GetAsync(id, ct) is { } l)
+            {
+                r = r with
+                {
+                    CreditLimit = sent.Contains(nameof(r.CreditLimit)) ? r.CreditLimit : l.CreditLimit,
+                    FactorFee = sent.Contains(nameof(r.FactorFee)) ? r.FactorFee : l.FactorFee,
+                    ClassId = sent.Contains(nameof(r.ClassId)) ? r.ClassId : l.ClassId,
+                };
+            }
+
+            return LoanResponse.From(await s.UpdateAsync(id, r, ct));
+        }).Accepts<LoanDetails>("application/json");
         assets.MapPut("/loans/{id:guid}/rates/{from}", async (Guid id, DateOnly from, LoanRateChangeRequest r, LoanService s, CancellationToken ct) =>
             LoanResponse.From(await s.SetRateChangeAsync(id, from, r.RatePercent, r.PaymentAmount, ct)));
         assets.MapDelete("/loans/{id:guid}/rates/{from}", async (Guid id, DateOnly from, LoanService s, CancellationToken ct) =>

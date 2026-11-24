@@ -44,6 +44,15 @@ public interface IPaymentGateway
     /// <summary>Closes an open checkout, so it can't be paid. Refused once it's been paid.</summary>
     /// <param name="sessionId">The link's own id at the provider where it has one (<see cref="CheckoutSession.LinkId"/>), else the checkout's.</param>
     Task<CheckoutSession> ExpireCheckoutAsync(GatewayKeys keys, string sessionId, CancellationToken ct);
+
+    /// <summary>
+    /// Gives back part or all of a payment. <see cref="ProviderAnswers.IsRefusal"/> says whether a failure means it
+    /// wasn't made; after any other, the same request is sent again.
+    /// </summary>
+    Task<ProviderRefund> RefundAsync(GatewayKeys keys, RefundRequest request, CancellationToken ct);
+
+    /// <summary>The refund made with the request's key, or null when the provider has none. Refused when it can't say.</summary>
+    Task<ProviderRefund?> FindRefundAsync(GatewayKeys keys, RefundRequest request, CancellationToken ct);
 }
 
 /// <summary>PayPal's check of a webhook call: PayPal itself says whether the headers' signature fits the body and the webhook.</summary>
@@ -54,8 +63,8 @@ public interface IPayPalWebhooks
 }
 
 /// <param name="LeaveLinks">
-/// Change the provider (or remove its key) even though links customers hold can't be closed there first: a payment made
-/// on one afterwards isn't recorded.
+/// Change the provider or its sandbox (or remove its key) even though links customers hold can't be closed there first: a
+/// payment made on one afterwards isn't recorded.
 /// </param>
 public sealed record OnlinePaymentSettingsCommand(bool Enabled, Guid? DepositAccountId, string? PublicUrl, string? SecretKey = null, string? WebhookSecret = null,
     bool ClearSecretKey = false, bool ClearWebhookSecret = false, PaymentProvider? Provider = null, string? ClientId = null, string? WebhookId = null, bool? Sandbox = null,
@@ -84,8 +93,14 @@ public interface IOnlineCheckoutHandler
     /// <param name="eventType">Stripe's event name; PayPal's events come as <c>checkout.session.completed</c> once the money is taken.</param>
     Task<WebhookOutcome?> HandleAsync(string eventType, string sessionId, bool paid, string? paymentReference, decimal? amount, CancellationToken ct);
 
-    /// <summary>Takes the money for a checkout the customer approved at PayPal and records it; false when the checkout isn't this handler's.</summary>
+    /// <summary>Takes the money for a checkout the customer approved at PayPal and records it, or records one found paid; false when the checkout isn't this handler's.</summary>
     Task<bool> CompleteAsync(string sessionId, CancellationToken ct) => Task.FromResult(false);
+
+    /// <summary>The minute job's look at this handler's open checkouts, for payments nothing reported. Returns why one couldn't be checked, if any couldn't.</summary>
+    Task<string?> CheckOpenAsync(OnlinePaymentSettings settings, CancellationToken ct) => Task.FromResult<string?>(null);
+
+    /// <summary>Closes this handler's open checkouts at the provider, recording those found paid, before its keys go. Returns why one couldn't be closed, if any couldn't.</summary>
+    Task<string?> CloseAllAsync(OnlinePaymentSettings settings, CancellationToken ct) => Task.FromResult<string?>(null);
 }
 
 /// <summary>What a webhook call amounted to.</summary>
@@ -103,11 +118,12 @@ public enum WebhookOutcome
 /// records an ordinary customer payment into the chosen deposit account, through the provider's webhook or by
 /// checking the link. Each link is recorded once, however often the provider reports it. At PayPal the customer only
 /// approves the payment: OpenBook takes the money (captures it) when it hears of the approval, and not at all when the
-/// invoice no longer owes the link's amount.
+/// invoice no longer owes the link's amount. Saved cards and their charges are in the other half of this class.
 /// </summary>
-public sealed class OnlinePaymentService(
-    ISalesStore store, ICompanyStore companies, IEnumerable<IPaymentGateway> gateways, IPayPalWebhooks payPalWebhooks, ISecretProtector secrets,
-    PaymentService payments, SalesAccounts salesAccounts, IUnitOfWork unit, IClock clock, ICurrentUser user, IEnumerable<IOnlineCheckoutHandler> others)
+public sealed partial class OnlinePaymentService(
+    ISalesStore store, IOnlineMoneyStore money, ICompanyStore companies, IEnumerable<IPaymentGateway> gateways, IPayPalWebhooks payPalWebhooks, ISecretProtector secrets,
+    PaymentService payments, OnlineRefundService refunds, SalesAccounts salesAccounts, IUnitOfWork unit, IClock clock, ICurrentUser user,
+    IEnumerable<IOnlineCheckoutHandler> others)
 {
     public const string SettingsEntity = "online_payment_settings";
 
@@ -132,9 +148,10 @@ public sealed class OnlinePaymentService(
         await store.GetOnlinePaymentSettingsAsync(ct) ?? OnlinePaymentSettings.Create();
 
     /// <summary>
-    /// Saves the settings. Changing the provider, or removing its key, first closes the old provider's open links while
-    /// its keys are still here: afterwards a payment made on one could be neither heard of nor recorded. Links found
-    /// paid are recorded. Refused when one can't be closed, unless <see cref="OnlinePaymentSettingsCommand.LeaveLinks"/>.
+    /// Saves the settings. Changing the provider or its sandbox, or removing its key, first closes the old provider's open
+    /// links (and gifts under way) while its keys are still here: afterwards a payment made on one could be neither heard of
+    /// nor recorded. Those found paid are recorded. Refused when one can't be closed, unless
+    /// <see cref="OnlinePaymentSettingsCommand.LeaveLinks"/>. Cards saved there can't be charged any more and are marked so.
     /// </summary>
     public async Task<OnlinePaymentSettings> SaveSettingsAsync(OnlinePaymentSettingsCommand command, CancellationToken ct = default)
     {
@@ -150,15 +167,16 @@ public sealed class OnlinePaymentService(
             settings = OnlinePaymentSettings.Create();
             store.Add(settings);
         }
-        else if (settings.HasKeys && (command.ClearSecretKey || command.Provider is { } chosen && chosen != settings.Provider))
+        else if (settings.HasKeys && LeavesLinksBehind(settings, command))
         {
             // What was typed is checked first, on a copy: nothing is closed for a save that's going to be refused.
             Apply(settings.Copy(), command);
             if (!command.LeaveLinks && await CloseAllAsync(settings, ct) is { } failure)
                 throw new DomainException("online.links_open",
-                    $"Some payment links customers hold couldn't be closed at {settings.Provider} ({failure.TrimEnd('.')}). Close them in its dashboard, then save again with \"Change anyway\" ticked: a payment made on one afterwards isn't recorded.");
+                    $"Some payment links customers hold (or gifts, card charges or refunds under way) couldn't be closed at {settings.Provider} ({failure.TrimEnd('.')}). Close them in its dashboard, then save again with \"Change anyway\" ticked: a payment made on one afterwards isn't recorded.");
             // Closing a link that couldn't be saved drops what was read.
             settings = await store.GetOnlinePaymentSettingsAsync(ct) ?? settings;
+            await MarkCardsUnusableAsync(settings.Provider, ct);
         }
 
         var before = Snapshot(settings);
@@ -167,6 +185,12 @@ public sealed class OnlinePaymentService(
         await store.SaveChangesAsync(ct);
         return settings;
     }
+
+    /// <summary>Whether the change cuts OpenBook off from links made under the settings as they are. A new key alone may be the same account's.</summary>
+    private static bool LeavesLinksBehind(OnlinePaymentSettings settings, OnlinePaymentSettingsCommand command) =>
+        command.ClearSecretKey
+        || (command.Provider is { } chosen && chosen != settings.Provider)
+        || (settings.Provider != PaymentProvider.Stripe && command.Sandbox is { } sandbox && sandbox != settings.Sandbox);
 
     private void Apply(OnlinePaymentSettings settings, OnlinePaymentSettingsCommand command)
     {
@@ -178,7 +202,7 @@ public sealed class OnlinePaymentService(
             keep ? settings.ClientId : command.ClientId, keep ? settings.WebhookId : command.WebhookId, command.Sandbox);
     }
 
-    /// <summary>Closes every open link of the settings' provider, recording those found paid. Returns why one couldn't be closed, if any couldn't.</summary>
+    /// <summary>Closes every open link of the settings' provider, and other checkouts under way, recording those found paid. Returns why one couldn't be closed, if any couldn't.</summary>
     private async Task<string?> CloseAllAsync(OnlinePaymentSettings settings, CancellationToken ct)
     {
         var open = (await store.ListOpenPaymentLinksAsync(ct)).Where(l => l.Provider == settings.Provider).Select(l => l.Id).ToList();
@@ -197,7 +221,16 @@ public sealed class OnlinePaymentService(
             }
         }
 
-        return failure;
+        foreach (var handler in others)
+        {
+            var refused = await handler.CloseAllAsync(settings, ct);
+            failure ??= refused;
+        }
+
+        var waiting = await SettleChargesAsync(settings, ct);
+        failure ??= waiting;
+        var refundsWaiting = await refunds.SettleAllAsync(settings.Provider, ct);
+        return failure ?? refundsWaiting;
     }
 
     /// <summary>
@@ -256,6 +289,7 @@ public sealed class OnlinePaymentService(
         var invoice = await store.GetInvoiceAsync(invoiceId, ct) ?? throw new EntityNotFoundException("invoice", invoiceId);
         if (!invoice.IsOpen)
             throw new DomainException("online.nothing_to_pay", $"Invoice {invoice.Number} has nothing left to pay.");
+        await EnsureNoChargeAsync(invoiceId, ct);
         var now = clock.UtcNow;
         if ((await store.ListPaymentLinksAsync(invoice.Id, ct)).FirstOrDefault(l => l.IsUsable(now) && l.Amount == invoice.Balance && l.Provider == settings.Provider) is { } existing)
             return existing;
@@ -276,6 +310,13 @@ public sealed class OnlinePaymentService(
             session.ExpiresAt ?? (gateway.CheckoutLifetime is { } lifetime ? now + lifetime : null), session.LinkId);
         store.Add(link);
         await store.SaveChangesAsync(ct);
+        if ((await money.ListChargesAsync(invoiceId, ct)).Any(c => c.Status == CardChargeStatus.Pending))
+        {
+            // Started while the link was being made: one of the two has to go, and the charge may be through already.
+            await CloseAsync(link, settings, ct);
+            throw ChargeUnderWay();
+        }
+
         return link;
     }
 
@@ -347,13 +388,25 @@ public sealed class OnlinePaymentService(
     /// <remarks>
     /// PayPal's links are looked after here too, since nothing is taken until OpenBook captures it: every
     /// <see cref="PayPalCheckMinutes"/> minutes while the order lasts, for an approval no webhook or return reported,
-    /// and once more when it's lapsed, before the link is closed.
+    /// and once more when it's lapsed, before the link is closed. Gifts under way are looked after on the same beat.
     /// </remarks>
     public async Task<string?> ExpireOutdatedAsync(CancellationToken ct = default)
     {
         var settings = await GetSettingsAsync(ct);
         if (!settings.HasKeys)
             return null;
+        var failure = await ExpireLinksAsync(settings, ct);
+        foreach (var handler in others)
+        {
+            var refused = await handler.CheckOpenAsync(settings, ct);
+            failure ??= refused;
+        }
+
+        return failure;
+    }
+
+    private async Task<string?> ExpireLinksAsync(OnlinePaymentSettings settings, CancellationToken ct)
+    {
         var now = clock.UtcNow;
         var all = (await store.ListOpenPaymentLinksAsync(ct)).Where(l => l.Provider == settings.Provider).ToList();
         if (all.Count == 0)
@@ -418,10 +471,14 @@ public sealed class OnlinePaymentService(
         var session = json.RootElement.GetProperty("data").GetProperty("object");
         if (type is "charge.refunded" or "charge.dispute.created")
             return await NoticeAsync(json.RootElement, type, session, ct);
+        if (type is "payment_intent.succeeded" or "payment_intent.payment_failed")
+            return await ChargeEventAsync(session.GetRawText(), ct);
         // Endpoints subscribed to everything get events about things with no id, such as a balance.
         var sessionId = session.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String ? id.GetString() : null;
         if (sessionId is null)
             return WebhookOutcome.Ignored;
+        if (await money.FindCardAsync(sessionId, ct) is { } card)
+            return await CardSessionAsync(card, settings, ct);
         if (await store.FindPaymentLinkAsync(sessionId, ct) is not { } link)
         {
             var paid = session.TryGetProperty("payment_status", out var otherStatus) && otherStatus.GetString() == "paid";
@@ -464,22 +521,43 @@ public sealed class OnlinePaymentService(
         var refund = type == "charge.refunded";
         var cents = charge.TryGetProperty(refund ? "amount_refunded" : "amount", out var a) && a.ValueKind == JsonValueKind.Number ? a.GetInt64() : 0L;
         var reason = !refund && charge.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : null;
-        return await NoticeAsync(eventId, refund ? OnlineNoticeKind.Refund : OnlineNoticeKind.Dispute, intent, cents / 100m, reason, ct);
+        return await NoticeAsync(eventId, refund ? OnlineNoticeKind.Refund : OnlineNoticeKind.Dispute, intent, cents / 100m, reason, refund, ct);
     }
 
     /// <summary>A refund or dispute at the provider on the payment <paramref name="reference"/>, kept once per event; ignored for payments OpenBook didn't take.</summary>
-    private async Task<WebhookOutcome> NoticeAsync(string? eventId, OnlineNoticeKind kind, string? reference, decimal amount, string? reason, CancellationToken ct)
+    /// <param name="runningTotal">The amount is all that's been refunded so far, refunds made from here included: those aren't news.</param>
+    private async Task<WebhookOutcome> NoticeAsync(
+        string? eventId, OnlineNoticeKind kind, string? reference, decimal amount, string? reason, bool runningTotal, CancellationToken ct)
     {
-        if (eventId is null || reference is null || await store.FindPaidLinkByReferenceAsync(reference, ct) is not { } link)
+        if (eventId is null || reference is null)
+            return WebhookOutcome.Ignored;
+        var link = await store.FindPaidLinkByReferenceAsync(reference, ct);
+        var charge = link is null ? await money.FindChargeAsync(reference, ct) : null;
+        if (link is null && charge is not { Status: CardChargeStatus.Succeeded })
             return WebhookOutcome.Ignored;
         if (await store.OnlineNoticeExistsAsync(eventId, ct))
             return WebhookOutcome.Handled;
 
-        var notice = OnlinePaymentNotice.Create(eventId, kind, link, amount, reason, clock.UtcNow);
-        store.Add(notice);
-        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", link.InvoiceId, null, JsonSerializer.Serialize(new
+        var invoiceId = link?.InvoiceId ?? charge!.InvoiceId;
+        if (runningTotal)
         {
-            OnlinePayment = kind == OnlineNoticeKind.Refund ? $"Refunded at {link.Provider}" : $"Disputed at {link.Provider}",
+            amount -= await refunds.RefundedHereAsync(reference, ct);
+            // Only what's new: a refund made from here raises the total past a notice already kept for one made there.
+            var noticed = (await store.ListOnlineNoticesAsync(invoiceId, false, ct))
+                .Where(n => n.Kind == OnlineNoticeKind.Refund && n.PaymentLinkId == link?.Id && n.CardChargeId == charge?.Id)
+                .Select(n => n.Amount).DefaultIfEmpty().Max();
+            if (amount <= noticed)
+                return WebhookOutcome.Ignored;
+        }
+
+        var provider = link?.Provider ?? PaymentProvider.Stripe;
+        var notice = link is not null
+            ? OnlinePaymentNotice.Create(eventId, kind, link, amount, reason, clock.UtcNow)
+            : OnlinePaymentNotice.Create(eventId, kind, charge!, amount, reason, clock.UtcNow);
+        store.Add(notice);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", invoiceId, null, JsonSerializer.Serialize(new
+        {
+            OnlinePayment = kind == OnlineNoticeKind.Refund ? $"Refunded at {provider}" : $"Disputed at {provider}",
             notice.Amount,
             notice.Reason,
         })));
@@ -511,18 +589,25 @@ public sealed class OnlinePaymentService(
                     // Money taken counts even on a link OpenBook had closed: the payment may have been under way.
                     if (link.Status == PaymentLinkStatus.Paid)
                         return WebhookOutcome.Ignored;
-                    await RecordAsync(link, squareEvent.PaymentId, squareEvent.Amount ?? link.Amount, ct);
+                    // One order can be paid in parts (a gift card and a card), each its own payment: the order says when it's paid, and how much.
+                    var order = await Gateway(PaymentProvider.Square).GetCheckoutAsync(Keys(settings), orderId, ct);
+                    if (!order.Paid)
+                        throw new DomainException("online.not_paid_yet", "Square says the order isn't paid in full yet.");
+                    await RecordAsync(link, order.PaymentReference, order.AmountPaid ?? link.Amount, ct);
                     return WebhookOutcome.Handled;
                 }
 
+                // Read back from the order too.
                 foreach (var handler in others)
-                    if (await handler.HandleAsync("checkout.session.completed", orderId, true, squareEvent.PaymentId, squareEvent.Amount, ct) is { } outcome)
-                        return outcome;
+                    if (await handler.CompleteAsync(orderId, ct))
+                        return WebhookOutcome.Handled;
                 return WebhookOutcome.Ignored;
             case "refund.created" or "refund.updated" when squareEvent.Completed:
-                return await NoticeAsync(squareEvent.NoticeId, OnlineNoticeKind.Refund, squareEvent.PaymentId, squareEvent.Amount ?? 0m, null, ct);
+                return await refunds.IsOursAsync(squareEvent.RefundId, squareEvent.Reason, ct)
+                    ? WebhookOutcome.Ignored
+                    : await NoticeAsync(squareEvent.NoticeId, OnlineNoticeKind.Refund, squareEvent.PaymentId, squareEvent.Amount ?? 0m, null, runningTotal: false, ct);
             case "dispute.created":
-                return await NoticeAsync(squareEvent.NoticeId, OnlineNoticeKind.Dispute, squareEvent.PaymentId, squareEvent.Amount ?? 0m, squareEvent.Reason, ct);
+                return await NoticeAsync(squareEvent.NoticeId, OnlineNoticeKind.Dispute, squareEvent.PaymentId, squareEvent.Amount ?? 0m, squareEvent.Reason, runningTotal: false, ct);
             default:
                 return WebhookOutcome.Ignored;
         }
@@ -577,9 +662,11 @@ public sealed class OnlinePaymentService(
                         return outcome;
                 return WebhookOutcome.Ignored;
             case "PAYMENT.CAPTURE.REFUNDED":
-                return await NoticeAsync(paypalEvent.Id, OnlineNoticeKind.Refund, paypalEvent.CaptureId, paypalEvent.Amount ?? 0m, null, ct);
+                return await refunds.IsOursAsync(paypalEvent.ResourceId, paypalEvent.Key, ct)
+                    ? WebhookOutcome.Ignored
+                    : await NoticeAsync(paypalEvent.Id, OnlineNoticeKind.Refund, paypalEvent.CaptureId, paypalEvent.Amount ?? 0m, null, runningTotal: true, ct);
             case "CUSTOMER.DISPUTE.CREATED":
-                return await NoticeAsync(paypalEvent.Id, OnlineNoticeKind.Dispute, paypalEvent.CaptureId, paypalEvent.Amount ?? 0m, paypalEvent.Reason, ct);
+                return await NoticeAsync(paypalEvent.Id, OnlineNoticeKind.Dispute, paypalEvent.CaptureId, paypalEvent.Amount ?? 0m, paypalEvent.Reason, runningTotal: false, ct);
             default:
                 return WebhookOutcome.Ignored;
         }
@@ -592,7 +679,7 @@ public sealed class OnlinePaymentService(
     public async Task<OnlinePaymentNotice> ResolveNoticeAsync(Guid id, CancellationToken ct = default)
     {
         var notice = await store.GetOnlineNoticeAsync(id, ct) ?? throw new EntityNotFoundException("online_payment_notice", id);
-        var provider = (await store.GetPaymentLinkAsync(notice.PaymentLinkId, ct))?.Provider ?? PaymentProvider.Stripe;
+        var provider = notice.PaymentLinkId is { } linkId && await store.GetPaymentLinkAsync(linkId, ct) is { } link ? link.Provider : PaymentProvider.Stripe;
         notice.Resolve(clock.UtcNow, user.Actor);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "invoice", notice.InvoiceId, null,
             JsonSerializer.Serialize(new { OnlinePayment = $"{(notice.Kind == OnlineNoticeKind.Refund ? "Refund" : "Dispute")} at {provider} dealt with", notice.Amount })));

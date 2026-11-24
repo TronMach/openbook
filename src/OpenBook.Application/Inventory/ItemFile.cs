@@ -28,7 +28,8 @@ public enum ItemFileRowStatus
 public sealed record ItemFileRow(int Line, string? Item, ItemFileRowStatus Status, IReadOnlyList<string> Changes, string? Message);
 
 /// <param name="Problem">A refusal the rows themselves pass but the import as a whole hit (found by trying it).</param>
-public sealed record ItemFilePlan(IReadOnlyList<ItemFileRow> Rows, int StockChanges, string? Problem)
+/// <param name="ProblemCode">The refusal's code, so a page can ask for the closing date password.</param>
+public sealed record ItemFilePlan(IReadOnlyList<ItemFileRow> Rows, int StockChanges, string? Problem, string? ProblemCode = null)
 {
     public int NewCount => Rows.Count(r => r.Status == ItemFileRowStatus.New);
     public int ChangedCount => Rows.Count(r => r.Status == ItemFileRowStatus.Changed);
@@ -146,7 +147,7 @@ public sealed class ItemFileService(
         }
         catch (DomainException ex)
         {
-            return result with { Problem = ex.Message };
+            return result with { Problem = ex.Message, ProblemCode = ex.Code };
         }
 
         return result;
@@ -223,10 +224,15 @@ public sealed class ItemFileService(
                 await pricing.SetLevelPricesAsync(level.Id, prices.Select(p => (p.Key, p.Value)).ToList(), ct: ct);
         }
 
-        var counts = plan.Rows.Where(r => ids.ContainsKey(r) && r.Counted is not null && r.Counted != r.OnHand)
-            .Select(r => new CountedItem(ids[r], r.Counted!.Value)).ToList();
-        if (counts.Count > 0)
-            await adjustments.CountAsync(new InventoryCountCommand(options.Date, counts, options.WarehouseId, options.AdjustmentAccountId, AdjustmentReference), ct);
+        // By what each cell was changed by, not a count on the date: the cell shows all the stock there is, whatever its date.
+        var place = new StockPlace(options.WarehouseId, null);
+        var changes = plan.Rows.Where(r => ids.ContainsKey(r) && r.Counted is not null && r.Counted != r.OnHand)
+            .Select(r => new InventoryAdjustmentLineDraft(ids[r], r.Counted!.Value - r.OnHand, null, place)).ToList();
+        if (changes.Count > 0)
+        {
+            await adjustments.CreateAsync(new CreateInventoryAdjustmentCommand(
+                options.Date, changes, options.AdjustmentAccountId, AdjustmentReference, "On hand changed in the items spreadsheet"), ct);
+        }
     }
 
     private sealed class RowPlan
@@ -472,9 +478,10 @@ public sealed class ItemFileService(
                 if (F(onHandCol) is { } onHandText)
                 {
                     var counted = Rate(onHandText, "quantity on hand");
-                    if (counted < 0m)
-                        throw new DomainException("count.quantity_invalid", "The quantity on hand can't be below zero.");
                     var held = existing is null ? 0m : context.OnHand.GetValueOrDefault(existing.Id);
+                    // What was sold short comes back as it went out.
+                    if (counted < 0m && counted != held)
+                        throw new DomainException("count.quantity_invalid", "The quantity on hand can't be below zero.");
                     if (!tracked)
                     {
                         if (counted != 0m)

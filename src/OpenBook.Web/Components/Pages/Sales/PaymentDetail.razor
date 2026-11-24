@@ -102,6 +102,8 @@
         </tbody>
     </table>
 
+    <OnlineRefundPanel PaymentId="_payment.Id" />
+
     @if (_payment.Status == DocumentStatus.Posted && _payment.ReturnedOn is null && _payment.Amount > 0m && (_payment.DepositId is not null || _inBank))
     {
         <div class="card" style="margin-top: 1.5rem">

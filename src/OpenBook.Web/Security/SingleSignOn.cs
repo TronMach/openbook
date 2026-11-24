@@ -53,8 +53,8 @@ public static class SingleSignOn
         // Sends the browser to the provider.
         app.MapGet("/login/sso", async (HttpContext http, SingleSignOnService sso, ISingleSignOnHost host, string? returnUrl) =>
         {
-            if (await sso.ClientAsync(http.RequestAborted) is null)
-                return Results.Redirect("/login?sso=off");
+            if (await UnavailableAsync(sso, http.RequestAborted) is { } reason)
+                return Results.Redirect($"/login?sso={reason}");
             // With several server instances, the settings may have been saved on another one.
             host.SettingsChanged();
             var done = $"/login/sso/done?returnUrl={Uri.EscapeDataString(WebSecurity.SafeReturnUrl(returnUrl))}";
@@ -66,8 +66,8 @@ public static class SingleSignOn
         // inside the signed ticket, not in the address, which anyone can edit.
         app.MapPost("/account/sso/link", async (IFormCollection form, HttpContext http, SingleSignOnService sso, TwoFactorService twoFactor, CancellationToken ct) =>
         {
-            if (await sso.ClientAsync(ct) is null)
-                return Results.Redirect("/login?sso=off");
+            if (await UnavailableAsync(sso, ct) is { } reason)
+                return Results.Redirect($"/account/password?sso={reason}");
             try
             {
                 await twoFactor.CheckIdentityAsync(http.User.GetUserId(), form["password"].ToString(), form["code"].ToString(), ct);
@@ -118,6 +118,15 @@ public static class SingleSignOn
 
         return app;
     }
+
+    /// <summary>Why nobody can be sent to the provider now ("off", or its secret can't be read here); null when they can.</summary>
+    private static async Task<string?> UnavailableAsync(SingleSignOnService sso, CancellationToken ct) =>
+        await sso.ClientAsync(ct) switch
+        {
+            null => "off",
+            { ClientSecret: null } => SingleSignOnService.SecretUnreadableCode,
+            _ => null,
+        };
 
     /// <summary>
     /// Who signed in, in OpenBook's terms. The issuer is the token's own (<see cref="SsoOptionsSetup"/> keeps the
@@ -173,8 +182,16 @@ internal sealed class SsoOptionsSetup(IServiceScopeFactory scopes) : IConfigureN
         if (name != SingleSignOn.Scheme)
             return;
         SsoClient? client;
-        using (var scope = scopes.CreateScope())
+        try
+        {
+            using var scope = scopes.CreateScope();
             client = scope.ServiceProvider.GetRequiredService<SingleSignOnService>().ClientAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is System.Data.Common.DbException or InvalidOperationException or TimeoutException)
+        {
+            // A failure here is kept with the options and would fail every request; /login/sso has them read again.
+            client = null;
+        }
 
         options.SignInScheme = SingleSignOn.ExternalScheme;
         options.CallbackPath = SingleSignOn.CallbackPath;

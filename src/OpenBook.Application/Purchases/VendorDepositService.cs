@@ -14,17 +14,21 @@ namespace OpenBook.Application.Purchases;
 public sealed record CreateVendorDepositCommand(
     Guid VendorId, DateOnly Date, decimal Amount, Guid PaidFromAccountId, Guid? PurchaseOrderId = null, string? Reference = null, string? Memo = null);
 
-/// <summary>A vendor deposit with what's been used of it.</summary>
+/// <param name="AccountId">The bank or card account the money came into.</param>
+public sealed record RefundVendorDepositCommand(DateOnly Date, decimal Amount, Guid AccountId, string? Reference = null);
+
+/// <summary>A vendor deposit with what's been used of it: what its bill payments took, not what they held back for the IRS.</summary>
 public sealed record VendorDepositBalance(VendorDeposit Deposit, decimal Applied, IReadOnlyList<BillPayment> Payments)
 {
-    public decimal Remaining => Deposit.Status == DocumentStatus.Posted ? Deposit.Amount - Applied : 0m;
+    public decimal Remaining => Deposit.Status == DocumentStatus.Posted ? Deposit.Amount - Applied - Deposit.Refunded : 0m;
 }
 
 /// <summary>
 /// Deposits paid to vendors ahead of their bills. Paying one posts Dr "Vendor Deposits" (other current asset, created
 /// on first use) / Cr the bank or card; applying it writes ordinary bill payments from that asset account
 /// (<see cref="BillPaymentService.PayFromDepositAsync"/>), each recording the deposit. Voiding such a payment frees the
-/// amount; the deposit itself is voided only while nothing of it is applied.
+/// amount. What the vendor pays back is a refund (Dr the bank or card / Cr "Vendor Deposits"). The deposit itself is
+/// voided only while nothing of it is applied or paid back.
 /// </summary>
 public sealed class VendorDepositService(
     IPurchasesStore store,
@@ -55,7 +59,7 @@ public sealed class VendorDepositService(
     private static VendorDepositBalance Balance(VendorDeposit deposit, IEnumerable<BillPayment> payments)
     {
         var list = payments.OrderBy(p => p.Date).ToList();
-        return new VendorDepositBalance(deposit, list.Where(p => p.Status == DocumentStatus.Posted).Sum(p => p.Amount), list);
+        return new VendorDepositBalance(deposit, list.Where(p => p.Status == DocumentStatus.Posted).Sum(p => p.NetPaid), list);
     }
 
     public async Task<VendorDeposit> CreateAsync(CreateVendorDepositCommand command, CancellationToken ct = default)
@@ -99,9 +103,10 @@ public sealed class VendorDepositService(
         if (date < deposit.Date)
             throw new DomainException("vendordeposit.before_deposit", "A deposit can't pay bills before the date it was paid.");
         var total = applications.Sum(a => a.Amount);
-        if (total > balance.Remaining)
+        // What's held back from a vendor marked for backup withholding doesn't come out of the deposit: checked as it's paid.
+        if (total > balance.Remaining && (await store.GetVendorAsync(deposit.VendorId, ct))?.WithholdsOn(date) != true)
             throw new DomainException("vendordeposit.too_much", $"Only {balance.Remaining:N2} of this deposit is left to use.");
-        var made = await payments.PayFromDepositAsync(deposit, date, applications, ct);
+        var made = await payments.PayFromDepositAsync(deposit, date, applications, balance.Remaining, ct);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, deposit.Id, null,
             JsonSerializer.Serialize(new { Applied = total, OnDate = date, Payments = made.Select(p => p.Id).ToList() })));
         await store.SaveChangesAsync(ct);
@@ -114,11 +119,58 @@ public sealed class VendorDepositService(
         var balance = await GetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (balance.Applied > 0m)
             throw new DomainException("vendordeposit.applied", "Some of this deposit pays bills. Void those payments first.");
-        var deposit = await store.GetVendorDepositAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (balance.Deposit.Refunded > 0m)
+            throw new DomainException("vendordeposit.refunded", "Some of this deposit was paid back. Void that refund first.");
+        var deposit = balance.Deposit;
+        if (deposit.Status == DocumentStatus.Voided)
+            throw new DomainException("vendordeposit.voided", "This deposit is already voided.");
         var before = Snapshot(deposit);
-        deposit.Void();
         await engine.StageVoidAsync(deposit.JournalEntryId, reason, fromDocument: true, ct);
+        deposit.Void();
         store.Add(Audit(AuditAction.Voided, deposit, before));
+        await store.SaveChangesAsync(ct);
+        return deposit;
+    }
+
+    /// <summary>The vendor paid some of the deposit back: Dr the account it came into / Cr the deposit's asset account.</summary>
+    public async Task<VendorDepositRefund> RefundAsync(Guid id, RefundVendorDepositCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        VendorDeposit.Check(command.Amount);
+        await using var transaction = await unitOfWork.BeginAsync(ct);
+        var balance = await GetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var deposit = balance.Deposit;
+        if (deposit.Status != DocumentStatus.Posted)
+            throw new DomainException("vendordeposit.voided", "This deposit is voided.");
+        if (command.Date < deposit.Date)
+            throw new DomainException("vendordeposit.before_deposit", "A deposit can't be paid back before the date it was paid.");
+        if (command.Amount > balance.Remaining)
+            throw new DomainException("vendordeposit.refund_too_much", $"Only {balance.Remaining:N2} of this deposit is left to pay back.");
+        var into = await purchaseAccounts.GetPaymentAccountAsync(command.AccountId, ct);
+        var vendor = await store.GetVendorAsync(deposit.VendorId, ct) ?? throw new EntityNotFoundException("vendor", deposit.VendorId);
+
+        var before = Snapshot(deposit);
+        var memo = $"Deposit paid back by {vendor.DisplayName}";
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
+            [JournalLineDraft.Dr(into.Id, command.Amount, memo), JournalLineDraft.Cr(deposit.DepositAccountId, command.Amount, memo)],
+            memo, VendorDeposit.RefundSource, deposit.Id), ct);
+        var refund = deposit.Refund(command.Date, command.Amount, into.Id, entry.Id, command.Reference);
+        store.Add(Audit(AuditAction.Updated, deposit, before));
+        await store.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return refund;
+    }
+
+    public async Task<VendorDeposit> VoidRefundAsync(Guid id, Guid refundId, string reason, CancellationToken ct = default)
+    {
+        var deposit = await store.GetVendorDepositAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        var refund = deposit.Refunds.FirstOrDefault(r => r.Id == refundId) ?? throw new EntityNotFoundException("vendor_deposit_refund", refundId);
+        if (refund.IsVoided)
+            throw new DomainException("vendordeposit.refund_voided", "That refund is already voided.");
+        var before = Snapshot(deposit);
+        await engine.StageVoidAsync(refund.JournalEntryId, reason, fromDocument: true, ct);
+        refund.Void();
+        store.Add(Audit(AuditAction.Updated, deposit, before));
         await store.SaveChangesAsync(ct);
         return deposit;
     }
@@ -144,5 +196,6 @@ public sealed class VendorDepositService(
         d.Memo,
         Status = d.Status.ToString(),
         d.JournalEntryId,
+        Refunds = d.Refunds.Select(r => new { r.Date, r.Amount, r.AccountId, r.Reference, r.IsVoided }),
     });
 }

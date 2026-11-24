@@ -55,7 +55,7 @@ If you also take invoice payments through Stripe ([Getting paid online](11-onlin
 
 New payouts are **waiting to post**. Open one to see its parts by account, its net payout, and each transaction in it. If the channel reported a net amount, the parts must add up to it before you can post.
 
-**Post payout** records one entry: the net to your deposit account, and each part to its account. To undo, **Void the entry**; the payout goes back to waiting. **Dismiss** a payout that's a duplicate or doesn't belong; **Restore** brings it back.
+**Post payout** records one entry: the net to your deposit account, and each part to its account. To undo, **Void the entry**; the payout goes back to waiting. **Dismiss** a payout that's a duplicate or doesn't belong; **Restore** brings it back. A live connection leaves a dismissed payout or order alone; importing a file with it brings it in again.
 
 When the money reaches your bank, match the bank line to the posted payout in the review list.
 

@@ -13,11 +13,17 @@
     }
     else if (Added is { } added)
     {
-        <div class="alert success" role="status">@L["Gifts added to donors' history: {0}.", added]</div>
+        <div class="alert success" role="status">
+            @L["Gifts added to donors' history: {0}.", added]
+            @if (Skipped is { } skipped and > 0)
+            {
+                @L["Already there: {0}.", skipped]
+            }
+        </div>
     }
     <div class="card">
         <p>@L["Bring in the gift list from your old system so each donor's page shows their whole history and this year's giving statements include the gifts made before you moved. These gifts aren't posted: their money is already in your opening balances."]</p>
-        <p class="muted">@L["A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be."]</p>
+        <p class="muted">@L["A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be. Gifts already there with the same donor, date, amount and reference are left out, so a file can be imported again."]</p>
         <PostForm Action="/nonprofit/gifts/history/import" enctype="multipart/form-data" data-enhance="false">
             <AntiforgeryToken />
             <div class="field">
@@ -32,4 +38,5 @@
 @code {
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private int? Added { get; set; }
+    [SupplyParameterFromQuery] private int? Skipped { get; set; }
 }

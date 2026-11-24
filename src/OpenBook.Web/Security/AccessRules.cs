@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using OpenBook.Application.Companies;
 using OpenBook.Domain.Companies;
@@ -50,6 +51,8 @@ public static class AccessRules
         ("/api/settings/plaid", UserRole.Admin, UserRole.Admin),
         ("/settings/document-reading", UserRole.Admin, UserRole.Admin),
         ("/api/settings/document-reading", UserRole.Admin, UserRole.Admin),
+        ("/settings/bills-mailbox", UserRole.Admin, UserRole.Admin),
+        ("/api/settings/bills-mailbox", UserRole.Admin, UserRole.Admin),
         ("/api/settings/online-payments", UserRole.Admin, UserRole.Admin),
         ("/settings/users", UserRole.Admin, UserRole.Admin),
         ("/settings/sign-in", UserRole.Admin, UserRole.Admin),
@@ -68,6 +71,9 @@ public static class AccessRules
         ("/api/backup", UserRole.Admin, UserRole.Admin),
         ("/export", UserRole.Admin, UserRole.Admin),
         ("/api/export", UserRole.Admin, UserRole.Admin),
+        // Erasing someone's personal details can't be undone.
+        ("/erase", UserRole.Admin, UserRole.Admin),
+        ("/api/erase", UserRole.Admin, UserRole.Admin),
 
         // Accountants: the books themselves.
         ("/audit", UserRole.Accountant, UserRole.Accountant),
@@ -93,10 +99,15 @@ public static class AccessRules
         ("/api/banking/connections", UserRole.Accountant, UserRole.Accountant),
         ("/pricing/rounding", UserRole.Accountant, UserRole.Accountant),
         ("/sales/collections/settings", UserRole.Accountant, UserRole.Accountant),
+        // What people are paid.
+        ("/sales/commissions", UserRole.Accountant, UserRole.Accountant),
+        ("/api/sales/commissions", UserRole.Accountant, UserRole.Accountant),
         ("/purchases/approvals", UserRole.Accountant, UserRole.Accountant),
         ("/api/purchases/approvals", UserRole.Accountant, UserRole.Accountant),
         ("/purchases/ach", UserRole.Accountant, UserRole.Accountant),
         ("/api/purchases/ach", UserRole.Accountant, UserRole.Accountant),
+        ("/purchases/backup-withholding", UserRole.Accountant, UserRole.Accountant),
+        ("/api/purchases/backup-withholding", UserRole.Accountant, UserRole.Accountant),
         ("/api/sales/collections/settings", UserRole.ViewOnly, UserRole.Accountant),
         ("/segments/tracking", UserRole.Accountant, UserRole.Accountant),
         ("/segments/reclassify", UserRole.Accountant, UserRole.Accountant),
@@ -112,6 +123,8 @@ public static class AccessRules
         ("/api/projects/time-review", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/defaults", UserRole.Accountant, UserRole.Accountant),
         ("/api/projects/time/lock", UserRole.ViewOnly, UserRole.Accountant),
+        // Repricing unbilled time is part of the rate card, as /time/rates/reprice is.
+        ("/api/projects/time/reprice", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/people", UserRole.ViewOnly, UserRole.Accountant),
         ("/sales/channels/connections", UserRole.Accountant, UserRole.Accountant),
         ("/api/channels/connections", UserRole.Accountant, UserRole.Accountant),
@@ -190,14 +203,16 @@ public static class AccessRules
 
     /// <summary>
     /// What a session that must set up two-factor sign-in may reach: the setup page, signing out, and the
-    /// framework's and site's static files (anything whose last segment has an extension).
+    /// framework's and site's static files (a last segment with an extension, and no endpoint that asks for a sign-in:
+    /// downloads such as /inventory/items.csv have an extension too).
     /// </summary>
-    public static bool AllowedBeforeTwoFactorSetup(PathString path) =>
+    public static bool AllowedBeforeTwoFactorSetup(PathString path, Endpoint? endpoint) =>
         path.StartsWithSegments("/account/two-factor", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/logout", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase)
         || path.StartsWithSegments("/_content", StringComparison.OrdinalIgnoreCase)
-        || (!path.StartsWithSegments("/api") && Path.HasExtension(path.Value ?? string.Empty));
+        || (!path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) && Path.HasExtension(path.Value ?? string.Empty)
+            && endpoint?.Metadata.GetMetadata<IAuthorizeData>() is null);
 
     /// <summary>
     /// The area each page and form endpoint belongs to, for permission sets (API paths use <see cref="ApiScopes.Areas"/>,
@@ -233,6 +248,7 @@ public static class AccessRules
         ("/capture", "capture"),
         ("/import", "data"),
         ("/merge", "data"),
+        ("/erase", "data"),
         ("/export", "data"),
         ("/backup", "data"),
         ("/print", "sales"),
@@ -355,7 +371,7 @@ public sealed class AccessMiddleware(RequestDelegate next)
     {
         if (http.User.Identity?.IsAuthenticated == true)
         {
-            if (http.User.MustSetUpTwoFactor() && !AccessRules.AllowedBeforeTwoFactorSetup(http.Request.Path))
+            if (http.User.MustSetUpTwoFactor() && !AccessRules.AllowedBeforeTwoFactorSetup(http.Request.Path, http.GetEndpoint()))
             {
                 if (http.Request.Path.StartsWithSegments("/api"))
                 {

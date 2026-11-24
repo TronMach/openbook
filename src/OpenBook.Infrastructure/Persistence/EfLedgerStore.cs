@@ -148,7 +148,7 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
             where e.Date <= toDate && (fromDate == null || e.Date >= fromDate)
             orderby e.Date, e.Number, l.LineNumber
             select new LedgerLine(l.Id, e.Id, e.Number, e.Date, l.AccountId, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Basis,
-                s == null ? null : s.ClassId, s == null ? null : s.LocationId))
+                s == null ? null : s.ClassId, s == null ? null : s.LocationId, l.LineNumber))
             .AsNoTracking()
             .ToListAsync(ct);
 
@@ -164,7 +164,7 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
             where ids.Contains(l.Id)
             orderby e.Date, e.Number, l.LineNumber
             select new LedgerLine(l.Id, e.Id, e.Number, e.Date, l.AccountId, l.Amount, l.Memo, e.Memo, e.Source, e.SourceId, e.Basis,
-                s == null ? null : s.ClassId, s == null ? null : s.LocationId))
+                s == null ? null : s.ClassId, s == null ? null : s.LocationId, l.LineNumber))
             .AsNoTracking()
             .ToListAsync(ct);
     }

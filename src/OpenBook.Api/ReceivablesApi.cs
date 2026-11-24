@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -25,11 +26,22 @@ public sealed record EstimateResponse(
 public sealed record CreditMemoResponse(
     Guid Id, string Number, Guid CustomerId, DateOnly Date, string? Memo, decimal Total, decimal AmountApplied, decimal AmountRefunded,
     decimal Balance, DocumentStatus Status, Guid JournalEntryId, IReadOnlyList<SalesLineResponse> Lines,
-    Guid? TaxCodeId = null, string? TaxExemption = null, decimal Subtotal = 0m, decimal TaxTotal = 0m)
+    Guid? TaxCodeId = null, string? TaxExemption = null, decimal Subtotal = 0m, decimal TaxTotal = 0m, Guid? SalesRepId = null)
 {
     public static CreditMemoResponse From(CreditMemo c) => new(
         c.Id, c.Number, c.CustomerId, c.Date, c.Memo, c.Total, c.AmountApplied, c.AmountRefunded, c.Balance, c.Status, c.JournalEntryId,
-        c.Lines.Select(SalesLineResponse.From).ToList(), c.TaxCodeId, c.TaxExemption, c.Subtotal, c.TaxTotal);
+        c.Lines.Select(SalesLineResponse.From).ToList(), c.TaxCodeId, c.TaxExemption, c.Subtotal, c.TaxTotal, c.SalesRepId);
+}
+
+public sealed record CommissionRunLineResponse(CommissionSource Source, Guid DocumentId, CommissionEvent Kind, Guid SettlementId, DateOnly Date, string Document,
+    decimal Counted, decimal? Percent, decimal Commission);
+
+/// <param name="Stands">False once its bill is voided: its lines are then free for the next run.</param>
+public sealed record CommissionRunResponse(Guid Id, int Number, Guid WorkerId, DateOnly Through, Guid BillId, bool Stands, decimal Total, DateTimeOffset CreatedAt,
+    IReadOnlyList<CommissionRunLineResponse> Lines)
+{
+    public static CommissionRunResponse From(CommissionRun r, bool stands) => new(r.Id, r.Number, r.WorkerId, r.Through, r.BillId, stands, r.Total, r.CreatedAt,
+        r.Lines.Select(l => new CommissionRunLineResponse(l.Source, l.DocumentId, l.Kind, l.SettlementId, l.Date, l.Document, l.Counted, l.Percent, l.Commission)).ToList());
 }
 
 public sealed record RefundResponse(
@@ -116,6 +128,37 @@ public sealed record PaymentLinkResponse(Guid Id, Guid InvoiceId, PaymentProvide
     public static PaymentLinkResponse From(PaymentLink l) => new(l.Id, l.InvoiceId, l.Provider, l.Url, l.Amount, l.Status, l.CreatedAt, l.CustomerPaymentId);
 }
 
+/// <param name="ProviderRefundId">The refund's id at the provider.</param>
+/// <param name="CustomerRefundId">The refund in the books, once it's recorded.</param>
+/// <param name="Failure">Why it failed, or what it's waiting for.</param>
+public sealed record OnlineRefundResponse(
+    Guid Id, Guid CustomerPaymentId, PaymentProvider Provider, decimal Amount, Guid PaymentAccountId, DateOnly Date, string? Reason, OnlineRefundStatus Status,
+    string? ProviderRefundId, Guid? CustomerRefundId, string? Failure, DateTimeOffset CreatedAt, string CreatedBy)
+{
+    public static OnlineRefundResponse From(OnlineRefund r) => new(
+        r.Id, r.CustomerPaymentId, r.Provider, r.Amount, r.PaymentAccountId, r.Date, r.Reason, r.Status, r.ProviderRefundId, r.CustomerRefundId, r.Failure, r.CreatedAt, r.CreatedBy);
+}
+
+/// <param name="CustomerId">Whose card it is: the customer billed for the one asked about.</param>
+public sealed record SavedCardResponse(
+    Guid Id, Guid CustomerId, PaymentProvider Provider, SavedCardStatus Status, CardAgreement How, DateTimeOffset AgreedAt, string? Brand, string? LastFour,
+    int? ExpiryMonth, int? ExpiryYear, DateTimeOffset? RemovedAt, string? RemovedReason)
+{
+    public static SavedCardResponse From(SavedCard c) => new(
+        c.Id, c.CustomerId, c.Provider, c.Status, c.How, c.AgreedAt, c.Brand, c.LastFour, c.ExpiryMonth, c.ExpiryYear, c.RemovedAt, c.RemovedReason);
+}
+
+public sealed record CardChargeResponse(
+    Guid Id, Guid InvoiceId, Guid CustomerId, int Attempt, bool Automatic, decimal Amount, CardChargeStatus Status, string? Failure, DateTimeOffset CreatedAt,
+    string CreatedBy, Guid? CustomerPaymentId)
+{
+    public static CardChargeResponse From(CardCharge c) =>
+        new(c.Id, c.InvoiceId, c.CustomerId, c.Attempt, c.Automatic, c.Amount, c.Status, c.Failure, c.CreatedAt, c.CreatedBy, c.CustomerPaymentId);
+}
+
+/// <param name="Hold">Leave the invoice out of automatic charges.</param>
+public sealed record HoldAutoChargeRequest(bool Hold);
+
 public sealed record RecurringInvoiceResponse(
     Guid Id, string Name, Guid CustomerId, string? Memo, RecurrenceFrequency Frequency, int Interval, DateOnly StartDate, DateOnly? EndDate,
     int? MaxOccurrences, int OccurrencesPosted, DateOnly? NextDate, bool AutoCreate, bool AutoEmail, bool IsActive, IReadOnlyList<SalesLineDraft> Lines, Guid? LocationId = null, IReadOnlyList<Guid>? TagIds = null)
@@ -154,10 +197,10 @@ public sealed record FormStyleRequest(FormTemplate Template, string? AccentColor
 
 public sealed record EmailSettingsResponse(
     EmailDelivery Delivery, string? Host, int Port, SmtpSecurity Security, string? Username, bool HasPassword,
-    string? FromAddress, string? FromName, string? BccAddress, bool IsConfigured, string? LinkAddress = null)
+    string? FromAddress, string? FromName, string? BccAddress, bool IsConfigured, string? LinkAddress = null, SmtpSignIn SignIn = SmtpSignIn.Password)
 {
     public static EmailSettingsResponse From(EmailSettings s) => new(
-        s.Delivery, s.Host, s.Port, s.Security, s.Username, s.ProtectedPassword is not null, s.FromAddress, s.FromName, s.BccAddress, s.IsConfigured, s.LinkAddress);
+        s.Delivery, s.Host, s.Port, s.Security, s.Username, s.ProtectedPassword is not null, s.FromAddress, s.FromName, s.BccAddress, s.IsConfigured, s.LinkAddress, s.SignIn);
 }
 
 public sealed record TestEmailRequest(string To);
@@ -298,12 +341,43 @@ internal static class ReceivablesApi
             PaymentLinkResponse.From(await s.LinkForInvoiceAsync(id, ct)));
         sales.MapPost("/payment-links/{id:guid}/check", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
             PaymentLinkResponse.From(await s.CheckAsync(id, ct)));
-        // Refunds and disputes made at Stripe or PayPal, waiting to be dealt with in the books.
+        // Refunds made from here at the provider of a payment taken online. Pending (202) when it gave no answer: retry sends the same refund.
+        sales.MapGet("/payments/{id:guid}/online-refunds", async (Guid id, OnlineRefundService s, CancellationToken ct) =>
+            (await s.ListAsync(id, ct)).Select(OnlineRefundResponse.From));
+        sales.MapPost("/payments/{id:guid}/online-refund", async (Guid id, OnlineRefundCommand r, OnlineRefundService s, CancellationToken ct) =>
+            OnlineRefundResult(await s.RefundAsync(id, r, ct)));
+        sales.MapPost("/online-refunds/{id:guid}/retry", async (Guid id, OnlineRefundService s, CancellationToken ct) => OnlineRefundResult(await s.RetryAsync(id, ct)));
+        sales.MapPost("/online-refunds/{id:guid}/abandon", async (Guid id, OnlineRefundService s, CancellationToken ct) => OnlineRefundResult(await s.AbandonAsync(id, ct)));
+
+        // Automatic payment with a saved card (Stripe).
+        sales.MapGet("/customers/{id:guid}/saved-card", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
+            (await s.CardViewAsync(id, ct)).Card is { } card ? Results.Ok(SavedCardResponse.From(card)) : Results.NotFound());
+        sales.MapDelete("/customers/{id:guid}/saved-card", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
+        {
+            await s.RemoveCardAsync(id, "Removed by the business.", ct: ct);
+            return Results.NoContent();
+        });
+        sales.MapGet("/invoices/{id:guid}/card-charges", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
+            (await s.ChargesAsync(id, ct)).Select(CardChargeResponse.From));
+        sales.MapPost("/invoices/{id:guid}/charge-card", async (Guid id, OnlinePaymentService s, CancellationToken ct) =>
+            CardChargeResponse.From(await s.ChargeCardAsync(id, ct)));
+        sales.MapPost("/invoices/{id:guid}/auto-charge", async (Guid id, HoldAutoChargeRequest r, OnlinePaymentService s, CancellationToken ct) =>
+            new { HoldAutoCharge = (await s.HoldAutoChargeAsync(id, r.Hold, ct)).HoldAutoCharge });
+        // Refunds and disputes made at the payment provider, waiting to be dealt with in the books.
         sales.MapGet("/online-notices", async (Guid? invoiceId, bool? open, OnlinePaymentService s, CancellationToken ct) => await s.NoticesAsync(invoiceId, open ?? false, ct));
         sales.MapPost("/online-notices/{id:guid}/resolve", async (Guid id, OnlinePaymentService s, CancellationToken ct) => await s.ResolveNoticeAsync(id, ct));
         api.MapGet("/settings/online-payments", async (OnlinePaymentService s, CancellationToken ct) => OnlinePaymentSettingsResponse.From(await s.GetSettingsAsync(ct)));
         api.MapPut("/settings/online-payments", async (OnlinePaymentSettingsCommand r, OnlinePaymentService s, CancellationToken ct) =>
             OnlinePaymentSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));
+
+        // Sales rep commissions: what's been billed, and billing what reps have earned through a date (to everyone who can be paid
+        // when WorkerIds is left out). A bill is a purchases record, so making one needs that area too.
+        sales.MapGet("/commissions/runs", async (CommissionService s, CancellationToken ct) =>
+            (await s.ListRunsAsync(ct)).Select(v => CommissionRunResponse.From(v.Run, v.Stands)));
+        sales.MapPost("/commissions/runs", async (CommissionRunCommand r, ClaimsPrincipal user, CommissionService s, CancellationToken ct) =>
+            AuthClaims.MayWrite(user, "purchases")
+                ? Results.Ok((await s.RunAsync(r, ct)).Select(run => CommissionRunResponse.From(run, stands: true)).ToList())
+                : Results.Forbid());
 
         sales.MapGet("/write-offs", async (Guid? customerId, WriteOffService s, CancellationToken ct) =>
             (await s.ListAsync(customerId, ct)).Select(WriteOffResponse.From));
@@ -369,7 +443,11 @@ internal static class ReceivablesApi
         });
         // Correct a deposit in place: its entry reversed and a new one posted, items added or taken out.
         sales.MapPut("/deposits/{id:guid}", async (Guid id, ChangeDepositRequest r, DepositService s, CancellationToken ct) =>
-            DepositResponse.From(await s.ChangeAsync(id, new MakeDepositCommand(r.BankAccountId, r.Date, (r.Items ?? []).Select(i => (i.Kind, i.Id)).ToList(), r.Memo, r.Extras), r.Reason, ct)));
+        {
+            // Left out, the fees and other lines stay (an empty list clears them).
+            var extras = r.Extras ?? (await s.GetAsync(id, ct))?.Extras.Select(e => e.ToDraft()).ToList();
+            return DepositResponse.From(await s.ChangeAsync(id, new MakeDepositCommand(r.BankAccountId, r.Date, (r.Items ?? []).Select(i => (i.Kind, i.Id)).ToList(), r.Memo, extras), r.Reason, ct));
+        });
         sales.MapPost("/deposits/{id:guid}/void", async (Guid id, VoidRequest r, DepositService s, CancellationToken ct) =>
             DepositResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
@@ -475,6 +553,10 @@ internal static class ReceivablesApi
         http.Response.Headers.ContentDisposition = disposition.ToString();
         return Results.File(form.Pdf, "application/pdf");
     }
+
+    private static IResult OnlineRefundResult(OnlineRefund refund) => refund.Status == OnlineRefundStatus.Pending
+        ? Results.Accepted(null, OnlineRefundResponse.From(refund))
+        : Results.Ok(OnlineRefundResponse.From(refund));
 
     private static FormKind ParseKind(string kind) => kind switch
     {

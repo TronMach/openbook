@@ -161,7 +161,7 @@ public sealed class ForecastService(
             foreach (var receipt in await sales.ListReceiptsDatedAsync(from, to, ct))
                 if (receipt.Status == DocumentStatus.Posted)
                     repeated[WeekOf(receipt.Date.AddDays(Back))] += receipt.Total;
-            foreach (var gift in await nonprofit.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Kind == Domain.Nonprofit.GiftKind.Cash && d.Date >= from && d.Date <= to, ct))
+            foreach (var gift in await nonprofit.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Kind == Domain.Nonprofit.GiftKind.Cash && d.Date >= from && d.Date <= to, ct))
                 repeated[WeekOf(gift.Date.AddDays(Back))] += gift.Amount;
             foreach (var payout in (await channels.ListPayoutsAsync(null, ct)).Where(p => p.Status == Domain.Channels.PayoutStatus.Posted && p.Date >= from && p.Date <= to))
                 repeated[WeekOf(payout.Date.AddDays(Back))] += payout.Net;
@@ -294,7 +294,9 @@ public sealed class AdjustingEntryService(IReportingStore store, ILedgerStore le
         var prior = FinancialReports.PriorYears(lines, fiscalStart, chart);
         var retainedAccount = FinancialReports.RetainedEarningsAccount(chart);
         var computed = retainedAccount is null ? Guid.Empty : retainedAccount.Id;
-        return lines.Except(prior).Concat(prior.Select(l => l with { AccountId = computed }))
+        // By reference: cash-basis lines can be alike (one payment for two equal invoices), and each of them counts.
+        var priorLines = new HashSet<LedgerLine>(prior, ReferenceEqualityComparer.Instance);
+        return lines.Select(l => priorLines.Contains(l) ? l with { AccountId = computed } : l)
             .GroupBy(l => l.AccountId)
             .Select(g =>
             {
@@ -483,8 +485,8 @@ public sealed class AccountantPackageService(
     }
 
     /// <summary>
-    /// The 1099 filing data for a year: one row per vendor that meets the threshold, with the fields the IRS forms ask
-    /// for (full TIN, address, form and box, amount), to copy into the IRIS upload template or a filing service.
+    /// The 1099 filing data for a year: one row per vendor that meets the threshold or had tax withheld, with the fields the IRS forms ask
+    /// for (full TIN, address, form and box, amount, tax withheld), to copy into the IRIS upload template or a filing service.
     /// </summary>
     /// <param name="year">The tax year.</param>
     /// <param name="audit">True when the file leaves OpenBook on its own (downloaded), so the export is audited.</param>
@@ -502,7 +504,7 @@ public sealed class AccountantPackageService(
 
         var report = await payables.Report1099Async(year, threshold, ct);
         var csv = new StringBuilder();
-        csv.Append("Form,Box,Recipient name,Recipient business name,Recipient TIN,TIN type,Recipient street,Recipient city,Recipient state,Recipient ZIP,Amount,Payer name,Payer TIN,Payer street,Payer city,Payer state,Payer ZIP,Tax year\r\n");
+        csv.Append("Form,Box,Recipient name,Recipient business name,Recipient TIN,TIN type,Recipient street,Recipient city,Recipient state,Recipient ZIP,Amount,Payer name,Payer TIN,Payer street,Payer city,Payer state,Payer ZIP,Tax year,Box 4 federal income tax withheld\r\n");
         var payer = AddressParts.Parse(company.Address);
         foreach (var v in report.Vendors.Where(v => v.MeetsThreshold).OrderBy(v => v.Vendor.DisplayName, StringComparer.OrdinalIgnoreCase))
         {
@@ -514,7 +516,7 @@ public sealed class AccountantPackageService(
                 Field(address.Street), Field(address.City), Field(address.State), Field(address.Zip),
                 v.Total.ToString("0.00", CultureInfo.InvariantCulture), Field(company.LegalName ?? company.Name), Field(company.TaxId),
                 Field(payer.Street), Field(payer.City), Field(payer.State), Field(payer.Zip),
-                year.ToString(CultureInfo.InvariantCulture),
+                year.ToString(CultureInfo.InvariantCulture), v.Withheld.ToString("0.00", CultureInfo.InvariantCulture),
             ]).Append("\r\n");
         }
 

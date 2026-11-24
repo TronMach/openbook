@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using OpenBook.Application.Sales;
@@ -8,12 +9,15 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Infrastructure.Payments;
 
 /// <summary>
-/// Stripe Checkout over its REST API: one-line payment sessions for an invoice's balance, and reading a session back.
-/// The secret key goes in the Authorization header; amounts are sent in cents.
+/// Stripe over its REST API: one-line Checkout sessions for an invoice's balance and reading one back, refunds, and cards
+/// saved by a Checkout session in setup mode and charged while the customer isn't there. The secret key goes in the
+/// Authorization header; amounts are sent in cents; refunds and charges carry their own key as the Idempotency-Key and
+/// in their metadata, where they're found again after no answer.
 /// </summary>
-public sealed class StripeGateway : IPaymentGateway, IDisposable
+public sealed class StripeGateway : IPaymentGateway, ISavedCardGateway, IDisposable
 {
-    private const string Api = "https://api.stripe.com/v1/checkout/sessions";
+    private const string Root = "https://api.stripe.com/v1/";
+    private const string Api = Root + "checkout/sessions";
     private readonly HttpClient _client;
 
     public StripeGateway()
@@ -64,7 +68,129 @@ public sealed class StripeGateway : IPaymentGateway, IDisposable
         return await SendAsync(message, keys.Secret, ct);
     }
 
+    public async Task<ProviderRefund> RefundAsync(GatewayKeys keys, RefundRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("payment_intent", request.Reference),
+            new("amount", Cents(request.Amount)),
+            new("reason", "requested_by_customer"),
+            new($"metadata[{StripeAnswers.RefundKey}]", request.Key),
+        };
+        if (request.Reason is { } reason)
+            form.Add(new("metadata[reason]", reason));
+        return StripeAnswers.Refund(await CallAsync(keys, HttpMethod.Post, "refunds", form, request.Key, ct));
+    }
+
+    public async Task<ProviderRefund?> FindRefundAsync(GatewayKeys keys, RefundRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return StripeAnswers.FindRefund(
+            await CallAsync(keys, HttpMethod.Get, $"refunds?payment_intent={Uri.EscapeDataString(request.Reference)}&limit=100", null, null, ct), request.Key);
+    }
+
+    /// <summary>A Checkout session in setup mode: Stripe makes a customer of its own to keep the card with.</summary>
+    public async Task<CardSetup> CreateSetupAsync(GatewayKeys keys, CardSetupRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("mode", "setup"),
+            new("payment_method_types[0]", "card"),
+            new("customer_creation", "always"),
+            new("client_reference_id", request.Reference),
+            new("success_url", request.SuccessUrl),
+            new("cancel_url", request.CancelUrl),
+        };
+        if (request.CustomerEmail is { } email)
+            form.Add(new("customer_email", email));
+        return StripeAnswers.Setup(await CallAsync(keys, HttpMethod.Post, "checkout/sessions", form, null, ct));
+    }
+
+    public async Task<CardSetup> GetSetupAsync(GatewayKeys keys, string sessionId, CancellationToken ct) =>
+        StripeAnswers.Setup(await CallAsync(keys, HttpMethod.Get,
+            $"checkout/sessions/{Uri.EscapeDataString(sessionId)}?expand[]=setup_intent.payment_method", null, null, ct));
+
+    public async Task DetachAsync(GatewayKeys keys, string paymentMethodId, CancellationToken ct)
+    {
+        try
+        {
+            await CallAsync(keys, HttpMethod.Post, $"payment_methods/{Uri.EscapeDataString(paymentMethodId)}/detach", [], null, ct);
+        }
+        catch (DomainException ex) when (ex.Code == ProviderAnswers.Refused)
+        {
+            // Stripe doesn't have it, or it belongs to no customer any more: it can't be charged either way.
+        }
+    }
+
+    public async Task<CardIntent> ChargeAsync(GatewayKeys keys, CardChargeRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("amount", Cents(request.Amount)),
+            new("currency", request.Currency),
+            new("customer", request.CustomerId),
+            new("payment_method", request.PaymentMethodId),
+            new("payment_method_types[0]", "card"),
+            new("off_session", "true"),
+            new("confirm", "true"),
+            new("description", request.Description),
+            new("metadata[invoice_id]", request.Reference),
+            new($"metadata[{StripeAnswers.ChargeKey}]", request.Key),
+        };
+        var (status, body) = await SendRawAsync(keys, HttpMethod.Post, "payment_intents", form, request.Key, ct);
+        if (status == HttpStatusCode.PaymentRequired && StripeAnswers.Declined(body) is { } declined)
+            return declined;
+        return IsSuccess(status) ? StripeAnswers.Intent(body) : throw StripeAnswers.Error(body, (int)status);
+    }
+
+    public async Task<CardIntent> GetIntentAsync(GatewayKeys keys, string intentId, CancellationToken ct) =>
+        StripeAnswers.Intent(await CallAsync(keys, HttpMethod.Get, $"payment_intents/{Uri.EscapeDataString(intentId)}", null, null, ct));
+
+    /// <remarks>The list of a customer's payments, not Stripe's search, which can be a minute behind.</remarks>
+    public async Task<CardIntent?> FindIntentAsync(GatewayKeys keys, string customerId, string key, DateTimeOffset since, CancellationToken ct) =>
+        StripeAnswers.FindIntent(await CallAsync(keys, HttpMethod.Get,
+            $"payment_intents?customer={Uri.EscapeDataString(customerId)}&created[gte]={since.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)}&limit=100", null, null, ct), key);
+
+    public Task CancelIntentAsync(GatewayKeys keys, string intentId, CancellationToken ct) =>
+        CallAsync(keys, HttpMethod.Post, $"payment_intents/{Uri.EscapeDataString(intentId)}/cancel", [], null, ct);
+
     public void Dispose() => _client.Dispose();
+
+    private static string Cents(decimal amount) =>
+        ((long)decimal.Round(amount * 100m, 0, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+
+    private static bool IsSuccess(HttpStatusCode status) => (int)status is >= 200 and < 300;
+
+    private async Task<string> CallAsync(
+        GatewayKeys keys, HttpMethod method, string path, List<KeyValuePair<string, string>>? form, string? idempotencyKey, CancellationToken ct)
+    {
+        var (status, body) = await SendRawAsync(keys, method, path, form, idempotencyKey, ct);
+        return IsSuccess(status) ? body : throw StripeAnswers.Error(body, (int)status);
+    }
+
+    private async Task<(HttpStatusCode Status, string Body)> SendRawAsync(
+        GatewayKeys keys, HttpMethod method, string path, List<KeyValuePair<string, string>>? form, string? idempotencyKey, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        using var message = new HttpRequestMessage(method, Root + path);
+        message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", keys.Secret);
+        if (form is not null)
+            message.Content = new FormUrlEncodedContent(form);
+        if (idempotencyKey is not null)
+            message.Headers.Add("Idempotency-Key", idempotencyKey);
+        try
+        {
+            using var response = await _client.SendAsync(message, ct);
+            return (response.StatusCode, await response.Content.ReadAsStringAsync(ct));
+        }
+        catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            throw ProviderAnswers.Unreachable(PaymentProvider.Stripe);
+        }
+    }
 
     private async Task<CheckoutSession> SendAsync(HttpRequestMessage message, string secretKey, CancellationToken ct)
     {

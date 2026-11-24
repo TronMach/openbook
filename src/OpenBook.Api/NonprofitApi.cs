@@ -18,10 +18,10 @@ public sealed record CampaignRequest(string? Campaign);
 public sealed record GiftResponse(
     Guid Id, int Number, Guid DonorId, DateOnly Date, GiftKind Kind, decimal Amount, Guid DebitAccountId, Guid IncomeAccountId, Guid? PledgeId,
     Guid? ClassId, string? Reference, string? Memo, string? Description, decimal GoodsValue, string? GoodsDescription, decimal Deductible,
-    DocumentStatus Status, Guid JournalEntryId, DateTimeOffset? AcknowledgedAt, string? Campaign)
+    DocumentStatus Status, Guid JournalEntryId, DateTimeOffset? AcknowledgedAt, string? Campaign, DateOnly? ReturnedOn)
 {
     public static GiftResponse From(Donation d) => new(d.Id, d.Number, d.DonorId, d.Date, d.Kind, d.Amount, d.DebitAccountId, d.IncomeAccountId, d.PledgeId,
-        d.ClassId, d.Reference, d.Memo, d.Description, d.GoodsValue, d.GoodsDescription, d.Deductible, d.Status, d.JournalEntryId, d.AcknowledgedAt, d.Campaign);
+        d.ClassId, d.Reference, d.Memo, d.Description, d.GoodsValue, d.GoodsDescription, d.Deductible, d.Status, d.JournalEntryId, d.AcknowledgedAt, d.Campaign, d.ReturnedOn);
 }
 
 public sealed record PledgeResponse(
@@ -32,9 +32,9 @@ public sealed record PledgeResponse(
         b.Pledge.Amount, b.Paid, b.Balance, b.Pledge.IncomeAccountId, b.Pledge.ClassId, b.Pledge.Memo, b.Pledge.Status, b.Pledge.JournalEntryId ?? Guid.Empty);
 }
 
-public sealed record GiftSettingsResponse(string? Ein, string? SignerName, string? SignerTitle, string? Intro)
+public sealed record GiftSettingsResponse(string? Ein, string? SignerName, string? SignerTitle, string? Intro, bool OnlineGiving)
 {
-    public static GiftSettingsResponse From(GiftSettings s) => new(s.Ein, s.SignerName, s.SignerTitle, s.Intro);
+    public static GiftSettingsResponse From(GiftSettings s) => new(s.Ein, s.SignerName, s.SignerTitle, s.Intro, s.OnlineGiving);
 }
 
 public sealed record AcknowledgedRequest(IReadOnlyList<Guid> Ids);
@@ -100,15 +100,19 @@ internal static class NonprofitApi
         nonprofit.MapGet("/households", async (HouseholdService s, CancellationToken ct) => (await s.ListAsync(ct)).Select(HouseholdResponse.From));
         nonprofit.MapGet("/households/{id:guid}", async (Guid id, HouseholdService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } h ? Results.Ok(HouseholdResponse.From(h)) : Results.NotFound());
-        nonprofit.MapPost("/households", async (HouseholdRequest r, HouseholdService s, CancellationToken ct) =>
+        nonprofit.MapPost("/households", async (HouseholdRequest r, HouseholdService s, IUnitOfWork work, CancellationToken ct) =>
         {
+            // All or nothing: a member refused leaves no half-made household.
+            await using var transaction = await work.BeginAsync(ct);
             var household = await s.CreateAsync(r.PrimaryDonorId, r.Name, r.Salutation, ct);
             foreach (var member in r.MemberIds ?? [])
                 await s.AddMemberAsync(household.Id, member, ct);
+            await transaction.CommitAsync(ct);
             return Results.Created($"/api/nonprofit/households/{household.Id}", HouseholdResponse.From((await s.GetAsync(household.Id, ct))!));
         });
-        nonprofit.MapPut("/households/{id:guid}", async (Guid id, HouseholdRequest r, HouseholdService s, CancellationToken ct) =>
+        nonprofit.MapPut("/households/{id:guid}", async (Guid id, HouseholdRequest r, HouseholdService s, IUnitOfWork work, CancellationToken ct) =>
         {
+            await using var transaction = await work.BeginAsync(ct);
             await s.RenameAsync(id, r.Name, r.Salutation, ct);
             var current = (await s.GetAsync(id, ct))!.Household;
             var wanted = (r.MemberIds ?? []).Append(r.PrimaryDonorId).ToHashSet();
@@ -117,6 +121,7 @@ internal static class NonprofitApi
             await s.MakePrimaryAsync(id, r.PrimaryDonorId, ct);
             foreach (var member in current.Members.Select(m => m.DonorId).Where(m => !wanted.Contains(m)).ToList())
                 await s.RemoveMemberAsync(id, member, ct);
+            await transaction.CommitAsync(ct);
             return HouseholdResponse.From((await s.GetAsync(id, ct))!);
         });
         nonprofit.MapDelete("/households/{id:guid}", async (Guid id, HouseholdService s, CancellationToken ct) =>

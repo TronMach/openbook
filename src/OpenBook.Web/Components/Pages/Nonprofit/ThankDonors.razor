@@ -115,7 +115,7 @@
         var today = CompanyTime.Today;
         // Statements go out early in the new year for the year just ended.
         _year = Year ?? (today.Month <= 2 ? today.Year - 1 : today.Year);
-        _unthanked = (await GiftService.ListAsync()).Where(g => g.Status == DocumentStatus.Posted && g.AcknowledgedAt is null).ToList();
+        _unthanked = (await GiftService.ListAsync()).Where(g => g.Counts && g.AcknowledgedAt is null).ToList();
         // A household's members get one statement (C622).
         _givers = await GiftService.StatementGroupsAsync(_year);
         _names = (await CustomerService.ListRecordsAsync()).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);

@@ -1,0 +1,48 @@
+@page "/pay/card"
+@attribute [AllowAnonymous]
+@layout OpenBook.Web.Components.Layout.PortalLayout
+@inject OnlinePaymentService Online
+@inject OpenBook.Web.Security.OnlinePaymentActor Actor
+
+<PageTitle>Automatic payment · OpenBook</PageTitle>
+
+<div class="card narrow">
+    @if (Cancelled == true)
+    {
+        <h1>No card was saved</h1>
+        <p>Nothing has changed. You can agree from the link again whenever you like.</p>
+    }
+    else if (_saved)
+    {
+        <h1>Thank you</h1>
+        <p>Your card is saved. Your invoices are charged to it on their due dates until you stop it on your account's page.</p>
+    }
+    else
+    {
+        <h1>Nearly there</h1>
+        <p>Your card isn't saved yet. If you've just entered it, it will be in a few minutes; otherwise open the link again.</p>
+    }
+</div>
+
+@code {
+    private bool _saved;
+
+    [SupplyParameterFromQuery] private bool? Cancelled { get; set; }
+    [SupplyParameterFromQuery] private Guid? Card { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Card is not { } card)
+            return;
+        // Reads the card now if Stripe's webhook hasn't said so (or can't reach this server).
+        Actor.Use();
+        try
+        {
+            _saved = await Online.CheckCardAsync(card);
+        }
+        catch (DomainException)
+        {
+            // The webhook or the hourly job will see it; the customer needn't see why this check failed.
+        }
+    }
+}

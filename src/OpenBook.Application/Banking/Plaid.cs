@@ -176,7 +176,7 @@ public static class Plaid
         new("plaid.response_invalid", $"Plaid sent an answer OpenBook couldn't read ({what}).");
 
     private static string? String(JsonElement e, string name) =>
-        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String && v.GetString()?.Trim() is { Length: > 0 } s ? s : null;
+        e.TryGetProperty(name, out var v) && v.Text()?.Trim() is { Length: > 0 } s ? s : null;
 
     private static decimal? Amount(JsonElement e, string name)
     {

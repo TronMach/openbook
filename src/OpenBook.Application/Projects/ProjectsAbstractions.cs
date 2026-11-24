@@ -47,6 +47,9 @@ public interface IProjectStore
     Task<IReadOnlyList<TimeEntry>> GetTimeEntriesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
     Task<IReadOnlyList<TimeEntry>> ListTimeForInvoiceAsync(Guid invoiceId, CancellationToken ct);
 
+    /// <summary>The time a credit memo took back off its invoice. Tracked.</summary>
+    Task<IReadOnlyList<TimeEntry>> ListTimeTakenBackByAsync(Guid memoId, CancellationToken ct);
+
     /// <summary>Tracked, oldest first; nulls don't filter.</summary>
     Task<IReadOnlyList<MileageTrip>> ListMileageAsync(DateOnly? fromDate, DateOnly? toDate, Guid? customerId, CancellationToken ct);
 

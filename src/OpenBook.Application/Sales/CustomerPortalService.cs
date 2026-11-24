@@ -9,9 +9,11 @@ namespace OpenBook.Application.Sales;
 
 /// <summary>What a customer sees in the portal: who it's from, what they owe and their recent activity.</summary>
 /// <param name="Estimates">Estimates waiting for an answer, then those answered or invoiced in the last 90 days.</param>
+/// <param name="Card">The saved card their invoices are charged to; null when there's none.</param>
+/// <param name="CanSaveCard">Whether they can agree to automatic payment.</param>
 public sealed record PortalView(
     Company Company, Customer Customer, IReadOnlyList<Invoice> OpenInvoices, IReadOnlyList<Invoice> PaidInvoices, CustomerStatement Statement, bool CanPayOnline,
-    IReadOnlyList<Estimate> Estimates);
+    IReadOnlyList<Estimate> Estimates, SavedCard? Card = null, bool CanSaveCard = false);
 
 /// <summary>
 /// The customer portal: links (tokens) that let a customer see their open and recent invoices and statement, download
@@ -78,6 +80,7 @@ public sealed class CustomerPortalService(
             estimates.AddRange(await store.ListEstimatesAsync(id, ct));
         }
 
+        var card = await online.CardViewAsync(customer.Id, ct);
         var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
         var statement = await receivables.StatementAsync(customer.Id, today.AddDays(-(int)StatementPeriod.TotalDays), today, ct);
         return new PortalView(
@@ -90,7 +93,21 @@ public sealed class CustomerPortalService(
             [
                 .. estimates.Where(e => e.Status == EstimateStatus.Pending).OrderBy(e => e.Date),
                 .. estimates.Where(e => e.Status != EstimateStatus.Pending && (e.RespondedAt ?? e.CreatedAt) >= clock.UtcNow - StatementPeriod).OrderByDescending(e => e.Date),
-            ]);
+            ],
+            card.Card, card.Available);
+    }
+
+    /// <summary>The customer agrees to automatic payment: the page to enter the card on; null when the token is unknown.</summary>
+    public async Task<string?> AgreeToCardAsync(string? token, CardAgreement how, CancellationToken ct = default) =>
+        await CustomerForAsync(token, ct) is { } customer ? await online.AgreeAsync(customer.Id, how, ct) : null;
+
+    /// <summary>The customer stops automatic payment; false when the token is unknown.</summary>
+    public async Task<bool> StopCardAsync(string? token, CancellationToken ct = default)
+    {
+        if (await CustomerForAsync(token, ct) is not { } customer)
+            return false;
+        await online.RemoveCardAsync(customer.Id, "Stopped by the customer.", $"portal: {customer.DisplayName}", ct);
+        return true;
     }
 
     /// <summary>The estimate, if the token's customer may see it; null otherwise.</summary>

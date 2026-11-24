@@ -89,6 +89,15 @@ public interface ICompanyStore
     void Add(User user);
     void Add(ApiKey key);
     void Add(UserSession session);
+
+    /// <summary>Tracked.</summary>
+    Task<IReadOnlyList<UserPasskey>> ListPasskeysAsync(Guid userId, CancellationToken ct);
+
+    /// <summary>Tracked.</summary>
+    Task<UserPasskey?> FindPasskeyAsync(string credentialId, CancellationToken ct);
+
+    void Add(UserPasskey passkey);
+    void Remove(UserPasskey passkey);
     void Add(SignInSettings settings);
     void Add(UserInvite invite);
     void Add(PermissionSet permissionSet);

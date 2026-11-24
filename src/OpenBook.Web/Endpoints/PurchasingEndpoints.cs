@@ -37,13 +37,16 @@ public static class PurchasingEndpoints
             })).RequireAuthorization();
 
         // Fields: qty:{lineNumber}, date, note.
-        app.MapPost("/purchases/orders/{id:guid}/receive", async (Guid id, IFormCollection form, PurchaseOrderService orders, CancellationToken ct) =>
-            await Back($"/purchases/orders/{id}", async () =>
+        app.MapPost("/purchases/orders/{id:guid}/receive", async (Guid id, IFormCollection form, PurchaseOrderService orders, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            return await Back($"/purchases/orders/{id}", async () =>
             {
                 var lines = Numbered(form, "qty:").Select(x => new ReceiveLine(x.Line, x.Value)).ToList();
                 await orders.ReceiveAsync(id, new ReceiveGoodsCommand(Date(form["date"]) ?? Today(), lines, form["note"]), ct);
                 return "done=received";
-            })).RequireAuthorization();
+            });
+        }).RequireAuthorization();
 
         app.MapPost("/purchases/vendor-credits/{id:guid}/applications/{billId:guid}/remove", async (Guid id, Guid billId, IFormCollection form, VendorCreditService credits, ClosedPeriodOverride closing, CancellationToken ct) =>
         {
@@ -60,12 +63,15 @@ public static class PurchasingEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/purchases/orders/{id:guid}/receipts/{number:int}/void", async (IFormCollection _, Guid id, int number, PurchaseOrderService orders, CancellationToken ct) =>
-            await Back($"/purchases/orders/{id}", async () =>
+        app.MapPost("/purchases/orders/{id:guid}/receipts/{number:int}/void", async (IFormCollection form, Guid id, int number, PurchaseOrderService orders, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            return await Back($"/purchases/orders/{id}", async () =>
             {
                 await orders.VoidReceiptAsync(id, number, ct);
                 return "done=received";
-            })).RequireAuthorization();
+            });
+        }).RequireAuthorization();
 
         // Fields: qty:{lineNumber} (item lines), cost:{lineNumber} (unit cost, or a category line's amount), reference, date.
         app.MapPost("/purchases/orders/{id:guid}/bill", async (Guid id, IFormCollection form, PurchaseOrderService orders, ClosedPeriodOverride closing, CancellationToken ct) =>
@@ -189,6 +195,28 @@ public static class PurchasingEndpoints
             return Results.Bytes(Encoding.ASCII.GetBytes(text), "text/plain");
         }).RequireAuthorization();
 
+        // Fields: applies (a tick), from, note.
+        app.MapPost("/purchases/backup-withholding/vendors/{vendorId:guid}", async (Guid vendorId, IFormCollection form, BackupWithholdingService withholding, CancellationToken ct) =>
+        {
+            try
+            {
+                DateOnly? from = null;
+                if (form["applies"].Count > 0)
+                {
+                    from = DateOnly.TryParseExact(form["from"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+                        ? date
+                        : throw new DomainException("vendor.withholding_date", "Enter the date backup withholding applies from.");
+                }
+
+                await withholding.SetAsync(vendorId, from, form["note"].ToString(), ct);
+                return Results.Redirect($"/vendors/{vendorId}#backup-withholding");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/vendors/{vendorId}?withholdingError={Uri.EscapeDataString(ex.Message)}#backup-withholding");
+            }
+        }).RequireAuthorization();
+
         // Fields: routing, accountNumber, kind, action (save/remove).
         app.MapPost("/purchases/ach/vendors/{vendorId:guid}", async (Guid vendorId, IFormCollection form, AchService ach, CancellationToken ct) =>
         {
@@ -276,6 +304,31 @@ public static class PurchasingEndpoints
                 return "done=voided";
             });
         }).RequireAuthorization();
+
+        // Fields: date, amount, accountId (what it came into), reference.
+        app.MapPost("/purchases/vendor-deposits/{id:guid}/refund", async (Guid id, IFormCollection form, VendorDepositService deposits, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            return await Back($"/purchases/vendor-deposits/{id}", async () =>
+            {
+                await deposits.RefundAsync(id, new RefundVendorDepositCommand(
+                    Date(form["date"]) ?? CompanyTime.Today,
+                    Amount(form["amount"]) ?? throw new DomainException("vendordeposit.amount", "Enter an amount above zero."),
+                    Id(form["accountId"]) ?? throw new DomainException("vendordeposit.refund_account", "Choose the account the money came into."),
+                    form["reference"]), ct);
+                return "done=refunded";
+            });
+        }).RequireAuthorization();
+
+        app.MapPost("/purchases/vendor-deposits/{id:guid}/refunds/{refundId:guid}/void", async (Guid id, Guid refundId, IFormCollection form, VendorDepositService deposits, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            return await Back($"/purchases/vendor-deposits/{id}", async () =>
+            {
+                await deposits.VoidRefundAsync(id, refundId, form["reason"].ToString() is { Length: > 0 } reason ? reason : throw new DomainException("void.reason_required", "Say why."), ct);
+                return "done=voided";
+            });
+        }).RequireAuthorization();
     }
 
     /// <param name="page">The page, ending in "?" or "&amp;" when it has a query already.</param>
@@ -288,7 +341,9 @@ public static class PurchasingEndpoints
         }
         catch (DomainException ex)
         {
-            return Results.Redirect($"{page}{join}error={Uri.EscapeDataString(ex.Message)}");
+            // The page then asks for the closing date password.
+            var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
+            return Results.Redirect($"{page}{join}error={Uri.EscapeDataString(ex.Message)}{password}");
         }
     }
 

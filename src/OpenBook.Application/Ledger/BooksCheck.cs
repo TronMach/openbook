@@ -103,6 +103,8 @@ public sealed class BooksCheckService(
             await InventoryTieAsync(data, ct),
             CustomerDepositsTie(data),
             await ReceivedNotBilledTieAsync(data, ct),
+            await UseTaxTiesAsync(data, ct),
+            await WithholdingTiesAsync(data, ct),
             await PledgesTieAsync(data, ct),
             await GrantsTieAsync(data, ct),
             await DepreciationTieAsync(data, ct),
@@ -150,11 +152,24 @@ public sealed class BooksCheckService(
         foreach (var a in await partners.ListAllocationsAsync(ct))
             Add($"Partner allocation for {a.YearEnd:yyyy}", "partner_allocation", a.Id, Domain.Accounts.PartnerAllocation.Source, a.JournalEntryId, !a.IsVoided);
         foreach (var v in await purchases.ListVendorDepositsAsync(null, ct))
+        {
             Add($"Vendor deposit of {v.Date:MMM d, yyyy}", "vendor_deposit", v.Id, VendorDeposit.Source, v.JournalEntryId, v.Status == DocumentStatus.Posted);
+            foreach (var r in v.Refunds)
+                Add($"Vendor deposit paid back on {r.Date:MMM d, yyyy}", "vendor_deposit", v.Id, VendorDeposit.RefundSource, r.JournalEntryId, !r.IsVoided);
+        }
+
         foreach (var p in await salesTax.ListPaymentsAsync(null, ct))
             Add($"Sales tax payment of {p.Date:MMM d, yyyy}", "sales_tax_payment", p.Id, Domain.SalesTax.SalesTaxPayment.Source, p.JournalEntryId, p.Status == DocumentStatus.Posted);
-        foreach (var a in await stock.ListAdjustmentsAsync(ct))
+        var adjustments = (await stock.ListAdjustmentsAsync(ct)).ToDictionary(a => a.Id);
+        foreach (var a in adjustments.Values)
             Add($"Inventory adjustment of {a.Date:MMM d, yyyy}", "inventory_adjustment", a.Id, Domain.Inventory.InventoryAdjustment.Source, a.JournalEntryId, a.Status == DocumentStatus.Posted);
+        var (opening, _) = await ledger.ListEntriesAsync(new JournalEntryFilter(Take: int.MaxValue, Source: Domain.Inventory.InventoryAdjustment.AlreadyHeldSource), ct);
+        foreach (var e in opening.Where(e => e.Kind == JournalEntryKind.Standard))
+        {
+            if (e.SourceId is { } id && adjustments.TryGetValue(id, out var a))
+                Add($"Opening stock of {a.Date:MMM d, yyyy}, already in the books", "inventory_adjustment", a.Id, Domain.Inventory.InventoryAdjustment.AlreadyHeldSource, e.Id, a.Status == DocumentStatus.Posted);
+        }
+
         foreach (var b in await stock.ListBuildsAsync(ct))
             Add($"Assembly build of {b.Date:MMM d, yyyy}", "assembly_build", b.Id, Domain.Inventory.AssemblyBuild.Source, b.JournalEntryId, b.Status == DocumentStatus.Posted);
         foreach (var l in await stock.ListLandedCostsAsync(ct))
@@ -499,6 +514,7 @@ public sealed class BooksCheckService(
         // What reached those accounts without moving any stock: entered by hand, spent to them, or a bill's category line.
         var plain = d.Bills.SelectMany(b => b.Lines.Where(l => l.ItemId is null).Select(l => (b.Id, l.AccountId, l.Amount))).ToHashSet();
         var others = lines.Where(l => JournalEntry.IsJournalSource(l.Source) || l.Source.StartsWith("bank.", StringComparison.Ordinal)
+            || l.Source == Domain.Inventory.InventoryAdjustment.AlreadyHeldSource
             || (l.Source == Bill.Source && l.SourceId is { } bill && plain.Contains((bill, l.AccountId, l.Amount)))).ToList();
         return Compare("inventory", "Stock value matches the books",
             "The cost of everything in stock equals the inventory asset accounts.",
@@ -539,6 +555,47 @@ public sealed class BooksCheckService(
             -(received - cleared), lines.Sum(l => l.Amount), others, "Deliveries not billed", Names(d, accountIds, "Received Not Billed"), credit: true);
     }
 
+    /// <summary>Use tax is kept beside the document and posted in its entry: what's kept is what its entry owes each agency.</summary>
+    private async Task<CheckResult> UseTaxTiesAsync(Data d, CancellationToken ct)
+    {
+        var taxes = await salesTax.ListUseTaxesAsync(null, Always, ct);
+        var documents = Documents(d).Where(x => x.Posted).Select(x => (x.Id, x.EntryId)).ToHashSet();
+        var lines = d.Lines.ToLookup(l => l.JournalEntryId);
+        var findings = new List<CheckFinding>();
+        foreach (var tax in taxes.OrderBy(t => t.Date))
+        {
+            var type = tax.Kind switch
+            {
+                Domain.SalesTax.UseTaxDocument.Bill => "bill",
+                Domain.SalesTax.UseTaxDocument.VendorCredit => "vendor_credit",
+                _ => "bank_transaction",
+            };
+            var posted = lines[tax.JournalEntryId].Where(l => tax.Covers(l.JournalEntryId, l.LineNumber)).ToList();
+            if (!documents.Contains((tax.DocumentId, tax.JournalEntryId)))
+                findings.Add(new($"Use tax of {tax.Total:N2} on {tax.Date:MMM d, yyyy} is kept for a document that's voided or has another entry.", type, tax.DocumentId));
+            else if (posted.Sum(l => l.Amount) != 0m
+                || tax.Lines.GroupBy(l => l.LiabilityAccountId).Any(g => -posted.Where(l => l.AccountId == g.Key).Sum(l => l.Amount) != tax.Sign * g.Sum(l => l.Amount)))
+            {
+                findings.Add(new($"Use tax of {tax.Total:N2} on {tax.Date:MMM d, yyyy} isn't what its entry owes the agencies.", type, tax.DocumentId));
+            }
+        }
+
+        return Result("use-tax", "Use tax matches the entries",
+            "The use tax kept for each bill, expense and vendor credit is what its entry owes the tax agencies.",
+            findings, $"{taxes.Count:N0} documents with use tax checked.");
+    }
+
+    /// <summary>What bill payments say they held back, against what their entries put on the withholding account.</summary>
+    private async Task<CheckResult> WithholdingTiesAsync(Data d, CancellationToken ct)
+    {
+        var accountId = (await purchases.GetPurchasingSettingsAsync(ct))?.BackupWithholdingAccountId;
+        var lines = d.Accrual.Where(l => l.AccountId == accountId && l.Source == BillPayment.Source).ToList();
+        return Compare("backup-withholding", "Backup withholding matches the bill payments",
+            "What bill payments held back from vendors for the IRS equals what their entries credit to the backup withholding account.",
+            -d.BillPayments.Where(p => p.Status == DocumentStatus.Posted).Sum(p => p.Withheld), lines.Sum(l => l.Amount), [],
+            "Held back on bill payments", "their entries", credit: true);
+    }
+
     private async Task<CheckResult> PledgesTieAsync(Data d, CancellationToken ct)
     {
         var pledges = await nonprofit.ListPledgesAsync(ct);
@@ -565,8 +622,9 @@ public sealed class BooksCheckService(
             Domain.Nonprofit.Grant.RecognitionSource, Domain.Nonprofit.Grant.AdjustmentSource);
         return Compare("grants", "Grants receivable and advances match the grants",
             "What funders still owe for income recognized, less money they paid ahead and isn't earned yet, equals the grants receivable and refundable advance accounts, on the accrual basis.",
-            // An unconditional grant carried over already on the books (C080) has its award in an opening balance entry instead.
-            grants.Sum(g => g.Receivable) - grants.Sum(g => g.Advance) - grants.Where(g => !g.Conditional && g.AwardEntryId is null).Sum(g => g.NetAward),
+            // An unconditional grant carried over already on the books (C080) has its award in an opening balance entry instead:
+            // the award as it came in, since its reductions and increases have entries of their own.
+            grants.Sum(g => g.Receivable) - grants.Sum(g => g.Advance) - grants.Where(g => g.CarriedOver).Sum(g => g.Amount),
             lines.Sum(l => l.Amount), others, "The grants",
             Names(d, accountIds, "the grants receivable account"));
     }

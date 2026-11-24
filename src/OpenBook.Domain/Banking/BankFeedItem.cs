@@ -67,6 +67,14 @@ public sealed class BankFeedItem
     /// <summary>The rule that added it or suggested its category.</summary>
     public Guid? RuleId { get; private set; }
 
+    /// <summary>
+    /// A line from another source (a file, or a bank connection since replaced) had this date and amount when it came in,
+    /// under another id: the same line may be here twice, so no rule adds it and the review says so.
+    /// </summary>
+    public bool PossibleDuplicate { get; private set; }
+
+    public void FlagPossibleDuplicate() => PossibleDuplicate = true;
+
     public DateTimeOffset? ResolvedAt { get; private set; }
     public string? ResolvedBy { get; private set; }
 

@@ -15,7 +15,7 @@ public sealed record OpeningStockLine(Guid ItemId, decimal Quantity, decimal Uni
 /// <summary>
 /// Starting stock when moving in: one adjustment against Opening Balance Equity. When the books already hold its value,
 /// because the inventory account came in with balances or history, a second entry takes that value back out, so the
-/// stock is there and the accounts stay as they were.
+/// stock is there and the accounts stay as they were. Voiding the adjustment voids that entry too.
 /// </summary>
 public sealed class OpeningStockService(InventoryAdjustmentService adjustments, ILedgerStore ledger, PostingEngine engine)
 {
@@ -29,7 +29,7 @@ public sealed class OpeningStockService(InventoryAdjustmentService adjustments, 
         if (alreadyInBooks && adjustment.JournalEntryId is { } entryId && await ledger.GetEntryAsync(entryId, ct) is { } entry)
         {
             var back = entry.Lines.Select(l => l.Amount > 0m ? JournalLineDraft.Cr(l.AccountId, l.Amount, Reference) : JournalLineDraft.Dr(l.AccountId, -l.Amount, Reference)).ToList();
-            await engine.PostAsync(new PostJournalEntryCommand(date, back, "Opening stock already in the imported balances"), ct);
+            await engine.PostAsync(new PostJournalEntryCommand(date, back, "Opening stock already in the imported balances", InventoryAdjustment.AlreadyHeldSource, adjustment.Id), ct);
         }
 
         return adjustment;
@@ -64,6 +64,24 @@ public sealed class OpeningStockImportService(ISalesStore sales, InventoryServic
         return plan;
     }
 
+    /// <summary>An amount as statements write them, or a number to four decimals (a part costing 0.125), which quantities and unit costs may have.</summary>
+    private static bool TryParse(string? text, out decimal value)
+    {
+        if (StatementValues.TryParseAmount(text, out value))
+            return true;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        try
+        {
+            value = ItemImportService.ParseRate(text);
+            return true;
+        }
+        catch (DomainException)
+        {
+            return false;
+        }
+    }
+
     private async Task<OpeningStockPlan> PlanAsync(string csv, CancellationToken ct)
     {
         var records = SalesImport.Records(csv, MaxRows);
@@ -85,16 +103,19 @@ public sealed class OpeningStockImportService(ISalesStore sales, InventoryServic
         {
             string? F(int? c) => CsvColumns.Field(r, c);
             var name = F(itemColumn)?.Trim();
-            var hasQuantity = StatementValues.TryParseAmount(F(quantityColumn), out var quantity);
+            var hasQuantity = TryParse(F(quantityColumn), out var quantity);
             var item = name is null ? null : byName.GetValueOrDefault(name) ?? byCode.GetValueOrDefault(name);
-            decimal? cost = StatementValues.TryParseAmount(F(costColumn), out var unit) ? unit : null;
-            decimal? value = StatementValues.TryParseAmount(F(valueColumn), out var total) ? total : null;
+            decimal? cost = TryParse(F(costColumn), out var unit) ? unit : null;
+            decimal? value = TryParse(F(valueColumn), out var total) ? total : null;
             var unitCost = cost ?? (value is { } v && quantity != 0m ? decimal.Round(v / quantity, 4, MidpointRounding.AwayFromZero) : item?.PurchaseCost ?? 0m);
             var message = string.IsNullOrEmpty(name) ? "There's no item."
                 : item is null ? $"There's no item \"{name}\". Import your products first."
                 : !item.IsInventory ? $"{item.Name} isn't an inventory item."
                 : item.Tracking != ItemTracking.None ? $"{item.Name} is tracked by lot or serial number: enter its stock as an adjustment."
                 : !hasQuantity || quantity < 0m ? "The quantity can't be read."
+                // Text that can't be read isn't the same as none: the item's own cost, or nothing, would take its place.
+                : quantity != 0m && ((cost is null && !string.IsNullOrWhiteSpace(F(costColumn))) || cost < 0m) ? "The unit cost can't be read. Use a number with up to 4 decimal places."
+                : quantity != 0m && ((value is null && !string.IsNullOrWhiteSpace(F(valueColumn))) || value < 0m) ? "The value can't be read."
                 : !seen.Add(item.Id) ? $"{item.Name} is in the file twice."
                 : null;
             if (message is not null)

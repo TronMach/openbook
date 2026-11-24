@@ -16,7 +16,7 @@ public sealed class CliApp(TextWriter output, TextWriter error, string settingsP
     /// <summary>Options that take a value. Anything else is a typing mistake, and a mistyped --dry-run mustn't import for real.</summary>
     private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "url", "key", "closing-password", "idempotency-key", "format", "out", "query", "data",
+        "url", "key", "closing-password", "idempotency-key", "format", "out", "query", "data", "file",
     };
 
     /// <summary>Resources <c>list</c> knows, by API path.</summary>

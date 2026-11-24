@@ -103,6 +103,7 @@
                             {
                                 <PostForm Action="@($"/purchases/orders/{_order.Id}/receipts/{group.Key}/void")" data-enhance="false" class="inline">
                                     <AntiforgeryToken />
+                                    <ClosedPeriodPassword Visible="Password" Interactive="false" Id="@($"closing-password-take-back-{group.Key}")" />
                                     <button type="submit" class="secondary">Take back</button>
                                 </PostForm>
                             }
@@ -157,6 +158,7 @@
                     <div class="field"><label for="receive-date">Date</label><input id="receive-date" type="date" name="date" value="@today" /></div>
                     <div class="field"><label for="receive-note">Note <span class="muted">(optional)</span></label><input id="receive-note" name="note" maxlength="500" placeholder="Packing slip number" /></div>
                 </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" Id="closing-password-receive" />
                 <div class="actions"><button type="submit">Record receipt</button></div>
             </PostForm>
         </div>

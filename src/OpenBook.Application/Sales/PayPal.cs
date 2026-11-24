@@ -9,7 +9,8 @@ namespace OpenBook.Application.Sales;
 /// <param name="OrderId">The order a capture belongs to.</param>
 /// <param name="CaptureId">The capture a refund or dispute is about.</param>
 /// <param name="Amount">A capture's amount, the total refunded so far, or what's disputed.</param>
-public sealed record PayPalEvent(string Id, string Type, string? ResourceId, string? OrderId, string? CaptureId, decimal? Amount, string? Reason);
+/// <param name="Key">The key of a refund made from OpenBook (<see cref="Domain.Sales.OnlineRefund.IdempotencyKey"/>).</param>
+public sealed record PayPalEvent(string Id, string Type, string? ResourceId, string? OrderId, string? CaptureId, decimal? Amount, string? Reason, string? Key = null);
 
 /// <summary>
 /// PayPal's Orders v2 API (developer.paypal.com/docs/api/orders/v2), read. An order is made with intent CAPTURE; the
@@ -45,6 +46,26 @@ public static class PayPal
             paid && capture!.Value.TryGetProperty("amount", out var amount) ? Money(amount) : null,
             null, Expired: status == "VOIDED", Approved: status == "APPROVED");
     });
+
+    /// <summary>A refund of a capture, as made.</summary>
+    public static ProviderRefund Refund(string json) => Read(json, ReadRefund);
+
+    /// <summary>The refund made with the key (its custom id), from the order its capture belongs to.</summary>
+    public static ProviderRefund? FindRefund(string json, string key) => Read(json, root =>
+    {
+        if (!root.TryGetProperty("purchase_units", out var units) || units.ValueKind != JsonValueKind.Array)
+            return null;
+        foreach (var unit in units.EnumerateArray())
+            if (unit.ValueKind == JsonValueKind.Object && unit.TryGetProperty("payments", out var payments) && payments.ValueKind == JsonValueKind.Object
+                && payments.TryGetProperty("refunds", out var refunds) && refunds.ValueKind == JsonValueKind.Array)
+                foreach (var refund in refunds.EnumerateArray())
+                    if (refund.ValueKind == JsonValueKind.Object && String(refund, "custom_id") == key)
+                        return ReadRefund(refund);
+        return null;
+    });
+
+    private static ProviderRefund ReadRefund(JsonElement refund) =>
+        new(String(refund, "id") ?? throw Unreadable("no refund id"), String(refund, "status") is not ("FAILED" or "CANCELLED"));
 
     public static string AccessToken(string json) => Read(json, root => String(root, "access_token") ?? throw Unreadable("no access token"));
 
@@ -112,7 +133,7 @@ public static class PayPal
         if (!root.TryGetProperty("resource", out var resource) || resource.ValueKind != JsonValueKind.Object)
             return new PayPalEvent(id, type, null, null, null, null, null);
         var resourceId = String(resource, "id");
-        string? order = null, capture = null, reason = null;
+        string? order = null, capture = null, reason = null, key = null;
         decimal? amount = null;
         switch (type)
         {
@@ -132,6 +153,7 @@ public static class PayPal
                 amount = resource.TryGetProperty("seller_payable_breakdown", out var breakdown) && breakdown.ValueKind == JsonValueKind.Object
                     && breakdown.TryGetProperty("total_refunded_amount", out var total) ? Money(total) : null;
                 amount ??= resource.TryGetProperty("amount", out var refunded) ? Money(refunded) : null;
+                key = String(resource, "custom_id");
                 break;
             case "CUSTOMER.DISPUTE.CREATED":
                 if (resource.TryGetProperty("disputed_transactions", out var disputed) && disputed.ValueKind == JsonValueKind.Array)
@@ -147,7 +169,7 @@ public static class PayPal
                 break;
         }
 
-        return new PayPalEvent(id, type, resourceId, order, capture, amount, reason);
+        return new PayPalEvent(id, type, resourceId, order, capture, amount, reason, key);
     });
 
     /// <summary>An amount as PayPal writes it ("12.34"), for the request.</summary>
@@ -200,5 +222,5 @@ public static class PayPal
         new("online.provider_unreadable", $"PayPal sent an answer OpenBook couldn't read ({what}).");
 
     private static string? String(JsonElement e, string name) =>
-        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String && v.GetString()?.Trim() is { Length: > 0 } s ? s : null;
+        e.TryGetProperty(name, out var v) && v.Text()?.Trim() is { Length: > 0 } s ? s : null;
 }

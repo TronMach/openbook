@@ -37,7 +37,11 @@
     {
         <div class="alert error" role="alert">@_error</div>
     }
-    @if (_vendor is { IsActive: false })
+    @if (_vendor?.ErasedAt is { } erasedAt)
+    {
+        <div class="alert notice" role="status">This vendor's personal details were erased on @erasedAt.InCompanyTime().ToString("d"). The record stays for its documents, and can't be changed or used again.</div>
+    }
+    else if (_vendor is { IsActive: false })
     {
         <div class="alert notice" role="status">This vendor is inactive and can't be used on new bills or expenses.</div>
     }
@@ -102,6 +106,8 @@
         </div>
     }
 
+    @if (_vendor?.ErasedAt is null)
+    {
     <div class="card" style="margin-top: 1.5rem">
         <h2>Details</h2>
         <EditForm Model="Input" FormName="vendor" OnValidSubmit="SaveAsync" method="post">
@@ -211,8 +217,9 @@
             </FormAccess>
         </EditForm>
     </div>
+    }
 
-    @if (_vendor is not null)
+    @if (_vendor is { ErasedAt: null })
     {
         <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync">
             <AntiforgeryToken />
@@ -222,12 +229,14 @@
         </form>
         <AuthorizeView>
             <VendorBankDetails VendorId="_vendor.Id" CanEdit="@context.User.CanPost($"/purchases/ach/vendors/{_vendor.Id}")" Error="@BankError" />
+            <VendorWithholding Vendor="_vendor" CanEdit="@context.User.CanPost($"/purchases/backup-withholding/vendors/{_vendor.Id}")" Error="@WithholdingError" />
         </AuthorizeView>
         <Attachments EntityType="vendor" EntityId="_vendor.Id" />
         <CustomFieldPanel EntityType="vendor" EntityId="_vendor.Id" />
         <Notes EntityType="vendor" EntityId="_vendor.Id" />
         <OpenBook.Web.Components.Documents.LearnedCodes PartyId="_vendor.Id" Back="@($"/vendors/{_vendor.Id}")" />
         <MergeCard Kind="vendors" Id="_vendor.Id" Name="@_vendor.DisplayName" />
+        <EraseCard Kind="vendors" Id="_vendor.Id" />
     }
 </div>
 
@@ -248,6 +257,7 @@
     private string FormPath => Id is { } id ? $"/vendors/{id}" : "/vendors/new";
 
     [SupplyParameterFromQuery(Name = "bankError")] private string? BankError { get; set; }
+    [SupplyParameterFromQuery(Name = "withholdingError")] private string? WithholdingError { get; set; }
 
     [SupplyParameterFromForm(FormName = "vendor")]
     private VendorModel Input { get; set; } = default!;

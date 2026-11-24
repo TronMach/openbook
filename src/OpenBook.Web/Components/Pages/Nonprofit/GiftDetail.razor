@@ -33,7 +33,7 @@
             {
                 <a class="button secondary" href="/nonprofit/gifts/@_gift.Id/letter" target="_blank">Acknowledgment (PDF)</a>
             }
-            @if (_gift.Status == DocumentStatus.Posted && _gift.PledgeId is null)
+            @if (_gift.Counts && _gift.PledgeId is null)
             {
                 <ActionLink Class="button secondary" Href="@($"/nonprofit/gifts/{_gift.Id}/edit")">Change</ActionLink>
             }
@@ -111,19 +111,22 @@
 
         @if (_gift.Status == DocumentStatus.Posted)
         {
-            <div class="card" style="margin-top: 1.5rem">
-                <h2>Send the acknowledgment</h2>
-                <p><ActionLink Class="button" Href="@($"/nonprofit/gifts/{_gift.Id}/email")">Email the letter</ActionLink></p>
-                @if (_gift.AcknowledgedAt is null)
-                {
-                    <PostForm Action="/nonprofit/thanks/mark" data-enhance="false" style="margin-top: 0.75rem">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="id" value="@_gift.Id" />
-                        <input type="hidden" name="back" value="/nonprofit/gifts/@_gift.Id" />
-                        <button type="submit" class="secondary">Mark as thanked (printed or sent another way)</button>
-                    </PostForm>
-                }
-            </div>
+            @if (_gift.Counts)
+            {
+                <div class="card" style="margin-top: 1.5rem">
+                    <h2>Send the acknowledgment</h2>
+                    <p><ActionLink Class="button" Href="@($"/nonprofit/gifts/{_gift.Id}/email")">Email the letter</ActionLink></p>
+                    @if (_gift.AcknowledgedAt is null)
+                    {
+                        <PostForm Action="/nonprofit/thanks/mark" data-enhance="false" style="margin-top: 0.75rem">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="id" value="@_gift.Id" />
+                            <input type="hidden" name="back" value="/nonprofit/gifts/@_gift.Id" />
+                            <button type="submit" class="secondary">Mark as thanked (printed or sent another way)</button>
+                        </PostForm>
+                    }
+                </div>
+            }
 
             <EmailHistory EntityType="donation" EntityId="_gift.Id" />
 

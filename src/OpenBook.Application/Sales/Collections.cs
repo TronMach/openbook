@@ -396,7 +396,7 @@ public sealed class ReminderService(IUnitOfWork unit, ISalesStore store, ICompan
                 store.Remove(reserved);
                 await store.SaveChangesAsync(ct);
                 results.Add(new ReminderResult(i, reminder.Step, ex.Message));
-                if (ex.Code is "email.not_configured" or "email.password_unreadable")
+                if (ex.Code is "email.not_configured" or "email.password_unreadable" || ex.Code.StartsWith("email.microsoft_", StringComparison.Ordinal))
                     break;
             }
         }

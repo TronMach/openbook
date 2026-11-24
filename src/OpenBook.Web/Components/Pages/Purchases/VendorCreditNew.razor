@@ -39,6 +39,7 @@
             <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Items="_stockItems" Changed="StateHasChanged" />
             <p class="hint">Sending stock back? Choose the item and its quantity on a line: the stock leaves at its cost, and any difference from the amount credited goes to Purchase Price Variance.</p>
 
+            <UseTaxField Model="_useTax" Date="_date" Taxable="Taxable" Credit="true" />
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
@@ -60,18 +61,19 @@
     private List<Account> _categories = [];
     private IReadOnlyList<Item> _stockItems = [];
     private bool _useNumbers;
-    internal sealed record Draft(Guid? VendorId, string? Reference, DateOnly Date, string? Memo, Guid? LocationId, List<BillLineModel> Lines);
+    internal sealed record Draft(Guid? VendorId, string? Reference, DateOnly Date, string? Memo, Guid? LocationId, List<BillLineModel> Lines, UseTaxModel? UseTax = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => _vendorId is null && !_lines.Any(BillLineModel.IsFilledLine) ? null
-        : new Draft(_vendorId, _reference, _date, _memo, _locationId, _lines);
+        : new Draft(_vendorId, _reference, _date, _memo, _locationId, _lines, _useTax);
 
     private void Restore(Draft draft)
     {
         _vendorId = _vendors.Any(v => v.Id == draft.VendorId) ? draft.VendorId : null;
         (_reference, _date, _memo, _locationId) = (draft.Reference, draft.Date, draft.Memo, draft.LocationId);
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+        _useTax = draft.UseTax ?? new();
     }
 
     private Guid? _vendorId;
@@ -79,6 +81,8 @@
     private DateOnly _date = CompanyTime.Today;
     private string? _memo;
     private List<BillLineModel> _lines = [new()];
+    private UseTaxModel _useTax = new();
+    private decimal Taxable => UseTaxService.TaxableAmount(_chart, _lines.Select(l => (l.AccountId ?? Guid.Empty, l.ItemId, l.Amount ?? 0m)));
     private bool _loaded;
     private bool _busy;
     private string? _error;
@@ -126,7 +130,7 @@
         _error = null;
         try
         {
-            var command = new CreateVendorCreditCommand(_vendorId!.Value, _date, BillLineModel.Drafts(_lines), _reference, _memo, LocationId: _locationId);
+            var command = new CreateVendorCreditCommand(_vendorId!.Value, _date, BillLineModel.Drafts(_lines), _reference, _memo, LocationId: _locationId, UseTax: _useTax.ForNew);
             var credit = await Ops.RunAsync<VendorCreditService, VendorCredit>(s => s.CreateAsync(command), _closingPassword);
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/purchases/vendor-credits/{credit.Id}");

@@ -3,6 +3,7 @@
 @using OpenBook.Application.Nonprofit
 @using OpenBook.Domain.Nonprofit
 @inject GiftService GiftService
+@inject OnlineGivingService OnlineGiving
 @inject CustomerService CustomerService
 
 <PageTitle>Gifts · OpenBook</PageTitle>
@@ -19,6 +20,45 @@
         <ActionLink Class="button secondary" Href="/nonprofit/households">Households</ActionLink>
         <ActionLink Class="button secondary" Href="/reports/giving-by-donor">Giving by donor</ActionLink>
     </div>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Checked is not null)
+    {
+        <div class="alert notice" role="status">@(Checked == nameof(DonationCheckoutStatus.Paid) ? "That gift was paid, and it's recorded now."
+            : Checked == nameof(DonationCheckoutStatus.Expired) ? "That gift was never paid, and it can't be any more." : "That gift hasn't been paid yet.")</div>
+    }
+    @if (_unrecorded.Count > 0)
+    {
+        <div class="card" id="online">
+            <h2>Online gifts not recorded yet</h2>
+            <p class="muted">Started on the giving page, with no word from the payment provider that they were paid. Most were given up. OpenBook asks the provider about each for a day.</p>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Started</th><th>Name</th><th>Email</th><th class="num">Amount</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _unrecorded.Take(20))
+                        {
+                            <tr>
+                                <td>@c.CreatedAt.InCompanyTime().ToString("g")</td>
+                                <td>@c.Name</td>
+                                <td>@c.Email</td>
+                                <td class="num">@Labels.Amount(c.Amount)</td>
+                                <td>
+                                    <PostForm Action="@($"/nonprofit/gifts/online/{c.Id}/check")" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="secondary">Check if paid</button>
+                                    </PostForm>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 
     @if (Donor is { } donorId)
     {
@@ -46,17 +86,17 @@
             <tbody>
                 @foreach (var g in _gifts)
                 {
-                    <tr class="@(g.Status == DocumentStatus.Voided ? "muted" : "")">
+                    <tr class="@(g.Counts ? "" : "muted")">
                         <td><a href="/nonprofit/gifts/@g.Id">@g.Number</a></td>
                         <td>@Labels.Date(g.Date)</td>
                         <td><a href="/customers/@g.DonorId">@_names.GetValueOrDefault(g.DonorId)</a></td>
-                        <td>@(g.Kind == GiftKind.InKind ? "In kind" : g.PledgeId is null ? "Money" : "Pledge payment")@(g.Status == DocumentStatus.Voided ? " (voided)" : "")</td>
+                        <td>@(g.Kind == GiftKind.InKind ? "In kind" : g.PledgeId is null ? "Money" : "Pledge payment")@(g.Status == DocumentStatus.Voided ? " (voided)" : g.Counts ? "" : " (returned)")</td>
                         <td class="num">@Labels.Amount(g.Amount)</td>
                         <td>@(g.AcknowledgedAt is { } at ? Labels.Date(DateOnly.FromDateTime(at.InCompanyTime().DateTime)) : "")</td>
                     </tr>
                 }
             </tbody>
-            <tfoot><tr><td colspan="4">Total</td><td class="num">@Labels.Amount(_gifts.Where(g => g.Status == DocumentStatus.Posted).Sum(g => g.Amount))</td><td></td></tr></tfoot>
+            <tfoot><tr><td colspan="4">Total</td><td class="num">@Labels.Amount(_gifts.Where(g => g.Counts).Sum(g => g.Amount))</td><td></td></tr></tfoot>
         </table>
     }
 </div>
@@ -65,10 +105,15 @@
     private DateOnly _from;
     private DateOnly _to;
     private IReadOnlyList<Donation> _gifts = [];
+    private IReadOnlyList<DonationCheckout> _unrecorded = [];
     private Dictionary<Guid, string> _names = [];
 
     [SupplyParameterFromQuery] private string? From { get; set; }
     [SupplyParameterFromQuery] private string? To { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    /// <summary>What "Check if paid" found.</summary>
+    [SupplyParameterFromQuery] private string? Checked { get; set; }
 
     /// <summary>One donor's gifts, from every date unless a period is chosen.</summary>
     [SupplyParameterFromQuery] private Guid? Donor { get; set; }
@@ -80,6 +125,7 @@
         _from = DateOnly.TryParseExact(From, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : Donor is null ? yearStart : new DateOnly(2000, 1, 1);
         _to = DateOnly.TryParseExact(To, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t) ? t : today;
         _gifts = await GiftService.ListAsync(_from, _to, Donor);
+        _unrecorded = Donor is null ? await OnlineGiving.UnrecordedAsync() : [];
         _names = (await CustomerService.ListRecordsAsync()).ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
     }
 }

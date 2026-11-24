@@ -255,10 +255,12 @@ public sealed class GiftService(
             entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
                 [JournalLineDraft.Dr(debit.Id, command.Amount, memo), JournalLineDraft.Cr(pledge.ReceivableAccountId, command.Amount, memo, classId)],
                 command.Memo ?? memo, Donation.Source, id), ct);
-            // Cash basis left the pledge out, so it recognizes the income as the money comes in.
-            cash = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
-                [JournalLineDraft.Dr(pledge.ReceivableAccountId, command.Amount, memo, classId), JournalLineDraft.Cr(incomeId, command.Amount, memo, classId)],
-                $"{memo} (pledge {pledge.Number}, cash basis)", Donation.Source, id, EntryBasis.CashOnly), ct);
+            // Cash basis left the pledge out, so it recognizes the income as the money comes in. One carried over is in the
+            // opening balances on both bases, so its money only comes off the receivable.
+            if (pledge.JournalEntryId is not null)
+                cash = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
+                    [JournalLineDraft.Dr(pledge.ReceivableAccountId, command.Amount, memo, classId), JournalLineDraft.Cr(incomeId, command.Amount, memo, classId)],
+                    $"{memo} (pledge {pledge.Number}, cash basis)", Donation.Source, id, EntryBasis.CashOnly), ct);
         }
 
         // The highest number, not every gift: a batch or an import records hundreds in one scope.
@@ -297,6 +299,10 @@ public sealed class GiftService(
         var rest = command.Amount - parts.Sum(p => p.Amount);
         if (rest <= 0m)
             throw new DomainException("donation.split_over", $"The parts come to {parts.Sum(p => p.Amount):N2}, which leaves nothing of the {command.Amount:N2} for the first purpose.");
+        // The first gift's letter carries what the donor received; the others say nothing was, so they'd be fully deductible.
+        if (command.GoodsValue > rest)
+            throw new DomainException("donation.split_goods",
+                $"The first purpose keeps {rest.ToString("N2", CultureInfo.CurrentCulture)}, less than the {command.GoodsValue.ToString("N2", CultureInfo.CurrentCulture)} the donor received. Give it at least that, so the letters say what may be deducted.");
 
         await using var transaction = await unitOfWork.BeginAsync(ct);
         var gifts = new List<Donation> { await RecordAsync(command with { Amount = rest }, ct) };
@@ -349,7 +355,7 @@ public sealed class GiftService(
         if (donation.PledgeId is not null)
             throw new DomainException("donation.change_pledge", "This gift pays a pledge. Void it and record it again to change it.");
         Donation.Check(donation.Kind, command.Amount, command.Description, command.GoodsValue, command.GoodsDescription, null);
-        var donor = await DonorAsync(command.DonorId, ct);
+        var donor = await DonorAsync(command.DonorId, ct, activeOnly: command.DonorId != donation.DonorId);
         var chart = await accounts.GetChartAsync(ct);
         var debit = chart.Find(command.DebitAccountId) ?? throw new DomainException("donation.account_required", "Choose the account the gift went to.");
         if (debit.Id != donation.DebitAccountId && !debit.IsActive)
@@ -364,6 +370,8 @@ public sealed class GiftService(
         if ((donation.DepositId is not null || donation.PayoutId is not null) && !moneyStays)
             throw new DomainException("donation.deposited_fixed",
                 $"Gift {donation.Number} is in a {(donation.DepositId is not null ? "bank deposit" : "processor's payout")}, so its amount and account stay. Void that first to change them.");
+        if (donation.DepositId is { } depositedIn && await sales.GetDepositAsync(depositedIn, ct) is { } deposit && command.Date > deposit.Date)
+            throw new DomainException("donation.after_deposit", $"Gift {donation.Number} went into a bank deposit on {deposit.Date:yyyy-MM-dd}, so it can't be dated after that.");
         var feed = await Banking.BankFeedService.TiedToAsync(bank, donation.DebitAccountId, donation.JournalEntryId, null, ct);
         if (feed.Count > 0 && !moneyStays)
             throw new DomainException("donation.feed_matched", $"Gift {donation.Number} is matched to a line from the bank feed, so its amount and account stay. Undo the match first.");
@@ -378,17 +386,18 @@ public sealed class GiftService(
         var newExchange = command.ExchangeAccountId is { } x && x != Guid.Empty && command.GoodsValue > 0m ? Math.Min(command.GoodsValue, command.Amount) : 0m;
         var leaving = samePurpose ? Math.Max(0m, contributed - (command.Amount - newExchange)) : contributed;
         if (leaving > 0m)
-            await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, leaving, ct);
+            await nonprofit.EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, leaving, donation.Date, ct);
+        var exchangeId = await ExchangeAccountAsync(chart, command.ExchangeAccountId, command.GoodsValue, false, ct, keep: donation.ExchangeAccountId);
 
         var before = Snapshot(donation);
         var oldEntry = donation.JournalEntryId;
+        var (location, tags) = await engine.SegmentsOfAsync(oldEntry, ct);
         await engine.StageVoidAsync(oldEntry, $"Gift changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var memo = $"Gift from {donor.DisplayName}";
         var debitClass = debit.Type.ClassOf() == AccountClass.Expense ? classId : null;
-        var exchangeId = await ExchangeAccountAsync(chart, command.ExchangeAccountId, command.GoodsValue, false, ct);
         var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
             GiftLines(debit.Id, debitClass, incomeId, exchangeId, classId, command.Amount, command.GoodsValue, memo),
-            command.Memo ?? memo, Donation.Source, donation.Id), ct);
+            command.Memo ?? memo, Donation.Source, donation.Id, LocationId: location, TagIds: tags), ct);
         donation.SetExchangeAccount(exchangeId);
         donation.Change(donor.Id, command.Date, command.Amount, debit.Id, incomeId, classId, command.Reference, command.Memo,
             command.Description, command.GoodsValue, command.GoodsDescription, entry.Id);
@@ -396,8 +405,30 @@ public sealed class GiftService(
             item.FollowEntry(oldEntry, entry.Id);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, DonationEntity, donation.Id, before,
             DocumentChanges.WithReason(Snapshot(donation), command.Reason)));
+        await FitSoftCreditsAsync(donation, ct);
         await store.SaveChangesAsync(ct);
         return donation;
+    }
+
+    /// <summary>
+    /// After a correction: a soft credit is never the payer's own, nor more than the gift. One for the gift's new donor is
+    /// taken off, and one above its new amount comes down to it.
+    /// </summary>
+    private async Task FitSoftCreditsAsync(Donation donation, CancellationToken ct)
+    {
+        foreach (var credit in await store.ListSoftCreditsAsync(donation.Id, null, ct))
+        {
+            var before = SoftCreditService.Snapshot(credit);
+            if (credit.DonorId == donation.DonorId)
+            {
+                store.Remove(credit);
+                store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Deleted, SoftCreditService.EntityType, credit.Id, before, null));
+            }
+            else if (credit.LimitTo(donation.Amount))
+            {
+                store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SoftCreditService.EntityType, credit.Id, before, SoftCreditService.Snapshot(credit)));
+            }
+        }
     }
 
     public async Task<Donation> VoidAsync(Guid id, string reason, CancellationToken ct = default)
@@ -405,7 +436,9 @@ public sealed class GiftService(
         var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
         if (donation.Status == DocumentStatus.Voided)
             throw new DomainException("donation.already_voided", "This gift is already voided.");
-        await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, donation.Amount - donation.ExchangePart, ct);
+        // A pledge payment took no income on the accrual basis: the pledge did, and it's owed again.
+        if (donation.PledgeId is null)
+            await nonprofit.EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, donation.Amount - donation.ExchangePart, donation.Date, ct);
         var before = Snapshot(donation);
         await engine.StageVoidAsync(donation.JournalEntryId, reason, fromDocument: true, ct);
         if (donation.CashEntryId is { } cash)
@@ -434,7 +467,12 @@ public sealed class GiftService(
         var chart = await accounts.GetChartAsync(ct);
         Guid bankId;
         if (donation.DepositId is { } depositId)
-            bankId = (await sales.GetDepositAsync(depositId, ct) ?? throw new EntityNotFoundException("deposit", depositId)).BankAccountId;
+        {
+            var deposit = await sales.GetDepositAsync(depositId, ct) ?? throw new EntityNotFoundException("deposit", depositId);
+            if (date < deposit.Date)
+                throw new DomainException("donation.return_before_deposit", $"It went into the bank on {deposit.Date:yyyy-MM-dd}, so it can't have come back before that.");
+            bankId = deposit.BankAccountId;
+        }
         else if (chart.Find(donation.DebitAccountId) is { Type: AccountType.Bank })
             bankId = donation.DebitAccountId;
         else
@@ -443,9 +481,12 @@ public sealed class GiftService(
         // Checked here, so a refusal leaves the gift as it was.
         donation.MarkReturned(date, bankId, Guid.Empty, null, fee, reason);
         donation.UndoReturn();
-        await EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, donation.Amount - donation.ExchangePart, ct);
+        if (donation.PledgeId is null)
+            await nonprofit.EnsureNotReleasedAsync(donation.IncomeAccountId, donation.ClassId, donation.Amount - donation.ExchangePart, date, ct);
 
-        var donor = await DonorAsync(donation.DonorId, ct);
+        // What the gift was recorded with may be inactive since: the check still bounced.
+        engine.Carry(new[] { donation.IncomeAccountId, donation.ExchangeAccountId, donation.ClassId }.OfType<Guid>());
+        var donor = await DonorAsync(donation.DonorId, ct, activeOnly: false);
         var memo = $"Gift returned · {donor.DisplayName}{(donation.Reference is { } r ? $" · {r}" : "")}";
         List<JournalLineDraft> lines;
         JournalEntry? cash = null;
@@ -501,16 +542,6 @@ public sealed class GiftService(
         store.Add(Audit(AuditAction.Updated, donation, before));
         await store.SaveChangesAsync(ct);
         return donation;
-    }
-
-    /// <summary>Taking back restricted money that's been released would leave the purpose below zero: the release goes first.</summary>
-    private async Task EnsureNotReleasedAsync(Guid incomeAccountId, Guid? classId, decimal amount, CancellationToken ct)
-    {
-        if (!(await accounts.GetChartAsync(ct)).Get(incomeAccountId).DonorRestricted)
-            return;
-        var held = (await nonprofit.PurposesAsync(CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone), ct)).FirstOrDefault(p => p.ClassId == classId)?.Balance ?? 0m;
-        if (held < amount)
-            throw new DomainException("gift.released", $"Only {held:N2} of this purpose is still restricted; the rest has been released. Void that release first.");
     }
 
     /// <summary>Marks gifts as thanked (letters printed or sent another way).</summary>
@@ -579,7 +610,9 @@ public sealed class GiftService(
             throw new DomainException("pledge.already_voided", "This pledge is already voided.");
         if (await PaidAsync(pledge.Id, ct) > 0m)
             throw new DomainException("pledge.has_payments", "Gifts have been paid on this pledge. Void them first.");
-        await EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, pledge.Amount, ct);
+        // One carried over posted nothing, so voiding it takes nothing back.
+        if (pledge.JournalEntryId is not null)
+            await nonprofit.EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, pledge.Amount, pledge.Date, ct);
         var before = Snapshot(pledge);
         if (pledge.JournalEntryId is { } entryId)
             await engine.StageVoidAsync(entryId, reason, fromDocument: true, ct);
@@ -609,7 +642,8 @@ public sealed class GiftService(
 
     /// <summary>
     /// The donor won't pay the rest: reverses the unpaid part (Dr the contribution account / Cr the receivable, on its
-    /// class, accrual basis only). Payments can't be recorded after it, unless it's undone.
+    /// class, accrual basis only, or both for a pledge carried over in the opening balances). Payments can't be recorded
+    /// after it, unless it's undone.
     /// </summary>
     public async Task<Pledge> CancelRestAsync(Guid id, DateOnly on, CancellationToken ct = default)
     {
@@ -617,12 +651,12 @@ public sealed class GiftService(
         var unpaid = pledge.Amount - await PaidAsync(pledge.Id, ct);
         pledge.Cancel(unpaid, on, Guid.Empty); // checks before anything is staged
         pledge.UndoCancel();
-        await EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, unpaid, ct);
+        await nonprofit.EnsureNotReleasedAsync(pledge.IncomeAccountId, pledge.ClassId, unpaid, on, ct);
         var before = Snapshot(pledge);
         var memo = $"Rest of pledge {pledge.Number} cancelled";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(on,
             [JournalLineDraft.Dr(pledge.IncomeAccountId, unpaid, memo, pledge.ClassId), JournalLineDraft.Cr(pledge.ReceivableAccountId, unpaid, memo, pledge.ClassId)],
-            memo, Pledge.CancelSource, pledge.Id, EntryBasis.AccrualOnly), ct);
+            memo, Pledge.CancelSource, pledge.Id, pledge.JournalEntryId is null ? EntryBasis.Both : EntryBasis.AccrualOnly), ct);
         pledge.Cancel(unpaid, on, entry.Id);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, PledgeEntity, pledge.Id, before, Snapshot(pledge)));
         await store.SaveChangesAsync(ct);
@@ -711,6 +745,8 @@ public sealed class GiftService(
         var donation = await store.GetDonationAsync(id, ct) ?? throw new EntityNotFoundException(DonationEntity, id);
         if (donation.Status != DocumentStatus.Posted)
             throw new DomainException("donation.voided", "This gift is voided.");
+        if (!donation.Counts)
+            throw new DomainException("donation.returned", "This gift came back from the bank, so there's nothing to thank the donor for.");
         var company = await companies.GetRequiredCompanyAsync(ct);
         using var region = CompanyRegion.Use(company);
         var donor = await DonorAsync(donation.DonorId, ct, activeOnly: false);
@@ -761,7 +797,7 @@ public sealed class GiftService(
             renderer.Render([letter]), donor.Id, $"Pledge statement {pledge.Number}");
     }
 
-    /// <summary>Thank-you letters for several gifts in one PDF, to print together (voided gifts are left out).</summary>
+    /// <summary>Thank-you letters for several gifts in one PDF, to print together (voided and returned gifts are left out).</summary>
     public async Task<RenderedForm> AcknowledgmentsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ids);
@@ -770,7 +806,7 @@ public sealed class GiftService(
         var letters = new List<DonorLetter>();
         foreach (var id in ids.Distinct())
         {
-            if (await store.GetDonationAsync(id, ct) is not { Status: DocumentStatus.Posted } donation)
+            if (await store.GetDonationAsync(id, ct) is not { Counts: true } donation)
                 continue;
             var donor = await DonorAsync(donation.DonorId, ct, activeOnly: false);
             letters.Add(await LetterAsync(company, donor, "Thank you", donation.Date, [donation], year: null, ct));
@@ -924,7 +960,8 @@ public sealed class GiftService(
     }
 
     /// <summary>The account for a gift's exchange part: an active income account that isn't donor-restricted, only when goods were received.</summary>
-    private static Task<Guid?> ExchangeAccountAsync(ChartOfAccounts chart, Guid? id, decimal goodsValue, bool pledgePayment, CancellationToken ct)
+    /// <param name="keep">The gift's own account, which it keeps though it's inactive now.</param>
+    private static Task<Guid?> ExchangeAccountAsync(ChartOfAccounts chart, Guid? id, decimal goodsValue, bool pledgePayment, CancellationToken ct, Guid? keep = null)
     {
         _ = ct;
         if (id is not { } chosen || chosen == Guid.Empty || goodsValue <= 0m)
@@ -934,7 +971,7 @@ public sealed class GiftService(
         var account = chart.Find(chosen) ?? throw new EntityNotFoundException("account", chosen);
         if (account.Type is not (AccountType.Income or AccountType.OtherIncome) || account.DonorRestricted)
             throw new DomainException("donation.exchange_account", $"'{account.Name}' can't take the value received: choose an income account without donor restrictions, such as special event revenue.");
-        if (!account.IsActive)
+        if (!account.IsActive && account.Id != keep)
             throw new DomainException("donation.account_inactive", $"'{account.Name}' is inactive.");
         return Task.FromResult<Guid?>(account.Id);
     }
@@ -980,6 +1017,8 @@ public sealed class GiftService(
         d.Description,
         d.GoodsValue,
         d.GoodsDescription,
+        d.ExchangeAccountId,
+        Method = d.Method?.ToString(),
         d.Campaign,
         Status = d.Status.ToString(),
         d.AcknowledgedAt,
@@ -1003,5 +1042,5 @@ public sealed class GiftService(
         p.CancelledOn,
     });
 
-    private static string Snapshot(GiftSettings s) => JsonSerializer.Serialize(new { s.Ein, s.SignerName, s.SignerTitle, s.Intro });
+    private static string Snapshot(GiftSettings s) => JsonSerializer.Serialize(new { s.Ein, s.SignerName, s.SignerTitle, s.Intro, s.OnlineGiving });
 }

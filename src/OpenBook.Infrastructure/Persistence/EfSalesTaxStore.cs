@@ -10,7 +10,8 @@ internal sealed class EfSalesTaxStore(OpenBookDbContext db) : ISalesTaxStore
     public async Task<bool> RateChargedAsync(Guid rateId, CancellationToken ct) =>
         await db.Invoices.AnyAsync(i => i.Lines.Any(l => l.TaxRateId == rateId), ct)
         || await db.SalesReceipts.AnyAsync(r => r.Lines.Any(l => l.TaxRateId == rateId), ct)
-        || await db.CreditMemos.AnyAsync(c => c.Lines.Any(l => l.TaxRateId == rateId), ct);
+        || await db.CreditMemos.AnyAsync(c => c.Lines.Any(l => l.TaxRateId == rateId), ct)
+        || await db.UseTaxes.AnyAsync(u => u.Lines.Any(l => l.TaxRateId == rateId), ct);
 
     public async Task<IReadOnlyList<TaxAgency>> ListAgenciesAsync(CancellationToken ct) => await db.TaxAgencies.ToListAsync(ct);
 
@@ -52,6 +53,20 @@ internal sealed class EfSalesTaxStore(OpenBookDbContext db) : ISalesTaxStore
     public void Add(SalesTaxFiling filing) => db.SalesTaxFilings.Add(filing);
 
     public void Remove(SalesTaxFiling filing) => db.SalesTaxFilings.Remove(filing);
+
+    public Task<UseTax?> GetUseTaxAsync(Guid documentId, CancellationToken ct) => db.UseTaxes.SingleOrDefaultAsync(u => u.DocumentId == documentId, ct);
+
+    public async Task<IReadOnlyList<UseTax>> ListUseTaxesAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct) =>
+        await db.UseTaxes.AsNoTracking()
+            .Where(u => !u.IsVoided && u.Date <= toDate && (fromDate == null || u.Date >= fromDate))
+            .ToListAsync(ct);
+
+    public Task<Guid?> LastUseTaxCodeAsync(CancellationToken ct) =>
+        db.UseTaxes.OrderByDescending(u => u.Date).ThenByDescending(u => u.Id).Select(u => (Guid?)u.TaxCodeId).FirstOrDefaultAsync(ct);
+
+    public void Add(UseTax tax) => db.UseTaxes.Add(tax);
+
+    public void Remove(UseTax tax) => db.UseTaxes.Remove(tax);
 
     public async Task<IReadOnlyList<NexusThreshold>> ListNexusThresholdsAsync(CancellationToken ct) => await db.NexusThresholds.ToListAsync(ct);
 

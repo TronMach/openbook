@@ -45,6 +45,18 @@ public interface ISalesTaxStore
     void Add(SalesTaxFiling filing);
     void Remove(SalesTaxFiling filing);
 
+    /// <summary>The use tax on a bill, bank transaction or vendor credit, tracked.</summary>
+    Task<UseTax?> GetUseTaxAsync(Guid documentId, CancellationToken ct);
+
+    /// <summary>Use tax on documents not voided, dated in the range (null = since the beginning), untracked.</summary>
+    Task<IReadOnlyList<UseTax>> ListUseTaxesAsync(DateOnly? fromDate, DateOnly toDate, CancellationToken ct);
+
+    /// <summary>The code use tax was last recorded with.</summary>
+    Task<Guid?> LastUseTaxCodeAsync(CancellationToken ct);
+
+    void Add(UseTax tax);
+    void Remove(UseTax tax);
+
     /// <summary>Tracked.</summary>
     Task<IReadOnlyList<NexusThreshold>> ListNexusThresholdsAsync(CancellationToken ct);
 
@@ -55,6 +67,7 @@ public interface ISalesTaxStore
     Task SaveChangesAsync(CancellationToken ct);
 }
 
+/// <param name="Region">The state it taxes; null keeps the agency's, blank clears it.</param>
 /// <param name="DueDays">Days after a period ends that its return is due; null keeps the agency's (20 for a new one).</param>
 public sealed record TaxAgencyDetails(string Name, FilingFrequency FilingFrequency = FilingFrequency.Quarterly, string? RegistrationNumber = null, string? Region = null, int? DueDays = null);
 
@@ -116,9 +129,11 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
         var name = TaxAgency.NormalizeName(details.Name);
         var agencies = await store.ListAgenciesAsync(ct);
         EnsureUnique(agencies.Select(a => (a.Id, a.Name)), id, name, "tax.agency_name_taken", "agency");
-        EnsureRegionFree(agencies, id, details.Region);
+        // A program from before the state was kept sends none: cleared, its tax and exemptions would go elsewhere.
+        var region = details.Region ?? agency.Region;
+        EnsureRegionFree(agencies, id, region);
         var before = Snapshot(agency);
-        agency.Update(name, details.FilingFrequency, details.RegistrationNumber, details.Region);
+        agency.Update(name, details.FilingFrequency, details.RegistrationNumber, region);
         if (details.DueDays is { } days)
             agency.SetDueDays(days);
         store.Add(Audit(AuditAction.Updated, AgencyEntity, id, before, Snapshot(agency)));
@@ -259,10 +274,12 @@ public sealed class SalesTaxService(ISalesTaxStore store, AccountService account
     /// The choices on a document's Change page: the codes that can be charged now, with the document's own code at the
     /// rates it was charged, even when that code can't be chosen any more, because a correction keeps them.
     /// </summary>
-    public async Task<IReadOnlyList<TaxCodeChoice>> ListChoicesForDocumentAsync(Guid? taxCodeId, IReadOnlyList<Domain.Sales.SalesLine> lines, CancellationToken ct = default)
+    /// <param name="on">The document's date, which the other codes are charged at (null: today).</param>
+    public async Task<IReadOnlyList<TaxCodeChoice>> ListChoicesForDocumentAsync(
+        Guid? taxCodeId, IReadOnlyList<Domain.Sales.SalesLine> lines, DateOnly? on = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        var choices = await ListChoicesAsync(ct: ct);
+        var choices = await ListChoicesAsync(on, ct);
         var charged = TaxCalculator.Charged(lines);
         if (taxCodeId is not { } id || charged.Count == 0 || await store.GetCodeAsync(id, ct) is not { } code)
             return choices;

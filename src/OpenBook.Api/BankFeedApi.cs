@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenBook.Application.Banking;
+using OpenBook.Application.Companies;
 using OpenBook.Application.Import;
 using OpenBook.Application;
 using OpenBook.Domain.Banking;
@@ -15,18 +17,24 @@ public sealed record MatchFeedItemRequest(Guid? JournalEntryId = null, IReadOnly
 
 public sealed record FeedItemResponse(
     Guid Id, Guid AccountId, DateOnly Date, decimal Amount, string? Payee, string? Reference, string? Memo, string? FitId,
-    BankFeedStatus Status, Guid? BankTransactionId, Guid? MatchedJournalEntryId, Guid? RuleId)
+    BankFeedStatus Status, Guid? BankTransactionId, Guid? MatchedJournalEntryId, Guid? RuleId, bool PossibleDuplicate)
 {
     public static FeedItemResponse From(BankFeedItem i) => new(
-        i.Id, i.AccountId, i.Date, i.Amount, i.Payee, i.Reference, i.Memo, i.FitId, i.Status, i.BankTransactionId, i.MatchedJournalEntryId, i.RuleId);
+        i.Id, i.AccountId, i.Date, i.Amount, i.Payee, i.Reference, i.Memo, i.FitId, i.Status, i.BankTransactionId, i.MatchedJournalEntryId, i.RuleId,
+        i.PossibleDuplicate);
 }
+
+/// <summary>One part of a rule's split: the account, its percentage of a line and the class.</summary>
+public sealed record BankRuleSplitResponse(Guid AccountId, decimal Percent, Guid? ClassId);
 
 public sealed record BankRuleResponse(
     Guid Id, string Name, int Priority, Guid? AccountId, RuleDirection Direction, string Contains, decimal? MinAmount, decimal? MaxAmount,
-    Guid CategoryAccountId, string? Payee, Guid? VendorId, bool AutoAdd, bool IsActive, Guid? ClassId, Guid? LocationId)
+    Guid CategoryAccountId, string? Payee, Guid? VendorId, bool AutoAdd, bool IsActive, Guid? ClassId, Guid? LocationId,
+    IReadOnlyList<BankRuleSplitResponse> Splits)
 {
     public static BankRuleResponse From(BankRule r) => new(
-        r.Id, r.Name, r.Priority, r.AccountId, r.Direction, r.Contains, r.MinAmount, r.MaxAmount, r.CategoryAccountId, r.Payee, r.VendorId, r.AutoAdd, r.IsActive, r.ClassId, r.LocationId);
+        r.Id, r.Name, r.Priority, r.AccountId, r.Direction, r.Contains, r.MinAmount, r.MaxAmount, r.CategoryAccountId, r.Payee, r.VendorId, r.AutoAdd, r.IsActive, r.ClassId, r.LocationId,
+        r.Splits.Select(s => new BankRuleSplitResponse(s.AccountId, s.Percent, s.ClassId)).ToList());
 }
 
 /// <param name="FirstNumber">For checks without a number: the first to give them, in order.</param>
@@ -52,7 +60,7 @@ internal static class BankFeedApi
             (await s.ReviewAsync(id, status ?? BankFeedStatus.Pending, ct)).Select(r => new
             {
                 Item = FeedItemResponse.From(r.Item),
-                Suggestion = r.Suggestion is { } x ? new { x.CategoryAccountId, x.Payee, x.VendorId, x.ClassId, x.LocationId, RuleId = x.Rule.Id, RuleName = x.Rule.Name } : null,
+                Suggestion = r.Suggestion is { } x ? new { x.CategoryAccountId, x.Payee, x.VendorId, x.ClassId, x.LocationId, x.Splits, RuleId = x.Rule.Id, RuleName = x.Rule.Name } : null,
                 r.Matches,
                 r.PartMatches,
             }));
@@ -64,10 +72,16 @@ internal static class BankFeedApi
             return Results.NoContent();
         });
         // A line that pays an open invoice or bill: the payment is recorded and the line matched to it in one go.
-        banking.MapGet("/accounts/{id:guid}/feed/documents", async (Guid id, IBankingStore store, FeedDocumentService s, CancellationToken ct) =>
-            await s.CandidatesAsync(id, await store.ListFeedItemsAsync(id, ct), ct));
-        banking.MapPost("/feed/{id:guid}/pay-document", async (Guid id, FeedDocumentRequest r, FeedDocumentService s, CancellationToken ct) =>
-            new { JournalEntryId = await s.ApplyAsync(id, r.Kind, r.DocumentId, ct) });
+        // Invoices for those who may write in sales, bills in purchases.
+        banking.MapGet("/accounts/{id:guid}/feed/documents", async (Guid id, ClaimsPrincipal user, IBankingStore store, FeedDocumentService s, CancellationToken ct) =>
+            (await s.CandidatesAsync(id, await store.ListFeedItemsAsync(id, ct), ct))
+                .Select(line => (Line: line.Key, Documents: line.Value.Where(d => AuthClaims.MayWrite(user, FeedDocumentService.AreaOf(d.Kind))).ToList()))
+                .Where(line => line.Documents.Count > 0)
+                .ToDictionary(line => line.Line, line => line.Documents));
+        banking.MapPost("/feed/{id:guid}/pay-document", async (Guid id, FeedDocumentRequest r, ClaimsPrincipal user, FeedDocumentService s, CancellationToken ct) =>
+            AuthClaims.MayWrite(user, FeedDocumentService.AreaOf(r.Kind))
+                ? Results.Ok(new { JournalEntryId = await s.ApplyAsync(id, r.Kind, r.DocumentId, ct) })
+                : Results.Forbid());
         banking.MapPost("/feed/{id:guid}/exclude", async (Guid id, BankFeedService s, CancellationToken ct) =>
         {
             await s.ExcludeAsync(id, ct);

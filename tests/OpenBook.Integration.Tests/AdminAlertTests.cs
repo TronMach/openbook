@@ -104,11 +104,17 @@ public sealed class AdminAlertTests : IAsyncLifetime
         var due = new[] { 7, 3, 0, -10, -14 }.Select(days => (grant, grant.AddReportDue(today.AddDays(days), $"Report {days}"))).ToList();
         var alerts = Alerts();
 
+        // Every one is in a stage nobody has heard about yet, whatever day OpenBook first runs in it.
         alerts.GrantReportsDue(due, today, Now);
-        Assert.Equal(3, alerts.Pending);
-        // The hourly job asks again within the day: nothing more.
+        Assert.Equal(5, alerts.Pending);
+        // The hourly job asks again: nothing more while each stays in its stage (the week before, or a week late).
         alerts.GrantReportsDue(due, today, Now.AddHours(1));
-        Assert.Equal(3, alerts.Pending);
+        alerts.GrantReportsDue(due, today.AddDays(2), Now.AddDays(2));
+        Assert.Equal(5, alerts.Pending);
+        // Two weeks on, all five are late by another week or more, and one alert each goes out, not one a day.
+        alerts.GrantReportsDue(due, today.AddDays(14), Now.AddDays(14));
+        alerts.GrantReportsDue(due, today.AddDays(15), Now.AddDays(15));
+        Assert.Equal(10, alerts.Pending);
     }
 
     [Theory]

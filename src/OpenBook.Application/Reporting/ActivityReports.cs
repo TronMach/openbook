@@ -97,11 +97,13 @@ public sealed class ActivityReports(
         documents.AddRange((await sales.ListReceiptsAsync(ct)).Where(r => Counts(r.Status, r.Date)).Select(r => (r.Lines, 1m)));
         documents.AddRange((await sales.ListCreditMemosAsync(null, ct)).Where(c => Counts(c.Status, c.Date)).Select(c => (c.Lines, -1m)));
 
+        // Gift cards and retainage hold money: they aren't sold.
+        var holding = await SalesTax.SalesFigures.HoldingAccountsAsync(accounts, ct);
         var byItem = new Dictionary<Guid, (decimal Quantity, decimal Amount)>();
         var discounts = 0m;
         foreach (var (lines, sign) in documents)
         {
-            foreach (var line in lines)
+            foreach (var line in lines.Where(l => SalesTax.SalesFigures.Counts(l, holding)))
             {
                 if (line.Kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount)
                     discounts += sign * line.Amount;
@@ -429,56 +431,52 @@ public sealed class ActivityReports(
             Note: "Unapplied vendor credits aren't subtracted here; the A/P aging report nets them.");
     }
 
-    /// <summary>Each payment counted on the 1099 summary, plus card payments shown but not counted (1099-K).</summary>
+    /// <summary>
+    /// Each payment counted on the 1099 summary (<see cref="PayablesService.Payments1099Async"/>, which the summary adds
+    /// up), plus card payments and not reportable parts, shown but not counted.
+    /// </summary>
     public async Task<ReportTable> Detail1099Async(int year, CancellationToken ct = default)
     {
         if (year is < 2000 or > 2100)
             throw new DomainException("report.year_invalid", "Choose a year between 2000 and 2100.");
         var company = await companies.GetRequiredCompanyAsync(ct);
         var chart = await accounts.GetChartAsync(ct);
-        var vendors = (await purchases.ListVendorsAsync(ct)).Where(v => v.Track1099).ToDictionary(v => v.Id);
+        var all = await payables.Payments1099Async(year, ct);
+        var withheldFrom = all.Where(p => p.Withheld != 0m).Select(p => p.VendorId).ToHashSet();
+        var vendors = (await purchases.ListVendorsAsync(ct)).Where(v => v.Track1099 || withheldFrom.Contains(v.Id)).ToDictionary(v => v.Id);
 
-        var payments = new List<(Guid VendorId, DateOnly Date, string Type, string? Reference, Guid AccountId, decimal Amount, ReportLink Link)>();
-        foreach (var p in (await purchases.ListPaymentsAsync(null, ct)).Where(p => p.Status == DocumentStatus.Posted && p.Date.Year == year && vendors.ContainsKey(p.VendorId)))
-            payments.Add((p.VendorId, p.Date, "Bill payment", p.Reference, p.PaymentAccountId, p.Amount, new ReportLink("bill_payment", p.Id)));
-        foreach (var e in (await purchases.ListExpensesAsync(null, ct)).Where(e => e.Status == BankTransactionStatus.Posted && e.Date.Year == year && e.VendorId is { } v && vendors.ContainsKey(v)))
-            payments.Add((e.VendorId!.Value, e.Date, "Expense", e.Reference, e.AccountId, e.Amount, new ReportLink("bank_transaction", e.Id)));
-
-        if ((await purchases.GetPurchasingSettingsAsync(ct))?.Net1099Refunds == true)
-        {
-            foreach (var r in (await purchases.ListVendorRefundsAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted && r.Date.Year == year && vendors.ContainsKey(r.VendorId)))
-                payments.Add((r.VendorId, r.Date, "Refund", r.Reference, r.DepositAccountId, -r.Amount, new ReportLink("vendor_credit", r.VendorCreditId)));
-        }
-
-        bool IsCard(Guid accountId) => chart.Find(accountId)?.Type == AccountType.CreditCard;
+        var payments = all.Where(p => vendors.ContainsKey(p.VendorId)).ToList();
         var rows = new List<ReportTableRow>();
         foreach (var group in payments.GroupBy(p => p.VendorId).OrderBy(g => vendors[g.Key].DisplayName, StringComparer.OrdinalIgnoreCase))
         {
             var vendor = vendors[group.Key];
-            rows.Add(new ReportTableRow([new ReportCell(vendor.DisplayName, new ReportLink("vendor", vendor.Id)), .. Blank(4), ReportCell.Empty], 0, ReportRowStyle.Section));
-            rows.AddRange(group.OrderBy(p => p.Date).Select(p => new ReportTableRow(
+            rows.Add(new ReportTableRow([new ReportCell(vendor.DisplayName, new ReportLink("vendor", vendor.Id)), .. Blank(7)], 0, ReportRowStyle.Section));
+            rows.AddRange(group.OrderBy(p => p.Date ?? DateOnly.MinValue).Select(p => new ReportTableRow(
             [
-                new ReportCell(p.Type, p.Link),
-                new ReportCell(p.Date),
+                new ReportCell(p.Type, new ReportLink(p.EntityType, p.EntityId)),
+                p.Date is { } on ? new ReportCell(on) : ReportCell.Empty,
                 p.Reference,
-                chart.Find(p.AccountId) is { } a ? chart.FullName(a.Id) : null,
-                new ReportCell(IsCard(p.AccountId) ? null : p.Amount),
-                new ReportCell(IsCard(p.AccountId) ? p.Amount : null),
+                p.AccountId is { } paidFrom && chart.Find(paidFrom) is { } a ? chart.FullName(a.Id) : null,
+                new ReportCell(p.ByCard ? null : p.Counted),
+                new ReportCell(p.ByCard ? p.Amount : null),
+                new ReportCell(p.NotReportable == 0m ? null : p.NotReportable),
+                new ReportCell(p.Withheld == 0m ? null : p.Withheld),
             ], 1)));
             rows.Add(new ReportTableRow(
-                [$"Total {vendor.DisplayName}", .. Blank(3), group.Where(p => !IsCard(p.AccountId)).Sum(p => p.Amount), group.Where(p => IsCard(p.AccountId)).Sum(p => p.Amount)],
+                [$"Total {vendor.DisplayName}", .. Blank(3), group.Sum(p => p.Counted), group.Where(p => p.ByCard).Sum(p => p.Amount), group.Sum(p => p.NotReportable), group.Sum(p => p.Withheld)],
                 0, ReportRowStyle.Subtotal));
         }
 
         rows.Add(new ReportTableRow(
-            ["Total", .. Blank(3), payments.Where(p => !IsCard(p.AccountId)).Sum(p => p.Amount), payments.Where(p => IsCard(p.AccountId)).Sum(p => p.Amount)],
+            ["Total", .. Blank(3), payments.Sum(p => p.Counted), payments.Where(p => p.ByCard).Sum(p => p.Amount), payments.Sum(p => p.NotReportable), payments.Sum(p => p.Withheld)],
             0, ReportRowStyle.Total));
         return new ReportTable(
             $"1099 detail for {year}",
             [company.Name, "Payments to vendors tracked for 1099s"],
-            [new("Vendor and payment"), new("Date", ColumnFormat.Date), new("Reference"), new("Paid from"), new("Counted", ColumnFormat.Money), new("Card (1099-K)", ColumnFormat.Money)],
+            [new("Vendor and payment"), new("Date", ColumnFormat.Date), new("Reference"), new("Paid from"), new("Counted", ColumnFormat.Money), new("Card (1099-K)", ColumnFormat.Money),
+                new("Not reportable", ColumnFormat.Money), new("Withheld (box 4)", ColumnFormat.Money)],
             rows,
-            Note: "Card payments are left out of the 1099 totals because the card company reports them on Form 1099-K.");
+            Note: "Card payments are left out of the 1099 totals because the card company reports them on Form 1099-K. Deposits count on the day they were paid, so the bill payments made from them don't.");
     }
 
     private static decimal? Share(decimal amount, decimal total) => total == 0m ? null : decimal.Round(amount / total * 100m, 1, MidpointRounding.AwayFromZero);
