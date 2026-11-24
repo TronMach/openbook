@@ -39,10 +39,10 @@
     }
     else if (_loaded && _status == BankFeedStatus.Pending)
     {
-        @if (_rows.Count(r => r.CategoryId is not null && r.Matches.Count == 0) is var ready and > 0)
+        @if (_rows.Count(r => r.IsReady) is var ready and > 0)
         {
             <div class="actions">
-                <button type="button" class="secondary" @onclick="AddAllReadyAsync" disabled="@_busy">Add the @ready with a category and no match</button>
+                <button type="button" class="secondary" @onclick="AddAllReadyAsync" disabled="@_busy">Add the @ready with a category and nothing to match or pay</button>
             </div>
         }
         <div class="table-wrap">
@@ -294,9 +294,19 @@
             RuleName = r.Suggestion?.Rule.Name,
             MatchEntryId = chosen.GetValueOrDefault(r.Item.Id)?.MatchEntryId ?? r.Matches.FirstOrDefault()?.JournalEntryId,
             Documents = documents.GetValueOrDefault(r.Item.Id) ?? [],
-            DocumentKey = documents.GetValueOrDefault(r.Item.Id)?.FirstOrDefault() is { } first ? $"{first.Kind}:{first.Id}" : null,
+            DocumentKey = Document(documents.GetValueOrDefault(r.Item.Id) ?? [], chosen.GetValueOrDefault(r.Item.Id)?.DocumentKey),
+            BillTo = chosen.GetValueOrDefault(r.Item.Id)?.BillTo,
+            Choosing = chosen.GetValueOrDefault(r.Item.Id)?.Choosing ?? false,
+            Chosen = [.. (chosen.GetValueOrDefault(r.Item.Id)?.Chosen ?? []).Where(id => r.Matches.Concat(r.PartMatches).Any(m => m.JournalEntryId == id))],
         }).ToList();
         _loaded = true;
+    }
+
+    /// <summary>The document chosen before, while it's still owed; else the first.</summary>
+    private static string? Document(IReadOnlyList<FeedDocument> documents, string? chosen)
+    {
+        var keys = documents.Select(d => $"{d.Kind}:{d.Id}").ToList();
+        return chosen is not null && keys.Contains(chosen) ? chosen : keys.FirstOrDefault();
     }
 
     private static AddFeedItemCommand CommandFor(Row row) => new(
@@ -360,7 +370,7 @@
     private Task AddAllReadyAsync() => RunAsync(async () =>
     {
         var added = 0;
-        foreach (var row in _rows.Where(r => r.CanAdd && r.Matches.Count == 0).ToList())
+        foreach (var row in _rows.Where(r => r.IsReady).ToList())
         {
             var command = CommandFor(row);
             await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command), _closingPassword);
@@ -424,7 +434,7 @@
         public IReadOnlyList<FeedMatch> Matches { get; } = matches;
         public IReadOnlyList<FeedMatch> PartMatches { get; } = partMatches;
         public bool Choosing { get; set; }
-        public HashSet<Guid> Chosen { get; } = [];
+        public HashSet<Guid> Chosen { get; init; } = [];
         public decimal ChosenTotal => Math.Abs(Matches.Concat(PartMatches).Where(m => Chosen.Contains(m.JournalEntryId)).Sum(m => m.Amount));
         public Guid? ClassId { get; set; }
         public Guid? LocationId { get; set; }
@@ -434,6 +444,12 @@
         public bool CanAdd => Splits is null
             ? CategoryId is not null
             : Splits.All(s => s.AccountId is not null && s.Amount > 0m) && SplitTotal == Math.Abs(Item.Amount);
+
+        /// <summary>
+        /// Can be added with the rest at once: it has what it needs, and nothing recorded or owed explains it. A line that
+        /// pays an open bill or invoice would otherwise be counted twice.
+        /// </summary>
+        public bool IsReady => CanAdd && Matches.Count == 0 && Documents.Count == 0;
 
         public Guid? CategoryId { get; set; }
         public Guid? VendorId { get; set; }
