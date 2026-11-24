@@ -262,6 +262,8 @@ html.preview-full { overflow: hidden; }
 .email-chip:hover { border-color: var(--accent); }
 .email-frames { flex: 1 1 auto; border: 0; border-radius: 0; background: #f4f5f7; }
 .email-frames[hidden] { display: none; }
+/* A field is a flex box, which would show a hidden one. */
+[data-shown-by][hidden], [data-passkey-part][hidden], [data-passkey-missing][hidden], [data-passkey-error][hidden] { display: none; }
 .email-notes { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; color: var(--muted); }
 .email-notes:empty { display: none; }
 .email-toolbar { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
