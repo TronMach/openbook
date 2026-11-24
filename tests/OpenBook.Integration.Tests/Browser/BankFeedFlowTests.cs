@@ -185,15 +185,23 @@ public sealed class BankFeedFlowTests(BrowserApp app)
         var p = page.Page;
         await p.GotoAsync($"/sales/credits/apply?customer={customer.Id}");
         var apply = p.GetByRole(AriaRole.Button, new() { Name = "Apply credit" });
-        var oldest = p.GetByRole(AriaRole.Button, new() { Name = "Apply oldest first" });
+        await Assertions.Expect(apply).ToBeEnabledAsync(new() { Timeout = Slow });
+        // The amounts come filled in, so the button is on before the circuit is up, and the first clicks may reach only the page.
         var deadline = DateTime.UtcNow.AddMilliseconds(Slow);
-        while (!await apply.IsEnabledAsync() && DateTime.UtcNow < deadline)
+        while (await apply.IsVisibleAsync() && DateTime.UtcNow < deadline)
         {
-            await oldest.ClickAsync();
-            await p.WaitForTimeoutAsync(400);
+            try
+            {
+                await apply.ClickAsync(new() { Timeout = 2000 });
+            }
+            catch (TimeoutException)
+            {
+                // Applied, so the button is off or gone.
+            }
+
+            await p.WaitForTimeoutAsync(500);
         }
 
-        await apply.ClickAsync();
         await Assertions.Expect(p.Locator(".alert.notice")).ToContainTextAsync("Credit applied", new() { Timeout = Slow });
         Assert.Equal(50m, (await Db(db => db.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoice.Id))).Balance);
         await page.AssertCleanAsync();
