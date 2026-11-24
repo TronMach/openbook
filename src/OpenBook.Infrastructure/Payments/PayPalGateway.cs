@@ -187,7 +187,12 @@ public sealed class PayPalGateway : IPaymentGateway, IPayPalWebhooks, IDisposabl
         using var message = new HttpRequestMessage(method, new Uri(PayPal.BaseUrl(keys.Sandbox), path));
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (json is not null)
-            message.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        {
+            // Bytes to PayPal, not a page for anyone: a code scan takes text content for one.
+            message.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(json));
+            message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json", "utf-8");
+        }
+
         message.Headers.Add("Prefer", "return=representation");
         // Sent again with the same id, PayPal answers with what it did the first time.
         if (requestId is not null)
