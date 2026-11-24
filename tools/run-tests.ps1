@@ -123,9 +123,34 @@ $process.PriorityClass = 'BelowNormal'
 # The build's worker processes and the test host set their own priority back to normal (the processors limit holds),
 # so every few seconds anything this run started is put back to below normal while it lasts.
 $lowered = @{}
+# Two CI runs (2026-11-19) passed every test and then never ended, until the job's time limit: something dotnet waits for
+# at the end can stay (or the process query below can hang, hence its time limit). Once every test project's results are
+# in, the run gets $EndMinutes more; then what's left of it is listed and stopped, and the results files decide.
+$EndMinutes = 3
+$projects = if ($Postgres) { 1 } else { 2 }
+$finishedAt = $null
+$stopped = $false
 while (-not $process.WaitForExit(3000)) {
+    if ($null -eq $finishedAt) {
+        $done = @(Get-ChildItem -Path $Results -Filter "${name}_*.trx" -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $started -and $_.Length -gt 0 })
+        if ($done.Count -ge $projects) { $finishedAt = Get-Date }
+    }
+    elseif (((Get-Date) - $finishedAt).TotalMinutes -ge $EndMinutes) {
+        $note = "The tests finished $EndMinutes minutes ago but dotnet test didn't end, so it was stopped; the results files decide."
+        Write-Host $note
+        if ($env:GITHUB_ACTIONS) { Write-Host "::warning::$note" }
+        try {
+            Get-CimInstance Win32_Process -OperationTimeoutSec 20 -ErrorAction Stop | Where-Object { $_.Name -match '^(dotnet|testhost|vstest|node|msedge|chrome|MSBuild)' } |
+                ForEach-Object { Write-Host "  still running: $($_.ProcessId) (parent $($_.ParentProcessId)) $($_.Name) $(if ($_.CommandLine) { $_.CommandLine.Substring(0, [Math]::Min(160, $_.CommandLine.Length)) })" }
+        }
+        catch { Write-Host "  (couldn't list what was still running: $($_.Exception.Message))" }
+        & taskkill.exe /PID $process.Id /T /F | Out-Null
+        $stopped = $true
+        $null = $process.WaitForExit(30000)
+        break
+    }
     try {
-        $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId -ErrorAction Stop)
+        $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId -OperationTimeoutSec 20 -ErrorAction Stop)
         $children = @{}
         foreach ($p in $all) { $children[[int]$p.ParentProcessId] += @([int]$p.ProcessId) }
         $queue = New-Object System.Collections.Queue
@@ -146,7 +171,7 @@ while (-not $process.WaitForExit(3000)) {
     }
     catch { }
 }
-$code = $process.ExitCode
+$code = if ($stopped) { 0 } else { $process.ExitCode }
 
 # The results files decide as well, so a failure can't be lost to how a shell reports exit codes.
 $failed = 0

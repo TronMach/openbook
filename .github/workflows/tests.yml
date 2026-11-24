@@ -3,6 +3,8 @@
 # installed on GitHub's Windows runners, with nothing waiting for the disk, reached as a login that may create
 # databases but isn't a superuser, as locally). Windows, like the release workflow, whose test
 # step has passed there on every release. Failed tests are listed on the run's summary page and their trx files kept.
+# The server edition runs on Linux, so the SQLite suite runs there too (without the browser tests, which the Windows jobs
+# run), and the Docker image is built and started on SQLite and on PostgreSQL until its health check answers.
 # The SQLite job also checks every package's licence (tools/check-licences.ps1), so a Dependabot update can't bring in
 # one OpenBook can't use.
 name: Tests
@@ -55,6 +57,64 @@ jobs:
           name: sqlite-test-results
           path: ${{ runner.temp }}/test-results/*.trx
           retention-days: 14
+
+  linux:
+    name: Linux (SQLite tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # The font the image installs, for PDF forms without a shipped font.
+      - name: Fonts
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+
+      - name: Build
+        run: dotnet build tests/OpenBook.Integration.Tests -nologo -v q && dotnet build tests/OpenBook.Domain.Tests -nologo -v q
+
+      - name: Test (Domain)
+        run: dotnet test tests/OpenBook.Domain.Tests --no-build -nologo --logger "trx;LogFilePrefix=linux" --results-directory "$RUNNER_TEMP/test-results"
+
+      - name: Test (Integration)
+        env:
+          OPENBOOK_TEST_BROWSER: '0'
+          OPENBOOK_TEST_TIMES: ${{ github.workspace }}/tools/test-times.json
+        run: dotnet test tests/OpenBook.Integration.Tests --no-build -nologo --logger "trx;LogFilePrefix=linux" --logger "console;verbosity=minimal" --results-directory "$RUNNER_TEMP/test-results" -- xUnit.MaxParallelThreads=3
+
+      - name: Keep the results of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-test-results
+          path: ${{ runner.temp }}/test-results/*.trx
+          retention-days: 14
+
+  container:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        run: docker build -t openbook:test .
+
+      - name: Start on SQLite
+        run: |
+          docker run -d --name sqlite -p 8081:8080 openbook:test
+          sh tools/wait-for-health.sh sqlite http://localhost:8081
+
+      - name: Start on PostgreSQL
+        run: |
+          password=$(openssl rand -hex 16)
+          docker network create openbook
+          docker run -d --name db --network openbook -e POSTGRES_DB=openbook -e POSTGRES_USER=openbook -e POSTGRES_PASSWORD="$password" postgres:17
+          docker run -d --name postgres --network openbook -p 8082:8080 -e ConnectionStrings__OpenBook="Host=db;Database=openbook;Username=openbook;Password=$password" --restart on-failure openbook:test
+          sh tools/wait-for-health.sh postgres http://localhost:8082
 
   postgres:
     name: PostgreSQL (integration tests)
