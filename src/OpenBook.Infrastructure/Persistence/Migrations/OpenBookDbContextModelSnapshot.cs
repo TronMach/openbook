@@ -6630,6 +6630,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsRetainage")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("LeadTimeDays")
                         .HasColumnType("INTEGER");
 

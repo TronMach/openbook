@@ -4,7 +4,7 @@ Customers can pay invoices online through Stripe, PayPal or Square, and see thei
 
 ## Setting up online payments
 
-You need an account with one of the three: [Stripe](https://stripe.com), [PayPal](https://developer.paypal.com) (a business account) or [Square](https://developer.squareup.com). An administrator then fills in **Settings → Online card payments**. Under **Take payments through**, choose the provider; the page then shows that provider's fields and its own **Setting up …, step by step** list, which ticks off each step that's done. Changing the provider removes the old provider's saved keys.
+You need an account with one of the three: [Stripe](https://stripe.com), [PayPal](https://developer.paypal.com) (a business account) or [Square](https://developer.squareup.com). An administrator then fills in **Settings → Online card payments**. Under **Take payments through**, choose the provider; the page then shows that provider's fields and its own **Setting up …, step by step** list, which ticks off each step that's done. Changing the provider first closes the links customers still hold from the old one (recording any that have been paid), then removes its saved keys. If a link can't be closed, the change waits and says why: close it in that provider's dashboard, then save again with **Change anyway** ticked.
 
 For every provider:
 

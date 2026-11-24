@@ -6637,6 +6637,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsRetainage")
+                        .HasColumnType("boolean");
+
                     b.Property<int?>("LeadTimeDays")
                         .HasColumnType("integer");
 

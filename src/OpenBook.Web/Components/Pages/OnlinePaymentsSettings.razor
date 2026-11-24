@@ -40,7 +40,14 @@
                     </label>
                 }
             </fieldset>
-            <p class="hint">Changing the provider removes the old provider's saved keys.</p>
+            <p class="hint">Changing the provider closes the links customers still hold from the old one, then removes its saved keys.</p>
+            @if (Error is not null && _settings.HasKeys)
+            {
+                <label class="check">
+                    <input type="checkbox" name="leaveLinks" value="true" />
+                    <span>Change anyway, leaving any links that can't be closed (payments made on them aren't recorded)</span>
+                </label>
+            }
 
             <div class="provider-panel provider-Stripe">
                 <details class="setup-steps" open="@(!_settings.IsReady)">

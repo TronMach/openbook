@@ -31,6 +31,9 @@ public sealed class FakeSquare : HttpMessageHandler
     public List<string> Deleted { get; } = [];
     public int LocationLookups { get; private set; }
 
+    /// <summary>Square can't be reached.</summary>
+    public bool Down { get; set; }
+
     public Order this[string orderId] => _orders[orderId];
 
     public string Pay(string orderId)
@@ -78,6 +81,8 @@ public sealed class FakeSquare : HttpMessageHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (Down)
+            throw new HttpRequestException("No route to host.");
         if (request.Headers.Authorization?.Parameter != AccessToken)
             return Answer(HttpStatusCode.Unauthorized, new { errors = new[] { new { category = "AUTHENTICATION_ERROR", code = "UNAUTHORIZED", detail = "This request could not be authorized." } } });
         if (!request.Headers.Contains("Square-Version"))

@@ -84,6 +84,8 @@ public sealed class MergeService(ISalesStore sales, IPurchasesStore purchases, I
             throw new DomainException("merge.item_stock", "Only services and non-inventory products can be merged: stock, bundles and assemblies keep their own histories.");
         if (merged.Type != kept.Type)
             throw new DomainException("merge.item_type", $"{merged.Name} and {kept.Name} are different types. Change one so they match first.");
+        if (merged.IsRetainage || kept.IsRetainage)
+            throw new DomainException("merge.item_retainage", "The item retainage is held with can't be merged: what's held on progress invoices is worked out from its lines.");
         if (!kept.IsActive)
             throw new DomainException("merge.kept_inactive", $"{kept.Name} is inactive. Make it active first, or keep the other one.");
         var all = await sales.ListItemsAsync(ct);

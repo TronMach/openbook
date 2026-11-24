@@ -127,6 +127,12 @@ public sealed class Item
 
     public decimal? PackSize { get; private set; }
 
+    /// <summary>
+    /// The item progress invoices hold retainage back with (C338): known by this, not its name, so it can be renamed. It
+    /// stays a service on its account, where the money held waits.
+    /// </summary>
+    public bool IsRetainage { get; private set; }
+
     /// <summary>The style this item is a variant of ("T-shirt" for "T-shirt - M / Red"), C329; null when it isn't one.</summary>
     public Guid? VariantOfId { get; private set; }
 
@@ -249,6 +255,8 @@ public sealed class Item
     public void Update(ItemDetails details)
     {
         ArgumentNullException.ThrowIfNull(details);
+        if (IsRetainage && (details.Type != Type || details.IncomeAccountId != IncomeAccountId))
+            throw new DomainException("item.retainage_locked", $"{Name} holds retainage back on progress invoices, so its type and account can't change. Its name can.");
         Name = NormalizeName(details.Name);
         Type = Enum.IsDefined(details.Type) ? details.Type : throw new DomainException("item.type_invalid", $"Unknown item type {details.Type}.");
         Description = Text.Optional(details.Description, 1000, "item.description_too_long", "Description");
@@ -334,6 +342,15 @@ public sealed class Item
 
     /// <summary>Only the name (a merged duplicate's "(merged)"); other details go through Update.</summary>
     public void Rename(string name) => Name = NormalizeName(name);
+
+    /// <summary>Makes this the item retainage is held with. Only a service on an other current asset account.</summary>
+    public void MarkRetainage(Account account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        if (Type != ItemType.Service || account.Id != IncomeAccountId || account.Type != AccountType.OtherCurrentAsset)
+            throw new DomainException("item.retainage_account", "Retainage is held with a service on an other current asset account.");
+        IsRetainage = true;
+    }
 
     public void Deactivate() => IsActive = false;
 

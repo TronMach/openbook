@@ -53,8 +53,13 @@ public interface IPayPalWebhooks
     Task<bool> VerifyAsync(GatewayKeys keys, string webhookId, IReadOnlyDictionary<string, string> headers, string payload, CancellationToken ct);
 }
 
+/// <param name="LeaveLinks">
+/// Change the provider (or remove its key) even though links customers hold can't be closed there first: a payment made
+/// on one afterwards isn't recorded.
+/// </param>
 public sealed record OnlinePaymentSettingsCommand(bool Enabled, Guid? DepositAccountId, string? PublicUrl, string? SecretKey = null, string? WebhookSecret = null,
-    bool ClearSecretKey = false, bool ClearWebhookSecret = false, PaymentProvider? Provider = null, string? ClientId = null, string? WebhookId = null, bool? Sandbox = null);
+    bool ClearSecretKey = false, bool ClearWebhookSecret = false, PaymentProvider? Provider = null, string? ClientId = null, string? WebhookId = null, bool? Sandbox = null,
+    bool LeaveLinks = false);
 
 /// <summary>Reads the company's provider keys.</summary>
 public static class OnlineKeys
@@ -126,6 +131,11 @@ public sealed class OnlinePaymentService(
     public async Task<OnlinePaymentSettings> GetSettingsAsync(CancellationToken ct = default) =>
         await store.GetOnlinePaymentSettingsAsync(ct) ?? OnlinePaymentSettings.Create();
 
+    /// <summary>
+    /// Saves the settings. Changing the provider, or removing its key, first closes the old provider's open links while
+    /// its keys are still here: afterwards a payment made on one could be neither heard of nor recorded. Links found
+    /// paid are recorded. Refused when one can't be closed, unless <see cref="OnlinePaymentSettingsCommand.LeaveLinks"/>.
+    /// </summary>
     public async Task<OnlinePaymentSettings> SaveSettingsAsync(OnlinePaymentSettingsCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -140,17 +150,88 @@ public sealed class OnlinePaymentService(
             settings = OnlinePaymentSettings.Create();
             store.Add(settings);
         }
+        else if (settings.HasKeys && (command.ClearSecretKey || command.Provider is { } chosen && chosen != settings.Provider))
+        {
+            // What was typed is checked first, on a copy: nothing is closed for a save that's going to be refused.
+            Apply(settings.Copy(), command);
+            if (!command.LeaveLinks && await CloseAllAsync(settings, ct) is { } failure)
+                throw new DomainException("online.links_open",
+                    $"Some payment links customers hold couldn't be closed at {settings.Provider} ({failure.TrimEnd('.')}). Close them in its dashboard, then save again with \"Change anyway\" ticked: a payment made on one afterwards isn't recorded.");
+            // Closing a link that couldn't be saved drops what was read.
+            settings = await store.GetOnlinePaymentSettingsAsync(ct) ?? settings;
+        }
 
         var before = Snapshot(settings);
+        Apply(settings, command);
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SettingsEntity, company.Id, before, Snapshot(settings)));
+        await store.SaveChangesAsync(ct);
+        return settings;
+    }
+
+    private void Apply(OnlinePaymentSettings settings, OnlinePaymentSettingsCommand command)
+    {
         var key = command.ClearSecretKey ? "" : string.IsNullOrWhiteSpace(command.SecretKey) ? null : secrets.Protect(command.SecretKey.Trim());
         var hook = command.ClearWebhookSecret ? "" : string.IsNullOrWhiteSpace(command.WebhookSecret) ? null : secrets.Protect(command.WebhookSecret.Trim());
         // A command that doesn't name the provider (an older API client) keeps PayPal's ids as they are.
         var keep = command.Provider is null && settings.Provider == PaymentProvider.PayPal;
         settings.Update(command.Enabled, command.DepositAccountId, command.PublicUrl, key, hook, command.Provider,
             keep ? settings.ClientId : command.ClientId, keep ? settings.WebhookId : command.WebhookId, command.Sandbox);
-        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SettingsEntity, company.Id, before, Snapshot(settings)));
-        await store.SaveChangesAsync(ct);
-        return settings;
+    }
+
+    /// <summary>Closes every open link of the settings' provider, recording those found paid. Returns why one couldn't be closed, if any couldn't.</summary>
+    private async Task<string?> CloseAllAsync(OnlinePaymentSettings settings, CancellationToken ct)
+    {
+        var open = (await store.ListOpenPaymentLinksAsync(ct)).Where(l => l.Provider == settings.Provider).Select(l => l.Id).ToList();
+        string? failure = null;
+        foreach (var id in open)
+        {
+            try
+            {
+                var link = await store.GetPaymentLinkAsync(id, ct) ?? throw new EntityNotFoundException("payment_link", id);
+                await CloseAsync(link, settings, ct);
+            }
+            catch (DomainException ex)
+            {
+                unit.DiscardPending();
+                failure ??= ex.Message;
+            }
+        }
+
+        return failure;
+    }
+
+    /// <summary>
+    /// Closes a link at its provider, so it can't be paid any more; one found paid is recorded instead. A payment
+    /// approved at PayPal is taken if the invoice still owes it; PayPal's links then just lapse.
+    /// </summary>
+    private async Task CloseAsync(PaymentLink link, OnlinePaymentSettings settings, CancellationToken ct)
+    {
+        if (link.Status != PaymentLinkStatus.Open)
+            return;
+        if (link.Provider == PaymentProvider.PayPal)
+        {
+            await SettleAsync(link, settings, ct);
+        }
+        else
+        {
+            var gateway = Gateway(link.Provider);
+            var keys = Keys(settings);
+            var session = await gateway.GetCheckoutAsync(keys, link.SessionId, ct);
+            if (session.Paid)
+            {
+                await RecordAsync(link, session.PaymentReference, session.AmountPaid ?? link.Amount, ct);
+                return;
+            }
+
+            if (!session.Expired)
+                await gateway.ExpireCheckoutAsync(keys, link.ProviderLinkId ?? link.SessionId, ct);
+        }
+
+        if (link.Status == PaymentLinkStatus.Open)
+        {
+            link.Expire();
+            await store.SaveChangesAsync(ct);
+        }
     }
 
     public async Task<IReadOnlyList<PaymentLink>> LinksAsync(Guid invoiceId, CancellationToken ct = default) =>
@@ -217,7 +298,7 @@ public sealed class OnlinePaymentService(
     public async Task<PaymentLink> CheckAsync(Guid linkId, CancellationToken ct = default)
     {
         var link = await store.GetPaymentLinkAsync(linkId, ct) ?? throw new EntityNotFoundException("payment_link", linkId);
-        if (link.Status != PaymentLinkStatus.Open)
+        if (link.Status == PaymentLinkStatus.Paid)
             return link;
         var settings = await GetSettingsAsync(ct);
         if (link.Provider != settings.Provider)
@@ -227,7 +308,7 @@ public sealed class OnlinePaymentService(
     }
 
     /// <summary>
-    /// Records an open link once paid and closes it once lapsed. An approved one (PayPal) is captured if its invoice
+    /// Records a link once paid and closes it once lapsed. An approved one (PayPal) is captured if it's open and its invoice
     /// still owes the link's amount; otherwise it's closed, and PayPal lets the approval lapse with nothing taken.
     /// </summary>
     private async Task SettleAsync(PaymentLink link, OnlinePaymentSettings settings, CancellationToken ct)
@@ -238,7 +319,7 @@ public sealed class OnlinePaymentService(
         if (session.Approved)
         {
             var invoice = await store.GetInvoiceAsync(link.InvoiceId, ct);
-            if (invoice is not { IsOpen: true } || invoice.Balance != link.Amount)
+            if (link.Status != PaymentLinkStatus.Open || invoice is not { IsOpen: true } || invoice.Balance != link.Amount)
             {
                 link.Expire();
                 await store.SaveChangesAsync(ct);
@@ -285,8 +366,6 @@ public sealed class OnlinePaymentService(
         if (due.Count == 0)
             return null;
 
-        var keys = Keys(settings);
-        var gateway = Gateway(settings.Provider);
         string? failure = null;
         foreach (var id in due)
         {
@@ -306,17 +385,7 @@ public sealed class OnlinePaymentService(
                     continue;
                 }
 
-                var session = await gateway.GetCheckoutAsync(keys, link.SessionId, ct);
-                if (session.Paid)
-                {
-                    await RecordAsync(link, session.PaymentReference, session.AmountPaid ?? link.Amount, ct);
-                    continue;
-                }
-
-                if (!session.Expired)
-                    await gateway.ExpireCheckoutAsync(keys, link.ProviderLinkId ?? link.SessionId, ct);
-                link.Expire();
-                await store.SaveChangesAsync(ct);
+                await CloseAsync(link, settings, ct);
             }
             catch (DomainException ex)
             {
@@ -439,7 +508,8 @@ public sealed class OnlinePaymentService(
             case "payment.created" or "payment.updated" when squareEvent is { Completed: true, OrderId: { } orderId }:
                 if (await store.FindPaymentLinkAsync(orderId, ct) is { } link)
                 {
-                    if (link.Status != PaymentLinkStatus.Open)
+                    // Money taken counts even on a link OpenBook had closed: the payment may have been under way.
+                    if (link.Status == PaymentLinkStatus.Paid)
                         return WebhookOutcome.Ignored;
                     await RecordAsync(link, squareEvent.PaymentId, squareEvent.Amount ?? link.Amount, ct);
                     return WebhookOutcome.Handled;
@@ -495,8 +565,8 @@ public sealed class OnlinePaymentService(
             case "PAYMENT.CAPTURE.COMPLETED" when paypalEvent.OrderId is { } orderId:
                 if (await store.FindPaymentLinkAsync(orderId, ct) is { } paid)
                 {
-                    // OpenBook never captures a link it closed, so a capture can only follow an open one.
-                    if (paid.Status != PaymentLinkStatus.Open)
+                    // A capture PayPal held back (an eCheck, a review) can complete days after its link lapsed.
+                    if (paid.Status == PaymentLinkStatus.Paid)
                         return WebhookOutcome.Ignored;
                     await RecordAsync(paid, paypalEvent.CaptureId, paypalEvent.Amount ?? paid.Amount, ct);
                     return WebhookOutcome.Handled;

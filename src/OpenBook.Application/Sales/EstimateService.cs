@@ -22,7 +22,6 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
     SalesAccounts salesAccounts, ItemService items)
 {
     internal const string EntityType = "estimate";
-    public const string RetainageItemName = "Retainage";
 
     public async Task<string> SuggestNumberAsync(CancellationToken ct = default) =>
         SalesAccounts.NextNumber(await store.ListEstimateNumbersAsync(ct));
@@ -128,11 +127,11 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
     public async Task<decimal> RetainageHeldAsync(Guid id, CancellationToken ct = default)
     {
         var estimate = await store.GetEstimateAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
-        var item = (await store.ListItemsAsync(ct)).FirstOrDefault(i => string.Equals(i.Name, RetainageItemName, StringComparison.OrdinalIgnoreCase));
-        if (item is null)
+        var held = (await store.ListItemsAsync(ct)).Where(i => i.IsRetainage).Select(i => i.Id).ToHashSet();
+        if (held.Count == 0)
             return 0m;
         return -(await store.ListInvoicesAsync(estimate.CustomerId, ct)).Where(i => i.EstimateId == estimate.Id && i.Status == DocumentStatus.Posted)
-            .SelectMany(i => i.Lines).Where(l => l.ItemId == item.Id).Sum(l => l.Amount);
+            .SelectMany(i => i.Lines).Where(l => l.ItemId is { } item && held.Contains(item)).Sum(l => l.Amount);
     }
 
     /// <summary>Bills the retainage held on the estimate's invoices (C338): an invoice moving it from the retainage account to receivables.</summary>
@@ -148,10 +147,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
             recurringInvoiceId: null, ct, source: new InvoiceSource(null, [], Completes: false, RetainageRelease: true));
     }
 
-    private async Task<Item> RetainageItemAsync(CancellationToken ct) =>
-        (await store.ListItemsAsync(ct)).FirstOrDefault(i => string.Equals(i.Name, RetainageItemName, StringComparison.OrdinalIgnoreCase))
-        ?? await items.CreateAsync(new ItemDetails(RetainageItemName, ItemType.Service, (await salesAccounts.GetOrCreateRetainageAsync(ct)).Id, 0m,
-            "Retainage held back on progress invoices, and released when it's billed.", Taxable: false), ct);
+    private Task<Item> RetainageItemAsync(CancellationToken ct) => items.GetOrCreateRetainageAsync(salesAccounts.GetOrCreateRetainageAsync, ct);
 
     private async Task<InvoicingProgress> ProgressAsync(Estimate estimate, CancellationToken ct)
     {

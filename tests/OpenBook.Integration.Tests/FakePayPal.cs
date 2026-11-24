@@ -62,11 +62,13 @@ public sealed class FakePayPal : HttpMessageHandler
 
     public static string Approved(string orderId) => Event("CHECKOUT.ORDER.APPROVED", new { id = orderId, status = "APPROVED" });
 
-    public string CaptureCompleted(string orderId) => Event("PAYMENT.CAPTURE.COMPLETED", new
+    public string CaptureCompleted(string orderId) => CaptureCompleted(orderId, _orders[orderId].CaptureId!, _orders[orderId].Amount);
+
+    public static string CaptureCompleted(string orderId, string captureId, string amount) => Event("PAYMENT.CAPTURE.COMPLETED", new
     {
-        id = _orders[orderId].CaptureId,
+        id = captureId,
         status = "COMPLETED",
-        amount = new { currency_code = "USD", value = _orders[orderId].Amount },
+        amount = new { currency_code = "USD", value = amount },
         supplementary_data = new { related_ids = new { order_id = orderId } },
     });
 

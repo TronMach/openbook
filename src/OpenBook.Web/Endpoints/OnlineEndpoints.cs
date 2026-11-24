@@ -171,6 +171,7 @@ public static class OnlineEndpoints
                     Enabled = form["enabled"] == "true",
                     DepositAccountId = Guid.TryParse(form["depositAccountId"], out var account) ? account : null,
                     PublicUrl = form["publicUrl"],
+                    LeaveLinks = form["leaveLinks"] == "true",
                 }, ct);
                 return "done=saved";
             })).RequireAuthorization();

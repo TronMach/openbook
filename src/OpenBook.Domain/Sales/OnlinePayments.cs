@@ -59,6 +59,9 @@ public sealed class OnlinePaymentSettings
 
     public static OnlinePaymentSettings Create() => new() { Id = Guid.CreateVersion7(), Provider = PaymentProvider.Stripe };
 
+    /// <summary>A copy to try a change on; it's never saved.</summary>
+    public OnlinePaymentSettings Copy() => (OnlinePaymentSettings)MemberwiseClone();
+
     /// <param name="protectedSecretKey">Null keeps the saved key; "" clears it. A change of provider drops the old provider's key.</param>
     /// <param name="protectedWebhookSecret">Null keeps the saved secret; "" clears it.</param>
     public void Update(bool enabled, Guid? depositAccountId, string? publicUrl, string? protectedSecretKey, string? protectedWebhookSecret,
