@@ -97,6 +97,17 @@ public static class SettlementEndpoints
         app.MapPost("/settlements/{id:guid}/post", async (IFormCollection _, Guid id, SettlementService settlements, CancellationToken ct) =>
             await Back($"/settlements/{id}", () => settlements.PostAsync(id, ct))).RequireAuthorization();
 
+        // A scan checked against its statement: ticked lines (line:n), the net typed from it, and that all of it was looked at.
+        app.MapPost("/settlements/{id:guid}/confirm", async (Guid id, IFormCollection form, SettlementService settlements, CancellationToken ct) =>
+            await Back($"/settlements/{id}", () =>
+            {
+                if (!OpenBook.Application.Import.StatementValues.TryParseAmount(form["netPaid"], out var net))
+                    throw new DomainException("settlement.net_unreadable", "Type the net paid from the statement.");
+                var lines = form.Keys.Where(k => k.StartsWith("line:", StringComparison.Ordinal) && form[k] == "true")
+                    .Select(k => int.TryParse(k[5..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 0).ToList();
+                return settlements.ConfirmAsync(id, net, lines, form["all"] == "true", ct);
+            })).RequireAuthorization();
+
         app.MapPost("/settlements/{id:guid}/void", async (Guid id, IFormCollection form, SettlementService settlements, CancellationToken ct) =>
             await Back($"/settlements/{id}", () => settlements.VoidAsync(id, form["reason"].ToString().Trim() is { Length: > 0 } r ? r : "Settlement voided", ct))).RequireAuthorization();
 

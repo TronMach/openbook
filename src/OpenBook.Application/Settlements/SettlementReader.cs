@@ -7,7 +7,8 @@ namespace OpenBook.Application.Settlements;
 
 /// <summary>A settlement as read from text; whatever the text doesn't say is null.</summary>
 public sealed record SettlementReading(
-    string? Number, DateOnly? Date, DateOnly? PeriodStart, DateOnly? PeriodEnd, decimal? NetPaid, decimal? CarriedForward, IReadOnlyList<SettlementLineDraft> Lines);
+    string? Number, DateOnly? Date, DateOnly? PeriodStart, DateOnly? PeriodEnd, decimal? NetPaid, decimal? CarriedForward, IReadOnlyList<SettlementLineDraft> Lines,
+    IReadOnlyList<SettlementTotalDraft>? StatedTotals = null, IReadOnlyList<string>? Notes = null);
 
 public sealed record SettlementReadResult(IReadOnlyList<SettlementReading> Settlements, IReadOnlyList<string> Warnings);
 

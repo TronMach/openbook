@@ -8346,6 +8346,13 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("CarrierId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("CheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CheckedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -8384,6 +8391,14 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                     b.Property<DateOnly?>("PeriodStart")
                         .HasColumnType("date");
+
+                    b.Property<string>("ReadMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ReadNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -13859,6 +13874,13 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.Property<string>("Dispatch")
                                 .HasMaxLength(20)
                                 .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Doubt")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<bool>("DoubtCleared")
+                                .HasColumnType("boolean");
 
                             b1.Property<long?>("EmptyMiles")
                                 .HasColumnType("bigint")

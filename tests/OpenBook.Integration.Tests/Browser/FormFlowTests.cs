@@ -124,6 +124,46 @@ public sealed class FormFlowTests(BrowserApp app)
     }
 
     [BrowserFact]
+    public async Task A_statements_chosen_pages_are_read_on_this_computer()
+    {
+        var tag = Tag();
+        var bank = await NewAccount($"Statement bank {tag}", AccountType.Bank);
+        await app.InScope(sp => sp.GetRequiredService<OpenBook.Application.Settlements.SettlementService>().CreateCarrierAsync(
+            new OpenBook.Domain.Settlements.CarrierDetails($"Reader {tag}", bank.Id)));
+
+        await using var page = await app.SignedInAsync();
+        var p = page.Page;
+        await p.GotoAsync("/settlements/new/statement");
+        var first = p.GetByLabel("Page 1");
+        // A file given before the circuit is up is given again, until the pages show.
+        var deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (true)
+        {
+            await p.Locator("#file").SetInputFilesAsync(new FilePayload { Name = "week.pdf", MimeType = "application/pdf", Buffer = FakeStatementPages.Pdf(SettlementCaptureTests.Statement, "PAY STUB", null) });
+            try
+            {
+                await Assertions.Expect(first).ToBeVisibleAsync(new() { Timeout = 2000 });
+                break;
+            }
+            catch (PlaywrightException) when (DateTime.UtcNow < deadline)
+            {
+            }
+        }
+
+        await p.Locator("#carrier").SelectOptionAsync(new SelectOptionValue { Label = $"Reader {tag}" });
+        var read = p.GetByRole(AriaRole.Button, new() { Name = "Read it on this computer", Exact = true });
+        await Assertions.Expect(read).ToBeDisabledAsync();
+        await first.CheckAsync();
+        await Assertions.Expect(p.GetByText("Pages chosen: 1", new() { Exact = true })).ToBeVisibleAsync(new() { Timeout = Slow });
+        await read.ClickAsync();
+        await p.WaitForURLAsync(new Regex("/settlements/[0-9a-f-]{36}$"), new() { Timeout = Slow });
+        var id = Guid.Parse(p.Url[^36..]);
+        var settlement = await Db(db => db.Settlements.AsNoTracking().AsSplitQuery().SingleAsync(s => s.Id == id));
+        Assert.Equal((11, 1406.95m, "text"), (settlement.Lines.Count, settlement.NetPaid, settlement.ReadMethod));
+        await page.AssertCleanAsync();
+    }
+
+    [BrowserFact]
     public async Task A_bill_is_entered_with_a_category_line()
     {
         var tag = Tag();

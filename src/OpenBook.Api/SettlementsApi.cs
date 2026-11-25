@@ -53,25 +53,28 @@ public sealed record SettlementRequest(
 
 public sealed record SettlementLineResponse(
     int Line, SettlementSection Section, string Code, decimal Amount, DateOnly? Date, string? Load, string? Dispatch, string? Description, Guid? AccountId, Guid? ClassId,
-    Guid? PostedAccountId, decimal? LoadedMiles, decimal? EmptyMiles, decimal? Gallons);
+    Guid? PostedAccountId, decimal? LoadedMiles, decimal? EmptyMiles, decimal? Gallons, string? Doubt, bool NeedsChecking);
 
 public sealed record SettlementResponse(
     Guid Id, Guid CarrierId, string Number, DateOnly Date, DateOnly? PeriodStart, DateOnly? PeriodEnd, SettlementStatus Status, decimal NetPaid, decimal CarriedForward,
     decimal Difference, decimal LoadedMiles, decimal EmptyMiles, decimal Gallons, Guid? JournalEntryId, string? Memo,
     IReadOnlyDictionary<SettlementSection, decimal> Totals, IReadOnlyList<SettlementLineResponse>? Lines, IReadOnlyList<SettlementDepositRequest>? Deposits,
-    IReadOnlyList<SettlementTotalRequest>? StatedTotals, IReadOnlyList<SettlementDepositRequest>? StatedBalances)
+    IReadOnlyList<SettlementTotalRequest>? StatedTotals, IReadOnlyList<SettlementDepositRequest>? StatedBalances, string? ReadMethod, string? ReadNote, string? CheckedBy)
 {
     public static SettlementResponse From(Settlement s, bool lines = false) => new(
         s.Id, s.CarrierId, s.Number, s.Date, s.PeriodStart, s.PeriodEnd, s.Status, s.NetPaid, s.CarriedForward, s.Difference, s.LoadedMiles, s.EmptyMiles, s.Gallons,
         s.JournalEntryId, s.Memo, s.Lines.GroupBy(l => l.Section).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount)),
         lines ? s.Lines.Select(l => new SettlementLineResponse(l.LineNumber, l.Section, l.Code, l.Amount, l.Date, l.Load, l.Dispatch, l.Description, l.AccountId, l.ClassId,
-            l.PostedAccountId, l.LoadedMiles, l.EmptyMiles, l.Gallons)).ToList() : null,
+            l.PostedAccountId, l.LoadedMiles, l.EmptyMiles, l.Gallons, l.Doubt, l.NeedsChecking)).ToList() : null,
         lines ? s.Deposits.Select(d => new SettlementDepositRequest(d.AccountId, d.Amount)).ToList() : null,
         lines ? s.StatedTotals.Select(t => new SettlementTotalRequest(t.Section, t.Amount)).ToList() : null,
-        lines ? s.StatedBalances.Select(b => new SettlementDepositRequest(b.AccountId, b.Amount)).ToList() : null);
+        lines ? s.StatedBalances.Select(b => new SettlementDepositRequest(b.AccountId, b.Amount)).ToList() : null, s.ReadMethod, s.ReadNote, s.CheckedBy);
 }
 
 public sealed record VoidSettlementRequest(string? Reason);
+
+/// <summary>That a person checked a settlement read by OCR against its statement (<see cref="SettlementService.ConfirmAsync"/>).</summary>
+public sealed record ConfirmSettlementRequest(decimal NetPaid, bool AllChecked, IReadOnlyList<int>? CheckedLines = null);
 
 public static class SettlementsApi
 {
@@ -115,6 +118,17 @@ public static class SettlementsApi
             await request.Body.CopyToAsync(memory, ct);
             return await s.ImportAsync(carrierId, memory.ToArray(), date ?? OpenBook.Application.CompanyTime.Today, save: dryRun != true, ct);
         });
+        // A statement (PDF or picture) as the body; only the pages given (1-4, 7) are read, sent and kept. ?with=claude or thisComputer.
+        settlements.MapPost("/read", async (HttpRequest request, Guid carrierId, string? pages, string? fileName, SettlementReadWith? with, DateOnly? date, SettlementCaptureService s, CancellationToken ct) =>
+        {
+            using var memory = new MemoryStream();
+            await request.Body.CopyToAsync(memory, ct);
+            var settlement = await s.ReadAsync(carrierId, fileName ?? "statement.pdf", memory.ToArray(), SettlementCaptureService.ParsePages(pages), with ?? SettlementReadWith.Claude,
+                date ?? OpenBook.Application.CompanyTime.Today, ct);
+            return Results.Created($"/api/settlements/{settlement.Id}", SettlementResponse.From(settlement, lines: true));
+        });
+        settlements.MapPost("/{id:guid}/confirm", async (Guid id, ConfirmSettlementRequest r, SettlementService s, CancellationToken ct) =>
+            SettlementResponse.From(await s.ConfirmAsync(id, r.NetPaid, r.CheckedLines ?? [], r.AllChecked, ct), lines: true));
         settlements.MapGet("/{id:guid}/review", async (Guid id, SettlementService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } x ? Results.Ok(await s.ReviewAsync(x, ct)) : Results.NotFound());
         settlements.MapGet("/{id:guid}/unassigned", async (Guid id, SettlementService s, CancellationToken ct) =>

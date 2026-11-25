@@ -1,0 +1,216 @@
+@page "/settlements/new/statement"
+@rendermode InteractiveServer
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Read a statement"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Read a statement"]</h1>
+        <HelpLink Chapter="33-trucking-settlements" />
+        <ActionLink Class="button secondary" Href="/settlements">@L["All settlements"]</ActionLink>
+    </div>
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _carriers.Count == 0)
+    {
+        <div class="card">
+            <p>@L["Add the carrier that pays you first."]</p>
+            <div class="actions"><ActionLink Class="button" Href="/settlements/carriers">@L["Add a carrier"]</ActionLink></div>
+        </div>
+    }
+    else if (_loaded)
+    {
+        <div class="card">
+            <p class="muted">@L["Choose the statement, then the pages that are the settlement itself. Only those pages are read and kept: statements often have other people's pay stubs and bank details further on. What's read waits for you to check; nothing is posted."]</p>
+            <div class="row">
+                <div class="field">
+                    <label for="carrier">@L["Carrier"]</label>
+                    <select id="carrier" @bind="_carrierId" disabled="@_busy">
+                        @foreach (var c in _carriers)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="date">@L["Paid on"]</label>
+                    <input id="date" type="date" @bind="_date" disabled="@_busy" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="file">@L["Statement (PDF or picture)"]</label>
+                <InputFile id="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" OnChange="LoadAsync" disabled="@_busy" />
+            </div>
+
+            @if (_pages.Count > 0)
+            {
+                <fieldset disabled="@_busy">
+                    <legend>@L["Pages of the settlement"]</legend>
+                    <div class="statement-pages">
+                        @foreach (var page in _pages)
+                        {
+                            <label class="statement-page">
+                                <span><input type="checkbox" checked="@_chosen.Contains(page.Number)" @onchange="e => Choose(page.Number, e.Value is true)" /> @L["Page {0}", page.Number]</span>
+                                @if (page.Preview is { } picture)
+                                {
+                                    <img src="data:image/png;base64,@Convert.ToBase64String(picture)" alt="" />
+                                }
+                                else if (page.Start is { } start)
+                                {
+                                    <span class="muted">@start</span>
+                                }
+                            </label>
+                        }
+                    </div>
+                </fieldset>
+                <p aria-live="polite">@(_chosen.Count == 0 ? L["No pages chosen yet."] : L["Pages chosen: {0}", SettlementCaptureService.PageList([.. _chosen.Order()])])</p>
+
+                @if (_claude)
+                {
+                    <p class="hint">@L["Read with Claude sends the pages chosen to Anthropic, with your company's API key, and nothing else."]</p>
+                    <div class="actions">
+                        <button type="button" disabled="@(_busy || _chosen.Count == 0)" @onclick="() => ReadAsync(SettlementReadWith.Claude)">@L["Read with Claude"]</button>
+                    </div>
+                }
+                else
+                {
+                    <p>@L["Reading with Claude isn't switched on. It reads scans far better; an admin can switch it on under Settings, Document reading."]</p>
+                }
+
+                <details open="@(!_claude)" style="margin-top: 1rem">
+                    <summary>@L["Read it on this computer instead (backup)"]</summary>
+                    @if (Pictures && !_ocr)
+                    {
+                        <p>@L["These pages are pictures, and no OCR program is set up on this computer to read them. Import a CSV or type the lines instead."]</p>
+                    }
+                    else
+                    {
+                        @if (Pictures)
+                        {
+                            <div class="alert error" role="note">
+                                @L["Reading a scan on this computer often makes mistakes, such as 8 for 3, a lost decimal point or a missing minus sign. Check every line against the statement. Nothing can be posted until you say you have."]
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="hint">@L["This PDF holds its own text, so the figures are read exactly; which part each belongs to can still be wrong. Nothing leaves this computer."]</p>
+                        }
+                        <div class="actions">
+                            <button type="button" class="secondary" disabled="@(_busy || _chosen.Count == 0)" @onclick="() => ReadAsync(SettlementReadWith.ThisComputer)">@L["Read it on this computer"]</button>
+                        </div>
+                    }
+                </details>
+            }
+            @if (_busy)
+            {
+                <p role="status">@_doing</p>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loaded;
+    private bool _busy;
+    private string? _doing;
+    private string? _error;
+    private bool _claude;
+    private bool _ocr;
+    private IReadOnlyList<Carrier> _carriers = [];
+    private Guid _carrierId;
+    private DateOnly _date = CompanyTime.Today;
+    private string _fileName = string.Empty;
+    private byte[] _content = [];
+    private IReadOnlyList<StatementPage> _pages = [];
+    private readonly HashSet<int> _chosen = [];
+
+    [SupplyParameterFromQuery(Name = "carrier")] private Guid? Preset { get; set; }
+
+    /// <summary>Whether a page chosen is a picture (before choosing, whether they all are).</summary>
+    private bool Pictures => _chosen.Count == 0 ? _pages.All(p => p.Start is null) : _pages.Any(p => p.Start is null && _chosen.Contains(p.Number));
+
+    protected override async Task OnInitializedAsync()
+    {
+        (_claude, _ocr, _carriers) = await Ops.RunAsync(async sp =>
+        {
+            var capture = sp.GetRequiredService<SettlementCaptureService>();
+            return (await capture.CanUseClaudeAsync(), capture.CanReadPictures, await sp.GetRequiredService<SettlementService>().ListCarriersAsync());
+        });
+        _carrierId = Preset is { } preset && _carriers.Any(c => c.Id == preset) ? preset : _carriers.FirstOrDefault()?.Id ?? Guid.Empty;
+        _loaded = true;
+    }
+
+    private void Choose(int page, bool on)
+    {
+        if (on)
+            _chosen.Add(page);
+        else
+            _chosen.Remove(page);
+    }
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        (_error, _doing) = (null, L["Opening the file…"]);
+        (_pages, _content) = ([], []);
+        _chosen.Clear();
+        try
+        {
+            const long max = OpenBook.Domain.Attachments.Attachment.MaxBytes;
+            if (e.File.Size > max)
+                throw new DomainException("settlement.file_too_large", L["Files can be at most {0} MB.", max / (1024 * 1024)]);
+            using var memory = new MemoryStream();
+            await using (var stream = e.File.OpenReadStream(max))
+                await stream.CopyToAsync(memory);
+            var content = memory.ToArray();
+            _pages = await Ops.RunAsync(sp => Task.Run(() => sp.GetRequiredService<SettlementCaptureService>().Inspect(e.File.Name, content)));
+            (_fileName, _content) = (e.File.Name, content);
+            // A picture, or a one-page file, is its only page; otherwise the person chooses.
+            if (_pages.Count == 1)
+                _chosen.Add(1);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (IOException)
+        {
+            _error = L["The file couldn't be read. Choose it again."];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReadAsync(SettlementReadWith with)
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        (_error, _doing) = (null, with == SettlementReadWith.Claude ? L["Claude is reading the pages. This can take a few minutes; leave this page open."] : L["Reading the pages on this computer…"]);
+        StateHasChanged();
+        try
+        {
+            var settlement = await Ops.RunAsync<SettlementCaptureService, Settlement>(s => s.ReadAsync(_carrierId, _fileName, _content, [.. _chosen], with, _date));
+            Navigation.NavigateTo($"/settlements/{settlement.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

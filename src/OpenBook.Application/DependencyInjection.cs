@@ -192,6 +192,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Channels.ChannelOrderService>();
         services.AddScoped<OpenBook.Application.Settlements.SettlementService>();
         services.AddScoped<OpenBook.Application.Settlements.SettlementReports>();
+        services.AddScoped<OpenBook.Application.Settlements.SettlementCaptureService>();
         services.AddScoped<OpenBook.Application.Settlements.IMileageSource, OpenBook.Application.Settlements.SettlementMileage>();
         services.AddScoped<OpenBook.Application.Nonprofit.NonprofitService>();
         services.AddScoped<OpenBook.Application.Nonprofit.NonprofitReports>();

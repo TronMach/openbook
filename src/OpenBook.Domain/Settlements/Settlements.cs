@@ -17,9 +17,10 @@ public enum SettlementStatus
 /// <param name="Code">The carrier's code; without one, the description stands in for it.</param>
 /// <param name="AccountId">This line's own account, instead of the code's.</param>
 /// <param name="ClassId">This line's own class, instead of the code's or the carrier's.</param>
+/// <param name="Doubt">Why whoever read it isn't sure of it (a scan); null when there's nothing to point out.</param>
 public sealed record SettlementLineDraft(
     SettlementSection Section, string? Code, decimal Amount, DateOnly? Date = null, string? Load = null, string? Dispatch = null, string? Description = null,
-    Guid? AccountId = null, Guid? ClassId = null, decimal? LoadedMiles = null, decimal? EmptyMiles = null, decimal? Gallons = null);
+    Guid? AccountId = null, Guid? ClassId = null, decimal? LoadedMiles = null, decimal? EmptyMiles = null, decimal? Gallons = null, string? Doubt = null);
 
 /// <summary>What the statement prints as a section's total, signed as it counts, to check the lines against.</summary>
 public sealed record SettlementTotalDraft(SettlementSection Section, decimal Amount);
@@ -39,6 +40,19 @@ public sealed record SettlementDetails(
     string Number, DateOnly Date, decimal NetPaid, IReadOnlyList<SettlementLineDraft> Lines, DateOnly? PeriodStart = null, DateOnly? PeriodEnd = null,
     decimal CarriedForward = 0m, IReadOnlyList<SettlementDepositDraft>? Deposits = null, string? Memo = null,
     IReadOnlyList<SettlementTotalDraft>? StatedTotals = null, IReadOnlyList<SettlementBalanceDraft>? StatedBalances = null);
+
+/// <summary>How a settlement's lines were read from its statement; null when they were typed or imported.</summary>
+public static class SettlementReadMethods
+{
+    /// <summary>Sent to Claude (Anthropic's API).</summary>
+    public const string Claude = "claude";
+
+    /// <summary>The words a PDF holds, read exactly.</summary>
+    public const string Text = "text";
+
+    /// <summary>A picture of a page read by the local OCR program: a backup, and often wrong.</summary>
+    public const string Ocr = "ocr";
+}
 
 public sealed class SettlementLine
 {
@@ -60,6 +74,7 @@ public sealed class SettlementLine
         LoadedMiles = Quantity(draft.LoadedMiles, lineNumber, "miles", 1);
         EmptyMiles = Quantity(draft.EmptyMiles, lineNumber, "miles", 1);
         Gallons = Quantity(draft.Gallons, lineNumber, "gallons", 3);
+        Doubt = SettlementText.Fit(draft.Doubt, 200);
     }
 
     public int LineNumber { get; private set; }
@@ -80,6 +95,23 @@ public sealed class SettlementLine
     public decimal? LoadedMiles { get; private set; }
     public decimal? EmptyMiles { get; private set; }
     public decimal? Gallons { get; private set; }
+
+    /// <summary>Why it needs checking against the statement: it came from a scan. Null when nothing was pointed out.</summary>
+    public string? Doubt { get; private set; }
+
+    /// <summary>A person looked at it beside the statement and says it's right.</summary>
+    public bool DoubtCleared { get; private set; }
+
+    public bool NeedsChecking => Doubt is not null && !DoubtCleared;
+
+    internal void ClearDoubt() => DoubtCleared = true;
+
+    /// <summary>Whether the other says the same thing, so what was doubted on it still is.</summary>
+    internal bool SaysTheSame(SettlementLine other) =>
+        (Section, Code, Amount, Load, Dispatch, Date, Description, LoadedMiles, EmptyMiles, Gallons)
+        == (other.Section, other.Code, other.Amount, other.Load, other.Dispatch, other.Date, other.Description, other.LoadedMiles, other.EmptyMiles, other.Gallons);
+
+    internal void KeepDoubt(SettlementLine from) => (Doubt, DoubtCleared) = (from.Doubt, from.DoubtCleared);
 
     /// <summary>Where it went when the settlement posted; null while it waits.</summary>
     public Guid? PostedAccountId { get; private set; }
@@ -188,6 +220,47 @@ public sealed class Settlement
 
     public void SetFileHash(string hash) => FileHash = hash;
 
+    /// <summary>One of <see cref="SettlementReadMethods"/>; null when it was typed or imported.</summary>
+    public string? ReadMethod { get; private set; }
+
+    /// <summary>What the reading left out or wasn't sure of.</summary>
+    public string? ReadNote { get; private set; }
+
+    /// <summary>Who checked a scan's lines against the statement, and when; null until then.</summary>
+    public string? CheckedBy { get; private set; }
+
+    public DateTimeOffset? CheckedAt { get; private set; }
+
+    /// <summary>Read by OCR: it posts only once a person has checked it (<see cref="Confirm"/>).</summary>
+    public bool IsScanned => ReadMethod == SettlementReadMethods.Ocr;
+
+    public void SetReading(string method, string? note) => (ReadMethod, ReadNote) = (method, SettlementText.Fit(note, 1000));
+
+    /// <summary>
+    /// A person has checked a scan against the statement: every line pointed out is right (or was changed), all the others
+    /// were looked at too, and the net is what they typed from the statement, not what the scan says.
+    /// </summary>
+    public void Confirm(decimal netPaid, IReadOnlyCollection<int> checkedLines, bool allChecked, string by, DateTimeOffset at)
+    {
+        ArgumentNullException.ThrowIfNull(checkedLines);
+        if (Status != SettlementStatus.Waiting)
+            throw new DomainException("settlement.not_waiting", "Only a settlement waiting to be posted can be checked.");
+        if (!IsScanned)
+            throw new DomainException("settlement.not_scanned", "Only a settlement read by OCR asks for this.");
+        if (_lines.Where(l => l.NeedsChecking && !checkedLines.Contains(l.LineNumber)).Select(l => l.LineNumber).Order().ToList() is { Count: > 0 } left)
+            throw new DomainException("settlement.still_doubtful", $"Check the lines still marked against the statement first: {string.Join(", ", left.Take(8))}{(left.Count > 8 ? "…" : "")}. Change any that are wrong.");
+        if (!allChecked)
+            throw new DomainException("settlement.not_all_checked", "Tick that every line was checked against the statement.");
+        var net = Cents(netPaid, "The net paid");
+        if (net < 0m)
+            throw new DomainException("settlement.net_negative", "A settlement can't pay less than nothing.");
+        if (_deposits.Count > 0 && _deposits.Sum(d => d.Amount) != net)
+            throw new DomainException("settlement.deposits_unequal", $"The deposits add up to {_deposits.Sum(d => d.Amount):N2}, but the net paid is {net:N2}.");
+        foreach (var line in _lines.Where(l => checkedLines.Contains(l.LineNumber)))
+            line.ClearDoubt();
+        (NetPaid, CheckedBy, CheckedAt) = (net, by, at.ToUniversalTime());
+    }
+
     public string? CreatedBy { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -264,6 +337,17 @@ public sealed class Settlement
         if (balances.Select(b => b.AccountId).Distinct().Count() != balances.Count)
             throw new DomainException("settlement.balance_twice", "Each account has one printed balance.");
 
+        // What was pointed out on a scanned line stays until it's checked or the line is changed; a change asks for the whole to be checked again.
+        var doubted = _lines.Where(l => l.Doubt is not null).ToList();
+        foreach (var line in newLines)
+        {
+            if (doubted.Find(line.SaysTheSame) is not { } same)
+                continue;
+            line.KeepDoubt(same);
+            doubted.Remove(same);
+        }
+
+        (CheckedBy, CheckedAt) = (null, null);
         _lines.Clear();
         _lines.AddRange(newLines);
         _deposits.Clear();
@@ -339,6 +423,8 @@ public sealed class Settlement
     {
         if (Status != SettlementStatus.Waiting)
             throw new DomainException("settlement.not_waiting", "Only a settlement waiting to be posted can be posted.");
+        if (IsScanned && CheckedBy is null)
+            throw new DomainException("settlement.not_checked", "These lines were read by OCR, which makes mistakes. Check them against the statement, and say so on this page, before posting.");
         if (Difference != 0m)
             throw new DomainException("settlement.unbalanced",
                 $"The lines add up to {Total:N2}, but the statement says {NetPaid + CarriedForward:N2} (net paid and carried forward). Check the lines against the statement before posting.");

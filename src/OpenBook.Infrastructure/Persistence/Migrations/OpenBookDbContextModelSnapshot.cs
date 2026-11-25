@@ -8339,6 +8339,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CarrierId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("CheckedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CheckedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -8376,6 +8383,14 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly?>("PeriodStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadNote")
+                        .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -13782,6 +13797,13 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<string>("Dispatch")
                                 .HasMaxLength(20)
                                 .HasColumnType("TEXT");
+
+                            b1.Property<string>("Doubt")
+                                .HasMaxLength(200)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<bool>("DoubtCleared")
+                                .HasColumnType("INTEGER");
 
                             b1.Property<long?>("EmptyMiles")
                                 .HasColumnType("INTEGER")

@@ -31,6 +31,10 @@
         {
             <div class="alert error" role="alert">@Error</div>
         }
+        @if (_settlement.ReadMethod is { } method)
+        {
+            <SettlementReadBanner Settlement="_settlement" Method="method" />
+        }
         @if (Note is not null)
         {
             <div class="alert notice" role="status">@Note</div>
@@ -45,7 +49,7 @@
                     <a href="/banking/transactions/@deposit.TransactionId">@L["Open it"]</a>
                 </div>
             }
-            @if (_settlement.Difference != 0m)
+            @if (_settlement.Difference != 0m && !(_settlement.IsScanned && _settlement.CheckedBy is null))
             {
                 <div class="alert error" role="alert">
                     @L["The lines add up to {0}, but the statement says {1} (net paid and carried forward): {2} apart. It can't be posted until they agree.",
@@ -118,7 +122,7 @@
                 {
                     <PostForm Action="@($"/settlements/{_settlement.Id}/post")" data-enhance="false" class="inline">
                         <AntiforgeryToken />
-                        <button type="submit" disabled="@(_settlement.Difference != 0m || _unassigned.Count > 0)">@L["Post settlement"]</button>
+                        <button type="submit" disabled="@(_settlement.Difference != 0m || _unassigned.Count > 0 || _settlement.IsScanned && _settlement.CheckedBy is null)">@L["Post settlement"]</button>
                     </PostForm>
                     <PostForm Action="@($"/settlements/{_settlement.Id}/dismiss")" data-enhance="false" class="inline">
                         <AntiforgeryToken />
@@ -179,6 +183,11 @@
             </div>
         }
 
+        @if (_settlement.IsScanned && _settlement.Status == SettlementStatus.Waiting)
+        {
+            <SettlementScanCheck Settlement="_settlement" />
+        }
+
         @if (_review is not null)
         {
             <SettlementReviewCard Review="_review" Chart="_chart" />
@@ -198,7 +207,7 @@
                     {
                         <tr>
                             <td>@SettlementSections.Label(line.Section)</td>
-                            <td>@line.Code</td>
+                            <td>@line.Code @if (line.NeedsChecking) { <span class="badge" title="@line.Doubt">@L["Check this"]</span> }</td>
                             <td>@(line.Date is { } date ? Labels.Date(date) : "")</td>
                             <td>@line.Load @line.Dispatch</td>
                             <td>@line.Description</td>

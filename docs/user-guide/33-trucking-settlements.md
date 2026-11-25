@@ -42,6 +42,23 @@ Under **More options**:
 - **Paid into more than one account**: when the carrier splits your deposit.
 - **Choose accounts for single lines** (under the lines): an account for one line instead of its code's.
 
+## Reading the statement from its PDF
+
+**Settlements → Read a statement.** Choose the carrier, the day you were paid and the file (a PDF or a picture), then tick the pages that are the settlement itself. **Only those pages are read and kept**: statements often have other people's pay stubs, bank details and invoices further on.
+
+- **Read with Claude** sends those pages to Anthropic with your company's API key. An admin switches it on first, under **Settings → Document reading**. It reads scans well.
+- **Read it on this computer instead (backup)** sends nothing anywhere. A PDF that holds its own text is read exactly. A scan is read by an OCR program (Tesseract), if whoever runs OpenBook has set one up, and **it makes mistakes**: an 8 for a 3, a lost decimal point or minus sign, a missing line. On one real statement it misread an amount, a code and several words; another may go worse.
+
+What's read becomes a settlement waiting to be checked, with the pages attached. Nothing is posted.
+
+**After a scan**, the settlement's page shows the pages and asks you to **check the scan against the statement**:
+
+1. Lines marked **Check this** are the ones the reading wasn't sure of, or whose part doesn't add up to its printed total. Tick each one that's right; use **Change** to fix the others.
+2. Type the **net paid** from the statement. It isn't taken from the scan, so it checks it.
+3. Tick that you **checked every line**, marked or not, and **Save the check**. Lines that add up aren't proof: two mistakes can cancel.
+
+A scan can't be posted before that, and changing a line asks for it again. Reserves by the mile, interest and balances brought forward aren't read on this computer: add them in **Other**.
+
 ## Giving codes their accounts
 
 Statements mark each line with a code (RV, UF, NP…). The first time one turns up, the settlement's page lists it under **Codes without an account** with a suggestion from its words. Check each one and **Save the accounts**: it's remembered for every settlement from that carrier. The same code can mean different things in different parts of the statement, so each part has its own.

@@ -175,6 +175,14 @@ internal static class EveryRecordKind
         await Do<SettlementService>(s => s.CreateAsync(carrier.Id, Statement("W2", "NEW")));
         var dismissed = await In<SettlementService, Settlement>(s => s.CreateAsync(carrier.Id, Statement("W3", "RV")));
         await Do<SettlementService>(s => s.SetDismissedAsync(dismissed.Id, true));
+        // One read from a scan, with a line it wasn't sure of, waiting for someone to check it.
+        await Do<ISettlementStore>(async store =>
+        {
+            var scan = Settlement.Create(carrier.Id, Statement("W4", "RV") with { NetPaid = 0m, Lines = [new(SettlementSection.Revenue, "RV", 1000m, d, "L1", Doubt: SettlementTextParser.GuessedAmount)] }, DateTimeOffset.UtcNow, "owner");
+            scan.SetReading(SettlementReadMethods.Ocr, "Made for the accessibility checks.");
+            store.Add(scan);
+            await store.SaveChangesAsync(default);
+        });
 
         // Nonprofit: a gift, a pledge, a grant, a release of restricted money.
         var donor = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Pat Donor", Email: "pat@donor.test")));

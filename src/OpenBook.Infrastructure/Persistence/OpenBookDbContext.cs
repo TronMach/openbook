@@ -1350,6 +1350,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 l.Property(x => x.EmptyMiles).HasColumnName("EmptyMilesTenThousandths").HasConversion(NullableTenThousandths);
                 l.Property(x => x.Gallons).HasColumnName("GallonsTenThousandths").HasConversion(NullableTenThousandths);
                 l.Ignore(x => x.Miles);
+                l.Property(x => x.Doubt).HasMaxLength(200);
+                l.Ignore(x => x.NeedsChecking);
                 l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
                 l.HasOne<Account>().WithMany().HasForeignKey(x => x.PostedAccountId).OnDelete(DeleteBehavior.Restrict);
             });
@@ -1365,6 +1367,10 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             });
             b.Navigation(s => s.Deposits).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.Property(s => s.FileHash).HasMaxLength(64);
+            b.Property(s => s.ReadMethod).HasMaxLength(20);
+            b.Property(s => s.ReadNote).HasMaxLength(1000);
+            b.Property(s => s.CheckedBy).HasMaxLength(100);
+            b.Ignore(s => s.IsScanned);
             b.OwnsMany(s => s.StatedTotals, t =>
             {
                 t.ToTable("SettlementStatedTotals");

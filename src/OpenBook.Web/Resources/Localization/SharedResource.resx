@@ -389,6 +389,9 @@
   <data name="Amount" xml:space="preserve">
     <value>Amount</value>
   </data>
+  <data name="Amount as printed" xml:space="preserve">
+    <value>Amount as printed</value>
+  </data>
   <data name="Amount counted" xml:space="preserve">
     <value>Amount counted</value>
   </data>
@@ -818,6 +821,18 @@
   <data name="check the books against a bank statement" xml:space="preserve">
     <value>check the books against a bank statement</value>
   </data>
+  <data name="Check the scan against the statement" xml:space="preserve">
+    <value>Check the scan against the statement</value>
+  </data>
+  <data name="Check this" xml:space="preserve">
+    <value>Check this</value>
+  </data>
+  <data name="Checked against the statement by {0} on {1}." xml:space="preserve">
+    <value>Checked against the statement by {0} on {1}.</value>
+  </data>
+  <data name="Checked. Changing a line asks for it to be checked again." xml:space="preserve">
+    <value>Checked. Changing a line asks for it to be checked again.</value>
+  </data>
   <data name="Choose" xml:space="preserve">
     <value>Choose</value>
   </data>
@@ -829,6 +844,9 @@
   </data>
   <data name="Choose an account for each code below before posting." xml:space="preserve">
     <value>Choose an account for each code below before posting.</value>
+  </data>
+  <data name="Choose the statement, then the pages that are the settlement itself. Only those pages are read and kept: statements often have other people's pay stubs and bank details further on. What's read waits for you to check; nothing is posted." xml:space="preserve">
+    <value>Choose the statement, then the pages that are the settlement itself. Only those pages are read and kept: statements often have other people's pay stubs and bank details further on. What's read waits for you to check; nothing is posted.</value>
   </data>
   <data name="Choose what the dashboard shows" xml:space="preserve">
     <value>Choose what the dashboard shows</value>
@@ -856,6 +874,9 @@
   </data>
   <data name="Classes, locations and tags" xml:space="preserve">
     <value>Classes, locations and tags</value>
+  </data>
+  <data name="Claude is reading the pages. This can take a few minutes; leave this page open." xml:space="preserve">
+    <value>Claude is reading the pages. This can take a few minutes; leave this page open.</value>
   </data>
   <data name="Claude reads documents" xml:space="preserve">
     <value>Claude reads documents</value>
@@ -1340,6 +1361,9 @@
   <data name="Expect last year's takings again" xml:space="preserve">
     <value>Expect last year's takings again</value>
   </data>
+  <data name="Expect mistakes: an 8 for a 3, a lost decimal point or minus sign, a line missing. Check every line against the statement. Lines adding up isn't proof, since two mistakes can cancel." xml:space="preserve">
+    <value>Expect mistakes: an 8 for a 3, a lost decimal point or minus sign, a line missing. Check every line against the statement. Lines adding up isn't proof, since two mistakes can cancel.</value>
+  </data>
   <data name="Expense account" xml:space="preserve">
     <value>Expense account</value>
   </data>
@@ -1378,6 +1402,9 @@
   </data>
   <data name="Figures in the books that don't agree" xml:space="preserve">
     <value>Figures in the books that don't agree</value>
+  </data>
+  <data name="Files can be at most {0} MB." xml:space="preserve">
+    <value>Files can be at most {0} MB.</value>
   </data>
   <data name="Fill-ins:" xml:space="preserve">
     <value>Fill-ins:</value>
@@ -1652,6 +1679,9 @@
   <data name="How the document inbox reads scanned bills and orders: on this server, or by Claude for better results." xml:space="preserve">
     <value>How the document inbox reads scanned bills and orders: on this server, or by Claude for better results.</value>
   </data>
+  <data name="I checked every line against the statement, and none is missing" xml:space="preserve">
+    <value>I checked every line against the statement, and none is missing</value>
+  </data>
   <data name="I've checked: these documents are still right, import them anyway" xml:space="preserve">
     <value>I've checked: these documents are still right, import them anyway</value>
   </data>
@@ -1759,6 +1789,9 @@
   </data>
   <data name="It only changes the menu, the home page and which reports come first; everything stays available." xml:space="preserve">
     <value>It only changes the menu, the home page and which reports come first; everything stays available.</value>
+  </data>
+  <data name="It's right" xml:space="preserve">
+    <value>It's right</value>
   </data>
   <data name="Item" xml:space="preserve">
     <value>Item</value>
@@ -1894,6 +1927,9 @@
   </data>
   <data name="Line" xml:space="preserve">
     <value>Line</value>
+  </data>
+  <data name="Line {0} is right" xml:space="preserve">
+    <value>Line {0} is right</value>
   </data>
   <data name="Lines" xml:space="preserve">
     <value>Lines</value>
@@ -2093,6 +2129,9 @@
   <data name="Net paid into {0}" xml:space="preserve">
     <value>Net paid into {0}</value>
   </data>
+  <data name="Net paid, typed from the statement" xml:space="preserve">
+    <value>Net paid, typed from the statement</value>
+  </data>
   <data name="Net payout" xml:space="preserve">
     <value>Net payout</value>
   </data>
@@ -2209,6 +2248,9 @@
   </data>
   <data name="No names match." xml:space="preserve">
     <value>No names match.</value>
+  </data>
+  <data name="No pages chosen yet." xml:space="preserve">
+    <value>No pages chosen yet.</value>
   </data>
   <data name="No passkey was made. Try again." xml:space="preserve">
     <value>No passkey was made. Try again.</value>
@@ -2329,6 +2371,9 @@
   </data>
   <data name="Not set up: no sales tax is charged" xml:space="preserve">
     <value>Not set up: no sales tax is charged</value>
+  </data>
+  <data name="Not taken from the scan, so it's a check on it." xml:space="preserve">
+    <value>Not taken from the scan, so it's a check on it.</value>
   </data>
   <data name="Not yet" xml:space="preserve">
     <value>Not yet</value>
@@ -2504,6 +2549,9 @@
   <data name="Opening balances" xml:space="preserve">
     <value>Opening balances</value>
   </data>
+  <data name="Opening the file…" xml:space="preserve">
+    <value>Opening the file…</value>
+  </data>
   <data name="Operating statement" xml:space="preserve">
     <value>Operating statement</value>
   </data>
@@ -2572,6 +2620,15 @@
   </data>
   <data name="Page not found" xml:space="preserve">
     <value>Page not found</value>
+  </data>
+  <data name="Page {0}" xml:space="preserve">
+    <value>Page {0}</value>
+  </data>
+  <data name="Pages chosen: {0}" xml:space="preserve">
+    <value>Pages chosen: {0}</value>
+  </data>
+  <data name="Pages of the settlement" xml:space="preserve">
+    <value>Pages of the settlement</value>
   </data>
   <data name="Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open." xml:space="preserve">
     <value>Pages outside every area (home, search, your own password and API keys) are open to everyone who can sign in; search only shows what a set can open.</value>
@@ -2882,11 +2939,44 @@
   <data name="Ratios" xml:space="preserve">
     <value>Ratios</value>
   </data>
+  <data name="Read a statement" xml:space="preserve">
+    <value>Read a statement</value>
+  </data>
   <data name="Read about this in the user guide" xml:space="preserve">
     <value>Read about this in the user guide</value>
   </data>
+  <data name="Read by Claude from the pages you chose. Check it against the statement before posting." xml:space="preserve">
+    <value>Read by Claude from the pages you chose. Check it against the statement before posting.</value>
+  </data>
+  <data name="Read from a scan by OCR on this computer." xml:space="preserve">
+    <value>Read from a scan by OCR on this computer.</value>
+  </data>
+  <data name="Read from the PDF's own text. Check it against the statement before posting." xml:space="preserve">
+    <value>Read from the PDF's own text. Check it against the statement before posting.</value>
+  </data>
+  <data name="Read it on this computer" xml:space="preserve">
+    <value>Read it on this computer</value>
+  </data>
+  <data name="Read it on this computer instead (backup)" xml:space="preserve">
+    <value>Read it on this computer instead (backup)</value>
+  </data>
   <data name="Read on this server" xml:space="preserve">
     <value>Read on this server</value>
+  </data>
+  <data name="Read with Claude" xml:space="preserve">
+    <value>Read with Claude</value>
+  </data>
+  <data name="Read with Claude sends the pages chosen to Anthropic, with your company's API key, and nothing else." xml:space="preserve">
+    <value>Read with Claude sends the pages chosen to Anthropic, with your company's API key, and nothing else.</value>
+  </data>
+  <data name="Reading a scan on this computer often makes mistakes, such as 8 for 3, a lost decimal point or a missing minus sign. Check every line against the statement. Nothing can be posted until you say you have." xml:space="preserve">
+    <value>Reading a scan on this computer often makes mistakes, such as 8 for 3, a lost decimal point or a missing minus sign. Check every line against the statement. Nothing can be posted until you say you have.</value>
+  </data>
+  <data name="Reading the pages on this computer…" xml:space="preserve">
+    <value>Reading the pages on this computer…</value>
+  </data>
+  <data name="Reading with Claude isn't switched on. It reads scans far better; an admin can switch it on under Settings, Document reading." xml:space="preserve">
+    <value>Reading with Claude isn't switched on. It reads scans far better; an admin can switch it on under Settings, Document reading.</value>
   </data>
   <data name="Reading {0}" xml:space="preserve">
     <value>Reading {0}</value>
@@ -3275,6 +3365,9 @@
   <data name="Save the accounts" xml:space="preserve">
     <value>Save the accounts</value>
   </data>
+  <data name="Save the check" xml:space="preserve">
+    <value>Save the check</value>
+  </data>
   <data name="Save the codes" xml:space="preserve">
     <value>Save the codes</value>
   </data>
@@ -3572,6 +3665,9 @@
   <data name="Statement" xml:space="preserve">
     <value>Statement</value>
   </data>
+  <data name="Statement (PDF or picture)" xml:space="preserve">
+    <value>Statement (PDF or picture)</value>
+  </data>
   <data name="Statement number" xml:space="preserve">
     <value>Statement number</value>
   </data>
@@ -3752,6 +3848,9 @@
   <data name="The fee in parts, each billed when the work reaches it. Together they can be at most the fee." xml:space="preserve">
     <value>The fee in parts, each billed when the work reaches it. Together they can be at most the fee.</value>
   </data>
+  <data name="The file couldn't be read. Choose it again." xml:space="preserve">
+    <value>The file couldn't be read. Choose it again.</value>
+  </data>
   <data name="The first month of your financial year: where reports' year and the year-end close start. Changing it doesn't alter any transactions." xml:space="preserve">
     <value>The first month of your financial year: where reports' year and the year-end close start. Changing it doesn't alter any transactions.</value>
   </data>
@@ -3791,6 +3890,9 @@
   <data name="The notes, files and custom fields on the record itself." xml:space="preserve">
     <value>The notes, files and custom fields on the record itself.</value>
   </data>
+  <data name="The pages it was read from" xml:space="preserve">
+    <value>The pages it was read from</value>
+  </data>
   <data name="The per-mile rate for each year (the IRS business rates are filled in)." xml:space="preserve">
     <value>The per-mile rate for each year (the IRS business rates are filled in).</value>
   </data>
@@ -3817,6 +3919,9 @@
   </data>
   <data name="The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept." xml:space="preserve">
     <value>The simple view has a short menu by task and a home page that walks through each step; the full view has every area. Each person can switch with the link at the top of the page, and their choice is kept.</value>
+  </data>
+  <data name="The statement" xml:space="preserve">
+    <value>The statement</value>
   </data>
   <data name="The test text has gone. If it doesn't arrive within a minute, look it up in the Twilio Console under Monitor, Messaging." xml:space="preserve">
     <value>The test text has gone. If it doesn't arrive within a minute, look it up in the Twilio Console under Monitor, Messaging.</value>
@@ -3875,8 +3980,14 @@
   <data name="There's nothing to pay yet: these come off what's earned next." xml:space="preserve">
     <value>There's nothing to pay yet: these come off what's earned next.</value>
   </data>
+  <data name="These lines need a careful look. Tick each one that's right, and use Change above to fix the ones that aren't." xml:space="preserve">
+    <value>These lines need a careful look. Tick each one that's right, and use Change above to fix the ones that aren't.</value>
+  </data>
   <data name="These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again." xml:space="preserve">
     <value>These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again.</value>
+  </data>
+  <data name="These pages are pictures, and no OCR program is set up on this computer to read them. Import a CSV or type the lines instead." xml:space="preserve">
+    <value>These pages are pictures, and no OCR program is set up on this computer to read them. Import a CSV or type the lines instead.</value>
   </data>
   <data name="They agreed to get texts at this number" xml:space="preserve">
     <value>They agreed to get texts at this number</value>
@@ -3910,6 +4021,9 @@
   </data>
   <data name="This list goes away once every step is done. The user guide's first chapters walk through each one." xml:space="preserve">
     <value>This list goes away once every step is done. The user guide's first chapters walk through each one.</value>
+  </data>
+  <data name="This PDF holds its own text, so the figures are read exactly; which part each belongs to can still be wrong. Nothing leaves this computer." xml:space="preserve">
+    <value>This PDF holds its own text, so the figures are read exactly; which part each belongs to can still be wrong. Nothing leaves this computer.</value>
   </data>
   <data name="This recurring bill is inactive, so no bills are entered from it." xml:space="preserve">
     <value>This recurring bill is inactive, so no bills are entered from it.</value>

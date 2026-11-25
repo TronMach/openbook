@@ -195,7 +195,13 @@
                                         }
                                     </select>
                                 </td>
-                                <td><input class="settlement-code" aria-label="@L["Code"]" maxlength="@CarrierCode.MaxCodeLength" @bind="line.Code" /></td>
+                                <td>
+                                    <input class="settlement-code" aria-label="@L["Code"]" maxlength="@CarrierCode.MaxCodeLength" @bind="line.Code" />
+                                    @if (line.Doubt is { } doubt)
+                                    {
+                                        <span class="badge" title="@doubt">@L["Check this"]</span>
+                                    }
+                                </td>
                                 <td><input type="date" aria-label="@L["Date"]" @bind="line.Date" /></td>
                                 <td><input class="settlement-load" aria-label="@L["Load"]" maxlength="40" @bind="line.Load" /></td>
                                 <td><input class="settlement-code" aria-label="@L["Dispatch"]" maxlength="20" @bind="line.Dispatch" /></td>
@@ -344,7 +350,7 @@
         _lines = [.. s.Lines.Select(l => new LineModel
         {
             Section = l.Section, Code = l.Code, Date = l.Date, Load = l.Load, Dispatch = l.Dispatch, Description = l.Description, Amount = SettlementSections.Printed(l.Section, l.Amount),
-            LoadedMiles = l.LoadedMiles, EmptyMiles = l.EmptyMiles, Gallons = l.Gallons, AccountId = l.AccountId, ClassId = l.ClassId,
+            LoadedMiles = l.LoadedMiles, EmptyMiles = l.EmptyMiles, Gallons = l.Gallons, AccountId = l.AccountId, ClassId = l.ClassId, Doubt = l.NeedsChecking ? l.Doubt : null,
         })];
         for (var i = 0; i < s.Deposits.Count; i++)
         {
@@ -477,6 +483,9 @@
         public decimal? Gallons { get; set; }
         public Guid? AccountId { get; set; }
         public Guid? ClassId { get; set; }
+
+        /// <summary>What a scan wasn't sure of; shown until the settlement is saved, which keeps it on lines left as they were.</summary>
+        public string? Doubt { get; set; }
 
         internal bool IsBlank => string.IsNullOrWhiteSpace(Code) && string.IsNullOrWhiteSpace(Description) && (Amount ?? 0m) == 0m;
 

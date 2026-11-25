@@ -126,6 +126,8 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Channels.IChannelClient, Channels.ChannelClient>();
         services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));
         services.TryAddSingleton<OpenBook.Application.Documents.IClaudeDocumentReader, Documents.ClaudeDocumentReader>();
+        services.TryAddSingleton<OpenBook.Application.Settlements.IClaudeSettlementReader, Documents.ClaudeSettlementReader>();
+        services.TryAddSingleton<OpenBook.Application.Settlements.IStatementPages>(new Documents.StatementPages(null));
         services.TryAddSingleton<OpenBook.Application.Documents.IMailboxReader, Documents.ImapMailboxReader>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();

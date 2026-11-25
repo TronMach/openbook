@@ -54,6 +54,16 @@ public sealed class FuzzTests
         new("csv", b => Csv.Parse(Text(b)), Seeds.Statement, Seeds.Wave, Seeds.Etsy),
         new("statement-values", b => StatementLine(Text(b)), Seeds.Statement),
         new("settlement-csv", b => OpenBook.Application.Settlements.SettlementReader.Read(Text(b), new DateOnly(2026, 3, 13)), Seeds.Settlement),
+        new("settlement-words", b => OpenBook.Application.Settlements.SettlementTextParser.Parse(
+            new OpenBook.Application.Settlements.StatementWords(true, StatementPages.ReadTsv(Text(b), 1)), new DateOnly(2026, 3, 13)), Seeds.OcrWords),
+        new("settlement-answer", b => ClaudeSettlementReader.Parse(Text(b)), Seeds.SettlementAnswer),
+        new("settlement-pdf", b =>
+        {
+            var pages = new StatementPages(null);
+            var count = pages.Inspect("a.pdf", b).Count;
+            if (count > 0)
+                pages.WordsAsync("a.pdf", pages.Extract("a.pdf", b, [1]), [1], default).GetAwaiter().GetResult();
+        }) { Binary = [FakeStatementPages.Pdf("REVENUE SECTION\nRV 100 1 0309 TRIP 1.00", null)] },
         new("channel-amazon", b => ChannelReports.Read(ChannelKind.Amazon, Text(b)), Seeds.Amazon),
         new("channel-ebay", b => ChannelReports.Read(ChannelKind.Ebay, Text(b)), Seeds.Ebay),
         new("channel-etsy", b => ChannelReports.Read(ChannelKind.Etsy, Text(b)), Seeds.Etsy),

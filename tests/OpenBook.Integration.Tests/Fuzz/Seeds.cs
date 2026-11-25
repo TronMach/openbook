@@ -258,6 +258,17 @@ internal static class Seeds
         "W10,,,Deductions,UD,,,,Fuel discount,50.00-,,,\n" +
         "W11,2026-03-13,-30.00,Other,BF,1103,,,Balance forward,(30.00),,,\n";
 
+    public const string OcrWords =
+        "level\tpage\tblock\tpar\tline\tword\tleft\ttop\twidth\theight\tconf\ttext\n" +
+        "5\t1\t1\t1\t1\t1\t300\t10\t80\t16\t96\tREVENUE\n5\t1\t1\t1\t1\t2\t390\t10\t80\t16\t96\tSECTION\n" +
+        "5\t1\t1\t1\t2\t1\t40\t40\t60\t16\t95\tDATE\n5\t1\t1\t1\t2\t2\t120\t40\t60\t16\t95\tLOADED\n5\t1\t1\t1\t2\t3\t640\t40\t60\t16\t95\tOWNER\n" +
+        "5\t1\t1\t1\t3\t1\t10\t70\t20\t16\t91.2\tRV\n5\t1\t1\t1\t3\t2\t40\t70\t70\t16\t88\t88000O6\n5\t1\t1\t1\t3\t3\t120\t70\t40\t16\t90\tO713\n" +
+        "5\t1\t1\t1\t3\t4\t170\t70\t40\t16\t90\tTRIP\n5\t1\t1\t1\t3\t5\t620\t70\t80\t16\t70\t1,2S4.56\n5\t1\t1\t1\t3\t6\t704\t70\t8\t16\t70\t-\n" +
+        "5\t1\t1\t1\t4\t1\t300\t100\t60\t16\t96\tTOTAL\n5\t1\t1\t1\t4\t2\t640\t100\t60\t16\t96\t1,234.56\n";
+
+    public const string SettlementAnswer =
+        """{"number":"A1","pay_date":"2026-03-13","period_start":null,"period_end":null,"net_paid":905.00,"carried_forward":-1.5,"totals":{"revenue":1000.00,"reimbursement":null,"deduction":90.00,"wage":null},"lines":[{"section":"revenue","code":"RV","date":"2026-03-09","load":"1","dispatch":"01","description":"Trip","amount":1000.00,"loaded_miles":500,"empty_miles":20.5,"gallons":null},{"section":"deduction","code":"UD","date":null,"load":null,"dispatch":null,"description":"Discount","amount":-10.00,"loaded_miles":null,"empty_miles":null,"gallons":3.25}]}""";
+
     public const string EtsyOrders =
         "Sale Date,Item Name,Quantity,Price,Discount Amount,Order Shipping,Order Sales Tax,Ship State,Order ID,SKU\n" +
         "03/02/26,Blue mug,1,40.00,0,6.00,3.20,NY,900,MUG-1\n" +

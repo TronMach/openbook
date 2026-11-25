@@ -245,6 +245,22 @@ public sealed class SettlementService(
             [.. settlement.Lines.Where(l => (l.PostedAccountId ?? Settlement.AccountFor(carrier, l)) is { } id && loans.Contains(id))]);
     }
 
+    /// <summary>
+    /// For a settlement read by OCR: a person has checked every line against the statement, and typed the net it says was
+    /// paid. Posting waits for this; changing the lines afterwards asks for it again.
+    /// </summary>
+    /// <param name="checkedLines">The lines marked for checking that were looked at and are right.</param>
+    public async Task<Settlement> ConfirmAsync(Guid id, decimal netPaid, IReadOnlyCollection<int> checkedLines, bool allChecked, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(checkedLines);
+        var (settlement, carrier) = await LoadAsync(id, ct);
+        var before = Snapshot(settlement, carrier);
+        settlement.Confirm(netPaid, checkedLines, allChecked, user.Actor, clock.UtcNow);
+        store.Add(Audit(AuditAction.Updated, SettlementEntity, settlement.Id, before, Snapshot(settlement, carrier)));
+        await store.SaveChangesAsync(ct);
+        return settlement;
+    }
+
     /// <summary>The accounts whose balances were checked on the carrier's latest settlement, to ask for again.</summary>
     public async Task<IReadOnlyList<Guid>> CheckedAccountsAsync(Guid carrierId, CancellationToken ct = default) =>
         (await store.ListSettlementsAsync(carrierId, ct)).FirstOrDefault(s => s.Status != SettlementStatus.Dismissed && s.StatedBalances.Count > 0)?.StatedBalances.Select(b => b.AccountId).ToList() ?? [];
@@ -478,7 +494,7 @@ public sealed class SettlementService(
         c.Codes.ToDictionary(x => $"{SettlementSections.Label(x.Section)} {x.Code}", x => chart.Find(x.AccountId) is null ? x.AccountId.ToString() : chart.FullName(x.AccountId)));
 
     /// <summary>Codes and amounts only: descriptions can name people.</summary>
-    private static string Snapshot(Settlement s, Carrier c) => JsonSerializer.Serialize(new
+    internal static string Snapshot(Settlement s, Carrier c) => JsonSerializer.Serialize(new
     {
         Carrier = c.Name,
         s.Number,
@@ -492,6 +508,8 @@ public sealed class SettlementService(
         Deposits = s.Deposits.Select(d => $"{d.AccountId}: {d.Amount:0.00}").ToList(),
         StatedTotals = s.StatedTotals.Select(t => $"{SettlementSections.Label(t.Section)}: {t.Amount:0.00}").ToList(),
         StatedBalances = s.StatedBalances.Select(b => $"{b.AccountId}: {b.Amount:0.00}").ToList(),
+        s.ReadMethod,
+        s.CheckedBy,
         s.JournalEntryId,
     });
 }
