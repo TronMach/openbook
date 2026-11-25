@@ -129,7 +129,8 @@ public static class WindowsServerCommands
         var folder = new DirectoryInfo(installation.DataFolder!);
         if (!folder.Exists)
         {
-            folder.Create();
+            // Closed from the first moment, so nobody can leave anything in it before the service's account exists.
+            folder.Create(Permissions(service: null));
         }
         else if (folder.Attributes.HasFlag(FileAttributes.ReparsePoint) || !TrustedOwner(folder))
         {
@@ -144,25 +145,26 @@ public static class WindowsServerCommands
         folder.GetAccessControl(AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier)) is SecurityIdentifier owner
         && (owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid) || owner.IsWellKnown(WellKnownSidType.LocalSystemSid));
 
+    [SupportedOSPlatform("windows")]
+    private static void Protect(DirectoryInfo folder) =>
+        folder.SetAccessControl(Permissions(new NTAccount("NT SERVICE", WindowsServerHost.ServiceName).Translate(typeof(SecurityIdentifier))));
+
     /// <summary>Only administrators, Windows and the service: the books, their backups and the keys to stored secrets are in it.</summary>
     [SupportedOSPlatform("windows")]
-    private static void Protect(DirectoryInfo folder)
+    private static DirectorySecurity Permissions(IdentityReference? service)
     {
         var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
         var security = new DirectorySecurity();
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         security.SetOwner(administrators);
-        foreach (var (who, rights) in new (IdentityReference, FileSystemRights)[]
-        {
-            (administrators, FileSystemRights.FullControl),
-            (new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl),
-            (new NTAccount("NT SERVICE", WindowsServerHost.ServiceName).Translate(typeof(SecurityIdentifier)), FileSystemRights.Modify),
-        })
-        {
-            security.AddAccessRule(new FileSystemAccessRule(who, rights, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-        }
+        Allow(administrators, FileSystemRights.FullControl);
+        Allow(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl);
+        if (service is not null)
+            Allow(service, FileSystemRights.Modify);
+        return security;
 
-        folder.SetAccessControl(security);
+        void Allow(IdentityReference who, FileSystemRights rights) => security.AddAccessRule(new FileSystemAccessRule(
+            who, rights, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
     }
 
     /// <summary>The settings file is written once, with the port; after that it's whoever runs the server's to change.</summary>
