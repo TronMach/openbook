@@ -54,6 +54,11 @@
             <dt>Vendor</dt><dd><a href="/vendors/@_payment.VendorId">@_vendor?.DisplayName</a></dd>
             <dt>Date</dt><dd>@Labels.Date(_payment.Date)</dd>
             <dt>Amount</dt><dd>@Labels.Amount(_payment.Amount)</dd>
+            @if (_payment.Withheld > 0m)
+            {
+                <dt>Backup withholding</dt><dd>@Labels.Amount(_payment.Withheld), <ActionLink Href="@($"/reports/backup-withholding?year={_payment.Date.Year}")">owed to the IRS</ActionLink></dd>
+                <dt>Paid to the vendor</dt><dd>@Labels.Amount(_payment.NetPaid)</dd>
+            }
             <dt>Paid from</dt><dd><a href="/banking/@_payment.PaymentAccountId">@_chart.FullName(_payment.PaymentAccountId)</a></dd>
             @if (_payment.Reference is not null) { <dt>Check / reference</dt><dd>@_payment.Reference</dd> }
             @if (_payment.Memo is not null) { <dt>Memo</dt><dd>@_payment.Memo</dd> }

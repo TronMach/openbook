@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OpenBook.Application.Attachments;
 using OpenBook.Domain.Attachments;
 using OpenBook.Domain.Auditing;
+using OpenBook.Domain.Common;
 
 namespace OpenBook.Infrastructure.Persistence;
 
@@ -41,8 +42,8 @@ internal sealed class EfAttachmentStore(OpenBookDbContext db) : IAttachmentStore
         "bank_transaction" => db.BankTransactions.AnyAsync(x => x.Id == entityId, ct),
         "journal_entry" => db.JournalEntries.AnyAsync(x => x.Id == entityId, ct),
         "reconciliation" => db.Reconciliations.AnyAsync(x => x.Id == entityId, ct),
-        "customer" => db.Customers.AnyAsync(x => x.Id == entityId, ct),
-        "vendor" => db.Vendors.AnyAsync(x => x.Id == entityId, ct),
+        "customer" => NotErasedAsync(db.Customers.Where(x => x.Id == entityId).Select(x => x.ErasedAt), ct),
+        "vendor" => NotErasedAsync(db.Vendors.Where(x => x.Id == entityId).Select(x => x.ErasedAt), ct),
         "inventory_adjustment" => db.InventoryAdjustments.AnyAsync(x => x.Id == entityId, ct),
         "assembly_build" => db.AssemblyBuilds.AnyAsync(x => x.Id == entityId, ct),
         "landed_cost" => db.LandedCosts.AnyAsync(x => x.Id == entityId, ct),
@@ -57,6 +58,15 @@ internal sealed class EfAttachmentStore(OpenBookDbContext db) : IAttachmentStore
         "item" => db.Items.AnyAsync(x => x.Id == entityId, ct),
         _ => Task.FromResult(false),
     };
+
+    /// <summary>A customer or vendor whose details were erased takes no new files, notes or field values.</summary>
+    private static async Task<bool> NotErasedAsync(IQueryable<DateTimeOffset?> erasedAt, CancellationToken ct)
+    {
+        var found = await erasedAt.ToListAsync(ct);
+        if (found.Any(at => at is not null))
+            throw new DomainException("record.erased", "The personal details of this record were erased, so nothing can be added to it.");
+        return found.Count > 0;
+    }
 
     public void Add(Attachment attachment, AttachmentContent content)
     {

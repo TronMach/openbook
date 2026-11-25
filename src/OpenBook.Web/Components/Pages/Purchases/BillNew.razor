@@ -47,6 +47,7 @@
                 <LocationField Options="_segments" @bind-Value="_locationId" />
                 <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
             </MoreOptions>
+            <UseTaxField Model="_useTax" Date="_date" Taxable="Taxable" />
             <MoreOptions HasContent="@(_customers.Count > 0)" Open="@(_billTo is not null)" Title="Billing a customer">
                 <BillableToField Customers="_customers" @bind-Value="_billTo" @bind-Markup="_billMarkup" />
             </MoreOptions>
@@ -79,18 +80,19 @@
 
 @code {
     // What's typed so far, kept in the tab in case the connection goes.
-    internal sealed record Draft(Guid? VendorId, string? Reference, DateOnly Date, DateOnly DueDate, string? Memo, Guid? LocationId, Guid? WarehouseId, List<BillLineModel> Lines);
+    internal sealed record Draft(Guid? VendorId, string? Reference, DateOnly Date, DateOnly DueDate, string? Memo, Guid? LocationId, Guid? WarehouseId, List<BillLineModel> Lines, UseTaxModel? UseTax = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => _vendor is null && !_lines.Any(BillLineModel.IsFilledLine) ? null
-        : new Draft(_vendor?.Id, _reference, _date, _dueDate, _memo, _locationId, _warehouseId, _lines);
+        : new Draft(_vendor?.Id, _reference, _date, _dueDate, _memo, _locationId, _warehouseId, _lines, _useTax);
 
     private void RestoreAsync(Draft draft)
     {
         _vendor = _vendors.FirstOrDefault(v => v.Id == draft.VendorId);
         (_reference, _date, _dueDate, _memo, _locationId, _warehouseId) = (draft.Reference, draft.Date, draft.DueDate, draft.Memo, draft.LocationId, draft.WarehouseId);
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+        _useTax = draft.UseTax ?? new();
     }
 
     private IReadOnlyList<Vendor> _vendors = [];
@@ -107,6 +109,8 @@
     private DateOnly _dueDate = CompanyTime.Today;
     private string? _memo;
     private List<BillLineModel> _lines = [new()];
+    private UseTaxModel _useTax = new();
+    private decimal Taxable => UseTaxService.TaxableAmount(_chart, _lines.Select(l => (l.AccountId ?? Guid.Empty, l.ItemId, l.Amount ?? 0m)));
     private bool _loaded;
     private bool _busy;
     private string? _error;
@@ -208,7 +212,7 @@
                 return;
             }
 
-            var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo, LocationId: _locationId, WarehouseId: _warehouseId);
+            var command = new CreateBillCommand(_vendor!.Id, _date, lines, _dueDate, _reference, _memo, LocationId: _locationId, WarehouseId: _warehouseId, UseTax: _useTax.ForNew);
             var (billTo, markup) = (_billTo, _billMarkup);
             var bill = await Ops.RunAsync(async sp =>
             {

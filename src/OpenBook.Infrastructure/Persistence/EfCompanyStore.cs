@@ -83,6 +83,15 @@ internal sealed class EfCompanyStore(OpenBookDbContext db) : ICompanyStore
     public async Task<IReadOnlyList<string?>> ListSessionDevicesAsync(Guid userId, CancellationToken ct) =>
         await db.UserSessions.AsNoTracking().Where(s => s.UserId == userId).Select(s => s.Device).Distinct().ToListAsync(ct);
 
+    public async Task<IReadOnlyList<UserPasskey>> ListPasskeysAsync(Guid userId, CancellationToken ct) =>
+        await db.UserPasskeys.Where(p => p.UserId == userId).ToListAsync(ct);
+
+    public Task<UserPasskey?> FindPasskeyAsync(string credentialId, CancellationToken ct) => db.UserPasskeys.SingleOrDefaultAsync(p => p.CredentialId == credentialId, ct);
+
+    public void Add(UserPasskey passkey) => db.UserPasskeys.Add(passkey);
+
+    public void Remove(UserPasskey passkey) => db.UserPasskeys.Remove(passkey);
+
     public void Add(UserSession session) => db.UserSessions.Add(session);
 
     public Task<SignInSettings?> GetSignInSettingsAsync(CancellationToken ct) => db.SignInSettings.SingleOrDefaultAsync(ct);

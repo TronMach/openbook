@@ -56,6 +56,7 @@ public static class WebSecurity
         services.AddScoped<ICurrentUser, WebCurrentUser>();
         services.AddScoped<Operations>();
         services.AddSingleton<TwoFactorCookies>();
+        services.AddSingleton<PasskeyChallenges>();
         services.AddSingleton<OpenBook.Application.Forms.ISecretProtector, DataProtectionSecretProtector>();
         services.AddSingleton<SetupState>();
         services.AddHostedService<JobLeaseRelease>();
@@ -63,6 +64,7 @@ public static class WebSecurity
         services.AddHostedService<ScheduledBackupHostedService>();
         services.AddHostedService<ScheduledEmailHostedService>();
         services.AddHostedService<BankSyncHostedService>();
+        services.AddHostedService<BillsMailboxHostedService>();
         services.AddHostedService<ChannelSyncHostedService>();
         services.AddHostedService<WebhookDispatchService>();
         services.AddHostedService<AuditChainLinkingService>();

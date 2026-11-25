@@ -138,7 +138,7 @@
                             <tr class="@(r.IsActive ? null : "inactive")">
                                 <td><a href="/sales-tax/rates/@r.Id">@r.Name</a></td>
                                 <td>@_agencyNames.GetValueOrDefault(r.AgencyId)</td>
-                                <td class="num">@Labels.Percent(r.Percent)</td>
+                                <td class="num">@Labels.Percent(r.PercentOn(_today))</td>
                             </tr>
                         }
                     </tbody>
@@ -169,7 +169,7 @@
                             <tr class="@(c.IsActive ? null : "inactive")">
                                 <td><a href="/sales-tax/codes/@c.Id">@c.Name</a></td>
                                 <td>@string.Join(" + ", rates.Select(r => r.Name))</td>
-                                <td class="num">@Labels.Percent(rates.Sum(r => r.Percent))</td>
+                                <td class="num">@Labels.Percent(rates.Sum(r => r.PercentOn(_today)))</td>
                             </tr>
                         }
                     </tbody>

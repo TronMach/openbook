@@ -14,8 +14,11 @@ OpenBook contacts other services only in the cases below. Apart from the update 
 | What | Where it goes | What is sent |
 |---|---|---|
 | Sending email (invoices, statements, reminders, alerts) | The mail server you enter in **Settings → Email** | The messages and their attachments |
-| Bank connections | SimpleFIN Bridge, with the access you give it | Requests for your accounts' balances and transactions |
-| Online payments and the customer portal | Stripe, with your Stripe key | The amounts and descriptions of what customers pay; your customers enter their card details on Stripe's own page, never in OpenBook |
+| Microsoft's sign-in for a mailbox | Microsoft (login.microsoftonline.com), with your own app registration | The sign-in exchange, and requests for access tokens |
+| Bills by email | The mail server you enter in **Settings → Bills by email** | The sign-in, and requests for new messages in that mailbox; nothing in it is changed |
+| Sending text messages | Twilio, with your Twilio account | The customer's mobile number and the message |
+| Bank connections | SimpleFIN Bridge or Plaid, with the access you give them | Requests for your accounts' balances and transactions |
+| Online payments, online giving and the customer portal | Stripe, PayPal or Square, with your own keys | The amounts and descriptions of what customers pay, and their email address; your customers enter their card details on the provider's own page, never in OpenBook (a card saved for automatic payment stays at Stripe; OpenBook keeps its last four digits and expiry) |
 | Sales channels | Stripe or Shopify, with your key or access token | Requests for payouts and their transactions |
 | Reading documents and receipts with Claude | Anthropic, with your API key | The file being read (a PDF, image or text) |
 | Google Fonts for printed forms | Google Fonts | The name of the font family someone adds; the font is downloaded once |
@@ -30,7 +33,7 @@ The **support file** (Settings → System → Download support file) is a ZIP of
 
 ## Your customers, vendors and donors
 
-The people in your books are your business's to look after. OpenBook gives you the tools for it: exports of everything, an audit trail, roles and permission sets, and encryption of the company file and of stored keys. What you collect, how long you keep it and what you tell people about it is up to you as the business that keeps the books.
+The people in your books are your business's to look after. OpenBook gives you the tools for it: exports of everything, an audit trail, roles and permission sets, and encryption of the company file and of stored keys. When someone asks for their data to be erased, an admin can erase a customer's, donor's or vendor's personal details, which keeps the documents tax law makes you keep, the audit log, and backups made before. What you collect, how long you keep it and what you tell people about it is up to you as the business that keeps the books.
 
 ## The project
 

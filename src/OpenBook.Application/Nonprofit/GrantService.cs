@@ -78,7 +78,8 @@ public sealed record GrantReminders(IReadOnlyList<(Grant Grant, GrantReportDue R
 
 public sealed class GrantService(
     INonprofitStore store, ISalesStore sales, AccountService accounts, SegmentService segments, ReportLedger ledger, PostingEngine engine,
-    IUnitOfWork unitOfWork, OpenBook.Application.Companies.ICompanyStore companies, Forms.IFormRenderer renderer, Forms.FormDesignService designs, IClock clock, ICurrentUser user)
+    IUnitOfWork unitOfWork, OpenBook.Application.Companies.ICompanyStore companies, Forms.IFormRenderer renderer, Forms.FormDesignService designs, NonprofitService nonprofit,
+    IClock clock, ICurrentUser user)
 {
     public const string EntityType = "grant";
     public const string GrantsIncomeName = "Grants";
@@ -94,7 +95,7 @@ public sealed class GrantService(
     /// A grant's spending is what's on its class and subclasses: two grants sharing that in the same dates would each
     /// count the same spending, and a conditional one would recognize income twice for it.
     /// </summary>
-    private async Task EnsureOwnClassAsync(Guid classId, DateOnly startsOn, DateOnly endsOn, CancellationToken ct)
+    private async Task EnsureOwnClassAsync(Guid classId, DateOnly startsOn, DateOnly endsOn, CancellationToken ct, Guid? except = null)
     {
         var parents = (await segments.ListAsync(SegmentKind.Class, includeInactive: true, ct)).ToDictionary(s => s.Segment.Id, s => s.Segment.ParentId);
         HashSet<Guid> WithParents(Guid id)
@@ -108,7 +109,7 @@ public sealed class GrantService(
         }
 
         var mine = WithParents(classId);
-        var other = (await store.ListGrantsAsync(ct)).FirstOrDefault(g => g.Status != GrantStatus.Voided && g.StartsOn <= endsOn && startsOn <= g.EndsOn
+        var other = (await store.ListGrantsAsync(ct)).FirstOrDefault(g => g.Id != except && g.Status != GrantStatus.Voided && g.StartsOn <= endsOn && startsOn <= g.EndsOn
             && (mine.Contains(g.ClassId) || WithParents(g.ClassId).Contains(classId)));
         if (other is not null)
             throw new DomainException("grant.class_shared", $"{other.Name} uses that class (or one it belongs to) in the same dates, and both would count the same spending. Give each grant its own class or subclass.");
@@ -180,8 +181,15 @@ public sealed class GrantService(
         return grant;
     }
 
-    public Task<Grant> UpdateAsync(Guid id, GrantDetailsCommand command, CancellationToken ct = default) =>
-        ChangeAsync(id, AuditAction.Updated, g => g.Update(command.Name, command.Reference, command.StartsOn, command.EndsOn, command.Terms), ct);
+    public async Task<Grant> UpdateAsync(Guid id, GrantDetailsCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var grant = await RequiredAsync(id, ct, activeOnly: false);
+        // A longer period (a no-cost extension) can run into the next grant on the same class.
+        if (grant.Status != GrantStatus.Voided && (command.StartsOn < grant.StartsOn || command.EndsOn > grant.EndsOn))
+            await EnsureOwnClassAsync(grant.ClassId, command.StartsOn, command.EndsOn, ct, except: grant.Id);
+        return await ChangeAsync(id, AuditAction.Updated, g => g.Update(command.Name, command.Reference, command.StartsOn, command.EndsOn, command.Terms), ct);
+    }
 
     /// <summary>Replaces the budget: an amount per expense account, each optionally in one of the funder's categories.</summary>
     public async Task<Grant> SetBudgetAsync(Guid id, IReadOnlyList<GrantBudgetDraft> lines, CancellationToken ct = default)
@@ -209,7 +217,7 @@ public sealed class GrantService(
         var grant = await RequiredAsync(id, ct);
         var before = Snapshot(grant);
         // What the funder pays for the spending: its share, with the indirect costs its rate allows (C076).
-        grant.AddRequest(date, from, to, amount ?? Math.Min(grant.ClaimableOn(position.Spent), grant.NetAward) - Math.Max(grant.Requested, grant.Received));
+        grant.AddRequest(date, from, to, amount ?? Math.Min(grant.ClaimableOn(position.Spent), grant.NetAward) - grant.PaidOrAsked);
         store.Add(Audit(AuditAction.Updated, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
@@ -248,7 +256,7 @@ public sealed class GrantService(
             rows,
             [
                 $"Amount requested: {company.HomeCurrency.Code} {request.Amount:N2}.",
-                $"Award {grant.Amount:N2}. Spent to date {atEnd.Spent:N2}. Received to date {grant.ReceivedBy(request.Date):N2}.",
+                $"Award {grant.NetAward:N2}. Spent to date {atEnd.Spent:N2}. Received to date {grant.ReceivedBy(request.Date):N2}.",
             ],
             null,
             null,
@@ -281,7 +289,7 @@ public sealed class GrantService(
 
         // On the cash basis the money is the income: this clears the receivable and advance the entry above credited.
         Guid? cashEntry = null;
-        if (grant.CashOnReceipt)
+        if (grant.EarnsCashOnReceipt)
         {
             var cash = new List<JournalLineDraft>();
             if (amount - advance > 0m)
@@ -367,6 +375,8 @@ public sealed class GrantService(
     {
         var grant = await RequiredAsync(id, ct, activeOnly: false);
         var recognition = grant.Recognitions.FirstOrDefault(r => r.LineNumber == line) ?? throw new EntityNotFoundException("grant_recognition", id);
+        if (!recognition.IsVoided)
+            await nonprofit.EnsureNotReleasedAsync(grant.IncomeAccountId, grant.ClassId, recognition.Amount, recognition.Date, ct);
         var before = Snapshot(grant);
         grant.VoidRecognition(line); // checks before the reversal is staged
         await engine.StageVoidAsync(recognition.EntryId, reason, fromDocument: true, ct);
@@ -384,6 +394,8 @@ public sealed class GrantService(
         var grant = await RequiredAsync(id, ct, activeOnly: false);
         if (amount <= 0m || amount > grant.Reducible)
             grant.AddReduction(date, amount, null, reason); // throws with the reason
+        if (!grant.Conditional)
+            await nonprofit.EnsureNotReleasedAsync(grant.IncomeAccountId, grant.ClassId, amount, date, ct);
         var before = Snapshot(grant);
         Guid? entryId = null;
         if (!grant.Conditional)
@@ -391,7 +403,7 @@ public sealed class GrantService(
             var memo = $"Grant reduced: {grant.Name}";
             entryId = (await engine.StageAsync(new PostJournalEntryCommand(date,
                 [JournalLineDraft.Dr(grant.IncomeAccountId, amount, memo, grant.ClassId), JournalLineDraft.Cr(grant.ReceivableAccountId, amount, memo, grant.ClassId)],
-                memo, Grant.AdjustmentSource, grant.Id, grant.CashOnReceipt ? EntryBasis.AccrualOnly : EntryBasis.Both), ct)).Id;
+                memo, Grant.AdjustmentSource, grant.Id, grant.EarnsCashOnReceipt ? EntryBasis.AccrualOnly : EntryBasis.Both), ct)).Id;
         }
         else
         {
@@ -420,7 +432,7 @@ public sealed class GrantService(
             var memo = $"Grant increased: {grant.Name}";
             entryId = (await engine.StageAsync(new PostJournalEntryCommand(date,
                 [JournalLineDraft.Dr(grant.ReceivableAccountId, amount, memo, grant.ClassId), JournalLineDraft.Cr(grant.IncomeAccountId, amount, memo, grant.ClassId)],
-                memo, Grant.AdjustmentSource, grant.Id, grant.CashOnReceipt ? EntryBasis.AccrualOnly : EntryBasis.Both), ct)).Id;
+                memo, Grant.AdjustmentSource, grant.Id, grant.EarnsCashOnReceipt ? EntryBasis.AccrualOnly : EntryBasis.Both), ct)).Id;
         }
         else
         {
@@ -464,6 +476,9 @@ public sealed class GrantService(
     public async Task<Grant> VoidAdjustmentAsync(Guid id, int line, string reason, CancellationToken ct = default)
     {
         var grant = await RequiredAsync(id, ct, activeOnly: false);
+        // An increase's income comes back out; putting a reduction back adds it.
+        if (grant.Adjustments.FirstOrDefault(a => a.LineNumber == line) is { IsVoided: false, EntryId: not null, Kind: GrantAdjustmentKind.Increase } increase)
+            await nonprofit.EnsureNotReleasedAsync(grant.IncomeAccountId, grant.ClassId, increase.Amount, increase.Date, ct);
         var before = Snapshot(grant);
         var adjustment = grant.VoidAdjustment(line); // checks before any reversal is staged
         if (adjustment.EntryId is { } entry)
@@ -514,9 +529,15 @@ public sealed class GrantService(
     {
         var grant = await RequiredAsync(id, ct, activeOnly: false);
         var before = Snapshot(grant);
+        var standing = grant.Status != GrantStatus.Voided;
         grant.Void();
         if (grant.AwardEntryId is { } entry)
+        {
+            if (standing)
+                await nonprofit.EnsureNotReleasedAsync(grant.IncomeAccountId, grant.ClassId, grant.Amount, grant.AwardedOn, ct);
             await engine.StageVoidAsync(entry, reason, fromDocument: true, ct);
+        }
+
         store.Add(Audit(AuditAction.Voided, grant, before));
         await store.SaveChangesAsync(ct);
         return grant;
@@ -643,5 +664,7 @@ public sealed class GrantService(
         Requests = g.Requests.Select(r => new { r.LineNumber, r.Date, r.Amount, r.ReceiptLine, r.IsVoided }),
         Receipts = g.Receipts.Select(r => new { r.Date, r.Amount, r.AdvancePart, r.IsVoided }),
         Recognitions = g.Recognitions.Select(r => new { r.Date, r.Amount, r.AdvancePart, r.IsVoided }),
+        Adjustments = g.Adjustments.Select(a => new { Kind = a.Kind.ToString(), a.Date, a.Amount, a.Reason, a.IsVoided }),
+        ReportsDue = g.ReportsDue.Select(r => new { r.DueOn, r.Title, r.SentOn }),
     });
 }

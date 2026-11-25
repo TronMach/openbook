@@ -40,7 +40,18 @@
                     </label>
                 }
             </fieldset>
-            <p class="hint">Changing the provider removes the old provider's saved keys.</p>
+            <p class="hint">Changing the provider closes the links customers still hold from the old one, and gifts under way, then removes its saved keys. Switching its sandbox closes them too.</p>
+            @if (_cards > 0)
+            {
+                <p class="hint">@(_cards == 1 ? "1 customer pays" : $"{_cards} customers pay") automatically with a card saved at Stripe. Changing the provider or removing its key ends that: they have to agree again.</p>
+            }
+            @if (Error is not null && _settings.HasKeys)
+            {
+                <label class="check">
+                    <input type="checkbox" name="leaveLinks" value="true" />
+                    <span>Change anyway, leaving any links that can't be closed (payments made on them aren't recorded)</span>
+                </label>
+            }
 
             <div class="provider-panel provider-Stripe">
                 <details class="setup-steps" open="@(!_settings.IsReady)">
@@ -54,8 +65,8 @@
                         <li class="@(SavedHook(PaymentProvider.Stripe) ? "done" : null)">
                             So payments are recorded the moment they're made: in Stripe under <strong>Developers → Webhooks</strong>, add an endpoint at
                             <code>@(Address)/hooks/stripe</code> for the events <code>checkout.session.completed</code>,
-                            <code>checkout.session.async_payment_succeeded</code>, <code>checkout.session.expired</code>, <code>charge.refunded</code> and
-                            <code>charge.dispute.created</code>, then copy its <strong>signing secret</strong> (<code>whsec_…</code>) into the form. Without it,
+                            <code>checkout.session.async_payment_succeeded</code>, <code>checkout.session.expired</code>, <code>payment_intent.succeeded</code>,
+                            <code>payment_intent.payment_failed</code>, <code>charge.refunded</code> and <code>charge.dispute.created</code>, then copy its <strong>signing secret</strong> (<code>whsec_…</code>) into the form. Without it,
                             payments are recorded when the customer comes back to the thank-you page or when you check the link on the invoice.
                         </li>
                         <li>Tick <strong>Take payments online</strong> and save. Invoices then get a "Pay now" link, in their emails too.</li>
@@ -208,6 +219,7 @@
     private ChartOfAccounts _chart = new([]);
     private List<Account> _deposit = [];
     private string _here = "";
+    private int _cards;
 
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private string? Done { get; set; }
@@ -224,5 +236,6 @@
         _chart = await AccountService.GetChartAsync();
         _deposit = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset).ToList();
         _here = Navigation.BaseUri.TrimEnd('/');
+        _cards = await Online.CountCardsAsync();
     }
 }

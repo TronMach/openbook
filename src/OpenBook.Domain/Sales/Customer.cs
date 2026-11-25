@@ -129,6 +129,7 @@ public sealed class Customer
     {
         if (!Enum.IsDefined(pdf))
             throw new DomainException("customer.email_pdf_invalid", "Choose how documents are sent from the list.");
+        EnsureNotErased();
         EmailCc = Domain.Email.EmailAddresses.Normalize(cc, "Copy to", 5);
         EmailPdf = pdf;
     }
@@ -147,6 +148,7 @@ public sealed class Customer
     /// <param name="region">The company's region, for a number typed without its country code.</param>
     public void SetTextPreferences(string? number, bool allowed, DateTimeOffset now, string? region)
     {
+        EnsureNotErased();
         var clean = Domain.Email.PhoneNumbers.Normalize(number, "Mobile number", region);
         if (allowed && clean is null)
             throw new DomainException("customer.text_number_required", "Enter the mobile number they agreed to get texts at.");
@@ -160,6 +162,37 @@ public sealed class Customer
 
     public bool IsActive { get; private set; }
 
+    /// <summary>When the personal details were erased at the person's request; null on every other record. There's no way back.</summary>
+    public DateTimeOffset? ErasedAt { get; private set; }
+
+    /// <summary>
+    /// Takes away everything that says who this is, leaving the record for the documents that stay: the name becomes
+    /// <paramref name="placeholder"/>. The exemption certificate stays, because it's what untaxed sales are shown by.
+    /// </summary>
+    public void Erase(string placeholder, DateTimeOffset now)
+    {
+        EnsureNotErased();
+        if (IsActive)
+            throw new DomainException("customer.erase_active", "Make the customer inactive first.");
+        DisplayName = NormalizeName(placeholder);
+        CompanyName = null;
+        Email = null;
+        EmailCc = null;
+        Phone = null;
+        TextNumber = null;
+        TextsAllowedAt = null;
+        BillingAddress = null;
+        ShippingAddress = null;
+        Notes = null;
+        ErasedAt = now.ToUniversalTime();
+    }
+
+    private void EnsureNotErased()
+    {
+        if (ErasedAt is not null)
+            throw new DomainException("customer.erased", "This customer's personal details were erased, so the record can't be changed or used again.");
+    }
+
     public static Customer Create(CustomerDetails details)
     {
         var customer = new Customer { Id = Guid.CreateVersion7(), IsActive = true };
@@ -170,6 +203,7 @@ public sealed class Customer
     public void Update(CustomerDetails details)
     {
         ArgumentNullException.ThrowIfNull(details);
+        EnsureNotErased();
         DisplayName = NormalizeName(details.DisplayName);
         CompanyName = Text.Optional(details.CompanyName, 200, "customer.company_too_long", "Company name");
         Email = Text.Optional(details.Email, 320, "customer.email_too_long", "Email");
@@ -230,11 +264,19 @@ public sealed class Customer
     public bool ExemptionExpired(DateOnly today) => ExemptionCertificate is not null && ExemptionExpiresOn is { } e && e < today;
 
     /// <summary>Only the name (a merged duplicate's "(merged)"); other details go through Update.</summary>
-    public void Rename(string name) => DisplayName = NormalizeName(name);
+    public void Rename(string name)
+    {
+        EnsureNotErased();
+        DisplayName = NormalizeName(name);
+    }
 
     public void Deactivate() => IsActive = false;
 
-    public void Reactivate() => IsActive = true;
+    public void Reactivate()
+    {
+        EnsureNotErased();
+        IsActive = true;
+    }
 
     public DateOnly DueDateFor(DateOnly invoiceDate) => invoiceDate.AddDays(PaymentTermsDays);
 

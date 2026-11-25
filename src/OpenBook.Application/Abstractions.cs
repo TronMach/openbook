@@ -33,7 +33,8 @@ public sealed record LedgerLine(
     Guid? SourceId,
     EntryBasis Basis,
     Guid? ClassId = null,
-    Guid? LocationId = null);
+    Guid? LocationId = null,
+    int LineNumber = 0);
 
 /// <summary>An entry without its lines, sealed or not: what the books check compares documents with.</summary>
 public sealed record EntryHeader(

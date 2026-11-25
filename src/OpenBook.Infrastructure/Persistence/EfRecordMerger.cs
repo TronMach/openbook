@@ -88,7 +88,30 @@ internal sealed class EfRecordMerger(OpenBookDbContext db) : IRecordMerger
             moved += await RunAsync(transaction, mapping, $"UPDATE {Quote(table)} SET {Quote(column)} = @to WHERE {Quote(column)} = @from", mergeId, keepId, table, ct);
         }
 
+        if (kind == MergeKind.Customer)
+            await SettleDonorsAsync(transaction, mergeId, keepId, ct);
         return moved;
+    }
+
+    /// <summary>
+    /// What merging two donors leaves behind (C622): a soft credit that's now the payer's own goes; a household whose
+    /// primary member was merged into a donor of another household sends statements to a member it still has, and goes when
+    /// it has none.
+    /// </summary>
+    private async Task SettleDonorsAsync(DbTransaction transaction, Guid mergeId, Guid keepId, CancellationToken ct)
+    {
+        var mapping = db.Model.FindEntityType(typeof(Customer))!.FindProperty(nameof(Customer.Id))!.GetRelationalTypeMapping();
+        await RunAsync(transaction, mapping, """
+            DELETE FROM "SoftCredits" WHERE "DonorId" = @to AND @from <> @to
+            AND EXISTS (SELECT 1 FROM "Donations" d WHERE d."Id" = "SoftCredits"."DonationId" AND d."DonorId" = @to)
+            """, mergeId, keepId, "SoftCredits", ct);
+        const string adrift = """
+            "PrimaryDonorId" = @to AND @from <> @to
+            AND NOT EXISTS (SELECT 1 FROM "HouseholdMembers" m WHERE m."HouseholdId" = "Households"."Id" AND m."DonorId" = @to)
+            """;
+        const string members = """(SELECT m."DonorId" FROM "HouseholdMembers" m WHERE m."HouseholdId" = "Households"."Id" ORDER BY m."Id" LIMIT 1)""";
+        await RunAsync(transaction, mapping, $"""DELETE FROM "Households" WHERE {adrift} AND NOT EXISTS {members}""", mergeId, keepId, "Households", ct);
+        await RunAsync(transaction, mapping, $"""UPDATE "Households" SET "PrimaryDonorId" = {members} WHERE {adrift}""", mergeId, keepId, "Households", ct);
     }
 
     public Task<bool> HasProjectAsync(Guid customerId, CancellationToken ct) => db.Projects.AnyAsync(p => p.CustomerId == customerId, ct);

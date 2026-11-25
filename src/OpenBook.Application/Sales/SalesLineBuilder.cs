@@ -8,7 +8,11 @@ namespace OpenBook.Application.Sales;
 
 /// <param name="TaxCodeId">The code the document is taxed under; null for none.</param>
 /// <param name="TaxExemption">The customer's exemption on the document date, when they have one.</param>
-public sealed record BuiltSalesLines(IReadOnlyList<SalesLine> Lines, Guid? TaxCodeId, string? TaxExemption);
+public sealed record BuiltSalesLines(IReadOnlyList<SalesLine> Lines, Guid? TaxCodeId, string? TaxExemption)
+{
+    /// <summary>A gift card (or other prepaid credit) redeemed on the lines pays for all of it, so the total is zero.</summary>
+    public bool PaidInFull { get; init; }
+}
 
 /// <summary>The tax a document was charged, which a correction keeps.</summary>
 public sealed record TaxAsCharged(Guid? TaxCodeId, string? TaxExemption, Guid? CustomerId, IReadOnlyList<SalesLine> Lines, IReadOnlyList<int?>? FromLines = null);
@@ -52,15 +56,18 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         var lines = await BuildAsync(await PriceAsync(drafts, customer, date, ct), ct);
         var codeId = taxCodeId ?? customer?.TaxCodeId;
         if (codeId is not { } id || id == Guid.Empty)
-            return typedTax is null or 0m ? new BuiltSalesLines(lines, null, null)
+            return typedTax is null or 0m ? await BuiltAsync(lines, null, null, ct)
                 : throw new DomainException("tax.typed_without_code", "Choose a tax code to charge the typed tax under.");
 
         var components = await SalesTaxService.ComponentsAsync(taxes, id, ct, date);
         var holder = customer is { BillWithParent: true } ? CustomerTree.ExemptionHolder(customer, date, await store.ListCustomersAsync(ct)) : customer?.ExemptionOn(date) is null ? null : customer;
         var exemption = holder?.ExemptionOn(date);
         // A certificate for some states only leaves the other states' rates charged (C326).
-        return new BuiltSalesLines([.. lines, .. TaxCalculator.TaxLines(lines, components, c => holder is not null && holder.ExemptFrom(c), typedTax)], id, exemption);
+        return await BuiltAsync([.. lines, .. TaxCalculator.TaxLines(lines, components, c => holder is not null && holder.ExemptFrom(c), typedTax)], id, exemption, ct);
     }
+
+    private async Task<BuiltSalesLines> BuiltAsync(IReadOnlyList<SalesLine> lines, Guid? taxCodeId, string? exemption, CancellationToken ct) =>
+        new(lines, taxCodeId, exemption) { PaidInFull = lines.Sum(l => l.Amount) == 0m && await salesAccounts.RedeemsPrepaidAsync(lines, ct) };
 
     /// <summary>
     /// A line that goes on being the same item keeps the income account and list price it was sold under: a change
@@ -112,9 +119,9 @@ public sealed class SalesLineBuilder(ISalesStore store, SalesAccounts salesAccou
         var oldTaxable = TaxCalculator.TaxableAmount(charged.Lines.Where(l => l.Kind != SalesLineKind.Tax).ToList());
         var typed = typedTax ?? (workOutTax || TaxCalculator.TaxableAmount(lines) != oldTaxable ? null : TaxCalculator.TypedTax(charged.Lines, charged.TaxExemption));
         // Kept as charged, down to which states' rates the exemption covered (C326).
-        return new BuiltSalesLines(
+        return await BuiltAsync(
             [.. lines, .. TaxCalculator.TaxLines(lines, components, TaxCalculator.KeptExemption(charged.Lines, charged.TaxExemption), typed)],
-            codeId, charged.TaxExemption);
+            codeId, charged.TaxExemption, ct);
     }
 
     /// <summary>Automatic item lines get the quoted price and its source; quantity breaks see the item's total on the document.</summary>

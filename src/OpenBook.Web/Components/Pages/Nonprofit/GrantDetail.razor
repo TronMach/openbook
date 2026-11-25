@@ -482,7 +482,10 @@
         _banks = active.Where(a => a.Type == AccountType.Bank).ToList();
         // A bank, or a holding account such as Undeposited Funds to go into a deposit with other money.
         _receiveInto = [.. _banks, .. active.Where(a => a.Type == AccountType.OtherCurrentAsset && a.Name.Contains("Undeposited", StringComparison.OrdinalIgnoreCase))];
-        _expenses = active.Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
+        // A budget line's account stays on offer though it's inactive now, or saving the budget would drop the line.
+        var budgeted = _position?.Grant.Budget.Select(b => b.AccountId).ToHashSet() ?? [];
+        _expenses = _chart.Ordered().Select(x => x.Account)
+            .Where(a => a.Type.ClassOf() == AccountClass.Expense && (a.IsActive || budgeted.Contains(a.Id))).ToList();
     }
 
     private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

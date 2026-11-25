@@ -30,7 +30,8 @@ public static class TaxCalculator
             }
             else if (kind is SalesLineKind.DiscountPercent or SalesLineKind.DiscountAmount && items != 0m)
             {
-                discounts += -amount * taxable / items;
+                // At most the discount itself: a gift card redeemed above it leaves less to discount than was taxable.
+                discounts += Math.Clamp(-amount * taxable / items, 0m, Math.Max(0m, -amount));
             }
         }
 

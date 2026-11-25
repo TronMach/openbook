@@ -155,7 +155,7 @@
                             <td>
                                 @if (run.Status == DocumentStatus.Posted)
                                 {
-                                    <VoidLine Action="@($"/nonprofit/allocations/runs/{run.Id}/void")" />
+                                    <VoidLine Action="@($"/nonprofit/allocations/runs/{run.Id}/void")" Password="Password" />
                                 }
                                 else
                                 {
@@ -195,12 +195,16 @@
         _from = DateOnly.TryParseExact(FromText, "yyyy-MM-dd", out var from) ? from : lastMonth;
         _to = DateOnly.TryParseExact(ToText, "yyyy-MM-dd", out var to) ? to : lastMonth.AddMonths(1).AddDays(-1);
         _chart = await AccountService.GetChartAsync();
-        _expenses = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
-        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
-        _classNames = _classes.ToDictionary(c => c.Segment.Id, c => c.FullName);
         _rules = await Allocation.RulesAsync();
+        _editing = _rules.FirstOrDefault(r => r.Id == Edit);
+        // The rule's own account, pool and classes stay on offer though they're inactive now: without its pool it would
+        // save as spreading the lines with no class.
+        _expenses = _chart.Ordered().Select(x => x.Account)
+            .Where(a => a.Type.ClassOf() == AccountClass.Expense && (a.IsActive || a.Id == _editing?.AccountId)).ToList();
+        var classes = await Segments.ListAsync(SegmentKind.Class);
+        _classNames = classes.ToDictionary(c => c.Segment.Id, c => c.FullName);
+        _classes = [.. classes.Where(c => c.Segment.IsActive || c.Segment.Id == _editing?.PoolClassId || _editing?.Shares.Any(s => s.ClassId == c.Segment.Id) == true)];
         _runs = await Allocation.RunsAsync();
         _preview = await Allocation.PreviewAsync(_from, _to);
-        _editing = _rules.FirstOrDefault(r => r.Id == Edit);
     }
 }

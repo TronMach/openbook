@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<ActivityReports>();
         services.AddScoped<ListReports>();
         services.AddScoped<Lists.MergeService>();
+        services.AddScoped<Lists.ErasureService>();
         services.AddScoped<ReportCatalog>();
         services.AddScoped<BudgetService>();
         services.AddScoped<SavedReportService>();
@@ -78,6 +79,8 @@ public static class DependencyInjection
         services.AddScoped<BillApprovalService>();
         services.AddScoped<AchService>();
         services.AddScoped<OnlinePaymentService>();
+        services.AddScoped<OnlineRefundService>();
+        services.AddScoped<AutomaticPaymentService>();
         services.AddScoped<CustomerPortalService>();
         services.AddScoped<ReceiptService>();
         services.AddScoped<OpenBook.Application.Documents.DocumentCaptureService>();
@@ -86,6 +89,8 @@ public static class DependencyInjection
         services.AddScoped<BillableExpenseService>();
         services.AddScoped<CollectionService>();
         services.AddScoped<LateFeeService>();
+        services.AddScoped<SalesReps>();
+        services.AddScoped<CommissionService>();
         services.AddScoped<ReminderService>();
         services.AddScoped<ScheduledEmailService>();
         services.AddScoped<DepositService>();
@@ -98,6 +103,9 @@ public static class DependencyInjection
         services.AddScoped<PrintService>();
         services.AddScoped<OpenBook.Application.Purchases.PurchaseOrderForms>();
         services.AddScoped<EmailService>();
+        services.AddScoped<MicrosoftMailService>();
+        services.AddScoped<PasskeyService>();
+        services.AddScoped<Documents.BillsMailboxService>();
         services.AddScoped<TextMessageService>();
         services.AddScoped<IEmailSource, SalesEmailSource>();
         services.AddScoped<IEmailSource, PurchaseOrderEmailSource>();
@@ -118,6 +126,7 @@ public static class DependencyInjection
         services.AddScoped<PaymentService>();
         services.AddScoped<SalesReceiptService>();
         services.AddScoped<SalesTaxService>();
+        services.AddScoped<UseTaxService>();
         services.AddScoped<OpenBook.Application.Segments.SegmentService>();
         services.AddScoped<OpenBook.Application.Pricing.PricingService>();
         services.AddScoped<OpenBook.Application.Pricing.PricingReports>();
@@ -136,6 +145,7 @@ public static class DependencyInjection
         services.AddScoped<VendorDepositService>();
         services.AddScoped<RecurringBillService>();
         services.AddScoped<PayablesService>();
+        services.AddScoped<BackupWithholdingService>();
         services.AddScoped<Filing1099Service>();
         services.AddScoped<AttachmentService>();
         services.AddScoped<NoteService>();

@@ -9,6 +9,7 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Application.Sales;
 
 /// <param name="TaxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
+/// <param name="SalesRepId">Who sold it: null takes the customer's responsible person, <see cref="Guid.Empty"/> is nobody.</param>
 public sealed record CreateSalesReceiptCommand(
     Guid? CustomerId,
     DateOnly Date,
@@ -22,7 +23,8 @@ public sealed record CreateSalesReceiptCommand(
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
     PaymentMethod? Method = null,
-    decimal? TaxAmount = null);
+    decimal? TaxAmount = null,
+    Guid? SalesRepId = null);
 
 /// <summary>A correction to a posted sales receipt (<see cref="SalesReceiptService.ChangeAsync"/>).</summary>
 /// <param name="Lines">Every line the receipt should have, tax lines left out (they're recalculated).</param>
@@ -36,6 +38,7 @@ public sealed record CreateSalesReceiptCommand(
 /// <param name="WarehouseId">As for a new receipt: null is the default warehouse.</param>
 /// <param name="FromLines">For each of <paramref name="Lines"/>, the number of the line it continues (null for a new one), so
 /// its custom field values follow it; null takes the lines as continuing the old ones in order.</param>
+/// <param name="SalesRepId">Null keeps the receipt's sales rep; <see cref="Guid.Empty"/> is nobody.</param>
 public sealed record ChangeSalesReceiptCommand(
     DateOnly Date,
     IReadOnlyList<SalesLineDraft> Lines,
@@ -52,7 +55,8 @@ public sealed record ChangeSalesReceiptCommand(
     IReadOnlyList<int?>? FromLines = null,
     PaymentMethod? Method = null,
     decimal? TaxAmount = null,
-    bool WorkOutTax = false);
+    bool WorkOutTax = false,
+    Guid? SalesRepId = null);
 
 public sealed class SalesReceiptService(
     ISalesStore store,
@@ -64,6 +68,7 @@ public sealed class SalesReceiptService(
     CustomFields.CustomFieldStamper customFields,
     Banking.IBankingStore bank,
     ILedgerStore ledger,
+    SalesReps salesReps,
     IClock clock,
     ICurrentUser user)
 {
@@ -94,21 +99,24 @@ public sealed class SalesReceiptService(
         if ((await store.ListReceiptNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
             throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
 
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
+        var built = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
+        var (lines, taxCodeId, exemption) = built;
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var salesRepId = await salesReps.ForNewAsync(command.SalesRepId, customer?.Id, ct);
         var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
 
         var id = Guid.CreateVersion7();
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(deposit.Id, lines, memo), .. stock.Postings], memo, SalesReceipt.Source, id,
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(deposit.Id, lines, memo, built.PaidInFull), .. stock.Postings], memo, SalesReceipt.Source, id,
                 LocationId: command.LocationId, TagIds: command.TagIds), ct);
         inventory.Apply(stock, InventorySources.SalesReceipt, id);
 
-        var receipt = SalesReceipt.Create(id, number, customer?.Id, command.Date, deposit.Id, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo, taxCodeId, exemption);
+        var receipt = SalesReceipt.Create(id, number, customer?.Id, command.Date, deposit.Id, lines, entry.Id, clock.UtcNow, command.Reference, command.Memo, taxCodeId, exemption, built.PaidInFull);
         receipt.SetMethod(command.Method);
         receipt.SetLocation(command.LocationId);
         receipt.SetWarehouse(warehouseId);
+        receipt.SetSalesRep(salesRepId);
         await SalesAddresses.KeepAsync(store, receipt.CustomerId, receipt.KeepAddresses, ct);
         store.Add(receipt);
         store.Add(Audit(AuditAction.Created, receipt, before: null));
@@ -153,8 +161,9 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
 
         var drafts = command.Lines.ToList();
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
+        var built = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
             new TaxAsCharged(receipt.TaxCodeId, receipt.TaxExemption, receipt.CustomerId, receipt.Lines, command.FromLines), command.TaxAmount, command.WorkOutTax, ct);
+        var (lines, taxCodeId, exemption) = built;
         if (receipt.DepositId is not null && (lines.Sum(l => l.Amount) != receipt.Total || depositAccountId != receipt.DepositAccountId))
             throw new DomainException("receipt.deposited",
                 $"Sales receipt {receipt.Number} is in a bank deposit, so its total and deposit account can't change. Void the deposit first.");
@@ -169,6 +178,7 @@ public sealed class SalesReceiptService(
             throw new DomainException("receipt.feed_matched",
                 $"Sales receipt {receipt.Number} is matched to a line from the bank feed, so its total and deposit account stay. Undo the match first to change them.");
 
+        var salesRepId = await salesReps.ForChangeAsync(command.SalesRepId, receipt.SalesRepId, ct);
         var warehouseId = command.WarehouseId == receipt.WarehouseId ? receipt.WarehouseId : await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([receipt.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(receipt);
@@ -185,7 +195,7 @@ public sealed class SalesReceiptService(
         }
 
         var keptStock = back is null
-            ? await InventoryService.KeptStockAsync(ledger, receipt.JournalEntryId, SalesLine.Postings(receipt.DepositAccountId, receipt.Lines, null).Count, ct)
+            ? await InventoryService.KeptStockAsync(ledger, receipt.JournalEntryId, SalesLine.Postings(receipt.DepositAccountId, receipt.Lines, null, receipt.Total == 0m).Count, ct)
             : null;
         await engine.StageVoidAsync(receipt.JournalEntryId, $"Sales receipt changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         if (back is not null)
@@ -193,16 +203,17 @@ public sealed class SalesReceiptService(
         var stock = keptStock ?? await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
         var memo = customer is null ? $"Sales receipt {number}" : $"Sales receipt {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(depositAccountId, lines, memo), .. stock.Postings], memo, SalesReceipt.Source, receipt.Id,
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(depositAccountId, lines, memo, built.PaidInFull), .. stock.Postings], memo, SalesReceipt.Source, receipt.Id,
                 LocationId: command.LocationId, TagIds: tagIds), ct);
         inventory.Apply(stock, InventorySources.SalesReceipt, receipt.Id);
 
         receipt.Change(number, customer?.Id, command.Date, depositAccountId, lines, entry.Id,
-            command.Reference ?? receipt.Reference, command.Memo, taxCodeId, exemption);
+            command.Reference ?? receipt.Reference, command.Memo, taxCodeId, exemption, built.PaidInFull);
         if (command.Method is { } method)
             receipt.SetMethod(method);
         receipt.SetLocation(command.LocationId);
         receipt.SetWarehouse(warehouseId);
+        receipt.SetSalesRep(salesRepId);
         foreach (var item in feed)
             item.FollowEntry(oldEntry, entry.Id);
 
@@ -253,6 +264,7 @@ public sealed class SalesReceiptService(
         r.DepositId,
         r.TaxCodeId,
         r.TaxExemption,
+        r.SalesRepId,
         Lines = r.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),
     });
 }

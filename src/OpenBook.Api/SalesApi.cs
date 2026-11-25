@@ -39,12 +39,14 @@ public sealed record CustomerResponse(
     bool NoReminders = false,
     bool NoLateFees = false,
     DateOnly? ExemptionStartsOn = null,
-    string? ExemptionRegions = null)
+    string? ExemptionRegions = null,
+    decimal? CreditLimit = null,
+    bool CreditHold = false)
 {
     public static CustomerResponse From(Customer c, decimal? balance = null) =>
         new(c.Id, c.DisplayName, c.CompanyName, c.Email, c.Phone, c.BillingAddress, c.ShippingAddress, c.PaymentTermsDays, c.Notes, c.IsActive, balance,
             c.EarlyPaymentDiscountPercent, c.EarlyPaymentDiscountDays, c.Terms.Label, c.TaxCodeId, c.ExemptionCertificate, c.ExemptionReason, c.ExemptionExpiresOn, c.PriceLevelId,
-            c.ParentId, c.BillWithParent, c.NoReminders, c.NoLateFees, c.ExemptionStartsOn, c.ExemptionRegions);
+            c.ParentId, c.BillWithParent, c.NoReminders, c.NoLateFees, c.ExemptionStartsOn, c.ExemptionRegions, c.CreditLimit, c.CreditHold);
 }
 
 public sealed record ItemResponse(
@@ -100,12 +102,13 @@ public sealed record InvoiceResponse(
     string? TaxExemption = null,
     decimal Subtotal = 0m,
     decimal TaxTotal = 0m,
-    Guid? LocationId = null)
+    Guid? LocationId = null,
+    Guid? SalesRepId = null)
 {
     public static InvoiceResponse From(Invoice i) => new(
         i.Id, i.Number, i.CustomerId, i.Date, i.DueDate, i.Memo, i.Total, i.AmountPaid, i.Balance, i.Status, i.JournalEntryId,
         i.Lines.Select(SalesLineResponse.From).ToList(), i.EarlyPaymentDiscountDate, i.EarlyPaymentDiscountPercent, i.EstimateId,
-        i.RecurringInvoiceId, i.LastEmailedAt, i.TaxCodeId, i.TaxExemption, i.Subtotal, i.TaxTotal, i.LocationId);
+        i.RecurringInvoiceId, i.LastEmailedAt, i.TaxCodeId, i.TaxExemption, i.Subtotal, i.TaxTotal, i.LocationId, i.SalesRepId);
 }
 
 public sealed record PaymentResponse(
@@ -151,11 +154,12 @@ public sealed record SalesReceiptResponse(
     decimal Subtotal = 0m,
     decimal TaxTotal = 0m,
     Guid? LocationId = null,
-    PaymentMethod? Method = null)
+    PaymentMethod? Method = null,
+    Guid? SalesRepId = null)
 {
     public static SalesReceiptResponse From(SalesReceipt r) => new(
         r.Id, r.Number, r.CustomerId, r.Date, r.DepositAccountId, r.Reference, r.Memo, r.Total, r.Status, r.JournalEntryId,
-        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId, r.TaxCodeId, r.TaxExemption, r.Subtotal, r.TaxTotal, r.LocationId, r.Method);
+        r.Lines.Select(SalesLineResponse.From).ToList(), r.DepositId, r.TaxCodeId, r.TaxExemption, r.Subtotal, r.TaxTotal, r.LocationId, r.Method, r.SalesRepId);
 }
 
 public sealed record SetActiveRequest(bool Active);
@@ -190,8 +194,26 @@ internal static class SalesApi
             var c = await s.CreateAsync(r, ct);
             return Results.Created($"/api/customers/{c.Id}", CustomerResponse.From(c));
         });
-        api.MapPut("/customers/{id:guid}", async (Guid id, CustomerDetails r, CustomerService s, CancellationToken ct) =>
-            CustomerResponse.From(await s.UpdateAsync(id, r, ct)));
+        // The fields added since the first release stay when they're left out (a certificate's states cleared would exempt
+        // the customer everywhere); null clears them.
+        api.MapPut("/customers/{id:guid}", async (Guid id, HttpRequest request, CustomerService s, CancellationToken ct) =>
+        {
+            var (r, sent) = await ApiKeep.ReadAsync<CustomerDetails>(request, ct);
+            if (await s.GetAsync(id, ct) is { } c)
+            {
+                // Without a certificate there's nothing to keep of it.
+                var certified = r.ExemptionCertificate is not null;
+                r = r with
+                {
+                    CreditLimit = sent.Contains(nameof(r.CreditLimit)) ? r.CreditLimit : c.CreditLimit,
+                    CreditHold = sent.Contains(nameof(r.CreditHold)) ? r.CreditHold : c.CreditHold,
+                    ExemptionStartsOn = sent.Contains(nameof(r.ExemptionStartsOn)) || !certified ? r.ExemptionStartsOn : c.ExemptionStartsOn,
+                    ExemptionRegions = sent.Contains(nameof(r.ExemptionRegions)) || !certified ? r.ExemptionRegions : c.ExemptionRegions,
+                };
+            }
+
+            return CustomerResponse.From(await s.UpdateAsync(id, r, ct));
+        }).Accepts<CustomerDetails>("application/json");
         api.MapPut("/customers/{id:guid}/active", async (Guid id, SetActiveRequest r, CustomerService s, CancellationToken ct) =>
             CustomerResponse.From(await s.SetActiveAsync(id, r.Active, ct)));
         api.MapPost("/customers/import", async (HttpRequest request, bool? dryRun, CustomerImportService s, CancellationToken ct) =>

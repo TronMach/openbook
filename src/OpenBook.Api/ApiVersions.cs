@@ -42,6 +42,8 @@ public static class ApiVersions
         ("/api/recurring-entries", typeof(RecurringEntry)),
         ("/api/customers", typeof(Customer)),
         ("/api/vendors", typeof(Vendor)),
+        ("/api/erase/customers", typeof(Customer)),
+        ("/api/erase/vendors", typeof(Vendor)),
         ("/api/items", typeof(Item)),
         ("/api/nonprofit/gifts", typeof(Domain.Nonprofit.Donation)),
         ("/api/nonprofit/pledges", typeof(Domain.Nonprofit.Pledge)),

@@ -69,9 +69,9 @@ public static class MigrationReaders
     /// </summary>
     internal static Domain.Sales.CustomerDetails WithTaxStatus(Domain.Sales.CustomerDetails details, bool? taxable, string? resaleNumber)
     {
-        var resale = string.IsNullOrWhiteSpace(resaleNumber) ? null : resaleNumber.Trim();
-        if (taxable != false && resale is null)
+        if (taxable != false)
             return details;
+        var resale = string.IsNullOrWhiteSpace(resaleNumber) ? null : resaleNumber.Trim();
         return details with
         {
             ExemptionCertificate = resale is null ? NotTaxableNote : resale[..Math.Min(resale.Length, 50)],

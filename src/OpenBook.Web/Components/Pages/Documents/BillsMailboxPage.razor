@@ -1,0 +1,153 @@
+@page "/settings/bills-mailbox"
+@using OpenBook.Application.Documents
+@using OpenBook.Domain.Companies
+@using OpenBook.Domain.Documents
+@inject BillsMailboxService Mailbox
+@inject DocumentCaptureService DocumentService
+@inject MicrosoftMailService MicrosoftMailbox
+@inject NavigationManager Navigation
+
+<PageTitle>Bills by email · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>Bills by email</h1>
+        <ActionLink Class="button secondary" Href="/settings">Settings</ActionLink>
+        <ActionLink Class="button secondary" Href="/documents">Document inbox</ActionLink>
+        <ActionLink Class="button secondary" Href="/audit?entityType=bills_mailbox">History</ActionLink>
+    </div>
+    <p class="muted">
+        Give OpenBook a mailbox of its own (bills@your-company) and forward vendors' bills to it, or have vendors send them there. Every 10 minutes
+        the PDFs, scans and photos in new messages go into the <a href="/documents">document inbox</a>, read and matched like an upload, for a person to check.
+        Nothing is posted by itself, and OpenBook only reads the mailbox: messages stay as they are.
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Message is { } message)
+    {
+        <div class="alert notice" role="status">@message</div>
+    }
+
+    <div class="card">
+        <PostForm Action="/settings/bills-mailbox" data-enhance="false">
+            <AntiforgeryToken />
+            <SettingsVersion TRecord="BillsMailbox" />
+            <label class="check">
+                <input type="checkbox" name="enabled" value="true" checked="@_mailbox.Enabled" />
+                <span>Read bills from this mailbox</span>
+            </label>
+            <div class="row">
+                <div class="field">
+                    <label for="sign-in">Signs in with</label>
+                    <select id="sign-in" name="signIn">
+                        <option value="@SmtpSignIn.Password" selected="@(_mailbox.SignIn == SmtpSignIn.Password)">A user name and password</option>
+                        <option value="@SmtpSignIn.Microsoft" selected="@(_mailbox.SignIn == SmtpSignIn.Microsoft)">Microsoft's sign-in (Microsoft 365, Outlook.com)</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="host">IMAP server</label>
+                    <input id="host" name="host" value="@_mailbox.Host" maxlength="255" placeholder="imap.example.com" />
+                    <span class="hint">Gmail: <code>imap.gmail.com</code> with an app password. Microsoft: <code>outlook.office365.com</code>, filled in for you.</span>
+                </div>
+                <div class="field">
+                    <label for="port">Port</label>
+                    <input id="port" name="port" class="short" inputmode="numeric" value="@_mailbox.Port" />
+                    <span class="hint">993, or 143 with STARTTLS. Always encrypted.</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="username">User name</label>
+                    <input id="username" name="username" value="@_mailbox.Username" maxlength="320" autocomplete="off" />
+                    <span class="hint">Usually the mailbox's address.</span>
+                </div>
+                <div class="field" data-shown-by="#sign-in" data-shown-for="Password">
+                    <label for="password">Password @(_mailbox.ProtectedPassword is not null ? "(saved; leave blank to keep it)" : "")</label>
+                    <input id="password" name="password" type="password" autocomplete="new-password" />
+                    @if (_mailbox.ProtectedPassword is not null)
+                    {
+                        <label class="check"><input type="checkbox" name="clearPassword" value="true" /> <span>Forget the saved password</span></label>
+                    }
+                </div>
+                <div class="field">
+                    <label for="folder">Folder</label>
+                    <input id="folder" name="folder" value="@_mailbox.Folder" maxlength="200" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="senders">Only from <span class="muted">(optional, one a line)</span></label>
+                <textarea id="senders" name="senders" rows="3" placeholder="@("ana@paper.example\n@your-company.example")">@_mailbox.AllowedSenders</textarea>
+                <span class="hint">Addresses, or whole domains starting with @@. Blank takes attachments from anyone. Who an email says it's from can be made up, so check each document whoever it names.</span>
+            </div>
+            @if (_readingWithClaude)
+            {
+                <label class="check">
+                    <input type="checkbox" name="useClaude" value="true" checked="@_mailbox.UseClaude" />
+                    <span>Let Claude read what arrives (each file is sent to Anthropic and billed to your key)</span>
+                </label>
+            }
+            <div class="actions"><button type="submit">Save</button></div>
+        </PostForm>
+        @if (_mailbox.Enabled)
+        {
+            <p class="muted">
+                @if (_progress.LastCheckedAt is { } at)
+                {
+                    <span>Last checked @at.InCompanyTime().ToString("g").</span>
+                }
+                @if (_progress.LastReceivedAt is { } received)
+                {
+                    <span>The last bill came in @received.InCompanyTime().ToString("g").</span>
+                }
+            </p>
+            @if (_progress.LastError is { } problem)
+            {
+                <div class="alert error" role="status">@problem</div>
+            }
+            <PostForm Action="/settings/bills-mailbox/check" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="actions"><button type="submit" class="secondary">Check now</button></div>
+            </PostForm>
+        }
+    </div>
+
+    @if (_mailbox.SignIn == SmtpSignIn.Microsoft)
+    {
+        <MicrosoftSignInCard SignIn="_microsoft" Page="/settings/bills-mailbox" Permission="IMAP.AccessAsUser.All" SignInAs="the mailbox bills arrive in" />
+    }
+</div>
+
+@code {
+    private BillsMailbox _mailbox = BillsMailbox.Create();
+    private BillsMailboxProgress _progress = BillsMailboxProgress.Create();
+    private MicrosoftMailSignIn _microsoft = MicrosoftMailSignIn.Create(MailPurpose.Bills);
+    private bool _readingWithClaude;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+    [SupplyParameterFromQuery] private int? Documents { get; set; }
+    [SupplyParameterFromQuery] private int? Messages { get; set; }
+    [SupplyParameterFromQuery] private int? Refused { get; set; }
+
+    private string? Message => Done switch
+    {
+        "saved" => "Saved.",
+        "started" => "Connected. Mail already there is left alone; what arrives from now on is read.",
+        "checked" => $"Looked at {Messages ?? 0} new {(Messages == 1 ? "message" : "messages")}: {Documents ?? 0} {(Documents == 1 ? "document" : "documents")} put in the inbox{(Refused > 0 ? $", {Refused} from senders not on the list left alone" : "")}.",
+        "app" => "Saved. Sign in at Microsoft next.",
+        "signed-in" => "The mailbox is signed in. Press Check now to try it.",
+        "signed-out" => "The sign-in is forgotten.",
+        _ => null,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _mailbox = await Mailbox.GetAsync();
+        _progress = await Mailbox.ProgressAsync();
+        _microsoft = await MicrosoftMailbox.GetAsync(MailPurpose.Bills);
+        _readingWithClaude = (await DocumentService.GetSettingsAsync()).IsReady;
+    }
+}

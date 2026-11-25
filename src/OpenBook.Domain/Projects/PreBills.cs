@@ -74,6 +74,13 @@ public sealed class PreBill
         line.Set(billed, reason);
     }
 
+    /// <summary>The work has changed since the draft was made: the line shows what it is now, and one not billed at another amount follows it.</summary>
+    public void Follow(int lineNumber, decimal hours, decimal worked)
+    {
+        EnsureDraft();
+        (_lines.FirstOrDefault(l => l.LineNumber == lineNumber) ?? throw new DomainException("prebill.line_unknown", "That line isn't on this draft.")).Follow(hours, worked);
+    }
+
     /// <summary>Takes a line off: the work stays unbilled, for another time.</summary>
     public void Remove(int lineNumber)
     {
@@ -127,6 +134,15 @@ public sealed class PreBillLine
 
     /// <summary>Why it's billed at something other than its value.</summary>
     public string? Reason { get; private set; }
+
+    internal void Follow(decimal hours, decimal worked)
+    {
+        if (Billed == Worked)
+            Billed = worked;
+        (Hours, Worked) = (hours, worked);
+        if (Billed == Worked)
+            Reason = null;
+    }
 
     internal void Set(decimal billed, string? reason)
     {

@@ -143,6 +143,30 @@ public sealed class SalesFlowAdvancedTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Retainage_is_held_with_its_own_item_whatever_its_called()
+    {
+        // The business has an item of that name already, on an income account: money held with it would come off income.
+        var theirs = await In<ItemService, Item>(s => s.CreateAsync(new ItemDetails("Retainage", ItemType.Service, _consulting.IncomeAccountId, 0m)));
+        var estimate = await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(_acme.Id, Mar1, [Line(_consulting, 10m)])));
+        var first = await In<EstimateService, Invoice>(s => s.ProgressInvoiceAsync(estimate.Id, new InvoiceFromSourceCommand(Mar1, Percent: 50m, RetainagePercent: 10m)));
+        var held = (await In<ItemService, IReadOnlyList<Item>>(s => s.ListAsync())).Single(i => i.IsRetainage);
+        Assert.Equal((held.Id, "Retainage held"), (first.Lines.Single(l => l.Amount < 0m).ItemId!.Value, held.Name));
+        Assert.False((await In<ItemService, Item?>(s => s.GetAsync(theirs.Id)))!.IsRetainage);
+        var before = await In<EstimateService, decimal>(s => s.RetainageHeldAsync(estimate.Id));
+        Assert.True(before > 0m);
+
+        // Renamed and deactivated, it's still the one; its account and type stay, and it isn't merged away.
+        await In<ItemService, Item>(s => s.UpdateAsync(held.Id, held.Details() with { Name = "Retention" }));
+        Assert.Equal(before, await In<EstimateService, decimal>(s => s.RetainageHeldAsync(estimate.Id)));
+        Assert.Equal("item.retainage_locked", await Refused(() => In<ItemService, Item>(s => s.UpdateAsync(held.Id, held.Details() with { IncomeAccountId = _consulting.IncomeAccountId }))));
+        Assert.Equal("merge.item_retainage", await Refused(() => In<OpenBook.Application.Lists.MergeService, OpenBook.Application.Lists.MergeResult>(s => s.MergeItemsAsync(held.Id, theirs.Id))));
+        await In<ItemService, Item>(s => s.SetActiveAsync(held.Id, false));
+        var release = await In<EstimateService, Invoice>(s => s.BillRetainageAsync(estimate.Id, Mar1.AddDays(60)));
+        Assert.Equal((before, held.Id), (release.Total, release.Lines[0].ItemId!.Value));
+        Assert.True((await In<ItemService, Item?>(s => s.GetAsync(held.Id)))!.IsActive);
+    }
+
+    [Fact]
     public async Task Estimates_are_progress_invoiced_by_percentage_and_close_at_the_end()
     {
         var estimate = await In<EstimateService, Estimate>(s => s.CreateAsync(new SaveEstimateCommand(_acme.Id, Mar1, [Line(_design, 2m), Line(_consulting, 10m)])));

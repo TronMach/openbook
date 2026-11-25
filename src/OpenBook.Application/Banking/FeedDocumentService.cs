@@ -4,6 +4,7 @@ using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Purchases;
 
 namespace OpenBook.Application.Banking;
 
@@ -13,8 +14,12 @@ public enum FeedDocumentKind
     Bill,
 }
 
-/// <summary>An open invoice or bill that a bank line could be the payment of: it owes exactly the line's amount.</summary>
-public sealed record FeedDocument(FeedDocumentKind Kind, Guid Id, string Label, string Party, DateOnly Date, DateOnly DueDate, decimal Balance);
+/// <summary>
+/// An open invoice or bill that a bank line could be the payment of: it owes exactly the line's amount, or a bill does with
+/// what's held back from a vendor marked for backup withholding.
+/// </summary>
+/// <param name="Withheld">What paying the bill holds back for the IRS.</param>
+public sealed record FeedDocument(FeedDocumentKind Kind, Guid Id, string Label, string Party, DateOnly Date, DateOnly DueDate, decimal Balance, decimal Withheld = 0m);
 
 /// <summary>
 /// A bank line that is a customer paying an invoice, or the business paying a bill: instead of leaving the feed to
@@ -31,6 +36,9 @@ public sealed class FeedDocumentService(
     BankFeedService feed,
     IUnitOfWork unitOfWork)
 {
+    /// <summary>The access area paying one changes: the feed is no way round it for someone with banking alone.</summary>
+    public static string AreaOf(FeedDocumentKind kind) => kind == FeedDocumentKind.Invoice ? "sales" : "purchases";
+
     /// <summary>At most this many candidates per line, oldest due first.</summary>
     public const int MostPerLine = 5;
 
@@ -40,22 +48,26 @@ public sealed class FeedDocumentService(
         ArgumentNullException.ThrowIfNull(items);
         var pending = items.Where(i => i.Status == BankFeedStatus.Pending).ToList();
         var result = new Dictionary<Guid, IReadOnlyList<FeedDocument>>();
-        if (pending.Count == 0 || (await accounts.GetChartAsync(ct)).Find(accountId)?.Type != AccountType.Bank)
+        var chart = await accounts.GetChartAsync(ct);
+        if (pending.Count == 0 || chart.Find(accountId)?.Type != AccountType.Bank)
             return result;
 
         var invoices = pending.Any(i => i.Amount > 0m) ? await sales.ListOpenInvoicesAsync(null, ct) : [];
         var bills = pending.Any(i => i.Amount < 0m) ? await purchases.ListOpenBillsAsync(null, ct) : [];
         var customers = invoices.Count == 0 ? new Dictionary<Guid, string>() : (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
-        var vendors = bills.Count == 0 ? new Dictionary<Guid, string>() : (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
+        var vendors = bills.Count == 0 ? new Dictionary<Guid, Vendor>() : (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
+        decimal Held(Bill bill, DateOnly on) => vendors.GetValueOrDefault(bill.VendorId) is { } vendor
+            ? BackupWithholdingService.OnBills(chart, vendor, on, accountId, [(bill, bill.Balance)]) : 0m;
         foreach (var item in pending)
         {
             var found = item.Amount > 0m
                 ? invoices.Where(i => i.Balance == item.Amount && i.Date <= item.Date)
                     .OrderBy(i => i.DueDate).Take(MostPerLine)
                     .Select(i => new FeedDocument(FeedDocumentKind.Invoice, i.Id, $"Invoice {i.Number}", customers.GetValueOrDefault(i.CustomerId) ?? "", i.Date, i.DueDate, i.Balance)).ToList()
-                : bills.Where(b => b.Balance == -item.Amount && b.CanBePaid && b.Date <= item.Date)
+                : bills.Where(b => b.CanBePaid && b.Date <= item.Date && b.Balance - Held(b, item.Date) == -item.Amount)
                     .OrderBy(b => b.DueDate).Take(MostPerLine)
-                    .Select(b => new FeedDocument(FeedDocumentKind.Bill, b.Id, b.Reference is null ? "Bill" : $"Bill {b.Reference}", vendors.GetValueOrDefault(b.VendorId) ?? "", b.Date, b.DueDate, b.Balance)).ToList();
+                    .Select(b => new FeedDocument(FeedDocumentKind.Bill, b.Id, b.Reference is null ? "Bill" : $"Bill {b.Reference}",
+                        vendors.GetValueOrDefault(b.VendorId)?.DisplayName ?? "", b.Date, b.DueDate, b.Balance, Held(b, item.Date))).ToList();
             if (found.Count > 0)
                 result[item.Id] = found;
         }
@@ -66,7 +78,8 @@ public sealed class FeedDocumentService(
     /// <summary>
     /// Records the payment of the invoice (received into this bank account) or of the bill (paid from it), on the line's
     /// date with its reference, for its whole amount, and matches the line to it: in one transaction, so a refusal leaves
-    /// neither. The invoice or bill must owe exactly the line's amount.
+    /// neither. The invoice or bill must owe exactly the line's amount; a bill of a vendor marked for backup withholding,
+    /// the line's amount and what's held back.
     /// </summary>
     public async Task<Guid> ApplyAsync(Guid itemId, FeedDocumentKind kind, Guid documentId, CancellationToken ct = default)
     {
@@ -95,9 +108,16 @@ public sealed class FeedDocumentService(
             if (item.Amount >= 0m)
                 throw new DomainException("feed.document_direction", "Money coming into the bank can't be a bill payment.");
             var bill = await purchases.GetBillAsync(documentId, ct) ?? throw new EntityNotFoundException("bill", documentId);
-            if (bill.Balance != -item.Amount)
-                throw new DomainException("feed.document_amount", $"That bill owes {bill.Balance:N2}, not {-item.Amount:N2}.");
-            var paid = await billPayments.PayAsync(new PayBillsCommand(item.Date, item.AccountId, [new ApplyToBill(bill.Id, -item.Amount)], reference, "From the bank feed"), ct);
+            var vendor = await purchases.GetVendorAsync(bill.VendorId, ct) ?? throw new EntityNotFoundException("vendor", bill.VendorId);
+            var held = BackupWithholdingService.OnBills(await accounts.GetChartAsync(ct), vendor, item.Date, item.AccountId, [(bill, bill.Balance)]);
+            if (bill.Balance - held != -item.Amount)
+            {
+                throw new DomainException("feed.document_amount", held == 0m
+                    ? $"That bill owes {bill.Balance:N2}, not {-item.Amount:N2}."
+                    : $"That bill owes {bill.Balance:N2}, less {held:N2} backup withholding, not {-item.Amount:N2}.");
+            }
+
+            var paid = await billPayments.PayAsync(new PayBillsCommand(item.Date, item.AccountId, [new ApplyToBill(bill.Id, bill.Balance)], reference, "From the bank feed"), item.ImportBatchId, ct);
             entryId = paid.Single().JournalEntryId;
         }
 

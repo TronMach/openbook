@@ -38,9 +38,13 @@ public sealed class BilledTimeService(
             throw new DomainException("time.not_on_invoice", $"Some of that time isn't on invoice {invoice.Number}.");
         var workers = (await store.ListWorkersAsync(ct)).ToDictionary(w => w.Id);
 
-        var lines = entries.OrderBy(e => e.Date).Select(e => new SalesLineDraft(e.ItemId,
+        // Work done for a project on its client's invoice comes off the project, as the invoice's lines went to it.
+        var names = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
+        Guid? Owner(TimeEntry e) => e.CustomerId == invoice.CustomerId ? null : e.CustomerId;
+        string? Group(TimeEntry e) => Owner(e) is { } owner ? names.GetValueOrDefault(owner) : null;
+        var lines = entries.OrderBy(e => Group(e), StringComparer.CurrentCultureIgnoreCase).ThenBy(e => e.Date).Select(e => new SalesLineDraft(e.ItemId,
             TextCleaning.Cut($"Taken off invoice {invoice.Number}: {e.Date:MMM d, yyyy} · {workers[e.WorkerId].Name}{(e.Notes is { } n ? ": " + n : "")}", 1000),
-            e.Hours, e.RateBilled, PriceSource: ProjectBilling.TimePriceSource, ClassId: workers[e.WorkerId].ClassId)).ToList();
+            e.Hours, e.RateBilled, PriceSource: ProjectBilling.TimePriceSource, ClassId: workers[e.WorkerId].ClassId, Group: Group(e), OwnerCustomerId: Owner(e))).ToList();
         var memo = await credits.CreateCreditMemoAsync(new CreateCreditMemoCommand(invoice.CustomerId, command.Date, lines,
             Memo: TextCleaning.Cut($"Time taken off invoice {invoice.Number}: {command.Reason.Trim()}", 500), TaxCodeId: invoice.TaxCodeId ?? Guid.Empty), ct);
 
@@ -51,7 +55,7 @@ public sealed class BilledTimeService(
         foreach (var entry in entries)
         {
             var before = TimeService.Snapshot(entry);
-            entry.ClearInvoice();
+            entry.TakeBack(memo.Id);
             if (command.WriteOff)
                 entry.Adjust(0m, command.Reason, command.Date, user.Actor);
             store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, TimeService.EntityType, entry.Id, before, TimeService.Snapshot(entry)));

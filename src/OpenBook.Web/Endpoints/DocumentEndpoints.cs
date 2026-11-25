@@ -33,7 +33,7 @@ public static class DocumentEndpoints
                 try
                 {
                     await using var stream = file.OpenReadStream();
-                    made.Add((await documents.UploadAsync(kind, file.FileName, stream, form["claude"] == "true", order, ct)).Id);
+                    made.Add((await documents.UploadAsync(kind, file.FileName, stream, form["claude"] == "true", order, ct: ct)).Id);
                 }
                 catch (DomainException ex)
                 {
@@ -126,6 +126,25 @@ public static class DocumentEndpoints
                 await documents.SaveSettingsAsync(new DocumentReadingSettingsCommand(
                     form["useClaude"] == "true", Text(form["model"]), form["apiKey"], form["clearApiKey"] == "true"), ct);
                 return "done=saved";
+            })).RequireAuthorization();
+
+        // Fields: enabled, signIn, host, port, username, password, clearPassword, folder, senders, useClaude.
+        app.MapPost("/settings/bills-mailbox", async (IFormCollection form, OpenBook.Application.IRecordVersions versions, BillsMailboxService mailbox, CancellationToken ct) =>
+            await Back("/settings/bills-mailbox", async () =>
+            {
+                await Components.SettingsVersions.EnsureUnchangedAsync<OpenBook.Domain.Documents.BillsMailbox>(versions, form, ct);
+                await mailbox.SaveAsync(new BillsMailboxCommand(form["enabled"] == "true",
+                    Enum.TryParse<OpenBook.Domain.Companies.SmtpSignIn>(form["signIn"], out var signIn) ? signIn : OpenBook.Domain.Companies.SmtpSignIn.Password,
+                    form["host"], int.TryParse(form["port"], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var port) ? port : 993,
+                    form["username"], form["password"], form["clearPassword"] == "true", form["folder"], form["senders"], form["useClaude"] == "true"), ct);
+                return "done=saved";
+            })).RequireAuthorization();
+
+        app.MapPost("/settings/bills-mailbox/check", async (IFormCollection _, BillsMailboxService mailbox, CancellationToken ct) =>
+            await Back("/settings/bills-mailbox", async () =>
+            {
+                var check = await mailbox.CheckAsync(ct);
+                return check.Started ? "done=started" : $"done=checked&documents={check.Documents}&messages={check.Messages}&refused={check.NotAllowed}";
             })).RequireAuthorization();
 
         return app;

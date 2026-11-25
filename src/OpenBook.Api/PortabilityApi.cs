@@ -23,6 +23,14 @@ internal static class PortabilityApi
             _ => Results.NotFound(),
         });
 
+        // Erasing a person's details at their request (admins). confirm is the record's name; what's in the way comes back
+        // as 400 erase.not_ready. The documents, the ledger and the audit log stay.
+        var erase = api.MapGroup("/erase");
+        erase.MapPost("/customers/{id:guid}", async (Guid id, EraseRequest r, Application.Lists.ErasureService s, CancellationToken ct) =>
+            await s.EraseCustomerAsync(id, r.Confirm, ct));
+        erase.MapPost("/vendors/{id:guid}", async (Guid id, EraseRequest r, Application.Lists.ErasureService s, CancellationToken ct) =>
+            await s.EraseVendorAsync(id, r.Confirm, ct));
+
         // Bodies are the files themselves (text/csv, or the .iif text). With dryRun=true nothing is saved.
         var import = api.MapGroup("/import");
         import.MapPost("/journal-entries", async (HttpRequest request, bool? dryRun, JournalImportService s, CancellationToken ct) =>
@@ -112,3 +120,6 @@ internal static class PortabilityApi
 /// <param name="MergeId">The duplicate, made inactive.</param>
 /// <param name="KeepId">The one everything moves to.</param>
 public sealed record MergeRequest(Guid MergeId, Guid KeepId);
+
+/// <param name="Confirm">The record's name, as its details show it.</param>
+public sealed record EraseRequest(string? Confirm);

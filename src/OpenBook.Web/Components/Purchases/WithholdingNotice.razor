@@ -1,0 +1,18 @@
+@* On an expense to a vendor backup withholding applies to: says so, and offers to hold it back. *@
+<div class="alert notice" role="status">
+    <p>Backup withholding applies to @Vendor.</p>
+    <label class="check">
+        <input type="checkbox" checked="@HoldBack" @onchange="e => HoldBackChanged.InvokeAsync(e.Value is true)" />
+        <span>Hold back @Labels.Amount(Amount) (@Rate) for the IRS: the payment is the total less that</span>
+    </label>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Vendor { get; set; } = "";
+    [Parameter, EditorRequired] public decimal Amount { get; set; }
+    [Parameter, EditorRequired] public DateOnly Date { get; set; }
+    [Parameter] public bool HoldBack { get; set; }
+    [Parameter] public EventCallback<bool> HoldBackChanged { get; set; }
+
+    private string Rate => $"{(BackupWithholding.RateOn(Date) * 100m).ToString("0.##", System.Globalization.CultureInfo.CurrentCulture)}%";
+}

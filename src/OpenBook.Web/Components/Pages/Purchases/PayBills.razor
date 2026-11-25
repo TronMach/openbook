@@ -20,7 +20,7 @@
             Paid @_paid.Count vendor(s):
             @foreach (var (p, i) in _paid.Select((p, i) => (p, i)))
             {
-                @(i > 0 ? ", " : "")<a href="/purchases/payments/@p.Id">@Vendor(p.VendorId) @Labels.Amount(p.Amount)@(p.Reference is null ? "" : $" (#{p.Reference})")</a>
+                @(i > 0 ? ", " : "")<a href="/purchases/payments/@p.Id">@Vendor(p.VendorId) @Labels.Amount(p.NetPaid)@(p.Withheld > 0m ? $" after {Labels.Amount(p.Withheld)} withheld" : "")@(p.Reference is null ? "" : $" (#{p.Reference})")</a>
             }.
         </div>
     }
@@ -104,10 +104,18 @@
                     </tfoot>
                 </table>
             </div>
+            var held = Held();
+            @if (held.Count > 0)
+            {
+                <div class="alert notice" role="status">
+                    <p>Backup withholding is held back for the IRS; the bills are still paid in full:
+                        @string.Join("; ", held.Select(h => $"{Vendor(h.VendorId)} {Labels.Amount(h.Amount)}")).</p>
+                </div>
+            }
             <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
 
             <div class="actions">
-                <button type="button" @onclick="PayAsync" disabled="@(!CanPay || _busy)">Pay @Labels.Amount(Total)</button>
+                <button type="button" @onclick="PayAsync" disabled="@(!CanPay || _busy)">Pay @Labels.Amount(Total - held.Sum(h => h.Amount))</button>
                 @if (Invalid)
                 {
                     <span class="out-of-balance">A payment is more than the bill's balance.</span>
@@ -120,6 +128,8 @@
 @code {
     private IReadOnlyList<BankAccountSummary> _accounts = [];
     private Dictionary<Guid, string> _vendors = [];
+    private Dictionary<Guid, Vendor> _withheldFrom = [];
+    private ChartOfAccounts _chart = new([]);
     private List<RowModel> _rows = [];
     private List<BillPayment> _paid = [];
     private Guid _accountId;
@@ -151,10 +161,12 @@
 
     private async Task LoadAsync()
     {
-        var (accounts, vendors, bills) = await Ops.RunAsync(async sp => (
+        (var accounts, var vendors, var bills, _chart) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<BankingService>().ListAccountsAsync(),
             await sp.GetRequiredService<VendorService>().ListRecordsAsync(includeInactive: true),
-            await sp.GetRequiredService<BillPaymentService>().OpenBillsAsync()));
+            await sp.GetRequiredService<BillPaymentService>().OpenBillsAsync(),
+            await sp.GetRequiredService<AccountService>().GetChartAsync()));
+        _withheldFrom = vendors.Where(v => v.BackupWithholdingFrom is not null).ToDictionary(v => v.Id);
         _accounts = accounts.OrderBy(a => a.Account.Type != AccountType.Bank).ToList();
         _vendors = vendors.ToDictionary(v => v.Id, v => v.DisplayName);
         _rows = bills.Select(b => new RowModel(b)).ToList();
@@ -206,6 +218,15 @@
             _busy = false;
         }
     }
+
+    /// <summary>What paying the ticked bills holds back from vendors backup withholding applies to: a payment per vendor and payables account.</summary>
+    private List<(Guid VendorId, decimal Amount)> Held() => _withheldFrom.Count == 0 ? [] : Selected
+        .Where(r => _withheldFrom.ContainsKey(r.Bill.VendorId))
+        .GroupBy(r => (r.Bill.VendorId, r.Bill.PayableAccountId))
+        .Select(g => (g.Key.VendorId, Amount: BackupWithholdingService.OnBills(_chart, _withheldFrom[g.Key.VendorId], _date, _accountId,
+            g.Select(r => (r.Bill, r.Amount ?? 0m)).ToList())))
+        .Where(h => h.Amount > 0m)
+        .ToList();
 
     private string Vendor(Guid id) => _vendors.GetValueOrDefault(id, "(unknown)");
 

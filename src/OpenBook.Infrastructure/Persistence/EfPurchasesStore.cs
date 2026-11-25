@@ -163,7 +163,7 @@ internal sealed class EfPurchasesStore(OpenBookDbContext db) : IPurchasesStore
     public Task<BillPayment?> GetPaymentAsync(Guid id, CancellationToken ct) => db.BillPayments.SingleOrDefaultAsync(p => p.Id == id, ct);
 
     public async Task<IReadOnlyList<BillPayment>> ListCheckPaymentsAsync(CancellationToken ct) =>
-        await db.BillPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.AchBatchId == null).ToListAsync(ct);
+        await db.BillPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.AchBatchId == null && p.ImportBatchId == null).ToListAsync(ct);
 
     public async Task<IReadOnlyList<BillPayment>> ListPaymentsForAchAsync(Guid accountId, CancellationToken ct) =>
         await db.BillPayments.AsNoTracking()

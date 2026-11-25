@@ -49,6 +49,14 @@ Documents waiting to be checked and receipts waiting to be recorded are listed o
 
 **Read again** (with Claude or on the server) replaces the fields, including your corrections. **Dismiss** removes a document from the inbox; **Put it back in the inbox** restores it.
 
+## Bills by email
+
+Vendors can send their invoices straight to OpenBook, or you can forward them. Give OpenBook a mailbox of its own, such as bills@your-company; then an administrator fills in **Settings → Bills by email**: the IMAP server, user name and password (for Gmail an app password; for Microsoft 365 or Outlook.com choose **Microsoft's sign-in** and follow the steps on the page), and ticks **Read bills from this mailbox**.
+
+Every 10 minutes the PDFs, scans and photos in new messages go into the document inbox as vendor invoices, read and matched like an upload, marked with who emailed them. Nothing is posted: each waits for someone to check it. Mail already in the mailbox when it's connected is left alone, the same file twice is taken once, small pictures (logos in signatures) are left out, and OpenBook only reads the mailbox, so messages stay where they are. **Check now** looks straight away.
+
+Under **Only from**, list the addresses or domains whose mail is read; blank takes attachments from anyone. Who an email says it's from can be made up, and false invoices by email are common, so check every document as carefully as one that came by post. When reading with Claude is switched on, **Let Claude read what arrives** decides whether emailed files are sent to it.
+
 ## Turning a document into a transaction
 
 The bottom of the page offers the next step for its kind:

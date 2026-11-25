@@ -175,11 +175,12 @@
         _names = customers.ToDictionary(c => c.Customer.Id, c => c.FullName ?? c.Customer.DisplayName);
         _donors = customers.Where(c => c.Customer.IsActive).ToList();
         _chart = await AccountService.GetChartAsync();
-        var active = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
-        _deposit = active.Where(a => a.Type == AccountType.Bank
+        // What it's set to stays on offer though it's inactive now, or it would save as another account or none.
+        var active = _chart.Ordered().Select(x => x.Account).Where(a => a.IsActive || a.Id == _editing?.DepositAccountId || a.Id == _editing?.IncomeAccountId).ToList();
+        _deposit = active.Where(a => a.Type == AccountType.Bank || a.Id == _editing?.DepositAccountId
                                      || (a.Type == AccountType.OtherCurrentAsset && string.Equals(a.Name, "Undeposited Funds", StringComparison.OrdinalIgnoreCase))).ToList();
         _income = active.Where(a => a.Type is AccountType.Income or AccountType.OtherIncome).ToList();
-        _classes = await Segments.ListAsync(SegmentKind.Class, includeInactive: false);
+        _classes = [.. (await Segments.ListAsync(SegmentKind.Class)).Where(c => c.Segment.IsActive || c.Segment.Id == _editing?.ClassId)];
         // Its own pledge stays on offer though paid or cancelled: missing from the list, it would save as none.
         _pledges = (await Gifts.ListPledgesAsync()).Where(p => p.Balance > 0m || p.Pledge.Id == _editing?.PledgeId).ToList();
     }

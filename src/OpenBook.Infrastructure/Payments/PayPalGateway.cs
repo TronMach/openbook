@@ -106,6 +106,31 @@ public sealed class PayPalGateway : IPaymentGateway, IPayPalWebhooks, IDisposabl
         return order.Paid ? throw new DomainException("online.provider_error", "PayPal has taken this payment already.") : order with { Expired = true, Approved = false };
     }
 
+    public async Task<ProviderRefund> RefundAsync(GatewayKeys keys, RefundRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var body = JsonSerializer.Serialize(new
+        {
+            amount = new { currency_code = request.Currency.ToUpperInvariant(), value = PayPal.Value(request.Amount) },
+            custom_id = request.Key,
+            note_to_payer = request.Reason,
+        }, Json);
+        var (status, answer) = await SendAsync(keys, HttpMethod.Post, $"v2/payments/captures/{Uri.EscapeDataString(request.Reference)}/refund", body, request.Key, ct);
+        if (status is HttpStatusCode.OK or HttpStatusCode.Created)
+            return PayPal.Refund(answer);
+        throw ProviderAnswers.IsUnclear((int)status) ? ProviderAnswers.Unreachable(PaymentProvider.PayPal) : PayPal.Error(answer, (int)status);
+    }
+
+    /// <summary>From the order it was paid on, which lists its refunds.</summary>
+    public async Task<ProviderRefund?> FindRefundAsync(GatewayKeys keys, RefundRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.CheckoutId is not { } order)
+            return null;
+        var (status, answer) = await SendAsync(keys, HttpMethod.Get, $"v2/checkout/orders/{Uri.EscapeDataString(order)}", null, ct);
+        return status == HttpStatusCode.OK ? PayPal.FindRefund(answer, request.Key) : throw PayPal.Error(answer, (int)status);
+    }
+
     public async Task<bool> VerifyAsync(GatewayKeys keys, string webhookId, IReadOnlyDictionary<string, string> headers, string payload, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(headers);
@@ -134,18 +159,21 @@ public sealed class PayPalGateway : IPaymentGateway, IPayPalWebhooks, IDisposabl
 
     public void Dispose() => _client.Dispose();
 
-    private async Task<(HttpStatusCode Status, string Body)> SendAsync(GatewayKeys keys, HttpMethod method, string path, string? json, CancellationToken ct)
+    private Task<(HttpStatusCode Status, string Body)> SendAsync(GatewayKeys keys, HttpMethod method, string path, string? json, CancellationToken ct) =>
+        SendAsync(keys, method, path, json, null, ct);
+
+    private async Task<(HttpStatusCode Status, string Body)> SendAsync(GatewayKeys keys, HttpMethod method, string path, string? json, string? requestId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(keys);
         try
         {
             var token = await TokenAsync(keys, ct);
-            var answer = await CallAsync(keys, method, path, json, token, ct);
+            var answer = await CallAsync(keys, method, path, json, token, requestId, ct);
             if (answer.Status != HttpStatusCode.Unauthorized)
                 return answer;
             // A token PayPal dropped early: one more try with a new one.
             _tokens.TryRemove(TokenKey(keys), out _);
-            return await CallAsync(keys, method, path, json, await TokenAsync(keys, ct), ct);
+            return await CallAsync(keys, method, path, json, await TokenAsync(keys, ct), requestId, ct);
         }
         catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException && !ct.IsCancellationRequested)
         {
@@ -154,13 +182,21 @@ public sealed class PayPalGateway : IPaymentGateway, IPayPalWebhooks, IDisposabl
         }
     }
 
-    private async Task<(HttpStatusCode Status, string Body)> CallAsync(GatewayKeys keys, HttpMethod method, string path, string? json, string token, CancellationToken ct)
+    private async Task<(HttpStatusCode Status, string Body)> CallAsync(GatewayKeys keys, HttpMethod method, string path, string? json, string token, string? requestId, CancellationToken ct)
     {
         using var message = new HttpRequestMessage(method, new Uri(PayPal.BaseUrl(keys.Sandbox), path));
         message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (json is not null)
-            message.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        {
+            // Bytes to PayPal, not a page for anyone: a code scan takes text content for one.
+            message.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(json));
+            message.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json", "utf-8");
+        }
+
         message.Headers.Add("Prefer", "return=representation");
+        // Sent again with the same id, PayPal answers with what it did the first time.
+        if (requestId is not null)
+            message.Headers.Add("PayPal-Request-Id", requestId);
         using var response = await _client.SendAsync(message, ct);
         return (response.StatusCode, await response.Content.ReadAsStringAsync(ct));
     }

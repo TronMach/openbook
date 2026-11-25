@@ -75,12 +75,16 @@ public sealed class SingleSignOnService(
         return settings;
     }
 
-    /// <summary>Null while single sign-on is off or incomplete.</summary>
+    /// <summary>What <c>/login?sso=</c> says when the client secret can't be read on this computer.</summary>
+    public const string SecretUnreadableCode = "sso.secret_unreadable";
+
+    /// <summary>
+    /// Null while single sign-on is off or incomplete. A secret that can't be read (other Data Protection keys) is null
+    /// rather than a refusal: the host reads this for every request, the ones that would fix it included.
+    /// </summary>
     public async Task<SsoClient?> ClientAsync(CancellationToken ct = default) =>
         await store.GetSignInSettingsAsync(ct) is { IsSsoReady: true } s
-            ? new SsoClient(s.Authority!, s.SsoClientId!, protector.Unprotect(s.ProtectedSsoClientSecret!)
-                ?? throw new DomainException("sso.secret_unreadable", "The single sign-on client secret can't be read on this computer. Enter it again under Settings, Sign-in."),
-                s.IsAnyMicrosoftDirectory)
+            ? new SsoClient(s.Authority!, s.SsoClientId!, protector.Unprotect(s.ProtectedSsoClientSecret!), s.IsAnyMicrosoftDirectory)
             : null;
 
     public async Task<SignInResult> SignInAsync(ExternalIdentity identity, CancellationToken ct = default)

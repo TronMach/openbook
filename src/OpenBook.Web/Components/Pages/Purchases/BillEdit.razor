@@ -69,6 +69,7 @@
                 </p>
             }
 
+            <UseTaxField Model="_useTax" Date="_date" Taxable="Taxable" DocumentId="Id" />
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
             <div class="field" style="margin-top: 1rem">
@@ -110,6 +111,8 @@
     private string? _memo;
     private string? _reason;
     private List<BillLineModel> _lines = [];
+    private UseTaxModel _useTax = new();
+    private decimal Taxable => UseTaxService.TaxableAmount(_chart, _lines.Select(l => (l.AccountId ?? Guid.Empty, l.ItemId, l.Amount ?? 0m)));
     private IReadOnlyList<BillableLine> _marked = [];
     private bool _loaded;
     private bool _busy;
@@ -142,6 +145,7 @@
             _stockItems = await Ops.RunAsync(async sp =>
                 (IReadOnlyList<Item>)(await sp.GetRequiredService<ItemService>().ListForDocumentAsync(_bill.Lines.Select(l => l.ItemId))).Where(i => i.IsInventory).ToList());
 
+            _useTax = UseTaxModel.From(await Ops.RunAsync<UseTaxService, UseTax?>(s => s.ForAsync(Id)));
             _reference = _bill.Reference;
             _date = _bill.Date;
             _dueDate = _bill.DueDate;
@@ -178,7 +182,7 @@
         {
             var filled = _lines.Where(BillLineModel.IsFilledLine).ToList();
             var command = new ChangeBillCommand(_date, BillLineModel.Drafts(filled), _reason!, _dueDate, _reference ?? "", _memo, _locationId,
-                WarehouseId: _warehouseId, FromLines: filled.Select(l => l.OriginalLine).ToList());
+                WarehouseId: _warehouseId, FromLines: filled.Select(l => l.OriginalLine).ToList(), UseTax: _useTax.ForChange);
             await Ops.ChangeAsync<Bill, BillService, Bill>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/purchases/bills/{Id}");
         }

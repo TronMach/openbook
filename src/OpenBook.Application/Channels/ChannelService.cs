@@ -18,7 +18,8 @@ public interface IChannelStore
     Task<IReadOnlyList<ChannelPayout>> ListPayoutsAsync(Guid? channelId, CancellationToken ct);
 
     Task<ChannelPayout?> GetPayoutAsync(Guid id, CancellationToken ct);
-    Task<IReadOnlySet<string>> PayoutIdsAsync(Guid channelId, CancellationToken ct);
+    /// <summary>The channel's payout ids; dismissed ones only with <paramref name="dismissed"/>.</summary>
+    Task<IReadOnlySet<string>> PayoutIdsAsync(Guid channelId, bool dismissed, CancellationToken ct);
 
     void Add(SalesChannel channel);
     void Add(ChannelPayout payout);
@@ -204,10 +205,14 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
 
     internal static string SnapshotOf(SalesChannel channel) => Snapshot(channel);
 
-    /// <summary>Saves payouts not seen before (live connections use this too).</summary>
-    internal async Task<PayoutImportResult> AddAsync(SalesChannel channel, IReadOnlyList<PayoutData> payouts, IReadOnlyList<string> warnings, bool save, CancellationToken ct)
+    /// <summary>
+    /// Saves payouts not seen before (live connections use this too). A file someone imports can bring back a payout they
+    /// dismissed; a live connection, which fetches the last days again every time, can't.
+    /// </summary>
+    internal async Task<PayoutImportResult> AddAsync(
+        SalesChannel channel, IReadOnlyList<PayoutData> payouts, IReadOnlyList<string> warnings, bool save, CancellationToken ct, bool live = false)
     {
-        var known = await store.PayoutIdsAsync(channel.Id, ct);
+        var known = await store.PayoutIdsAsync(channel.Id, dismissed: live, ct);
         var fresh = payouts.Where(p => !known.Contains(p.ExternalId)).GroupBy(p => p.ExternalId).Select(g => g.First()).ToList();
         var old = payouts.Where(p => known.Contains(p.ExternalId)).ToList();
         (var unheld, var heldLines) = await WithoutHeldLinesAsync(channel.Id, fresh, ct);
@@ -285,12 +290,19 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
     /// </summary>
     private async Task<IReadOnlyList<Domain.Nonprofit.Donation>> RecordedGiftsAsync(SalesChannel channel, ChannelPayout payout, CancellationToken ct)
     {
-        var references = payout.Lines.Where(l => l.Type is ChannelLineType.Sale or ChannelLineType.Cleared).Select(l => l.Reference).OfType<string>().ToHashSet(StringComparer.Ordinal);
-        if (references.Count == 0)
+        var charged = payout.Lines.Where(l => l.Type is ChannelLineType.Sale or ChannelLineType.Cleared && l.Reference is not null)
+            .GroupBy(l => l.Reference!, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount), StringComparer.Ordinal);
+        if (charged.Count == 0)
             return [];
-        var wanted = references.ToList();
+        var wanted = charged.Keys.ToList();
+        // A check's number can be an order's number too: a gift paid that way isn't the charge, and one that doesn't say how
+        // it was paid (or a check split between gifts) is only when it comes to what was charged.
         var found = (await gifts.FindDonationsAsync(d => d.Status == DocumentStatus.Posted && d.Kind == Domain.Nonprofit.GiftKind.Cash
-            && d.DepositId == null && d.PayoutId == null && d.Reference != null && wanted.Contains(d.Reference), ct)).ToList();
+            && d.DepositId == null && d.PayoutId == null && d.Reference != null && wanted.Contains(d.Reference), ct))
+            .Where(d => d.Method is not (Domain.Sales.PaymentMethod.Cash or Domain.Sales.PaymentMethod.Check))
+            .GroupBy(d => d.Reference!, StringComparer.Ordinal)
+            .Where(g => g.All(d => d.Method is not null) || g.Sum(d => d.Amount) == charged[g.Key])
+            .SelectMany(g => g).ToList();
         if (found.Count == 0)
             return [];
         if (channel.ClearingAccountId is null)
@@ -345,19 +357,36 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
         var channel = await store.GetChannelAsync(channelId, ct) ?? throw new EntityNotFoundException(ChannelEntity, channelId);
         var taxAccounts = await TaxAccountsAsync(ct);
         var involved = taxAccounts.Values.Append(channel.TaxAccountId).ToHashSet();
+        var chart = await accounts.GetChartAsync(ct);
+        // What went to an agency since switched off stays there.
+        var retired = (await taxes.ListAgenciesAsync(ct)).Where(a => !a.IsActive).Select(a => a.LiabilityAccountId).Where(a => !involved.Contains(a)).ToHashSet();
         var moved = 0;
+        var changed = new List<string>();
         foreach (var payout in (await store.ListPayoutsAsync(channel.Id, ct)).Where(p => p.Status == PayoutStatus.Posted && p.TaxMoveEntryId is null && p.JournalEntryId is not null))
         {
             var posted = await engine.GetAsync(payout.JournalEntryId!.Value, ct);
             if (posted is null)
                 continue;
-            var was = posted.Lines.Where(l => involved.Contains(l.AccountId)).GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Debit - l.Credit));
+            // The channel's tax account (or an agency's) may have been another when it posted: that's a liability its entry
+            // has, which nothing but the tax can have gone to.
+            var elsewhere = payout.Lines.Where(l => l.Type is not (ChannelLineType.Tax or ChannelLineType.MarketplaceTax))
+                .Select(l => channel.RuleAccountFor(l) ?? channel.AccountFor(l.Type)).Append(channel.DepositAccountId).ToHashSet();
+            var places = posted.Lines.Select(l => l.AccountId)
+                .Where(a => !elsewhere.Contains(a) && !retired.Contains(a) && chart.Find(a)?.Type == AccountType.OtherCurrentLiability)
+                .Concat(involved).ToHashSet();
+            var was = posted.Lines.Where(l => places.Contains(l.AccountId)).GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Debit - l.Credit));
             var now = payout.Postings(channel, taxAccounts, await OrderRegionsAsync(channel, payout, ct))
-                .Where(l => involved.Contains(l.AccountId)).GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Debit - l.Credit));
-            var lines = involved.Select(a => (Account: a, Change: now.GetValueOrDefault(a) - was.GetValueOrDefault(a))).Where(x => x.Change != 0m)
+                .Where(l => places.Contains(l.AccountId)).GroupBy(l => l.AccountId).ToDictionary(g => g.Key, g => g.Sum(l => l.Debit - l.Credit));
+            var lines = places.Select(a => (Account: a, Change: now.GetValueOrDefault(a) - was.GetValueOrDefault(a))).Where(x => x.Change != 0m)
                 .Select(x => x.Change > 0m ? Domain.Ledger.JournalLineDraft.Dr(x.Account, x.Change) : Domain.Ledger.JournalLineDraft.Cr(x.Account, -x.Change)).ToList();
-            if (lines.Count < 2)
+            if (lines.Count == 0)
                 continue;
+            if (lines.Sum(l => l.Debit - l.Credit) != 0m)
+            {
+                changed.Add(payout.ExternalId);
+                continue;
+            }
+
             var before = PayoutSnapshot(payout, channel);
             var entry = await engine.StageAsync(new PostJournalEntryCommand(date, channel.Classed(lines),
                 $"{channel.Name} payout {payout.ExternalId}: sales tax to the states' agencies", ChannelPayout.TaxMoveSource, payout.Id, LocationId: channel.LocationId), ct);
@@ -368,6 +397,9 @@ public sealed partial class ChannelService(IChannelStore store, IChannelOrderSto
 
         if (moved > 0)
             await store.SaveChangesAsync(ct);
+        else if (changed.Count > 0)
+            throw new DomainException("channel.tax_move_accounts",
+                $"The accounts these payouts' tax went to have changed too much since to move it: {string.Join(", ", changed.Take(5))}{(changed.Count > 5 ? "…" : "")}. Move it with a journal entry.");
         return moved;
     }
 

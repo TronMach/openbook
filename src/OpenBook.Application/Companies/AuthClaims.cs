@@ -25,6 +25,11 @@ public static class AuthClaims
         LevelIn(user, area) >= UserRole.Standard
         && (!user.HasClaim(Scoped, "true") || user.HasClaim(Scope, $"{area}:write"));
 
+    /// <summary>The same for reading: any level in the area, and for a limited key a scope in it.</summary>
+    public static bool MayRead(ClaimsPrincipal user, string area) =>
+        LevelIn(user, area) is not null
+        && (!user.HasClaim(Scoped, "true") || user.HasClaim(Scope, $"{area}:read") || user.HasClaim(Scope, $"{area}:write"));
+
     public static bool HasPermissionSet(ClaimsPrincipal user) => user?.HasClaim(c => c.Type == PermissionSet) == true;
 
     /// <summary>A permission set's level in an area (null: none); for users with a built-in role, their role.</summary>

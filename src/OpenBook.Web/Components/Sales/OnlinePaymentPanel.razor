@@ -1,10 +1,18 @@
 @* An invoice's online payment links: make one to send the customer, see whether it's been paid, or check with the provider. *@
 @inject OnlinePaymentService Online
 
-@if (_ready || _links.Count > 0)
+@if (_ready || _links.Count > 0 || _charges.Count > 0)
 {
     <div class="card no-print" id="online" style="margin-top: 1.5rem">
         <h2>Online payment</h2>
+        @if (CardError is not null)
+        {
+            <div class="alert error" role="alert">@CardError</div>
+        }
+        else if (CardMessage is { } message)
+        {
+            <div class="alert notice" role="status">@message</div>
+        }
         @foreach (var notice in _notices)
         {
             <div class="alert @(notice.ResolvedAt is null ? "error" : "notice")" role="status">
@@ -18,7 +26,7 @@
                 {
                     <span>
                         @(notice.Kind == OnlineNoticeKind.Refund
-                            ? "Record it in the books as a refund of the payment's credit (change the payment so the money isn't applied, then refund it), or as a credit memo refund."
+                            ? "It was made there, not from OpenBook, so record it in the books as a refund of the payment's credit (change the payment so the money isn't applied, then refund it), or as a credit memo refund."
                             : "If the dispute is lost, record the payment as returned on its page; if it's won, nothing changes.")
                     </span>
                     <PostForm Action="@($"/sales/online-notices/{notice.Id}/resolve")" data-enhance="false" class="inline">
@@ -78,17 +86,90 @@
                 <button type="submit" class="secondary">Get a payment link for the balance</button>
             </PostForm>
         }
+        @if (_charges.Count > 0)
+        {
+            <h3>Charges to the saved card</h3>
+            <table class="data">
+                <thead><tr><th>Made</th><th class="num">Amount</th><th>Status</th><th>By</th></tr></thead>
+                <tbody>
+                    @foreach (var charge in _charges)
+                    {
+                        <tr class="@(charge.Status == CardChargeStatus.NotMade ? "inactive" : null)">
+                            <td>@charge.CreatedAt.InCompanyTime().ToString("g")</td>
+                            <td class="num">@Labels.Amount(charge.Amount)</td>
+                            <td>
+                                @(charge.Status switch
+                                {
+                                    CardChargeStatus.Succeeded => "Paid",
+                                    CardChargeStatus.Declined => "Declined",
+                                    CardChargeStatus.NotMade => "Not charged",
+                                    _ => "Waiting",
+                                })
+                                @if (charge.CustomerPaymentId is { } chargedPayment)
+                                {
+                                    <span> · <a href="/sales/payments/@chargedPayment">payment</a></span>
+                                }
+                                @if (charge.Failure is { } failure)
+                                {
+                                    <div class="muted">@failure</div>
+                                }
+                            </td>
+                            <td>@(charge.Automatic ? "Automatic" : charge.CreatedBy)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        @if (IsOpen && _card is { Available: true, Card: { } card })
+        {
+            <p class="muted">
+                @(HoldAutoCharge
+                    ? $"This invoice isn't charged automatically to the customer's saved card ({card.Label})."
+                    : $"Charged automatically to the customer's saved card ({card.Label}) when it's due.")
+            </p>
+            <div class="inline-actions">
+                <PostForm Action="@($"/sales/invoices/{InvoiceId}/charge-card")" data-enhance="false" class="inline">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary" data-confirm="@($"Charge the balance to {card.Label} now?")">Charge the saved card</button>
+                </PostForm>
+                <PostForm Action="@($"/sales/invoices/{InvoiceId}/auto-charge")" data-enhance="false" class="inline">
+                    <AntiforgeryToken />
+                    <label class="check">
+                        <input type="checkbox" name="hold" value="true" checked="@HoldAutoCharge" />
+                        <span>Don't charge automatically</span>
+                    </label>
+                    <button type="submit" class="secondary">Save</button>
+                </PostForm>
+            </div>
+        }
     </div>
 }
 
 @code {
     private IReadOnlyList<PaymentLink> _links = [];
     private IReadOnlyList<OnlinePaymentNotice> _notices = [];
+    private IReadOnlyList<CardCharge> _charges = [];
+    private SavedCardView? _card;
     private bool _ready;
     private OnlinePaymentSettings _settings = default!;
 
     [Parameter, EditorRequired] public Guid InvoiceId { get; set; }
     [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid CustomerId { get; set; }
+    [Parameter] public bool HoldAutoCharge { get; set; }
+
+    [SupplyParameterFromQuery(Name = "cardError")] private string? CardError { get; set; }
+    [SupplyParameterFromQuery(Name = "cardDone")] private string? CardDone { get; set; }
+
+    private string? CardMessage => CardDone switch
+    {
+        nameof(CardChargeStatus.Succeeded) => "Charged to the saved card, and recorded as a payment.",
+        nameof(CardChargeStatus.Declined) => "The card was declined: see why below.",
+        nameof(CardChargeStatus.Pending) => "Stripe hasn't answered yet. OpenBook asks again within the hour, and doesn't charge it twice.",
+        "held" => "Saved: this invoice isn't charged automatically.",
+        "released" => "Saved: this invoice is charged automatically when it's due.",
+        _ => null,
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -96,6 +177,8 @@
         _ready = _settings.IsReady;
         _links = await Online.LinksAsync(InvoiceId);
         _notices = await Online.NoticesAsync(InvoiceId);
+        _charges = await Online.ChargesAsync(InvoiceId);
+        _card = IsOpen && CustomerId != Guid.Empty ? await Online.CardViewAsync(CustomerId) : null;
     }
 
     private PaymentProvider ProviderOf(OnlinePaymentNotice notice) => _links.FirstOrDefault(l => l.Id == notice.PaymentLinkId)?.Provider ?? PaymentProvider.Stripe;

@@ -177,6 +177,13 @@ public sealed class CapturedDocument
 
     public void SetFileHash(string? hash) => FileHash = hash;
 
+    public const int MaxReceivedFrom = 400;
+
+    /// <summary>Who emailed it and the email's subject ("ana@paper.example: Invoice 1042"), as the email says; null when it was uploaded.</summary>
+    public string? ReceivedFrom { get; private set; }
+
+    public void SetReceivedFrom(string? from) => ReceivedFrom = Common.Text.Optional(from, MaxReceivedFrom, "document.received_from_too_long", "Sender");
+
     public static CapturedDocument Create(DocumentKind kind, string fileName, DateTimeOffset now, string? createdBy)
     {
         if (!Enum.IsDefined(kind))

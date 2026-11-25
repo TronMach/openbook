@@ -24,7 +24,7 @@
             <div class="row">
                 <div class="field">
                     <label for="customer">Customer</label>
-                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" CustomerAdded="c => _customers = [.. _customers, c]" @bind-Value="_customerId" @bind-Value:after="DefaultTaxCode" Placeholder="Choose a customer…" />
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" CustomerAdded="c => _customers = [.. _customers, c]" @bind-Value="_customerId" @bind-Value:after="CustomerChangedAsync" Placeholder="Choose a customer…" />
                 </div>
                 <div class="field">
                     <label for="number">Credit memo number</label>
@@ -33,7 +33,7 @@
                 </div>
                 <div class="field">
                     <label for="date">Date</label>
-                    <input id="date" type="date" @bind="_date" />
+                    <input id="date" type="date" @bind="_date" @bind:after="DateChangedAsync" />
                 </div>
             </div>
 
@@ -41,9 +41,10 @@
 
             <SalesLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Items="_items" OnItemAdded="i => _items = [.. _items, i]" OnChange="StateHasChanged" CustomerId="_customerId" Date="_date" Tax="SelectedTax" Exempt="@(TaxExemption is not null)" ExemptFrom="ExemptFrom" TypedTax="true" @bind-TaxAmount="_taxAmount" />
 
-            <MoreOptions HasContent="@(_segments.Locations.Count > 0 || _warehouses.Count > 1)" Open="@(_locationId is not null || _warehouseId is not null)">
+            <MoreOptions HasContent="@(_segments.Locations.Count > 0 || _warehouses.Count > 1 || _reps.Count > 0)" Open="@(_locationId is not null || _warehouseId is not null || _salesRepId != _defaultRepId)">
                 <LocationField Options="_segments" @bind-Value="_locationId" />
                 <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+                <SalesRepField People="_reps" @bind-Value="_salesRepId" />
             </MoreOptions>
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Message to customer <span class="muted">(optional)</span></label>
@@ -62,18 +63,21 @@
 @code {
     private decimal? _taxAmount; // typed in place of the worked-out tax (C328)
     private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
-    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines);
+    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines, Guid? SalesRepId = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => _customerId is null && _lines.All(l => l.IsBlank) ? null
-        : new Draft(_customerId, _number, _date, _memo, _taxCodeId, _locationId, _warehouseId, _lines);
+        : new Draft(_customerId, _number, _date, _memo, _taxCodeId, _locationId, _warehouseId, _lines, _salesRepId);
 
-    private void Restore(Draft draft)
+    private async Task Restore(Draft draft)
     {
         _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
         (_number, _date, _memo, _taxCodeId, _locationId, _warehouseId) = (draft.Number, draft.Date, draft.Memo, draft.TaxCodeId, draft.LocationId, draft.WarehouseId);
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+        await DefaultSalesRepAsync();
+        _salesRepId = _reps.Any(w => w.Id == draft.SalesRepId) ? draft.SalesRepId : null;
+        await DateChangedAsync();
     }
 
     private IReadOnlyList<Customer> _customers = [];
@@ -102,8 +106,20 @@
     private void DefaultTaxCode() =>
         _taxCodeId = TaxCustomer?.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
 
-    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync() =>
-        Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+    /// <summary>The codes at their rates on the document's date, which is what the save charges.</summary>
+    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync()
+    {
+        var on = _date;
+        return Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync(on));
+    }
+
+    private async Task DateChangedAsync()
+    {
+        var on = _date;
+        var codes = await LoadTaxCodesAsync();
+        if (on == _date)
+            _taxCodes = codes;
+    }
 
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
@@ -116,12 +132,32 @@
 
     private Guid? _locationId;
 
+    // Who the sale is credited to: the customer's responsible person, unless changed.
+    private IReadOnlyList<Worker> _reps = [];
+    private Guid? _salesRepId;
+    private Guid? _defaultRepId;
+
+    private async Task DefaultSalesRepAsync()
+    {
+        var customer = _customerId;
+        var rep = await Ops.RunAsync<SalesReps, Guid?>(s => s.DefaultAsync(customer));
+        if (customer == _customerId)
+            _salesRepId = _defaultRepId = rep;
+    }
+
+    private Task CustomerChangedAsync()
+    {
+        DefaultTaxCode();
+        return DefaultSalesRepAsync();
+    }
+
 
     protected override async Task OnInitializedAsync()
     {
 
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
+        _reps = await Ops.RunAsync<SalesReps, IReadOnlyList<Worker>>(s => s.ListAsync());
         _taxCodes = await LoadTaxCodesAsync();
         (_customers, _items, _number) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(s => s.Customer).ToList(),
@@ -129,6 +165,7 @@
             await sp.GetRequiredService<InvoiceService>().SuggestNumberAsync()));
         _customerId = PresetCustomer;
         DefaultTaxCode();
+        await DefaultSalesRepAsync();
         _loaded = true;
     }
 
@@ -140,7 +177,7 @@
         _error = null;
         try
         {
-            var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, TaxAmount: TypedTaxAmount);
+            var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, TaxAmount: TypedTaxAmount, SalesRepId: _salesRepId ?? Guid.Empty);
             var credit = await Ops.RunAsync<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(command), _closingPassword);
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/credit-memos/{credit.Id}");

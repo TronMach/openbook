@@ -59,7 +59,7 @@ On the loan's page, **Record a payment**: date, amount and **paid from**. OpenBo
 
 Payments must be in date order; only the latest can be voided. Once a payment is recorded, the loan's terms are fixed, though its **name, class and notes** can still be changed on its page. With a **class**, each payment's interest is posted to it.
 
-A loan entered by mistake: void its payments, latest first, then **Void this loan** on its page, saying why. That reverses the entry recording the money received, and the loan leaves the list, the Loans report and the forecast. To change the terms of a loan, void it and enter it again.
+A loan entered by mistake: void its payments, latest first, and a line of credit's draws, then **Void this loan** on its page, saying why. That reverses the entry recording the money received, and the loan leaves the list, the Loans report and the forecast. To change the terms of a loan, void it and enter it again.
 
 If you also download bank statements, match the payment in the bank review list to the one recorded here rather than adding it again.
 

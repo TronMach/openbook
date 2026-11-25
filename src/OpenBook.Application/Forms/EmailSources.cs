@@ -253,7 +253,8 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
                 {
                     // An in-kind gift's letter gives no value, and neither does its email: the line with this fill-in drops out.
                     ["donor"] = donor.DisplayName, ["number"] = number, ["date"] = D(gift.Date), ["amount"] = gift.Kind == GiftKind.InKind ? "" : M(gift.Amount), ["company"] = company.Name,
-                }, Customer: donor, Refusal: gift.Status != DocumentStatus.Posted ? ("donation.voided", "This gift is voided.") : null);
+                }, Customer: donor, Refusal: gift.Status != DocumentStatus.Posted ? ("donation.voided", "This gift is voided.")
+                    : !gift.Counts ? ("donation.returned", "This gift came back from the bank, so there's nothing to thank the donor for.") : null);
         }
 
         var year = source.Year ?? throw new DomainException("email.year_required", "Choose the year of the giving statement.");
@@ -261,10 +262,7 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
         {
             // A household's statement (C622): to the member it goes to, with its members' money gifts in the total.
             var sendTo = await DonorAsync(household.PrimaryDonorId, ct);
-            var members = household.Members.Select(m => m.DonorId).ToList();
-            var (from, to) = (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
-            var together = (await store.FindDonationsAsync(d => members.Contains(d.DonorId) && d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.Date >= from && d.Date <= to
-                && d.Kind != GiftKind.InKind, ct)).Sum(d => d.Amount);
+            var together = await GivenAsync([.. household.Members.Select(m => m.DonorId)], year, ct);
             return new EmailContext(HouseholdService.EntityType, household.Id, household.Name, $"Giving statement {year}",
                 FormService.FileName(company, $"Giving statement {year}", household.Name), sendTo.Email, new Dictionary<string, string>
                 {
@@ -273,9 +271,7 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
         }
 
         var giver = await DonorAsync(source.Id, ct);
-        var (giverId, first, last) = (giver.Id, new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
-        var total = (await store.FindDonationsAsync(d => d.DonorId == giverId && d.Status == DocumentStatus.Posted && d.Date >= first && d.Date <= last && d.Kind != GiftKind.InKind, ct))
-            .Sum(d => d.Amount);
+        var total = await GivenAsync([giver.Id], year, ct);
         return new EmailContext("customer", giver.Id, giver.DisplayName, $"Giving statement {year}", FormService.FileName(company, $"Giving statement {year}", giver.DisplayName),
             giver.Email, new Dictionary<string, string>
             {
@@ -289,6 +285,17 @@ internal sealed class GiftEmailSource(INonprofitStore store, ISalesStore sales, 
         EmailKind.PledgeReminder => gifts.PledgeStatementAsync(source.Id, CompanyTime.Today, ct),
         _ => StatementAsync(source, ct),
     };
+
+    /// <summary>The year's money gifts as the statement lists them: not returned ones, and those moved in as history too.</summary>
+    private async Task<decimal> GivenAsync(List<Guid> donors, int year, CancellationToken ct)
+    {
+        var (first, last) = (new DateOnly(year, 1, 1), new DateOnly(year, 12, 31));
+        var total = (await store.FindDonationsAsync(d => donors.Contains(d.DonorId) && d.Status == DocumentStatus.Posted && d.ReturnedOn == null
+            && d.Date >= first && d.Date <= last && d.Kind != GiftKind.InKind, ct)).Sum(d => d.Amount);
+        foreach (var donor in donors)
+            total += (await store.ListGiftHistoryAsync(donor, ct)).Where(h => h.Date >= first && h.Date <= last && h.Kind != GiftKind.InKind).Sum(h => h.Amount);
+        return total;
+    }
 
     private async Task<RenderedForm> StatementAsync(EmailSource source, CancellationToken ct) =>
         await store.GetHouseholdAsync(source.Id, ct) is not null

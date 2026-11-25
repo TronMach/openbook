@@ -304,14 +304,18 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
 
         var parts = new List<(string Label, IReadOnlyDictionary<Guid, decimal> Amounts, bool Drill)>();
         Dictionary<Guid, decimal> allActual = [], allBudget = [], allYear = [];
+        // A class counts once in the total, though it has two budgets or its parent has one as well.
+        var counted = new HashSet<Guid?>();
         foreach (var budget in budgets)
         {
             var months = (asOf.Year - budget.FiscalYearStart.Year) * 12 + asOf.Month - budget.FiscalYearStart.Month + 1;
-            var actual = FinancialReports.Sum(await ledger.LinesAsync(reportBasis, budget.FiscalYearStart, asOf, new SegmentFilter(budget.ClassId), ct));
+            var lines = await ledger.LinesAsync(reportBasis, budget.FiscalYearStart, asOf, new SegmentFilter(budget.ClassId), ct);
+            var actual = FinancialReports.Sum(lines);
             var toDate = Budgeted(budget, months);
             parts.Add(($"{budget.Name}: actual", actual, false));
             parts.Add(($"{budget.Name}: budget", toDate, false));
-            Add(allActual, actual);
+            Add(allActual, FinancialReports.Sum(lines.Where(l => !counted.Contains(l.ClassId))));
+            counted.UnionWith(lines.Select(l => l.ClassId));
             Add(allBudget, toDate);
             Add(allYear, Budgeted(budget, Budget.Periods));
         }
@@ -329,7 +333,7 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
             StatementTables.Columns("", columns, derived),
             StatementTables.ProfitAndLoss(columns, derived),
             reportBasis,
-            "Each column is a budget for one class, with that class and its subclasses' actual figures. A class with no budget isn't here, so the totals are the budgeted programs'.");
+            "Each column is a budget for one class, with that class and its subclasses' actual figures. A class with no budget isn't here, so the totals are the budgeted programs'; a class under two budgets counts once in the total actual.");
     }
 
     /// <summary>
@@ -371,8 +375,9 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
 
     /// <summary>
     /// A worksheet for an owner's estimated tax: for each of the IRS's four payment periods of the year, the net profit in
-    /// it, a set-aside at <paramref name="percent"/> of that, and what was paid (debits to equity accounts named for
-    /// estimated tax). A rough guide: the real figure depends on the owner's whole return.
+    /// it, a set-aside at <paramref name="percent"/> of that, and what was paid for it (debits to equity accounts named for
+    /// estimated tax, dated after the due date before and up to its own: the fourth runs into January). A rough guide: the real figure
+    /// depends on the owner's whole return.
     /// </summary>
     public async Task<ReportTable> EstimatedTaxAsync(int year, decimal percent = 25m, CancellationToken ct = default)
     {
@@ -387,16 +392,20 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
             ("June to August", new(year, 6, 1), new(year, 8, 31), new(year, 9, 15)),
             ("September to December", new(year, 9, 1), new(year, 12, 31), new(year + 1, 1, 15)),
         ];
-        var lines = await ledger.LinesAsync(company.DefaultReportBasis, periods[0].From, periods[^1].To, ct);
+        // Due on a weekend, a payment is in time on the Monday.
+        static DateOnly InTime(DateOnly due) => due.DayOfWeek switch { DayOfWeek.Saturday => due.AddDays(2), DayOfWeek.Sunday => due.AddDays(1), _ => due };
+        var lines = await ledger.LinesAsync(company.DefaultReportBasis, periods[0].From, InTime(periods[^1].Due), ct);
         var rows = new List<ReportTableRow>();
         decimal totalProfit = 0m, totalAside = 0m, totalPaid = 0m;
+        var paidAfter = InTime(new DateOnly(year, 1, 15));
         foreach (var (label, from, to, due) in periods)
         {
             var inPeriod = lines.Where(l => l.Date >= from && l.Date <= to).ToList();
             var profit = -inPeriod.Where(l => chart.Find(l.AccountId) is { } a && !a.Type.IsBalanceSheet()).Sum(l => l.Amount);
             var aside = decimal.Round(Math.Max(0m, profit) * percent / 100m, 2, MidpointRounding.AwayFromZero);
-            var paid = inPeriod.Where(l => paidInto.Contains(l.AccountId)).Sum(l => l.Amount);
-            rows.Add(new ReportTableRow([label, due.ToString("d", System.Globalization.CultureInfo.CurrentCulture), profit, aside, paid, aside - paid]));
+            var paid = lines.Where(l => l.Date > paidAfter && l.Date <= InTime(due) && paidInto.Contains(l.AccountId)).Sum(l => l.Amount);
+            paidAfter = InTime(due);
+            rows.Add(new ReportTableRow([label, InTime(due).ToString("d", System.Globalization.CultureInfo.CurrentCulture), profit, aside, paid, aside - paid]));
             (totalProfit, totalAside, totalPaid) = (totalProfit + profit, totalAside + aside, totalPaid + paid);
         }
 
@@ -406,7 +415,7 @@ public sealed class StatementReports(ReportLedger ledger, AccountService account
             [company.Name, $"{year} · set aside at {percent:0.##}% of net profit"],
             [new("Period"), new("Payment due"), new("Net profit", ColumnFormat.Money), new("Set aside", ColumnFormat.Money), new("Paid", ColumnFormat.Money), new("Still to pay", ColumnFormat.Money)],
             rows,
-            Note: "A rough guide, not a tax calculation: what the owner owes depends on their whole return. Payments count when recorded to an equity account named for estimated tax (the sole proprietor chart has Owner's Equity:Estimated Tax Payments), never as a business expense.");
+            Note: "A rough guide, not a tax calculation: what the owner owes depends on their whole return. A payment counts for the period whose due date it was made by (from the day after the one before), so the fourth includes the first half of January. Payments count when recorded to an equity account named for estimated tax (the sole proprietor chart has Owner's Equity:Estimated Tax Payments), never as a business expense.");
     }
 
     public async Task<ReportTable> TaxSummaryTableAsync(DateOnly from, DateOnly to, ReportBasis? basis = null, CancellationToken ct = default)

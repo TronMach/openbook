@@ -10,16 +10,22 @@ using OpenBook.Domain.SalesTax;
 namespace OpenBook.Api;
 
 public sealed record TaxAgencyResponse(
-    Guid Id, string Name, Guid LiabilityAccountId, FilingFrequency FilingFrequency, string? RegistrationNumber, bool IsActive, decimal? Owed = null)
+    Guid Id, string Name, Guid LiabilityAccountId, FilingFrequency FilingFrequency, string? RegistrationNumber, bool IsActive, decimal? Owed = null,
+    string? Region = null, int DueDays = 20)
 {
     public static TaxAgencyResponse From(TaxAgency a, decimal? owed = null) =>
-        new(a.Id, a.Name, a.LiabilityAccountId, a.FilingFrequency, a.RegistrationNumber, a.IsActive, owed);
+        new(a.Id, a.Name, a.LiabilityAccountId, a.FilingFrequency, a.RegistrationNumber, a.IsActive, owed, a.Region, a.DueDays);
 }
 
-public sealed record TaxRateResponse(Guid Id, string Name, Guid AgencyId, decimal Percent, bool IsActive)
+/// <param name="Percent">The rate before the first of <paramref name="Changes"/>.</param>
+/// <param name="PercentToday">What a document dated today is charged.</param>
+public sealed record TaxRateResponse(Guid Id, string Name, Guid AgencyId, decimal Percent, bool IsActive, decimal PercentToday, IReadOnlyList<TaxRateChangeResponse> Changes)
 {
-    public static TaxRateResponse From(TaxRate r) => new(r.Id, r.Name, r.AgencyId, r.Percent, r.IsActive);
+    public static TaxRateResponse From(TaxRate r) =>
+        new(r.Id, r.Name, r.AgencyId, r.Percent, r.IsActive, r.PercentOn(CompanyTime.Today), [.. r.Changes.Select(c => new TaxRateChangeResponse(c.EffectiveFrom, c.Percent))]);
 }
+
+public sealed record TaxRateChangeResponse(DateOnly EffectiveFrom, decimal Percent);
 
 public sealed record TaxCodeResponse(Guid Id, string Name, string? Description, IReadOnlyList<Guid> RateIds, bool IsCombined, bool IsActive)
 {
@@ -116,6 +122,15 @@ internal static class SalesTaxApi
         tax.MapPost("/payments/{id:guid}/void", async (Guid id, VoidRequest r, SalesTaxPaymentService s, CancellationToken ct) =>
             SalesTaxPaymentResponse.From(await s.VoidAsync(id, r.Reason, ct)));
 
+        // The use tax on a bill, bank transaction or vendor credit.
+        tax.MapGet("/use-tax/{documentId:guid}", async (Guid documentId, UseTaxService s, CancellationToken ct) =>
+            await s.ForAsync(documentId, ct) is { } u
+                ? Results.Ok(new
+                {
+                    Document = u.Kind, u.DocumentId, u.Date, u.TaxCodeId, u.Taxable, Tax = u.Total, u.IsVoided,
+                    Rates = u.Lines.OrderBy(l => l.Position).Select(l => new { l.TaxRateId, l.RateName, l.Percent, l.Amount }),
+                })
+                : Results.NotFound());
         tax.MapGet("/liability", async (DateOnly from, DateOnly to, string? basis, SalesTaxReports s, CancellationToken ct) =>
         {
             var report = await s.LiabilityAsync(from, to, string.Equals(basis, "cash", StringComparison.OrdinalIgnoreCase) ? ReportBasis.Cash : ReportBasis.Accrual, ct);

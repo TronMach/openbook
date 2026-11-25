@@ -5,6 +5,7 @@
 @inject WorkerService WorkerService
 @inject AccountService AccountService
 @inject CustomerService CustomerService
+@inject OpenBook.Application.IRecordVersions Versions
 
 <PageTitle>@(_view is null ? L["New expense claim"] : L["Change expense claim {0}", _view.Claim.Number]) · OpenBook</PageTitle>
 
@@ -38,6 +39,7 @@
         <p class="muted">@L["One line per receipt. Saving hands the claim in for approval; attach the receipts on the claim's page afterwards."]</p>
         <PostForm Action="@(_view is null ? "/time/claims" : $"/time/claims/{_view.Claim.Id}")" data-enhance="false">
             <AntiforgeryToken />
+            <input type="hidden" name="version" value="@_version" />
             <div class="row">
                 @if (_view is null)
                 {
@@ -110,6 +112,9 @@
     private int _rows;
     private DateOnly _today;
 
+    // Noted before the claim is read, so saving can tell if it was changed or reviewed meanwhile.
+    private int? _version;
+
     [Parameter] public Guid? Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
     [SupplyParameterFromQuery] private int? Rows { get; set; }
@@ -120,7 +125,11 @@
     {
         _today = CompanyTime.Today;
         if (Id is { } id)
+        {
+            _version = await Versions.GetAsync<ExpenseClaim>(id);
             _view = await Claims.GetAsync(id);
+        }
+
         _workers = await WorkerService.ListAsync();
         _me = await WorkerService.ForCurrentUserAsync();
         _chart = await AccountService.GetChartAsync();

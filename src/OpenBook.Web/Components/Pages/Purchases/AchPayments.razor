@@ -91,7 +91,7 @@
                                 <td>@c.Vendor.DisplayName</td>
                                 <td>@c.Payment.Reference</td>
                                 <td>@c.BankAccount.Kind @c.BankAccount.Masked</td>
-                                <td class="num">@Labels.Amount(c.Payment.Amount)</td>
+                                <td class="num">@Labels.Amount(c.Payment.NetPaid)@(c.Payment.Withheld > 0m ? $" ({Labels.Amount(c.Payment.Withheld)} withheld)" : "")</td>
                             </tr>
                         }
                     </tbody>

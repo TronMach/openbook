@@ -47,6 +47,9 @@ public sealed class InventoryAdjustment
 {
     public const string Source = "inventory.adjustment";
 
+    /// <summary>The entry taking the value of opening stock back out, when the books already held it; voided with the adjustment.</summary>
+    public const string AlreadyHeldSource = "inventory.opening_held";
+
     private readonly List<InventoryAdjustmentLine> _lines = [];
 
     private InventoryAdjustment() { }

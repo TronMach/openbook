@@ -16,6 +16,14 @@ public sealed record ReadDocumentRequest(bool UseClaude);
 public sealed record ReceiveDocumentRequest(DateOnly? Date = null);
 
 /// <summary>The document inbox: upload (raw body), check, read again, dismiss; the Claude setting (admin).</summary>
+public sealed record BillsMailboxResponse(
+    bool Enabled, OpenBook.Domain.Companies.SmtpSignIn SignIn, string? Host, int Port, string? Username, bool HasPassword, string Folder, string? AllowedSenders, bool UseClaude,
+    DateTimeOffset? LastCheckedAt, DateTimeOffset? LastReceivedAt, string? LastError)
+{
+    public static BillsMailboxResponse From(BillsMailbox m, BillsMailboxProgress p) => new(
+        m.Enabled, m.SignIn, m.Host, m.Port, m.Username, m.ProtectedPassword is not null, m.Folder, m.AllowedSenders, m.UseClaude, p.LastCheckedAt, p.LastReceivedAt, p.LastError);
+}
+
 public static class DocumentsApi
 {
     public static RouteGroupBuilder MapDocumentsApi(this RouteGroupBuilder api)
@@ -27,7 +35,7 @@ public static class DocumentsApi
         // The file is the raw body: ?kind=VendorInvoice&fileName=invoice.pdf[&claude=false][&purchaseOrderId=…].
         documents.MapPost("", async (HttpRequest request, DocumentKind kind, string fileName, bool? claude, Guid? purchaseOrderId, DocumentCaptureService s, CancellationToken ct) =>
         {
-            var document = await s.UploadAsync(kind, fileName, request.Body, claude, purchaseOrderId, ct);
+            var document = await s.UploadAsync(kind, fileName, request.Body, claude, purchaseOrderId, ct: ct);
             return Results.Created($"/api/documents/{document.Id}", document);
         });
         // Earlier uploads of the same file, and bills that may already stand for it.
@@ -59,6 +67,12 @@ public static class DocumentsApi
             DocumentReadingSettingsResponse.From(await s.GetSettingsAsync(ct)));
         api.MapPut("/settings/document-reading", async (DocumentReadingSettingsCommand r, DocumentCaptureService s, CancellationToken ct) =>
             DocumentReadingSettingsResponse.From(await s.SaveSettingsAsync(r, ct)));
+
+        api.MapGet("/settings/bills-mailbox", async (BillsMailboxService s, CancellationToken ct) =>
+            BillsMailboxResponse.From(await s.GetAsync(ct), await s.ProgressAsync(ct)));
+        api.MapPut("/settings/bills-mailbox", async (BillsMailboxCommand r, BillsMailboxService s, CancellationToken ct) =>
+            BillsMailboxResponse.From(await s.SaveAsync(r, ct), await s.ProgressAsync(ct)));
+        api.MapPost("/settings/bills-mailbox/check", async (BillsMailboxService s, CancellationToken ct) => await s.CheckAsync(ct));
         return api;
     }
 }

@@ -184,14 +184,40 @@ public static class Recurrence
     {
         if (oldFrequency == frequency && oldInterval == interval && oldStart == start)
             return (oldStart, oldOffset);
+        // Dates passed over before anything was made stay passed over.
+        if (start == oldStart)
+        {
+            var next = OccurrenceDate(oldFrequency, oldInterval, oldStart, posted + oldOffset);
+            return Continue(next, oldFrequency == RecurrenceFrequency.Weekly ? next.Day : oldStart.Day, frequency, interval, posted);
+        }
+
         if (posted == 0)
             return (start, 0);
-        if (start == oldStart)
-            return (OccurrenceDate(oldFrequency, oldInterval, oldStart, posted + oldOffset), -posted);
         var last = OccurrenceDate(oldFrequency, oldInterval, oldStart, posted + oldOffset - 1);
         if (start <= last)
             throw new DomainException("recurring.start_before_last", $"This schedule has reached {last:yyyy-MM-dd}, so choose a first date after that.");
         return (start, -posted);
+    }
+
+    /// <summary>
+    /// A schedule whose next date is <paramref name="next"/>. One that keeps the 29th, 30th or 31st has reached a shorter
+    /// month: starting on that day would lose the month's end for good, so it starts some steps back, in a month that has
+    /// the day, at the place that gives the same next date.
+    /// </summary>
+    private static (DateOnly Start, int Offset) Continue(DateOnly next, int day, RecurrenceFrequency frequency, int interval, int posted)
+    {
+        var months = frequency switch { RecurrenceFrequency.Monthly => interval, RecurrenceFrequency.Quarterly => 3 * interval, _ => 0 };
+        if (interval is > 0 and <= 99 && months > 0 && day > next.Day)
+        {
+            for (var back = 1; back <= 12 && next.Year - JournalEntry.MinYear > months * back / 12; back++)
+            {
+                var month = new DateOnly(next.Year, next.Month, 1).AddMonths(-months * back);
+                if (DateTime.DaysInMonth(month.Year, month.Month) >= day)
+                    return (month.AddDays(day - 1), back - posted);
+            }
+        }
+
+        return (next, -posted);
     }
 
     /// <summary>How many dates of the schedule from place <paramref name="index"/> fall before <paramref name="today"/>.</summary>

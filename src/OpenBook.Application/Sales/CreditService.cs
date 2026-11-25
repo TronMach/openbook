@@ -11,6 +11,7 @@ using OpenBook.Domain.Sales;
 namespace OpenBook.Application.Sales;
 
 /// <param name="TaxCodeId">Null takes the customer's tax code; <see cref="Guid.Empty"/> charges no sales tax.</param>
+/// <param name="SalesRepId">Whose sale it takes back: null takes the customer's responsible person, <see cref="Guid.Empty"/> is nobody.</param>
 public sealed record CreateCreditMemoCommand(
     Guid CustomerId,
     DateOnly Date,
@@ -21,7 +22,8 @@ public sealed record CreateCreditMemoCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
-    decimal? TaxAmount = null);
+    decimal? TaxAmount = null,
+    Guid? SalesRepId = null);
 
 /// <summary>A correction to a posted credit memo (<see cref="CreditService.ChangeCreditMemoAsync"/>). The customer can't change.</summary>
 /// <param name="Lines">Every line the credit memo should have, tax lines left out (they're recalculated).</param>
@@ -32,6 +34,7 @@ public sealed record CreateCreditMemoCommand(
 /// <param name="WarehouseId">As for a new credit memo: null is the default warehouse.</param>
 /// <param name="FromLines">For each of <paramref name="Lines"/>, the number of the line it continues (null for a new one), so
 /// its custom field values follow it; null takes the lines as continuing the old ones in order.</param>
+/// <param name="SalesRepId">Null keeps the credit memo's sales rep; <see cref="Guid.Empty"/> is nobody.</param>
 public sealed record ChangeCreditMemoCommand(
     DateOnly Date,
     IReadOnlyList<SalesLineDraft> Lines,
@@ -44,7 +47,8 @@ public sealed record ChangeCreditMemoCommand(
     Guid? WarehouseId = null,
     IReadOnlyList<int?>? FromLines = null,
     decimal? TaxAmount = null,
-    bool WorkOutTax = false);
+    bool WorkOutTax = false,
+    Guid? SalesRepId = null);
 
 public enum CreditKind
 {
@@ -83,6 +87,8 @@ public sealed class CreditService(
     CustomFields.CustomFieldStamper customFields,
     ICompanyStore companies,
     ILedgerStore ledger,
+    Projects.IProjectStore projects,
+    SalesReps salesReps,
     IClock clock,
     ICurrentUser user)
 {
@@ -125,6 +131,7 @@ public sealed class CreditService(
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var salesRepId = await salesReps.ForNewAsync(command.SalesRepId, customer.Id, ct);
         var stock = await inventory.PlanReturnAsync(lines, command.Date, warehouseId, ct);
         var id = Guid.CreateVersion7();
         var memo = $"Credit memo {number} · {customer.DisplayName}";
@@ -136,6 +143,7 @@ public sealed class CreditService(
         var credit = CreditMemo.Create(id, number, customer.Id, receivables.Id, command.Date, lines, entry.Id, clock.UtcNow, command.Memo, taxCodeId, exemption);
         credit.SetLocation(command.LocationId);
         credit.SetWarehouse(warehouseId);
+        credit.SetSalesRep(salesRepId);
         await SalesAddresses.KeepAsync(store, credit.CustomerId, credit.KeepAddresses, ct);
         store.Add(credit);
         store.Add(Audit(AuditAction.Created, CreditMemoType, credit.Id, null, Snapshot(credit)));
@@ -189,6 +197,7 @@ public sealed class CreditService(
                 engine.EnsureOpen(company, refundedOn, $"changing the lines of credit memo {credit.Number}, refunded on {refundedOn:yyyy-MM-dd}");
         }
 
+        var salesRepId = await salesReps.ForChangeAsync(command.SalesRepId, credit.SalesRepId, ct);
         var warehouseId = command.WarehouseId == credit.WarehouseId ? credit.WarehouseId : await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([credit.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(credit);
@@ -206,6 +215,7 @@ public sealed class CreditService(
         credit.Change(number, command.Date, lines, entry.Id, command.Memo, taxCodeId, exemption);
         credit.SetLocation(command.LocationId);
         credit.SetWarehouse(warehouseId);
+        credit.SetSalesRep(salesRepId);
 
         // Drafts become lines 1, 2, ... in order (tax lines after them); custom field values follow their line.
         await customFields.MoveLinesAsync(CreditMemoType, credit.Id, drafts.Count, command.FromLines, ct);
@@ -228,12 +238,26 @@ public sealed class CreditService(
         if (credit.AmountRefunded > 0m)
             throw new DomainException("creditmemo.refunded", $"Credit memo {credit.Number} was refunded. Void the refund first.");
 
+        // Time it took back off an invoice is billed there again, so it mustn't stay waiting to be billed too.
+        var taken = await projects.ListTimeTakenBackByAsync(credit.Id, ct);
+        if (taken.Any(t => t.InvoiceId is not null))
+            throw new DomainException("creditmemo.time_billed_again", $"Time that credit memo {credit.Number} took off an invoice has been billed again since. Void that invoice first.");
+        var standing = (await store.FindInvoicesAsync(taken.Select(t => t.TakenBackInvoiceId).OfType<Guid>().ToHashSet(), ct))
+            .Where(i => i.Status == DocumentStatus.Posted).Select(i => i.Id).ToHashSet();
+
         var stock = await inventory.PlanReversalAsync(InventorySources.CreditMemo, credit.Id, credit.Date, $"credit memo {credit.Number}", ct);
         var before = Snapshot(credit);
         await engine.StageVoidAsync(credit.JournalEntryId, reason, fromDocument: true, ct);
         inventory.Apply(stock, InventorySources.CreditMemo, credit.Id);
         credit.Void();
         store.Add(Audit(AuditAction.Voided, CreditMemoType, credit.Id, before, Snapshot(credit)));
+        foreach (var t in taken)
+        {
+            var timeBefore = Projects.TimeService.Snapshot(t);
+            t.UndoTakeBack(t.TakenBackInvoiceId is { } invoiceId && standing.Contains(invoiceId));
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, Projects.TimeService.EntityType, t.Id, timeBefore, Projects.TimeService.Snapshot(t)));
+        }
+
         await store.SaveChangesAsync(ct);
         return credit;
     }
@@ -447,6 +471,7 @@ public sealed class CreditService(
         c.Memo,
         c.TaxCodeId,
         c.TaxExemption,
+        c.SalesRepId,
         Lines = c.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),
         Applications = c.Applications.Select(a => new { a.InvoiceId, a.Amount, a.AppliedOn }),
     });

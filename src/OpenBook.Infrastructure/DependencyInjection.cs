@@ -74,6 +74,8 @@ public static class DependencyInjection
         services.AddScoped<ICompanyStore, EfCompanyStore>();
         services.AddScoped<IBankingStore, EfBankingStore>();
         services.AddScoped<ISalesStore, EfSalesStore>();
+        services.AddScoped<IOnlineMoneyStore, EfOnlineMoneyStore>();
+        services.AddScoped<ICommissionStore, EfCommissionStore>();
         services.AddScoped<IPurchasesStore, EfPurchasesStore>();
         services.AddScoped<OpenBook.Application.SalesTax.ISalesTaxStore, EfSalesTaxStore>();
         services.AddScoped<OpenBook.Application.Pricing.IPricingStore, EfPricingStore>();
@@ -103,6 +105,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IRecordVersions, EfRecordVersions>();
         services.AddScoped<Application.Lists.IRecordMerger, EfRecordMerger>();
+        services.AddScoped<Application.Lists.IRecordEraser, EfRecordEraser>();
         services.AddScoped<IDataExporter, DataExporter>();
         services.TryAddSingleton(new Net.OutboundPolicy());
         services.AddSingleton<OpenBook.Application.Webhooks.IWebhookSender, HttpWebhookSender>();
@@ -122,12 +125,15 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Channels.IChannelClient, Channels.ChannelClient>();
         services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));
         services.TryAddSingleton<OpenBook.Application.Documents.IClaudeDocumentReader, Documents.ClaudeDocumentReader>();
+        services.TryAddSingleton<OpenBook.Application.Documents.IMailboxReader, Documents.ImapMailboxReader>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IFormRenderer, MigraDocFormRenderer>();
         services.AddSingleton<OpenBook.Application.Inventory.ILabelRenderer, Forms.LabelRenderer>();
         services.AddSingleton<OpenBook.Application.Reporting.IReportExporter, ReportExporter>();
         services.AddSingleton<IEmailSender, MailKitEmailSender>();
+        services.TryAddSingleton<IMicrosoftMailClient>(_ => new Forms.MicrosoftMailClient());
+        services.AddSingleton<IMicrosoftMailTokens, Forms.MicrosoftMailTokens>();
         services.AddSingleton<ITextSender, Forms.TwilioTextSender>();
         return services;
     }

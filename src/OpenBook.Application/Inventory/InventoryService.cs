@@ -45,7 +45,7 @@ public sealed record ExpiringLot(Item Item, string Lot, DateOnly ExpiresOn, deci
 public sealed class InventoryService(IInventoryStore store, ISalesStore sales, ICompanyStore companies, IClock clock, ICurrentUser user)
 {
     /// <summary>A placeholder source for movements simulated while planning several takes of the same item.</summary>
-    private const string Planned = "planned";
+    internal const string Planned = "planned";
 
     /// <summary>
     /// Starts the line memo of the cost correction posted when stock fills a shortfall, so cash-basis reports can keep
@@ -452,7 +452,9 @@ public sealed class InventoryService(IInventoryStore store, ISalesStore sales, I
             }
         }
 
-        return new InventoryPlan([], open.Select(m => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((_, _, at) => m.Reverse(date, at))).ToList());
+        return new InventoryPlan([], open.Select(m => (Func<string, Guid, DateTimeOffset, InventoryMovement>)((_, _, at) =>
+            // A fill dated later than its document (Receive) is undone on its own day, or the days between would hold value with no units.
+            m.Reverse(m.Date > date ? m.Date : date, at))).ToList());
     }
 
     /// <summary>

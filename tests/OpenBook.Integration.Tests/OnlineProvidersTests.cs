@@ -289,6 +289,76 @@ public sealed class OnlineProvidersTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Money_taken_on_a_link_OpenBook_had_closed_is_still_recorded()
+    {
+        await UseSquare();
+        var square = await Invoice(3m);
+        var squareLink = await Link(square);
+        await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_acme.Id, Jan10, _undeposited.Id, [new ApplyToInvoice(square.Id, 100m)])));
+        Assert.Null(await Online(s => s.ExpireOutdatedAsync()));
+        Assert.Equal(PaymentLinkStatus.Expired, (await Again(squareLink)).Status);
+        _db.Square.Pay(squareLink.SessionId);
+        Assert.Equal(WebhookOutcome.Handled, await SquareHook(_db.Square.PaymentEvent(squareLink.SessionId)));
+        Assert.Equal(WebhookOutcome.Ignored, await SquareHook(_db.Square.PaymentEvent(squareLink.SessionId)));
+        // 200.00 was still owed; the other 100.00 is the customer's credit.
+        Assert.Equal((300m, 0m), (Assert.Single(await Payments(), p => p.Amount == 300m).Amount, await Balance(square)));
+
+        // PayPal held the capture back (an eCheck), and it completed after the link had lapsed.
+        await UsePayPal();
+        var paypal = await Invoice(2m);
+        var paypalLink = await Link(paypal);
+        _db.PayPal.Drop(paypalLink.SessionId);
+        _db.Clock.UtcNow += PayPal.Lifetime + OnlinePaymentService.PayPalGrace + TimeSpan.FromMinutes(1);
+        Assert.Null(await Online(s => s.ExpireOutdatedAsync()));
+        Assert.Equal(PaymentLinkStatus.Expired, (await Again(paypalLink)).Status);
+        Assert.Equal(WebhookOutcome.Handled, await PayPalHook(FakePayPal.CaptureCompleted(paypalLink.SessionId, "CAP-LATE", "200.00")));
+        Assert.Equal(0m, await Balance(paypal));
+    }
+
+    [Fact]
+    public async Task Changing_the_provider_or_removing_its_key_closes_the_links_customers_hold_first()
+    {
+        await UseSquare();
+        var paidInvoice = await Invoice(1m);
+        var paid = await Link(paidInvoice);
+        var open = await Link(await Invoice(2m));
+        _db.Square.Pay(paid.SessionId);
+
+        // A save that's refused anyway closes nothing.
+        Assert.Equal("online.incomplete", await Refused(() => UsePayPal(secret: null)));
+        Assert.Empty(_db.Square.Deleted);
+
+        // Square can't be reached: the change waits, keys and links as they were.
+        _db.Square.Down = true;
+        Assert.Equal("online.links_open", await Refused(() => UsePayPal()));
+        Assert.Equal(PaymentProvider.Square, (await Online(s => s.GetSettingsAsync())).Provider);
+        Assert.Equal(PaymentLinkStatus.Open, (await Again(open)).Status);
+
+        // Reachable again: the paid one is recorded, the other closed, and the provider changes.
+        _db.Square.Down = false;
+        Assert.Equal(PaymentProvider.PayPal, (await UsePayPal()).Provider);
+        Assert.Equal(PaymentLinkStatus.Paid, (await Again(paid)).Status);
+        Assert.Equal(0m, await Balance(paidInvoice));
+        Assert.Equal(PaymentLinkStatus.Expired, (await Again(open)).Status);
+        Assert.Equal(["PL2"], _db.Square.Deleted);
+
+        // Removing the key is the same: an approval is taken while it still can be.
+        var approved = await Link(await Invoice(4m));
+        _db.PayPal.Approve(approved.SessionId);
+        var off = await Online(s => s.SaveSettingsAsync(new OnlinePaymentSettingsCommand(false, _undeposited.Id, PublicUrl, ClearSecretKey: true)));
+        Assert.False(off.HasKeys);
+        Assert.Equal(PaymentLinkStatus.Paid, (await Again(approved)).Status);
+
+        // And it can be changed anyway.
+        await UseSquare();
+        var left = await Link(await Invoice(5m));
+        _db.Square.Down = true;
+        var changed = await Online(s => s.SaveSettingsAsync(new OnlinePaymentSettingsCommand(true, _undeposited.Id, PublicUrl, FakeStripe.SecretKey, "whsec_test",
+            Provider: PaymentProvider.Stripe, LeaveLinks: true)));
+        Assert.Equal((PaymentProvider.Stripe, PaymentLinkStatus.Open), (changed.Provider, (await Again(left)).Status));
+    }
+
+    [Fact]
     public async Task Answers_from_PayPal_and_Square_that_cant_be_read_are_refused()
     {
         Assert.Equal("online.provider_unreadable", Assert.Throws<DomainException>(() => PayPal.Order("{}")).Code);

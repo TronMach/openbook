@@ -13,11 +13,11 @@ namespace OpenBook.Api;
 
 public sealed record ProjectResponse(
     Guid Id, Guid CustomerId, string Name, ProjectStatus Status, DateOnly? StartDate, DateOnly? EndDate, decimal? BudgetRevenue, decimal? BudgetCost,
-    decimal? BudgetHours, string? Description)
+    decimal? BudgetHours, string? Description, BillingArrangement Arrangement = BillingArrangement.TimeAndMaterials, decimal? Fee = null)
 {
     public static ProjectResponse From(ProjectSummary s) => new(
         s.Project.Id, s.Customer.Id, s.FullName, s.Project.Status, s.Project.StartDate, s.Project.EndDate, s.Project.BudgetRevenue, s.Project.BudgetCost,
-        s.Project.BudgetHours, s.Project.Description);
+        s.Project.BudgetHours, s.Project.Description, s.Project.Arrangement, s.Project.Fee);
 }
 
 public sealed record ProjectFiguresResponse(
@@ -29,10 +29,10 @@ public sealed record ProjectFiguresResponse(
 }
 
 /// <param name="CostRate">What an hour costs; null below the accountant level.</param>
-public sealed record WorkerResponse(Guid Id, string Name, decimal? CostRate, decimal? BillRate, string? Username, Guid? VendorId, bool IsActive, string? Role = null, decimal? WeeklyHours = null)
+public sealed record WorkerResponse(Guid Id, string Name, decimal? CostRate, decimal? BillRate, string? Username, Guid? VendorId, bool IsActive, string? Role = null, decimal? WeeklyHours = null, Guid? ClassId = null)
 {
     public static WorkerResponse From(Worker w, ClaimsPrincipal user) =>
-        new(w.Id, w.Name, ProjectsApi.SeesCosts(user) ? w.CostRate : null, w.BillRate, w.Username, w.VendorId, w.IsActive) { Role = w.Role, WeeklyHours = w.WeeklyHours };
+        new(w.Id, w.Name, ProjectsApi.SeesCosts(user) ? w.CostRate : null, w.BillRate, w.Username, w.VendorId, w.IsActive) { Role = w.Role, WeeklyHours = w.WeeklyHours, ClassId = w.ClassId };
 }
 
 public sealed record TimeEntryResponse(
@@ -104,11 +104,22 @@ public static class ProjectsApi
             var project = await s.CreateAsync(r, ct);
             return Results.Created($"/api/projects/{project.Id}", ProjectResponse.From((await s.GetAsync(project.Id, ct))!));
         });
-        projects.MapPut("/{id:guid}", async (Guid id, ProjectDetails r, ProjectService s, CancellationToken ct) =>
+        // How it's billed stays when it's left out, or a fixed fee's time would all be billed; null clears the fee.
+        projects.MapPut("/{id:guid}", async (Guid id, HttpRequest request, ProjectService s, CancellationToken ct) =>
         {
+            var (r, sent) = await ApiKeep.ReadAsync<ProjectDetails>(request, ct);
+            if (await s.GetAsync(id, ct) is { Project: var p })
+            {
+                r = r with
+                {
+                    Arrangement = sent.Contains(nameof(r.Arrangement)) ? r.Arrangement : p.Arrangement,
+                    Fee = sent.Contains(nameof(r.Fee)) ? r.Fee : p.Fee,
+                };
+            }
+
             await s.UpdateAsync(id, r, ct);
             return ProjectResponse.From((await s.GetAsync(id, ct))!);
-        });
+        }).Accepts<ProjectDetails>("application/json");
 
         projects.MapGet("/workers", async (bool? includeInactive, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
             (await s.ListAsync(includeInactive ?? false, ct)).Select(w => WorkerResponse.From(w, user)));
@@ -117,8 +128,14 @@ public static class ProjectsApi
             var worker = await s.CreateAsync(r, ct);
             return Results.Created($"/api/projects/workers/{worker.Id}", WorkerResponse.From(worker, user));
         });
-        projects.MapPut("/workers/{id:guid}", async (Guid id, WorkerDetails r, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
-            WorkerResponse.From(await s.UpdateAsync(id, r, ct), user));
+        // Their class stays when it's left out; null clears it.
+        projects.MapPut("/workers/{id:guid}", async (Guid id, HttpRequest request, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
+        {
+            var (r, sent) = await ApiKeep.ReadAsync<WorkerDetails>(request, ct);
+            if (!sent.Contains(nameof(r.ClassId)) && await s.GetAsync(id, ct) is { } w)
+                r = r with { ClassId = w.ClassId };
+            return WorkerResponse.From(await s.UpdateAsync(id, r, ct), user);
+        }).Accepts<WorkerDetails>("application/json");
         projects.MapPost("/workers/{id:guid}/active", async (Guid id, bool active, WorkerService s, ClaimsPrincipal user, CancellationToken ct) =>
             WorkerResponse.From(await s.SetActiveAsync(id, active, ct), user));
 

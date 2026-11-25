@@ -80,18 +80,11 @@ public sealed class InventoryAdjustmentService(
             string? lots;
             if (draft.QuantityChange == 0m && draft.ValueChange is { } writeDown)
             {
-                // Value only: what's on hand on the date loses value, layer by layer in proportion; the units stay.
-                var onHand = Fifo.Layers(history.Where(m => m.Date <= command.Date)).Where(l => l.RemainingQuantity > 0m && l.RemainingCost > 0m).ToList();
-                var available = onHand.Sum(l => l.RemainingCost);
-                if (-writeDown > available)
-                    throw new DomainException("inventory.write_down_too_much", $"{item.Name} has {available:N2} of stock on hand on that date to write down.");
-                var shares = Shares.ByWeight(-writeDown, [.. onHand.Select(l => l.RemainingCost)]);
-                for (var k = 0; k < onHand.Count; k++)
+                foreach (var (layerId, share) in WriteDown(item, history, command.Date, -writeDown))
                 {
-                    if (shares[k] == 0m)
-                        continue;
-                    var (layerId, share) = (onHand[k].LayerId, shares[k]);
                     movements.Add((type, id, at) => InventoryMovement.CostAdjustment(layerId, item.Id, command.Date, -share, type, id, at));
+                    // So another line for the item sees it.
+                    history.Add(InventoryMovement.CostAdjustment(layerId, item.Id, command.Date, -share, InventoryService.Planned, Guid.Empty, DateTimeOffset.UnixEpoch));
                 }
 
                 lines.Add((item.Id, 0m, writeDown, place, null));
@@ -158,6 +151,47 @@ public sealed class InventoryAdjustmentService(
     }
 
     /// <summary>
+    /// What a write-down takes off each layer: what's on hand on the date loses value, the units stay. Only what is still
+    /// on hand counts, at no more than it costs now: value taken off what has been sold since would be left with no units.
+    /// Layers of an average-cost item have no cost of their own, so the whole value on hand is the limit, by quantity.
+    /// </summary>
+    private static List<(Guid LayerId, decimal Share)> WriteDown(Domain.Sales.Item item, List<InventoryMovement> history, DateOnly date, decimal amount)
+    {
+        var then = history.Where(m => m.Date <= date).ToList();
+        var onHand = Fifo.Layers(history).Where(l => l.RemainingQuantity > 0m).ToDictionary(l => l.LayerId);
+        var held = Fifo.Layers(then).Where(l => l.RemainingQuantity > 0m).ToList();
+        var left = held.Where(l => onHand.ContainsKey(l.LayerId)).Select(l => (Then: l, Now: onHand[l.LayerId])).ToList();
+        decimal before;
+        decimal available;
+        List<decimal> weights;
+        if (item.CostMethod == Domain.Sales.InventoryCostMethod.Average)
+        {
+            var shortfalls = history.Where(m => m.IsShortfall).Select(m => m.Id).ToHashSet();
+            weights = [.. left.Select(x => Math.Min(x.Then.RemainingQuantity, x.Now.RemainingQuantity))];
+            var units = weights.Sum();
+            var all = onHand.Values.Sum(l => l.RemainingQuantity);
+            var now = history.Where(m => !shortfalls.Contains(m.LayerId)).Sum(m => m.Cost);
+            before = then.Where(m => !shortfalls.Contains(m.LayerId)).Sum(m => m.Cost);
+            available = units == 0m ? 0m : Math.Max(0m, Math.Min(before, units == all ? now : decimal.Round(now * units / all, 2, MidpointRounding.ToZero)));
+        }
+        else
+        {
+            weights = [.. left.Select(x => Math.Max(0m, Math.Min(x.Then.RemainingCost, x.Now.RemainingCost)))];
+            before = held.Sum(l => Math.Max(0m, l.RemainingCost));
+            available = weights.Sum();
+        }
+
+        if (amount > available)
+        {
+            throw new DomainException("inventory.write_down_too_much", $"{item.Name} has {available:N2} of stock on hand on that date to write down."
+                + (before > available ? " The rest of what was there then has been sold or used since." : ""));
+        }
+
+        var shares = Shares.ByWeight(amount, weights);
+        return [.. left.Select((x, i) => (x.Then.LayerId, Share: shares[i])).Where(x => x.Share != 0m)];
+    }
+
+    /// <summary>
     /// Records a physical count: one adjustment for the differences between what was counted and what the books hold in
     /// that warehouse on the date (increases at the item's purchase cost, into no bin; decreases from any bin, FIFO).
     /// Null when everything counted matched. Lot and serial items are counted lot by lot on an ordinary adjustment.
@@ -211,6 +245,10 @@ public sealed class InventoryAdjustmentService(
         var plan = await inventory.PlanReversalAsync(EntityType, id, adjustment.Date, "this adjustment", ct);
         var before = Snapshot(adjustment);
         await engine.StageVoidAsync(adjustment.JournalEntryId, reason, fromDocument: true, ct);
+        // Opening stock the books already held: the entry that took its value back out goes with it.
+        var held = await engine.ListAllAsync(new JournalEntryFilter(Source: InventoryAdjustment.AlreadyHeldSource, SourceId: id), ct);
+        foreach (var entry in held.Where(e => e.Status == JournalEntryStatus.Posted && e.Kind == JournalEntryKind.Standard))
+            await engine.StageVoidAsync(entry.Id, reason, fromDocument: true, ct);
         inventory.Apply(plan, EntityType, id);
         adjustment.Void();
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Voided, EntityType, id, before, Snapshot(adjustment)));

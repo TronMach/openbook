@@ -88,6 +88,9 @@
 
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <MoreOptions HasContent="@(_reps.Count > 0)" Open="@(_salesRepId is not null)">
+                <SalesRepField People="_reps" @bind-Value="_salesRepId" />
+            </MoreOptions>
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">@L["Message to customer"] <span class="muted">@L["(optional, printed on the invoice)"]</span></label>
                 <textarea id="memo" rows="2" @bind="_memo" maxlength="1000"></textarea>
@@ -119,6 +122,9 @@
 
     private Invoice? _invoice;
     private Customer? _customer;
+
+    // For a parent's exemption, which covers a sub-customer billed with it.
+    private IReadOnlyList<Customer> _customers = [];
     private IReadOnlyList<Item> _items = [];
     private string? _number;
     private DateOnly _date;
@@ -140,15 +146,32 @@
     private IReadOnlyList<Warehouse> _warehouses = [];
     private Guid? _warehouseId;
     private Guid? _locationId;
+    private IReadOnlyList<Worker> _reps = [];
+    private Guid? _salesRepId;
 
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
     private bool KeepsTax => _taxCodeId == _invoice?.TaxCodeId;
-    private string? TaxExemption => SelectedTax is null ? null : KeepsTax ? _invoice?.TaxExemption : _customer?.ExemptionOn(_date);
-    private Func<TaxComponent, bool> ExemptFrom => KeepsTax && _invoice is { } kept ? TaxCalculator.KeptExemption(kept.Lines, kept.TaxExemption) : SalesLineModel.ExemptFrom(_customer?.ExemptionOn(_date) is null ? null : _customer);
+    private string? TaxExemption => SelectedTax is null ? null : KeepsTax ? _invoice?.TaxExemption : CustomerTree.ExemptionOn(_customer, _date, _customers);
+    private Func<TaxComponent, bool> ExemptFrom => KeepsTax && _invoice is { } kept ? TaxCalculator.KeptExemption(kept.Lines, kept.TaxExemption) : SalesLineModel.ExemptFrom(CustomerTree.ExemptionHolder(_customer, _date, _customers));
     private bool TaxExemptionExpired => SelectedTax is not null && !KeepsTax && _customer?.ExemptionCertificate is not null && TaxExemption is null;
 
     private bool CanSave => !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason)
-        && (_allLocked || SalesLineModel.Total(_lines) + _locked.Sum(l => l.Amount) > 0m);
+        && (_allLocked || SalesLineModel.MakesSale(_lines, _locked.Sum(l => l.Amount)));
+
+    /// <summary>Other codes at their rates on the document's date, which is what changing to one charges.</summary>
+    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync()
+    {
+        var (document, on) = (_invoice!, _date);
+        return Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(document.TaxCodeId, document.Lines, on));
+    }
+
+    private async Task DateChangedAsync()
+    {
+        var on = _date;
+        var codes = await LoadTaxCodesAsync();
+        if (on == _date)
+            _taxCodes = codes;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -159,17 +182,21 @@
             _taxAmount = TaxCalculator.TypedTax(_invoice.Lines, _invoice.TaxExemption);
             _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_invoice.LocationId, .. _invoice.Lines.Select(l => l.ClassId)]));
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
-            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_invoice.TaxCodeId, _invoice.Lines));
-            (_customer, _items) = await Ops.RunAsync(async sp => (
-                await sp.GetRequiredService<CustomerService>().GetAsync(_invoice.CustomerId),
+            _reps = await Ops.RunAsync<SalesReps, IReadOnlyList<Worker>>(s => s.ListAsync(_invoice.SalesRepId));
+            _date = _invoice.Date;
+            _taxCodes = await LoadTaxCodesAsync();
+            (_customers, _items) = await Ops.RunAsync(async sp => (
+                (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync(includeInactive: true)).Select(c => c.Customer).ToList(),
                 await sp.GetRequiredService<ItemService>().ListForDocumentAsync(_invoice.Lines.Select(l => l.ItemId))));
 
+            _customer = _customers.FirstOrDefault(c => c.Id == _invoice.CustomerId);
+
             _number = _invoice.Number;
-            _date = _invoice.Date;
             _dueDate = _invoice.DueDate;
             _memo = _invoice.Memo;
             _taxCodeId = _invoice.TaxCodeId;
             _locationId = _invoice.LocationId;
+            _salesRepId = _invoice.SalesRepId;
             _warehouseId = _invoice.WarehouseId;
 
             // The same rule the service checks: lines from a sales order or estimate, and billed costs, time and mileage, stay.
@@ -191,13 +218,14 @@
         _loaded = true;
     }
 
-    private void ChangeDate(ChangeEventArgs e)
+    private async Task ChangeDate(ChangeEventArgs e)
     {
         if (!DateOnly.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var date))
             return;
         // The due date keeps its distance from the invoice date.
         _dueDate = date.AddDays(_dueDate.DayNumber - _date.DayNumber);
         _date = date;
+        await DateChangedAsync();
     }
 
     private async Task SaveAsync()
@@ -212,7 +240,7 @@
             var drafts = SalesLineModel.Drafts(editable).Concat(_locked.Select(l => l.ToDraft())).ToList();
             var from = editable.Select(l => l.OriginalLine).Concat(_locked.Select(l => (int?)l.LineNumber)).ToList();
             var command = new ChangeInvoiceCommand(_date, drafts, _reason!, _dueDate, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId,
-                WarehouseId: _warehouseId, FromLines: from, TaxAmount: TypedTaxAmount, WorkOutTax: _taxAmount is null);
+                WarehouseId: _warehouseId, FromLines: from, TaxAmount: TypedTaxAmount, WorkOutTax: _taxAmount is null, SalesRepId: _salesRepId ?? Guid.Empty);
             await Ops.ChangeAsync<Invoice, InvoiceService, Invoice>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/invoices/{Id}");
         }

@@ -131,8 +131,8 @@ public sealed class FormService(
         if ((invoice.EstimateId is { } estimateId ? await store.GetEstimateAsync(estimateId, ct) : null) is { } estimate)
         {
             // Retainage lines move money between the retainage account and receivables, not work: left out of what's billed (C338).
-            var retainage = (await store.ListItemsAsync(ct)).FirstOrDefault(i => string.Equals(i.Name, Sales.EstimateService.RetainageItemName, StringComparison.OrdinalIgnoreCase))?.Id;
-            decimal Retained(Invoice i) => retainage is null ? 0m : -i.Lines.Where(l => l.ItemId == retainage).Sum(l => l.Amount);
+            var retainage = (await store.ListItemsAsync(ct)).Where(i => i.IsRetainage).Select(i => i.Id).ToHashSet();
+            decimal Retained(Invoice i) => -i.Lines.Where(l => l.ItemId is { } item && retainage.Contains(item)).Sum(l => l.Amount);
             var earlier = (await store.ListInvoicesAsync(invoice.CustomerId, ct))
                 .Where(i => i.EstimateId == estimate.Id && i.Status == DocumentStatus.Posted && i.Id != invoice.Id
                     && (i.Date < invoice.Date || (i.Date == invoice.Date && i.CreatedAt < invoice.CreatedAt))).ToList();

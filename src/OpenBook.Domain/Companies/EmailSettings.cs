@@ -40,6 +40,9 @@ public sealed class EmailSettings
     /// <summary>Encrypted by the host (ASP.NET Data Protection); never stored in plain text.</summary>
     public string? ProtectedPassword { get; private set; }
 
+    /// <summary>With <see cref="SmtpSignIn.Microsoft"/> the password isn't used: see <see cref="MicrosoftMailSignIn"/>.</summary>
+    public SmtpSignIn SignIn { get; private set; }
+
     public string? FromAddress { get; private set; }
     public string? FromName { get; private set; }
 
@@ -59,13 +62,23 @@ public sealed class EmailSettings
     public static EmailSettings Default() => new() { Delivery = EmailDelivery.None, Security = SmtpSecurity.Auto };
 
     /// <param name="protectedPassword">Null keeps the current password.</param>
+    /// <param name="signIn">Null keeps how it signs in.</param>
     public void Update(
         EmailDelivery delivery, string? host, int port, SmtpSecurity security, string? username, string? protectedPassword,
-        string? fromAddress, string? fromName, string? bccAddress, string? linkAddress = null)
+        string? fromAddress, string? fromName, string? bccAddress, string? linkAddress = null,
+        SmtpSignIn? signIn = null)
     {
-        if (!Enum.IsDefined(delivery) || !Enum.IsDefined(security))
+        var chosen = signIn ?? SignIn;
+        if (!Enum.IsDefined(delivery) || !Enum.IsDefined(security) || !Enum.IsDefined(chosen))
             throw new DomainException("email.settings_invalid", "Unknown email setting.");
         var cleanHost = Text.Optional(host, 255, "email.host_too_long", "Server");
+        if (delivery == EmailDelivery.Smtp && chosen == SmtpSignIn.Microsoft)
+        {
+            cleanHost ??= "smtp.office365.com";
+            if (security == SmtpSecurity.None)
+                throw new DomainException("email.microsoft_secure", "Microsoft's sign-in only goes over an encrypted connection. Choose STARTTLS.");
+        }
+
         if (delivery == EmailDelivery.Smtp && cleanHost is null)
             throw new DomainException("email.host_required", "Enter the SMTP server.");
         if (port is < 1 or > 65535)
@@ -75,6 +88,7 @@ public sealed class EmailSettings
             throw new DomainException("email.from_required", "Enter the address email is sent from.");
 
         Delivery = delivery;
+        SignIn = chosen;
         Host = cleanHost;
         Port = port;
         Security = security;

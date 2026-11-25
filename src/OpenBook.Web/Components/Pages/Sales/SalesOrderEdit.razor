@@ -41,7 +41,7 @@
             <div class="row">
                 <div class="field">
                     <label for="date">Date</label>
-                    <input id="date" type="date" @bind="_date" />
+                    <input id="date" type="date" @bind="_date" @bind:after="DateChangedAsync" />
                 </div>
                 <div class="field">
                     <label for="expected">Expected <span class="muted">(optional)</span></label>
@@ -102,13 +102,14 @@
     private Draft? TakeDraft() => Id is not null || (_customerId is null && _lines.All(l => l.IsBlank)) ? null
         : new Draft(_customerId, _number, _date, _expectedDate, _customerReference, _memo, _taxCodeId, _locationId, _warehouseId, _lines);
 
-    private void Restore(Draft draft)
+    private async Task Restore(Draft draft)
     {
         _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
         (_number, _date, _expectedDate, _customerReference, _memo, _locationId, _warehouseId) =
             (draft.Number, draft.Date, draft.ExpectedDate, draft.CustomerReference, draft.Memo, draft.LocationId, draft.WarehouseId);
         _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+        await DateChangedAsync();
     }
 
     private bool _loaded;
@@ -149,6 +150,21 @@
     private void DefaultTaxCode() =>
         _taxCodeId = TaxCustomer?.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
 
+    /// <summary>The codes at their rates on the document's date, which is what the save charges.</summary>
+    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync()
+    {
+        var on = _date;
+        return Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync(on));
+    }
+
+    private async Task DateChangedAsync()
+    {
+        var on = _date;
+        var codes = await LoadTaxCodesAsync();
+        if (on == _date)
+            _taxCodes = codes;
+    }
+
     private bool CanSave => _customerId is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
 
     protected override async Task OnInitializedAsync()
@@ -157,7 +173,7 @@
             _version = await Ops.VersionAsync<SalesOrder>(versionOf);
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
-        _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+        _taxCodes = await LoadTaxCodesAsync();
         SalesOrder? order;
         bool invoiced;
         (_customers, _items, _number, order, invoiced) = await Ops.RunAsync(async sp => (
@@ -192,6 +208,7 @@
             _customerId = order.CustomerId;
             _number = order.Number;
             _date = order.Date;
+            _taxCodes = await LoadTaxCodesAsync();
             _expectedDate = order.ExpectedDate;
             _customerReference = order.CustomerReference;
             _memo = order.Memo;

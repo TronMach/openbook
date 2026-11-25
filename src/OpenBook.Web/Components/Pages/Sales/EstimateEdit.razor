@@ -41,7 +41,7 @@
             <div class="row">
                 <div class="field">
                     <label for="date">Date</label>
-                    <input id="date" type="date" @bind="_date" />
+                    <input id="date" type="date" @bind="_date" @bind:after="DateChangedAsync" />
                 </div>
                 <div class="field">
                     <label for="expires">Valid until <span class="muted">(optional)</span></label>
@@ -85,12 +85,13 @@
     private Draft? TakeDraft() => Id is not null || (_customerId is null && _lines.All(l => l.IsBlank)) ? null
         : new Draft(_customerId, _number, _date, _expirationDate, _memo, _taxCodeId, _locationId, _lines);
 
-    private void RestoreAsync(Draft draft)
+    private async Task RestoreAsync(Draft draft)
     {
         _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
         (_number, _date, _expirationDate, _memo, _locationId) = (draft.Number, draft.Date, draft.ExpirationDate, draft.Memo, draft.LocationId);
         _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+        await DateChangedAsync();
     }
 
     private IReadOnlyList<Customer> _customers = [];
@@ -144,8 +145,20 @@
     private void DefaultTaxCode() =>
         _taxCodeId = TaxCustomer?.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
 
-    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync() =>
-        Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+    /// <summary>The codes at their rates on the document's date, which is what the save charges.</summary>
+    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync()
+    {
+        var on = _date;
+        return Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync(on));
+    }
+
+    private async Task DateChangedAsync()
+    {
+        var on = _date;
+        var codes = await LoadTaxCodesAsync();
+        if (on == _date)
+            _taxCodes = codes;
+    }
 
     private bool CanSave => _customerId is not null && SalesLineModel.Total(_lines) > 0m && !string.IsNullOrWhiteSpace(_number);
 
@@ -200,6 +213,7 @@
             _lines = SalesLine.Drafts(estimate.Lines).Select(SalesLineModel.From).ToList();
             _locationId = estimate.LocationId;
             _taxCodeId = estimate.TaxCodeId;
+            _taxCodes = await LoadTaxCodesAsync();
         }
 
         _loaded = true;

@@ -213,9 +213,9 @@ public static class NonprofitEndpoints
                 return Results.Redirect($"{page}?error={Uri.EscapeDataString("The file is larger than 20 MB.")}");
             try
             {
-                using var reader = new StreamReader(file.OpenReadStream());
-                var added = await history.ImportCsvAsync(await reader.ReadToEndAsync(ct), ct);
-                return Results.Redirect($"{page}?added={added}");
+                await using var content = file.OpenReadStream();
+                var imported = await history.ImportAsync(await OpenBook.Application.Import.TextFiles.ReadAsync(content, ct), ct);
+                return Results.Redirect($"{page}?added={imported.Added}&skipped={imported.Skipped}");
             }
             catch (DomainException ex)
             {

@@ -171,12 +171,14 @@ public sealed partial class CustomerImportService(ISalesStore store, CustomerSer
         var discount = DiscountPattern().Match(text);
         var net = NetPattern().Match(text);
         var digits = net.Success ? net.Groups[1].Value : discount.Success ? string.Empty : DaysPattern().Match(text).Value;
-        if (!int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var days) || days > Customer.MaxTermsDays)
+        decimal percent = 0m;
+        var within = 0;
+        if (!int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var days) || days > Customer.MaxTermsDays
+            || discount.Success && (!decimal.TryParse(discount.Groups[1].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out percent)
+                || !int.TryParse(discount.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out within)))
             throw new DomainException("import.terms_invalid", $"Couldn't read the terms '{text}'. Use e.g. \"Net 30\" or \"Due on receipt\".");
 
-        return discount.Success
-            ? new PaymentTerms(days, decimal.Parse(discount.Groups[1].Value, CultureInfo.InvariantCulture), int.Parse(discount.Groups[2].Value, CultureInfo.InvariantCulture))
-            : new PaymentTerms(days);
+        return discount.Success ? new PaymentTerms(days, percent, within) : new PaymentTerms(days);
     }
 
     internal static string? Address(string? street, string? street2, string? city, string? state, string? zip, string? country)

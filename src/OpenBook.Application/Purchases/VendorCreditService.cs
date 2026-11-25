@@ -2,15 +2,18 @@ using System.Text.Json;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.SalesTax;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Purchases;
+using OpenBook.Domain.SalesTax;
 
 namespace OpenBook.Application.Purchases;
 
 /// <param name="Reference">The vendor's credit memo number.</param>
+/// <param name="UseTax">Use tax recorded on what's returned, taken back; null for none.</param>
 public sealed record CreateVendorCreditCommand(
     Guid VendorId,
     DateOnly Date,
@@ -18,13 +21,15 @@ public sealed record CreateVendorCreditCommand(
     string? Reference = null,
     string? Memo = null,
     Guid? LocationId = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    UseTaxInput? UseTax = null);
 
 /// <summary>A correction to a posted vendor credit (<see cref="VendorCreditService.ChangeAsync"/>). The vendor can't change.</summary>
 /// <param name="Lines">Every category line the credit should have.</param>
 /// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
 /// <param name="Reference">Null keeps the vendor's credit number; blank clears it.</param>
 /// <param name="TagIds">Null keeps the entry's tags.</param>
+/// <param name="UseTax">Null keeps the use tax taken back, worked out again when the lines change; an empty code takes it off.</param>
 public sealed record ChangeVendorCreditCommand(
     DateOnly Date,
     IReadOnlyList<BillLineDraft> Lines,
@@ -32,7 +37,8 @@ public sealed record ChangeVendorCreditCommand(
     string? Reference = null,
     string? Memo = null,
     Guid? LocationId = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    UseTaxInput? UseTax = null);
 
 public sealed record ApplyVendorCredit(Guid VendorCreditId, Guid BillId, decimal Amount);
 
@@ -54,6 +60,7 @@ public sealed class VendorCreditService(
     AccountService accounts,
     PostingEngine engine,
     Inventory.InventoryService inventory,
+    UseTaxService useTaxes,
     ICompanyStore companies,
     ILedgerStore ledger,
     IClock clock,
@@ -88,20 +95,22 @@ public sealed class VendorCreditService(
         var (drafts, stock) = await inventory.PlanVendorReturnAsync(command.Lines ?? [], command.Date, null,
             async c => (await purchaseAccounts.GetOrCreatePriceVarianceAsync(c)).Id, ct);
         var lines = Bill.LinesFrom(drafts);
+        var useTax = await useTaxes.PlanAsync(command.UseTax, null, UseTaxDocument.VendorCredit, command.Date, TaxLines(lines), ct);
         var payables = await purchaseAccounts.GetOrCreatePayablesAsync(ct);
 
         var id = Guid.CreateVersion7();
         var reference = string.IsNullOrWhiteSpace(command.Reference) ? null : command.Reference.Trim();
         var memo = reference is null ? $"Vendor credit · {vendor.DisplayName}" : $"Vendor credit {reference} · {vendor.DisplayName}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
-            command.Date, [.. VendorCredit.Postings(payables.Id, lines, memo), .. stock.Postings], memo, VendorCredit.Source, id,
+            command.Date, [.. VendorCredit.Postings(payables.Id, lines, memo), .. stock.Postings, .. useTax?.Postings ?? []], memo, VendorCredit.Source, id,
             LocationId: command.LocationId, TagIds: command.TagIds), ct);
+        var owed = useTaxes.Apply(useTax, null, UseTaxDocument.VendorCredit, id, command.Date, entry);
         inventory.Apply(stock, OpenBook.Domain.Inventory.InventorySources.VendorCredit, id);
 
         var credit = VendorCredit.Create(id, vendor.Id, payables.Id, command.Date, lines, entry.Id, clock.UtcNow, reference, command.Memo);
         credit.SetLocation(command.LocationId);
         store.Add(credit);
-        store.Add(Audit(AuditAction.Created, EntityType, credit.Id, null, Snapshot(credit)));
+        store.Add(Audit(AuditAction.Created, EntityType, credit.Id, null, UseTaxService.Snapshot(Snapshot(credit), owed)));
         await store.SaveChangesAsync(ct);
         return credit;
     }
@@ -129,7 +138,7 @@ public sealed class VendorCreditService(
         var lines = Bill.LinesFrom(command.Lines);
         var chart = await accounts.GetChartAsync(ct);
         foreach (var accountId in lines.Select(l => l.AccountId).Distinct())
-            Bill.EnsureCategoryAccount(chart.Get(accountId));
+            Bill.EnsureCategoryAccount(chart.Get(accountId), credit.Lines.Any(l => l.AccountId == accountId));
         var used = credit.AmountApplied + credit.AmountRefunded;
         if (lines.Sum(l => l.Amount) < used)
             throw new DomainException("vendorcredit.total_below_used",
@@ -145,20 +154,26 @@ public sealed class VendorCreditService(
 
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([credit.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var reference = command.Reference is null ? credit.Reference : string.IsNullOrWhiteSpace(command.Reference) ? null : command.Reference.Trim();
-        var before = Snapshot(credit);
+        var taxedBefore = await useTaxes.ForAsync(credit.Id, ct);
+        var useTax = await useTaxes.PlanAsync(command.UseTax, taxedBefore, UseTaxDocument.VendorCredit, command.Date, TaxLines(lines), ct);
+        var before = UseTaxService.Snapshot(Snapshot(credit), taxedBefore);
 
         await engine.StageVoidAsync(credit.JournalEntryId, $"Vendor credit changed: {command.Reason.Trim()}", fromDocument: true, ct);
         var memo = reference is null ? $"Vendor credit · {vendor.DisplayName}" : $"Vendor credit {reference} · {vendor.DisplayName}";
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
-            command.Date, VendorCredit.Postings(credit.PayableAccountId, lines, memo), memo, VendorCredit.Source, credit.Id,
+            command.Date, [.. VendorCredit.Postings(credit.PayableAccountId, lines, memo), .. useTax?.Postings ?? []], memo, VendorCredit.Source, credit.Id,
             LocationId: command.LocationId, TagIds: tagIds), ct);
+        var owed = useTaxes.Apply(useTax, taxedBefore, UseTaxDocument.VendorCredit, credit.Id, command.Date, entry);
 
         credit.Change(reference, command.Date, lines, entry.Id, command.Memo);
         credit.SetLocation(command.LocationId);
-        store.Add(Audit(AuditAction.Updated, EntityType, credit.Id, before, DocumentChanges.WithReason(Snapshot(credit), command.Reason)));
+        store.Add(Audit(AuditAction.Updated, EntityType, credit.Id, before, DocumentChanges.WithReason(UseTaxService.Snapshot(Snapshot(credit), owed), command.Reason)));
         await store.SaveChangesAsync(ct);
         return credit;
     }
+
+    private static IEnumerable<(Guid AccountId, Guid? ClassId, Guid? ItemId, decimal Amount)> TaxLines(IEnumerable<BillLine> lines) =>
+        lines.Select(l => (l.AccountId, l.ClassId, l.ItemId, l.Amount));
 
     /// <summary>The vendor credit's corrections, oldest first.</summary>
     public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
@@ -178,6 +193,7 @@ public sealed class VendorCreditService(
         var before = Snapshot(credit);
         await engine.StageVoidAsync(credit.JournalEntryId, reason, fromDocument: true, ct);
         inventory.Apply(stock, OpenBook.Domain.Inventory.InventorySources.VendorCredit, credit.Id);
+        await useTaxes.VoidAsync(credit.Id, ct);
         credit.Void();
         store.Add(Audit(AuditAction.Voided, EntityType, credit.Id, before, Snapshot(credit)));
         await store.SaveChangesAsync(ct);

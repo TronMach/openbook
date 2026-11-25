@@ -78,6 +78,8 @@ internal sealed partial class Operations(IServiceScopeFactory scopes, CircuitUse
 /// <summary>Whether a refusal can be overcome by entering the closing date password.</summary>
 public static class ClosedPeriod
 {
-    public static bool NeedsPassword(DomainException ex) =>
-        ex is { Code: "period.password_required" or "period.wrong_password" };
+    public static bool NeedsPassword(DomainException ex) => NeedsPassword(ex?.Code);
+
+    /// <summary>For a refusal kept as its code (a preview that tried the change).</summary>
+    public static bool NeedsPassword(string? code) => code is "period.password_required" or "period.wrong_password";
 }

@@ -101,6 +101,7 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
     {
         ArgumentNullException.ThrowIfNull(command);
         var vendor = await store.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
+        vendor.EnsureNotErased();
         var number = Ach.AccountNumber(command.AccountNumber);
         var existing = await store.GetVendorBankAccountAsync(vendor.Id, ct);
         var before = existing is null ? null : Describe(existing);
@@ -264,7 +265,7 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
             secrets.Unprotect(c.BankAccount.ProtectedAccountNumber)
                 ?? throw new DomainException("ach.account_unreadable", $"{c.Vendor.DisplayName}'s bank account number can't be read on this computer. Enter it again."),
             c.BankAccount.Kind,
-            c.Payment.Amount,
+            c.Payment.NetPaid,
             c.Vendor.AccountNumber ?? c.Vendor.Id.ToString("N")[..15],
             c.Vendor.CompanyName ?? c.Vendor.DisplayName)).ToList();
 

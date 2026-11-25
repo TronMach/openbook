@@ -5,6 +5,7 @@
 @inject AccountService AccountService
 @inject OpenBook.Application.SalesTax.SalesTaxService Taxes
 @inject NavigationManager Navigation
+@inject ClosedPeriodOverride ClosingOverride
 
 <PageTitle>@L["Change products and services"] · OpenBook</PageTitle>
 
@@ -245,6 +246,7 @@
                         </table>
                     </div>
 
+                    <ClosedPeriodPassword Visible="_needsClosingPassword" Interactive="false" Name="Input.ClosingPassword" />
                     <div class="actions">
                         <button type="submit" name="Input.Step" value="apply" disabled="@(!_plan.CanApply)">@L["Change {0} item(s)", _plan.ChangedCount]</button>
                         <button type="submit" class="secondary" name="Input.Step" value="choose">@L["Back to the choices"]</button>
@@ -264,6 +266,7 @@
     private ItemBatchPlan? _plan;
     private string? _error;
     private bool _canStock;
+    private bool _needsClosingPassword;
 
     /// <summary>The posted form, under the field names <c>Input.…</c>; null before anything is posted.</summary>
     [SupplyParameterFromForm(FormName = "batch", Name = "Input")]
@@ -305,6 +308,7 @@
                     _plan = await Batch.PreviewAsync(command);
                     break;
                 case "apply":
+                    ClosingOverride.Password = Input.ClosingPassword;
                     try
                     {
                         var result = await Batch.ApplyAsync(command with { Versions = Versions(), StartingStock = Stock(), StockDate = StockDate() });
@@ -327,6 +331,7 @@
         catch (DomainException ex)
         {
             _error = ex.Message;
+            _needsClosingPassword = ClosedPeriod.NeedsPassword(ex);
         }
     }
 
@@ -409,6 +414,7 @@
         public List<string> Versions { get; set => field = value ?? []; } = [];
         public List<StockRow> Stock { get; set => field = value ?? []; } = [];
         public string? StockDate { get; set; }
+        public string? ClosingPassword { get; set; }
     }
 
     private sealed class StockRow

@@ -1,0 +1,141 @@
+@* Refunds of a payment taken online, made at its provider: the ones made, and the form for another. *@
+@inject OnlineRefundService Refunds
+@inject AccountService AccountService
+
+@if (_offer is not null || _refunds.Count > 0)
+{
+    <div class="card no-print" id="refunds" style="margin-top: 1.5rem">
+        <h2>@L["Refunds at {0}", Provider]</h2>
+        @if (RefundError is not null)
+        {
+            <div class="alert error" role="alert">@RefundError</div>
+        }
+        else if (Refund == nameof(OnlineRefundStatus.Done))
+        {
+            <div class="alert success" role="status">@L["Refunded at {0} and recorded.", Provider]</div>
+        }
+        else if (Refund == nameof(OnlineRefundStatus.Pending))
+        {
+            <div class="alert notice" role="status">@L["The refund is still waiting: see why below."]</div>
+        }
+        else if (Refund == nameof(OnlineRefundStatus.Failed))
+        {
+            <div class="alert notice" role="status">@L["{0} never had the refund: nothing was refunded.", Provider]</div>
+        }
+        @if (_refunds.Count > 0)
+        {
+            <table class="data">
+                <thead><tr><th>@L["Date"]</th><th class="num">@L["Amount"]</th><th>@L["Status"]</th><th>@L["Reason"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
+                <tbody>
+                    @foreach (var refund in _refunds)
+                    {
+                        <tr class="@(refund.Status == OnlineRefundStatus.Failed ? "inactive" : null)">
+                            <td>@Labels.Date(refund.Date)</td>
+                            <td class="num">@Labels.Amount(refund.Amount)</td>
+                            <td>
+                                @(refund.Status switch
+                                {
+                                    OnlineRefundStatus.Done => L["Refunded"],
+                                    OnlineRefundStatus.Failed => L["Not refunded"],
+                                    _ => L["Waiting"],
+                                })
+                                @if (refund.CustomerRefundId is { } recorded)
+                                {
+                                    <span> · <a href="/sales/refunds/@recorded">@L["in the books"]</a></span>
+                                }
+                                @if (refund.Failure is { } failure)
+                                {
+                                    <div class="muted">@failure</div>
+                                }
+                            </td>
+                            <td>@refund.Reason</td>
+                            <td>
+                                @if (refund.Status == OnlineRefundStatus.Pending)
+                                {
+                                    <PostForm Action="@($"/sales/payments/{PaymentId}/online-refunds/{refund.Id}/retry")" data-enhance="false" class="inline">
+                                        <AntiforgeryToken />
+                                        <ClosedPeriodPassword Visible="RefundPassword == true" Interactive="false" Id="@($"closing-{refund.Id}")" />
+                                        <button type="submit" class="secondary">@L["Try again"]</button>
+                                    </PostForm>
+                                    @if (refund.ProviderRefundId is null)
+                                    {
+                                        <PostForm Action="@($"/sales/payments/{PaymentId}/online-refunds/{refund.Id}/abandon")" data-enhance="false" class="inline">
+                                            <AntiforgeryToken />
+                                            <button type="submit" class="secondary">@L["It didn't go through"]</button>
+                                        </PostForm>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        @if (_offer is { WhyNot: { } whyNot })
+        {
+            <p class="muted">@whyNot</p>
+        }
+        else if (_offer is { } offer)
+        {
+            <p class="muted">
+                @L["Gives the money back to the customer's card or account through {0}, and records it: what's refunded comes off the invoices this payment paid, which are owed again, and is paid back to the customer. To keep an invoice settled as well, give the customer a credit memo for it.", Provider]
+            </p>
+            <PostForm Action="@($"/sales/payments/{PaymentId}/online-refund")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="form-row">
+                    <div class="field">
+                        <label for="refund-amount">@L["Amount"]</label>
+                        <input id="refund-amount" name="amount" class="amount" inputmode="decimal" value="@(offer.Left.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" required />
+                        <span class="hint">@L["Up to {0}", Labels.Amount(offer.Left)]</span>
+                    </div>
+                    <div class="field">
+                        <label for="refund-account">@L["Paid from"]</label>
+                        <select id="refund-account" name="accountId">
+                            @foreach (var account in _accounts)
+                            {
+                                <option value="@account.Id" selected="@(account.Id == offer.AccountId)">@_chart.FullName(account.Id)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="refund-date">@L["Date"]</label>
+                        <input id="refund-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="refund-reason">@L["Reason"] <span class="muted">@L["(optional; the customer may see it)"]</span></label>
+                    <input id="refund-reason" name="reason" maxlength="@OnlineRefund.MaxReasonLength" />
+                </div>
+                <ClosedPeriodPassword Visible="RefundPassword == true" Interactive="false" Id="closing-refund" />
+                <div class="actions">
+                    <button type="submit" class="danger" data-confirm="@L["Refund this at {0}? It can't be taken back.", Provider]">@L["Refund at {0}", Provider]</button>
+                </div>
+            </PostForm>
+        }
+    </div>
+}
+
+@code {
+    private OnlineRefundOffer? _offer;
+    private IReadOnlyList<OnlineRefund> _refunds = [];
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _accounts = [];
+
+    [Parameter, EditorRequired] public Guid PaymentId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "refund")] private string? Refund { get; set; }
+    [SupplyParameterFromQuery(Name = "refundError")] private string? RefundError { get; set; }
+    [SupplyParameterFromQuery(Name = "refundPassword")] private bool? RefundPassword { get; set; }
+
+    private PaymentProvider Provider => _offer?.Provider ?? _refunds.Select(r => r.Provider).FirstOrDefault();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _offer = await Refunds.OfferAsync(PaymentId);
+        _refunds = await Refunds.ListAsync(PaymentId);
+        if (_offer is null)
+            return;
+        _chart = await AccountService.GetChartAsync();
+        _accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
+    }
+}

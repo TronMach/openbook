@@ -15,6 +15,7 @@
         @if (_admin)
         {
             <ActionLink Class="button secondary" Href="/settings/document-reading">Reading settings</ActionLink>
+            <ActionLink Class="button secondary" Href="/settings/bills-mailbox">Bills by email</ActionLink>
         }
     </div>
     <p class="muted">
@@ -90,7 +91,13 @@
                     <tr class="@(d.Status == CapturedDocumentStatus.Dismissed ? "inactive" : null)">
                         <td>@d.CreatedAt.InCompanyTime().ToString("g")</td>
                         <td>@DocumentKinds.Label(d.Kind)</td>
-                        <td><a href="/documents/@d.Id">@d.FileName</a></td>
+                        <td>
+                            <a href="/documents/@d.Id">@d.FileName</a>
+                            @if (d.ReceivedFrom is { } emailed)
+                            {
+                                <div class="muted">Emailed by @emailed</div>
+                            }
+                        </td>
                         <td>@From(d)</td>
                         <td>@d.Number</td>
                         <td>@(d.Date is { } date ? Labels.Date(date) : "")</td>

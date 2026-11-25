@@ -28,12 +28,13 @@ internal sealed partial class RecurringPostingService(
         using var timer = new PeriodicTimer(Period);
         do
         {
-            await PostDueAsync(stoppingToken);
+            await RunOnceAsync(stoppingToken);
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    private async Task PostDueAsync(CancellationToken ct)
+    /// <summary>One hour's work; a part that fails is recorded (System page, admin alerts) and the rest still runs.</summary>
+    internal async Task RunOnceAsync(CancellationToken ct)
     {
         if (!await StepAsync("Checking setup", async services =>
         {
@@ -124,9 +125,19 @@ internal sealed partial class RecurringPostingService(
             foreach (var result in await services.GetRequiredService<OpenBook.Application.Nonprofit.RecurringGiftService>().CreateDueAsync(today, automaticOnly: true, ct: ct))
             {
                 if (result.Error is not null)
-                    LogStopped($"recurring gift {result.Template.Id}", result.Error);
+                    failures.Add(Stopped($"recurring gift {result.Template.Id}", result.Error));
             }
             EnsureNone(failures);
+            return true;
+        }, ct);
+
+        // Before late fees and reminders: an invoice paid now needs neither.
+        await StepAsync("Automatic card payments", async services =>
+        {
+            var run = await services.GetRequiredService<AutomaticPaymentService>().RunAsync(ct);
+            if (run.Charged.Count + run.Declined > 0)
+                LogCardsCharged(run.Charged.Count, run.Declined);
+            EnsureNone([.. run.Failures.Distinct(StringComparer.Ordinal)]);
             return true;
         }, ct);
 
@@ -146,25 +157,25 @@ internal sealed partial class RecurringPostingService(
             if ((await services.GetRequiredService<CollectionService>().GetAsync(ct)).RemindersEnabled)
             {
                 var results = await services.GetRequiredService<ReminderService>().SendAsync(today, ct: ct);
-                var failed = results.FirstOrDefault(r => r.Error is not null);
                 var sent = results.Count(r => r.Error is null);
                 if (sent > 0)
                     LogRemindersSent(sent);
-                if (failed is not null)
-                    LogCollectionFailed("Reminders", failed.Error!);
+                EnsureNone(results.Select(r => r.Error).OfType<string>().Distinct(StringComparer.Ordinal).ToList());
             }
             return true;
         }, ct);
 
         await StepAsync("Scheduled reports", async services =>
         {
+            var failures = new List<string>();
             foreach (var run in await services.GetRequiredService<OpenBook.Application.Reporting.ReportSubscriptionService>().SendDueAsync(ct))
             {
                 if (run.Error is null)
                     LogReportSent(run.ReportName, run.Subscription.Recipients);
                 else
-                    LogCollectionFailed($"Report '{run.ReportName}'", run.Error);
+                    failures.Add(Stopped($"report '{run.ReportName}'", run.Error));
             }
+            EnsureNone(failures);
             return true;
         }, ct);
 
@@ -204,11 +215,6 @@ internal sealed partial class RecurringPostingService(
         }
     }
 
-    /// <summary>
-    /// Runs one part of the hourly job in its own scope, so a save that failed (its entities still tracked) can't be
-    /// saved again by the next part, and any failure is logged rather than stopping the other parts or the app.
-    /// </summary>
-    /// <returns>The step's answer; false when it failed.</returns>
     /// <summary>A template that stopped is a failure of the step, or the System page would call it healthy.</summary>
     private string Stopped(string template, string error)
     {
@@ -222,6 +228,11 @@ internal sealed partial class RecurringPostingService(
             throw new DomainException("job.items_failed", string.Join("; ", failures));
     }
 
+    /// <summary>
+    /// Runs one part of the hourly job in its own scope, so a save that failed (its entities still tracked) can't be
+    /// saved again by the next part, and any failure is logged rather than stopping the other parts or the app.
+    /// </summary>
+    /// <returns>The step's answer; false when it failed.</returns>
     private async Task<bool> StepAsync(string what, Func<IServiceProvider, Task<bool>> step, CancellationToken ct)
     {
         var started = DateTimeOffset.UtcNow;
@@ -253,6 +264,9 @@ internal sealed partial class RecurringPostingService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Made {Username} inactive: their access ended.")]
     private partial void LogAccessEnded(string username);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Charged {Count} invoices to saved cards ({Declined} declined).")]
+    private partial void LogCardsCharged(int count, int declined);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Charged {Count} late fees.")]
     private partial void LogFeesCharged(int count);

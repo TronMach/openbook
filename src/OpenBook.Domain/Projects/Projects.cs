@@ -220,6 +220,10 @@ public sealed class Project
         Budget(details.Fee, "Fee");
         if (details.Arrangement != BillingArrangement.TimeAndMaterials && details.Fee is null or 0m)
             throw new DomainException("project.fee_required", "Enter the fee, or the amount not to exceed.");
+        if (details.Arrangement != BillingArrangement.FixedFee && _milestones.Any(m => m.InvoiceId is null))
+            throw new DomainException("project.milestones_fixed_fee", "Milestones are for a project billed at a fixed fee. Remove the ones not billed yet first.");
+        if (details.Arrangement == BillingArrangement.FixedFee && _milestones.Sum(m => m.Amount) > details.Fee)
+            throw new DomainException("project.milestones_over_fee", "The milestones add up to more than that fee. Remove some first.");
         Arrangement = details.Arrangement;
         Fee = details.Arrangement == BillingArrangement.TimeAndMaterials ? null : details.Fee;
         Status = details.Status;
@@ -434,19 +438,27 @@ public sealed class TimeEntry
         StartedAt = null;
     }
 
-    /// <summary>Rounds the hours up to a whole number of <paramref name="minutes"/> (to two decimals of an hour, at most a day).</summary>
+    /// <summary>
+    /// Rounds the hours up to a whole number of <paramref name="minutes"/> (to two decimals of an hour, at most a day).
+    /// Hours are to a hundredth (ten minutes are 0.17), so up to 0.3 of a minute is that rounding, not more work.
+    /// </summary>
     public void RoundUpTo(int minutes)
     {
         if (minutes <= 0 || Hours <= 0m)
             return;
-        var steps = decimal.Ceiling(decimal.Round(Hours * 60m, 4) / minutes);
+        var steps = Math.Max(1m, decimal.Ceiling((Hours * 60m - 0.3m) / minutes));
         Hours = Math.Min(MaxHours, decimal.Round(steps * minutes / 60m, 2, MidpointRounding.AwayFromZero));
     }
 
     public void Update(TimeEntryDetails details, decimal billRate, decimal costRate, string? rateSource = null)
     {
         EnsureEditable();
+        var before = (Hours, BillRate, Billable, CustomerId);
         Set(details, billRate, costRate, running: IsRunning, rateSource);
+
+        // A write-down is of that work at that value: other work is billed as worked.
+        if (before != (Hours, BillRate, Billable, CustomerId))
+            ClearAdjustment();
     }
 
     public void EnsureEditable()
@@ -465,6 +477,35 @@ public sealed class TimeEntry
     }
 
     public void ClearInvoice() => InvoiceId = null;
+
+    /// <summary>The invoice a credit memo took this time off (<see cref="TakenBackMemoId"/>), and what it was billed there.</summary>
+    public Guid? TakenBackInvoiceId { get; private set; }
+
+    public Guid? TakenBackMemoId { get; private set; }
+    public decimal? TakenBackAmount { get; private set; }
+
+    /// <summary>Off its invoice by a credit memo: waiting to be billed again, until the memo is voided.</summary>
+    public void TakeBack(Guid memoId)
+    {
+        (TakenBackInvoiceId, TakenBackMemoId, TakenBackAmount) = (InvoiceId, memoId, Amount);
+        InvoiceId = null;
+    }
+
+    /// <summary>The credit memo was voided, so its invoice bills the time again (<paramref name="onInvoice"/> while that invoice stands).</summary>
+    public void UndoTakeBack(bool onInvoice)
+    {
+        if (onInvoice && InvoiceId is null && TakenBackInvoiceId is { } invoice && Billable)
+        {
+            var billed = TakenBackAmount is { } amount && amount != Worked ? amount : (decimal?)null;
+            if (billed is null)
+                ClearAdjustment();
+            else
+                BilledAmount = billed;
+            InvoiceId = invoice;
+        }
+
+        (TakenBackInvoiceId, TakenBackMemoId, TakenBackAmount) = (null, null, null);
+    }
 
     internal static void CheckRate(decimal rate, string name)
     {

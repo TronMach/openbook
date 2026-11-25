@@ -47,6 +47,7 @@
 
             <BillLinesEditor Classes="_segments.ClassColumn" Lines="_lines" Categories="_categories" Chart="_chart" UseNumbers="_useNumbers" Changed="StateHasChanged" />
 
+            <UseTaxField Model="_useTax" Date="_date" Taxable="Taxable" DocumentId="Id" Credit="true" />
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
@@ -85,6 +86,8 @@
     private string? _memo;
     private string? _reason;
     private List<BillLineModel> _lines = [];
+    private UseTaxModel _useTax = new();
+    private decimal Taxable => UseTaxService.TaxableAmount(_chart, _lines.Select(l => (l.AccountId ?? Guid.Empty, l.ItemId, l.Amount ?? 0m)));
     private bool _loaded;
     private bool _busy;
     private string? _error;
@@ -110,6 +113,7 @@
             foreach (var used in _credit.Lines.Select(l => l.AccountId).Where(a => _categories.All(c => c.Id != a)).Distinct())
                 _categories.Add(_chart.Get(used));
 
+            _useTax = UseTaxModel.From(await Ops.RunAsync<UseTaxService, UseTax?>(s => s.ForAsync(Id)));
             _reference = _credit.Reference;
             _date = _credit.Date;
             _memo = _credit.Memo;
@@ -128,7 +132,7 @@
         _error = null;
         try
         {
-            var command = new ChangeVendorCreditCommand(_date, BillLineModel.Drafts(_lines.Where(BillLineModel.IsFilledLine).ToList()), _reason!, _reference ?? "", _memo, _locationId);
+            var command = new ChangeVendorCreditCommand(_date, BillLineModel.Drafts(_lines.Where(BillLineModel.IsFilledLine).ToList()), _reason!, _reference ?? "", _memo, _locationId, UseTax: _useTax.ForChange);
             await Ops.ChangeAsync<VendorCredit, VendorCreditService, VendorCredit>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/purchases/vendor-credits/{Id}");
         }

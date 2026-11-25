@@ -16,7 +16,7 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
 
     // Includes gifts added but not saved yet, so numbering and pledge balances see them.
     public Task<int> CountUnthankedDonationsAsync(CancellationToken ct) =>
-        db.Donations.CountAsync(d => d.Status == DocumentStatus.Posted && d.AcknowledgedAt == null, ct);
+        db.Donations.CountAsync(d => d.Status == DocumentStatus.Posted && d.ReturnedOn == null && d.AcknowledgedAt == null, ct);
 
     public async Task<IReadOnlyList<AllocationRule>> ListAllocationRulesAsync(CancellationToken ct) => (await db.AllocationRules.ToListAsync(ct)).OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 
@@ -71,6 +71,11 @@ internal sealed class EfNonprofitStore(OpenBookDbContext db) : INonprofitStore
 
     public Task<DonationCheckout?> FindDonationCheckoutAsync(string sessionId, CancellationToken ct) =>
         db.DonationCheckouts.SingleOrDefaultAsync(c => c.SessionId == sessionId, ct);
+
+    public Task<DonationCheckout?> GetDonationCheckoutAsync(Guid id, CancellationToken ct) => db.DonationCheckouts.SingleOrDefaultAsync(c => c.Id == id, ct);
+
+    public async Task<IReadOnlyList<DonationCheckout>> ListOpenDonationCheckoutsAsync(CancellationToken ct) =>
+        (await db.DonationCheckouts.AsNoTracking().Where(c => c.Status == DonationCheckoutStatus.Open).ToListAsync(ct)).OrderByDescending(c => c.CreatedAt).ToList();
 
     public void Add(DonationCheckout checkout) => db.DonationCheckouts.Add(checkout);
 

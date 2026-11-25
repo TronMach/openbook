@@ -71,18 +71,24 @@ public sealed class PreBillService(
     {
         var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         var capped = (await store.ListProjectsAsync(ct)).Where(p => p.Arrangement == BillingArrangement.NotToExceed && p.Fee is not null).ToDictionary(p => p.CustomerId);
+        var drafted = (await store.ListPreBillsAsync(PreBillStatus.Draft, ct)).SelectMany(b => b.Lines).Where(l => l.Kind == PreBillLineKind.Time)
+            .GroupBy(l => l.SourceId).ToDictionary(g => g.Key, g => g.Max(l => l.Billed));
         var rows = new List<BillingRow>();
         foreach (var group in (await UnbilledAsync(through, ct)).GroupBy(p => p.Client))
         {
-            string? warning = null;
-            foreach (var project in group.GroupBy(p => p.Owner).Where(g => capped.ContainsKey(g.Key)))
+            // The limit is on the hourly work: time billed, on a draft and waiting, not mileage or costs passed on.
+            var warnings = new List<string>();
+            foreach (var project in group.Where(p => p.Line.Kind == PreBillLineKind.Time).GroupBy(p => p.Owner).Where(g => capped.ContainsKey(g.Key)))
             {
                 var limit = capped[project.Key].Fee!.Value;
-                var billed = (await store.ListTimeAsync(new TimeFilter(CustomerId: project.Key), ct)).Where(t => t.InvoiceId is not null).Sum(t => t.Amount);
+                var billed = (await store.ListTimeAsync(new TimeFilter(CustomerId: project.Key), ct))
+                    .Sum(t => t.InvoiceId is not null ? t.Amount : drafted.GetValueOrDefault(t.Id));
                 var after = billed + project.Sum(p => p.Line.Worked);
                 if (after > limit)
-                    warning = $"{customers[project.Key].DisplayName} would go {after - limit:N2} over its limit of {limit:N2}.";
+                    warnings.Add($"{customers[project.Key].DisplayName} would go {after - limit:N2} over its limit of {limit:N2}.");
             }
+
+            var warning = warnings.Count == 0 ? null : string.Join(" ", warnings);
 
             decimal Of(PreBillLineKind kind) => group.Where(p => p.Line.Kind == kind).Sum(p => p.Line.Worked);
             rows.Add(new BillingRow(customers[group.Key], group.Sum(p => p.Line.Hours), Of(PreBillLineKind.Time), Of(PreBillLineKind.Mileage), Of(PreBillLineKind.Expense), group.Min(p => p.Line.Date), warning));
@@ -137,6 +143,33 @@ public sealed class PreBillService(
         await store.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Work can change while it's on a draft (hours corrected, time repriced), and what was reviewed isn't what would be
+    /// billed. Lines that changed are brought up to date and named; a line whose work can't be billed any more is refused.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> FollowAsync(PreBill draft, CancellationToken ct)
+    {
+        List<Guid> Ids(PreBillLineKind kind) => [.. draft.Lines.Where(l => l.Kind == kind).Select(l => l.SourceId)];
+        var now = new Dictionary<Guid, (decimal Hours, decimal Amount)>();
+        foreach (var t in (await store.GetTimeEntriesAsync(Ids(PreBillLineKind.Time), ct)).Where(t => t.Billable && !t.IsRunning && t.InvoiceId is null && !t.WrittenOff))
+            now[t.Id] = (t.Hours, t.Amount);
+        foreach (var m in (await store.GetMileageTripsAsync(Ids(PreBillLineKind.Mileage), ct)).Where(m => m.Billable && m.InvoiceId is null))
+            now[m.Id] = (0m, m.Amount);
+        foreach (var e in (await sales.GetBillableExpensesAsync(Ids(PreBillLineKind.Expense), ct)).Where(e => e.IsBillable && e.InvoiceId is null))
+            now[e.Id] = (0m, e.Amount);
+
+        if (draft.Lines.FirstOrDefault(l => !now.ContainsKey(l.SourceId)) is { } gone)
+            throw new DomainException("prebill.line_gone", $"'{gone.Description}' can't be billed any more: it's on an invoice, written off, deleted or not billable. Take it off this draft.");
+        var changed = new List<string>();
+        foreach (var line in draft.Lines.Where(l => now[l.SourceId].Amount != l.Worked).ToList())
+        {
+            changed.Add($"'{line.Description}' was {line.Worked:N2}, now {now[line.SourceId].Amount:N2}");
+            draft.Follow(line.LineNumber, now[line.SourceId].Hours, now[line.SourceId].Amount);
+        }
+
+        return changed;
+    }
+
     private static string WriteDown(decimal? billed, string? reason) => JsonSerializer.Serialize(new { BilledAmount = billed, WriteDownReason = reason });
 
     /// <summary>
@@ -151,6 +184,14 @@ public sealed class PreBillService(
             throw new DomainException("prebill.not_draft", "This draft has already been posted or discarded.");
         await using var transaction = await unitOfWork.BeginAsync(ct);
         var before = Snapshot(draft);
+        if (await FollowAsync(draft, ct) is { Count: > 0 } changed)
+        {
+            store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, id, before, Snapshot(draft)));
+            await store.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            throw new DomainException("prebill.work_changed", $"Work on this draft has changed since it was made: {string.Join("; ", changed.Take(3).Select(c => TextCleaning.Cut(c, 200)))}{(changed.Count > 3 ? $" and {changed.Count - 3} more" : "")}. The draft has the new amounts: check them and post it again.");
+        }
+
         var timeLines = draft.Lines.Where(l => l.Kind == PreBillLineKind.Time).ToList();
         var entries = (await store.GetTimeEntriesAsync(timeLines.Select(l => l.SourceId).ToList(), ct)).ToDictionary(t => t.Id);
         foreach (var line in timeLines.Where(l => entries.ContainsKey(l.SourceId) && l.Billed != l.Worked))
@@ -181,7 +222,7 @@ public sealed class PreBillService(
         Invoice? invoice = null;
         if (timeIds.Count + tripIds.Count + costIds.Count > 0)
         {
-            invoice = await invoices.CreateAsync(new CreateInvoiceCommand(draft.CustomerId, date, [], Memo: draft.Memo, TaxCodeId: Guid.Empty,
+            invoice = await invoices.CreateAsync(new CreateInvoiceCommand(draft.CustomerId, date, [], Memo: draft.Memo,
                 BillableExpenseIds: costIds, TimeEntryIds: timeIds, MileageTripIds: tripIds), ct);
         }
 
@@ -213,6 +254,8 @@ public sealed class PreBillService(
             }
             catch (DomainException ex)
             {
+                // What the refused draft had changed in memory mustn't be saved with the next one.
+                unitOfWork.DiscardPending();
                 problems.Add($"{client?.DisplayName}: {ex.Message}");
             }
         }

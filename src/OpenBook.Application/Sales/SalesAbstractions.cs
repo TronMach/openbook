@@ -282,7 +282,10 @@ public interface ISalesStore
     /// <summary>Every link still open.</summary>
     Task<IReadOnlyList<PaymentLink>> ListOpenPaymentLinksAsync(CancellationToken ct);
 
-    /// <summary>Whether a payment link recorded this payment.</summary>
+    /// <summary>Invoices that come to zero: a gift card redeemed on them paid for all of it.</summary>
+    Task<IReadOnlyList<Guid>> ListZeroInvoiceIdsAsync(CancellationToken ct);
+
+    /// <summary>Whether a payment link, or a charge to a saved card, recorded this payment.</summary>
     Task<bool> IsTakenOnlineAsync(Guid paymentId, CancellationToken ct);
 
     /// <summary>Tracked.</summary>
@@ -395,6 +398,17 @@ public sealed class SalesAccounts(AccountService accounts)
         await FindUndepositedFundsAsync(ct)
         ?? await accounts.CreateAsync(new CreateAccountCommand(UndepositedFundsName, AccountType.OtherCurrentAsset,
             Description: "Payments received but not yet deposited."), ct);
+
+    /// <summary>Whether the lines spend a gift card or other prepaid credit: a negative line on an other current liability.</summary>
+    public async Task<bool> RedeemsPrepaidAsync(IReadOnlyCollection<SalesLine> lines, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var spent = lines.Where(l => l.Kind == SalesLineKind.Item && l.Amount < 0m).Select(l => l.IncomeAccountId).OfType<Guid>().ToHashSet();
+        if (spent.Count == 0)
+            return false;
+        var chart = await accounts.GetChartAsync(ct);
+        return spent.Any(id => chart.Find(id)?.Type == AccountType.OtherCurrentLiability);
+    }
 
     public const string RetainageAccountName = "Retainage Receivable";
 

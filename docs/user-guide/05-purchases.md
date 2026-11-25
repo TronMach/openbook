@@ -27,6 +27,8 @@ Use one or the other for the same purchase, never both, or it will be counted tw
 
 Vendors with unpaid bills can't be made inactive. Vendors can be imported from a CSV file with **Vendors → Import CSV**. Besides names and contact details it reads a **1099** (or **Eligible for 1099**) yes/no column, a **Tax ID** and a **1099 box** (NEC, or MISC 1 rents, 3 other income, 6 medical, 10 attorney); a box alone turns tracking on. The preview shows only the last four digits of a tax ID.
 
+When a vendor asks for their data to be erased, an admin can use **Erase personal details…** at the bottom of the vendor's page; see [Erasing personal details](04-sales.md#erasing-personal-details).
+
 ## Bills
 
 **Purchases → New bill** (or `n` then `b`):
@@ -74,6 +76,17 @@ To correct a bill payment, open it and use **Change**: the payment date, **Paid 
 - A payment matched to a bank feed line keeps its amount and account.
 - A payment reconciled at the bank can't be changed, as it can't be voided.
 
+### Backup withholding
+
+When the IRS tells you to (a B notice), or a vendor you report on a 1099 gives no tax ID, you hold back 24% of what you pay them and send it to the IRS. An accountant turns it on at the bottom of the vendor's page: tick **Backup withholding applies**, give the date it starts and why, and **Save backup withholding**.
+
+- **Pay bills** then shows what's held back. The bill is paid in full: the vendor gets the rest, and the part held back goes to **Backup Withholding Payable**. Only what's reportable on a 1099 counts (not the share in accounts marked not reportable), and nothing is held back from a payment by card. The check, its stub, the ACH file and positive pay show what the vendor gets, and the stub says what was withheld.
+- Using a deposit holds back too. The part held back stays in the deposit, since the vendor has already had that money.
+- A bank line is offered against a bill when it's the bill less what's held back.
+- On an expense to the vendor paid from a bank account, tick **Hold back … for the IRS** (it's ticked to start with).
+- When you pay the IRS, record an expense with **Backup Withholding Payable** as its category. **Reports → Backup withholding** shows what was held back and paid over each month, for Form 945. OpenBook doesn't make the form.
+- 1099s show the whole payment, with what was withheld in box 4. Any withholding makes a 1099 due, however small the payments.
+
 ## Expenses
 
 To record something you've already paid, go to **Banking**, find the bank or card account it came out of and choose **Check / payment** (or **Card charge** for a card).
@@ -96,7 +109,7 @@ Bought something for the business with your own card or cash? Use **Banking → 
 
 When a vendor wants money before their bill (a deposit on an order), use **Purchases → Vendor deposit**: the vendor, amount, date, the bank or card account it's **paid from**, and if you like the **purchase order** it's for and a reference. It goes into "Vendor Deposits", an asset account OpenBook adds the first time, because it's still yours until the goods come.
 
-When their bill arrives, open the deposit and **Use it on bills**: it lists the vendor's unpaid bills with the deposit spread over them, oldest first; change the amounts if you like and **Pay these bills from the deposit**. Each becomes an ordinary bill payment from "Vendor Deposits" (reference "Deposit …"), so the bill's balance, the A/P aging and cash-basis reports all follow; on cash basis the cost counts on that date. The deposit page shows what's used and what's left. To take some back off a bill, void that payment. A deposit can be voided only while none of it is used.
+When their bill arrives, open the deposit and **Use it on bills**: it lists the vendor's unpaid bills with the deposit spread over them, oldest first; change the amounts if you like and **Pay these bills from the deposit**. Each becomes an ordinary bill payment from "Vendor Deposits" (reference "Deposit …"), so the bill's balance, the A/P aging and cash-basis reports all follow; on cash basis the cost counts on that date. The deposit page shows what's used and what's left. To take some back off a bill, void that payment. If the vendor sends some of it back, enter the amount under **Paid back by the vendor** on the deposit. A deposit can be voided only while none of it is used or paid back. A deposit paid by check can be printed and is in positive pay files.
 
 ## Vendor credits
 
@@ -115,7 +128,7 @@ To correct a vendor credit (one without stock on it), use **Change** at the top 
 
 - The **Purchases** page lists recent bills, payments, expenses and vendor credits. **Unpaid bills** shows every unpaid one; the other lists show the newest 100, with **Show 100 more** below.
 - **Reports → A/P aging** shows what you owe and how overdue it is; **Unpaid bills** lists each one.
-- **Reports → 1099 summary** totals what each tracked vendor was paid in a year (bill payments and expenses, not card payments, which the card company reports). Paying for labor and materials on one check? Tick **Not reportable on 1099s** on the materials account (or merchandise, freight): bill lines and expense categories on it come off the vendor's total, a bill payment in proportion to the bill's lines, and the summary shows what was left out.
+- **Reports → 1099 summary** totals what each tracked vendor was paid in a year (bill payments, deposits on the day they're paid, and expenses, not card payments, which the card company reports). Paying for labor and materials on one check? Tick **Not reportable on 1099s** on the materials account (or merchandise, freight): bill lines and expense categories on it come off the vendor's total, a bill payment in proportion to the bill's lines, and the summary shows what was left out.
   Refunds a vendor made in the year show in their own column. They aren't taken off the total unless you tick **Take refunds from a vendor off what's reported for them on 1099s** in the purchasing settings (**Bills to approve → Settings**): whether to report the net figure is a question for your tax adviser. The filing data on **Accountant tools** takes a threshold for years whose figure has been published, and warns about vendors over it with no tax ID.
   **Copies and filing**, under the table (accountant role): **Download filing data** for the IRS's IRIS system or your filing service, **Vendors' copies (PDF)** to print, **Email vendors their copies** (only with a vendor's agreement to get it by email), and **Mark as filed** to note the date. OpenBook doesn't file with the IRS. If payments change after filing, the vendor's row shows the amount filed, so you can tell a corrected form is needed.
   **Paid before OpenBook**, under the table (accountant role): if you started using OpenBook part-way through a year, enter what each vendor was paid by cash, check or bank in your old books. It's added to their total and shown beside it; zero removes it. When history moved in from another program has journal entries dated in the year, the report says so, since payments inside them aren't counted.

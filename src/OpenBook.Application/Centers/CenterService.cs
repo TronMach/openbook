@@ -66,7 +66,7 @@ public sealed class CenterService(ISalesStore sales, IPurchasesStore purchases, 
             rows.Add(new("donation", g.Id, g.Date, g.Number.ToString(CultureInfo.InvariantCulture), g.Reference ?? g.Memo, g.Amount, null, Posted(g.Status)));
         foreach (var p in (await nonprofit.ListPledgesAsync(ct)).Where(p => p.DonorId == customerId))
         {
-            var unpaid = p.Amount - p.CancelledAmount - gifts.Where(g => g.PledgeId == p.Id && g.Status == DocumentStatus.Posted).Sum(g => g.Amount);
+            var unpaid = p.Amount - p.CancelledAmount - gifts.Where(g => g.PledgeId == p.Id && g.Counts).Sum(g => g.Amount);
             rows.Add(new("pledge", p.Id, p.Date, p.Number.ToString(CultureInfo.InvariantCulture), p.Memo, p.Amount, p.Status == DocumentStatus.Posted && unpaid > 0m ? unpaid : null,
                 p.Status == DocumentStatus.Voided ? CenterState.Voided : unpaid > 0m ? CenterState.Open : CenterState.Paid));
         }

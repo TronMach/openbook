@@ -191,6 +191,7 @@ public sealed class Filing1099Service(
         [
             $"Payer: {company.LegalName ?? company.Name}. Payer's TIN: {company.TaxId ?? "not on file"}.",
             $"Recipient: {vendor.CompanyName ?? vendor.DisplayName}. Recipient's TIN: {vendor.MaskedTaxId ?? "not on file"}.",
+            .. (due.Withheld > 0m ? new[] { $"Box 4: Federal income tax withheld (backup withholding), {due.Withheld.ToString("N2", CultureInfo.CurrentCulture)}. It's part of the amount above." } : Array.Empty<string>()),
             "This is important tax information and is being furnished to the IRS. If you're required to file a return, a penalty may be imposed on you if this income is taxable and the IRS determines that it hasn't been reported.",
         ];
         return new DonorLetter(

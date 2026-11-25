@@ -207,6 +207,14 @@ public sealed class ProjectImportService(
                 continue;
             }
 
+            // Time another program has billed already would be billed again.
+            var marked = F(billable)?.ToUpperInvariant();
+            if (marked is "BILLED" or "INVOICED")
+            {
+                rows.Add(new ProjectImportRow(r.Line, label, ImportRowStatus.Exists, "Already billed, so it's left out."));
+                continue;
+            }
+
             var workerId = people[F(person)!];
             Guid? customerId = F(client) is { Length: > 0 } name ? clients[name] : null;
             Guid? itemId = F(service) is { Length: > 0 } what ? items[what] : null;
@@ -219,13 +227,12 @@ public sealed class ProjectImportService(
             }
 
             // Billable unless the file says otherwise, when there's someone to bill and something to bill as.
-            var marked = F(billable)?.ToUpperInvariant();
             var bill = marked is "N" or "NO" or "FALSE" or "0" or "NOT BILLABLE" or "NONBILLABLE" ? false : customerId is not null && itemId is not null;
             try
             {
                 var details = new TimeEntryDetails(workerId, date, hours, customerId, itemId, bill, Amount(F(rate)), F(notes));
                 if (save)
-                    await time.CreateAsync(details, ct);
+                    await time.CreateAsync(details, round: false, ct);
                 else if (hours <= 0m)
                     throw new DomainException("time.hours", "Hours are above zero.");
                 rows.Add(new ProjectImportRow(r.Line, label, ImportRowStatus.New, null));

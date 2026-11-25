@@ -263,7 +263,7 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
 
     public async Task<UndepositedDocuments> ListUndepositedAsync(IReadOnlyCollection<Guid> holdingAccountIds, CancellationToken ct) => new(
         await db.CustomerPayments.AsNoTracking().Where(p => p.Status == DocumentStatus.Posted && p.DepositId == null && p.PayoutId == null && holdingAccountIds.Contains(p.DepositAccountId)).ToListAsync(ct),
-        await db.SalesReceipts.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null && holdingAccountIds.Contains(r.DepositAccountId)).ToListAsync(ct),
+        await db.SalesReceipts.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null && r.Total != 0m && holdingAccountIds.Contains(r.DepositAccountId)).ToListAsync(ct),
         await db.Retainers.AsNoTracking().Where(r => r.Status == DocumentStatus.Posted && r.DepositId == null && holdingAccountIds.Contains(r.DepositAccountId)).ToListAsync(ct));
 
     public async Task<SalesDocumentCounts> CountDocumentsAsync(CancellationToken ct) => new(
@@ -462,8 +462,11 @@ internal sealed class EfSalesStore(OpenBookDbContext db) : ISalesStore
 
     public Task<OnlinePaymentSettings?> GetOnlinePaymentSettingsAsync(CancellationToken ct) => db.OnlinePaymentSettings.FirstOrDefaultAsync(ct);
 
-    public Task<bool> IsTakenOnlineAsync(Guid paymentId, CancellationToken ct) =>
-        db.PaymentLinks.AnyAsync(l => l.CustomerPaymentId == paymentId, ct);
+    public async Task<IReadOnlyList<Guid>> ListZeroInvoiceIdsAsync(CancellationToken ct) =>
+        await db.Invoices.Where(i => i.Total == 0m).Select(i => i.Id).ToListAsync(ct);
+
+    public async Task<bool> IsTakenOnlineAsync(Guid paymentId, CancellationToken ct) =>
+        await db.PaymentLinks.AnyAsync(l => l.CustomerPaymentId == paymentId, ct) || await db.CardCharges.AnyAsync(c => c.CustomerPaymentId == paymentId, ct);
 
     public async Task<IReadOnlyList<PaymentLink>> ListPaymentLinksAsync(Guid invoiceId, CancellationToken ct) =>
         await db.PaymentLinks.Where(l => l.InvoiceId == invoiceId).ToListAsync(ct);

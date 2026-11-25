@@ -158,5 +158,5 @@ public sealed class SoftCreditService(INonprofitStore store, ISalesStore sales, 
         await store.SaveChangesAsync(ct);
     }
 
-    private static string Snapshot(SoftCredit c) => JsonSerializer.Serialize(new { c.DonationId, c.DonorId, c.Amount, c.Note });
+    internal static string Snapshot(SoftCredit c) => JsonSerializer.Serialize(new { c.DonationId, c.DonorId, c.Amount, c.Note });
 }

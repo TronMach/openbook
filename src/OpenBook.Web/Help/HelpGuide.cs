@@ -49,14 +49,11 @@ public sealed partial class HelpGuide
     /// <summary>The contents page (README) or a chapter as HTML; null when there's no such chapter.</summary>
     public string? Html(string? key)
     {
-        var name = string.IsNullOrEmpty(key) ? "README" : key;
-        if (name != "README")
-        {
-            // The file's own spelling: names are case-sensitive on Linux, and addresses here aren't.
-            if (Find(name) is not { } chapter)
-                return null;
-            name = chapter.Key;
-        }
+        // Never what was asked for, always a name of ours: the contents page, or the chapter's own file. Its spelling
+        // too, because file names are case-sensitive on Linux and addresses here aren't.
+        var name = string.IsNullOrEmpty(key) || key == "README" ? "README" : Find(key)?.Key;
+        if (name is null)
+            return null;
 
         return _rendered.GetOrAdd(name, n =>
         {
@@ -182,6 +179,7 @@ public static class HelpTopics
         ("/settings/online-payments", "11-online-payments"),
         ("/settings/plaid", "21-banking-tools"),
         ("/settings/document-reading", "16-document-inbox"),
+        ("/settings/bills-mailbox", "16-document-inbox"),
         ("/settings/custom-fields", "25-custom-fields-notes-attachments"),
         ("/settings/forms", "27-printed-forms"),
         ("/settings/api-keys", "26-offline-cli-api"),
@@ -201,6 +199,8 @@ public static class HelpTopics
         ("/sales/channels", "22-sales-channels"),
         ("/sales/collections", "10-collections"),
         ("/sales/write-offs", "10-collections"),
+        ("/sales/commissions", "09-more-sales"),
+        ("/reports/sales-commissions", "09-more-sales"),
         ("/sales/estimates", "09-more-sales"),
         ("/sales/orders", "09-more-sales"),
         ("/sales/retainers", "09-more-sales"),
@@ -217,6 +217,7 @@ public static class HelpTopics
         ("/pricing", "13-pricing"),
         ("/sales", "04-sales"),
         ("/customers", "04-sales"),
+        ("/erase", "04-sales"),
         ("/items", "04-sales"),
         ("/purchases/orders", "15-purchase-orders"),
         ("/purchases/approvals", "15-purchase-orders"),
