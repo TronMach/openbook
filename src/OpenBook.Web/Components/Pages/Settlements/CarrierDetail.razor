@@ -40,6 +40,24 @@
         </div>
 
         <div class="card" style="margin-top: 1.5rem">
+            <h2 id="shares">@L["Your share of each charge"]</h2>
+            <p class="muted">@L["From your contract, in percent. When you enter what a load's customer was billed, the settlement's page says what you should have been paid and what's short. Leave blank what you don't want checked."]</p>
+            <PostForm Action="@($"/settlements/carriers/{_carrier.Id}/shares")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    @foreach (var charge in Enum.GetValues<LoadCharge>())
+                    {
+                        <div class="field">
+                            <label for="share-@charge">@LoadCharges.Label(charge) %</label>
+                            <input id="share-@charge" name="share:@charge" inputmode="decimal" value="@(_carrier.ShareOf(charge)?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" />
+                        </div>
+                    }
+                </div>
+                <div class="actions"><button type="submit" class="secondary">@L["Save the shares"]</button></div>
+            </PostForm>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
             <h2 id="codes">@L["What its codes stand for"]</h2>
             <p class="muted">@L["Each code on the statements goes to the account chosen here. Codes are added as they turn up on a settlement; the same code can mean different things in different parts of the statement."]</p>
             @if (_carrier.Codes.Count == 0)
@@ -54,7 +72,7 @@
                         <table class="data entry">
                             <thead>
                                 <tr>
-                                    <th>@L["Part"]</th><th>@L["Code"]</th><th>@L["Description"]</th><th>@L["Account"]</th>
+                                    <th>@L["Part"]</th><th>@L["Code"]</th><th>@L["Description"]</th><th>@L["Account"]</th><th>@L["Pays a load's"]</th>
                                     @if (_classes.Count > 0)
                                     {
                                         <th>@L["Class"]</th>
@@ -72,6 +90,15 @@
                                         <td>@known.Code<input type="hidden" name="code:@n" value="@known.Code" /></td>
                                         <td>@known.Name<input type="hidden" name="name:@n" value="@known.Name" /></td>
                                         <td><SettlementAccountSelect Name="@($"account:{n}")" Label="@L["Account for {0}", known.Code]" Chart="_chart" Value="known.AccountId" /></td>
+                                        <td>
+                                            <select name="charge:@n" aria-label="@L["Charge {0} pays", known.Code]">
+                                                <option value="">@L["(not a load charge)"]</option>
+                                                @foreach (var charge in Enum.GetValues<LoadCharge>())
+                                                {
+                                                    <option value="@charge" selected="@(charge == known.Charge)">@LoadCharges.Label(charge)</option>
+                                                }
+                                            </select>
+                                        </td>
                                         @if (_classes.Count > 0)
                                         {
                                             <td>

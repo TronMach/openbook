@@ -151,6 +151,40 @@
                 <button type="button" class="secondary" @onclick="() => _balances.Add(new())">@L["Add a balance"]</button>
             </details>
 
+            <details open="@_billed.Any(b => b.Amount is not null)">
+                <summary>@L["What the loads' customers were billed"]</summary>
+                <p class="hint">@L["Optional, from the freight bills sent with the statement: it checks that your share of each was paid, and the miles if you type them. The shares are on the carrier's page."]</p>
+                @for (var i = 0; i < _billed.Count; i++)
+                {
+                    var billed = _billed[i];
+                    var n = i + 1;
+                    <div class="row">
+                        <div class="field">
+                            <label for="billed-load-@n">@L["Load {0}", n]</label>
+                            <input id="billed-load-@n" maxlength="40" @bind="billed.Load" />
+                        </div>
+                        <div class="field">
+                            <label for="billed-charge-@n">@L["Charge {0}", n]</label>
+                            <select id="billed-charge-@n" @bind="billed.Charge">
+                                @foreach (var charge in Enum.GetValues<LoadCharge>())
+                                {
+                                    <option value="@charge">@LoadCharges.Label(charge)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="billed-amount-@n">@L["Billed {0}", n]</label>
+                            <input id="billed-amount-@n" class="amount" type="number" step="0.01" @bind="billed.Amount" />
+                        </div>
+                        <div class="field">
+                            <label for="billed-miles-@n">@L["Miles {0}", n]</label>
+                            <input id="billed-miles-@n" class="amount" type="number" step="0.1" min="0" @bind="billed.Miles" />
+                        </div>
+                    </div>
+                }
+                <button type="button" class="secondary" @onclick="() => _billed.Add(new() { Load = _billed[^1].Load })">@L["Add a billed charge"]</button>
+            </details>
+
             <details class="paste-lines" open="@(Id is null)">
                 <summary>@L["Paste lines from a spreadsheet"]</summary>
                 <div class="field">
@@ -289,6 +323,7 @@
     private List<StatedModel> _stated = [.. Enum.GetValues<SettlementSection>().Where(s => s != SettlementSection.Other).Select(s => new StatedModel { Section = s })];
     private List<SplitModel> _balances = [new()];
     private IReadOnlyList<Account> _balanceAccounts = [];
+    private List<BilledModel> _billed = [new()];
     private FormDraft<Draft>? _draft;
 
     [Parameter] public Guid? Id { get; set; }
@@ -365,6 +400,8 @@
                 row.Amount = SettlementSections.Printed(total.Section, total.Amount);
         }
 
+        if (s.Billed.Count > 0)
+            _billed = [.. s.Billed.Select(b => new BilledModel { Load = b.Load, Charge = b.Charge, Amount = b.Amount, Miles = b.Miles })];
         if (s.StatedBalances.Count > 0)
             _balances = [.. s.StatedBalances.Select(b => new SplitModel { AccountId = b.AccountId, Amount = b.Amount })];
         _showAccounts = _lines.Any(l => l.AccountId is not null || l.ClassId is not null);
@@ -416,7 +453,8 @@
                 Filled.Select(l => new SettlementLineDraft(l.Section, l.Code, l.Counted, l.Date, l.Load, l.Dispatch, l.Description, l.AccountId, l.ClassId, l.LoadedMiles, l.EmptyMiles, l.Gallons)).ToList(),
                 _from, _to, _carried ?? 0m, _splits.Where(s => s.AccountId is not null).Select(s => new SettlementDepositDraft(s.AccountId!.Value, s.Amount!.Value)).ToList(), _memo,
                 _stated.Where(t => t.Amount is not null).Select(t => new SettlementTotalDraft(t.Section, SettlementSections.Counted(t.Section, t.Amount!.Value))).ToList(),
-                _balances.Where(b => b.AccountId is not null && b.Amount is not null).Select(b => new SettlementBalanceDraft(b.AccountId!.Value, b.Amount!.Value)).ToList());
+                _balances.Where(b => b.AccountId is not null && b.Amount is not null).Select(b => new SettlementBalanceDraft(b.AccountId!.Value, b.Amount!.Value)).ToList(),
+                _billed.Where(b => b.Amount is not null).Select(b => new SettlementBilledDraft(b.Load ?? string.Empty, b.Charge, b.Amount!.Value, b.Miles)).ToList());
             var saved = Id is { } id
                 ? await Ops.ChangeAsync<Settlement, SettlementService, Settlement>(id, _version, s => s.ChangeAsync(id, details))
                 : await Ops.RunAsync<SettlementService, Settlement>(s => s.CreateAsync(_carrierId, details));
@@ -435,7 +473,7 @@
     }
 
     private Draft? TakeDraft() => !Filled.Any() && string.IsNullOrWhiteSpace(_number) ? null
-        : new Draft(_carrierId, _number, _date, _net, _carried, _from, _to, _memo, _lines, _splits, _stated, _balances);
+        : new Draft(_carrierId, _number, _date, _net, _carried, _from, _to, _memo, _lines, _splits, _stated, _balances, _billed);
 
     private void Restore(Draft draft)
     {
@@ -448,11 +486,20 @@
         _splits = draft.Splits.Count > 0 ? draft.Splits : [new(), new()];
         _stated = draft.Stated ?? _stated;
         _balances = draft.Balances ?? _balances;
+        _billed = draft.Billed is { Count: > 0 } kept ? kept : _billed;
         _showAccounts = _lines.Any(l => l.AccountId is not null || l.ClassId is not null);
     }
 
     internal sealed record Draft(Guid CarrierId, string? Number, DateOnly Date, decimal? Net, decimal? Carried, DateOnly? From, DateOnly? To, string? Memo, List<LineModel> Lines, List<SplitModel> Splits,
-        List<StatedModel>? Stated = null, List<SplitModel>? Balances = null);
+        List<StatedModel>? Stated = null, List<SplitModel>? Balances = null, List<BilledModel>? Billed = null);
+
+    internal sealed class BilledModel
+    {
+        public string? Load { get; set; }
+        public LoadCharge Charge { get; set; }
+        public decimal? Amount { get; set; }
+        public decimal? Miles { get; set; }
+    }
 
     internal sealed class StatedModel
     {

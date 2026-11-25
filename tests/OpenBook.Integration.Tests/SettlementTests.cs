@@ -372,6 +372,44 @@ public sealed class SettlementTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Loads_are_checked_against_what_their_customers_were_billed()
+    {
+        await In<SettlementService, Carrier>(s => s.SetSharesAsync(_carrier.Id, [(LoadCharge.Linehaul, 72m), (LoadCharge.FuelSurcharge, 100m), (LoadCharge.Detention, 72m)]));
+        await In<SettlementService, Carrier>(s => s.SetCodesAsync(_carrier.Id,
+            [new(Revenue, "RV", Account("Freight Revenue"), Charge: LoadCharge.Linehaul), new(Revenue, "FS", Account("Fuel Surcharge"), Charge: LoadCharge.FuelSurcharge), new(Revenue, "DT", Account("Accessorial Pay"), Charge: LoadCharge.Detention)]));
+        // One load over two dispatches loses a mile in the split, its detention isn't paid, and the surcharge is a cent out by rounding.
+        var settlement = await Enter(new SettlementDetails("1", Friday, 1317.20m,
+            [Line(Revenue, "RV", 500.10m, "TRIP REVENUE", "L1", 50m, 150m), Line(Revenue, "RV", 577.00m, "TRIP REVENUE", "L1", 279m), Line(Revenue, "FS", 240.10m, "FUEL SURCHARGE", "L1")],
+            Billed: [new("L1", LoadCharge.Linehaul, 1500.00m, 480m), new("L1", LoadCharge.FuelSurcharge, 240.11m), new("L1", LoadCharge.Detention, 50m), new("L1", LoadCharge.Tolls, 17.25m)]));
+        var loads = (await In<SettlementService, SettlementReview>(s => s.ReviewAsync(settlement))).Loads;
+        Assert.Equal([(LoadCharge.Linehaul, (decimal?)1080.00m, 1077.10m, (decimal?)2.90m), (LoadCharge.FuelSurcharge, 240.11m, 240.10m, null), (LoadCharge.Detention, 36.00m, 0m, 36.00m), (LoadCharge.Tolls, null, 0m, null)],
+            loads.Select(l => (l.Charge, l.Expected, l.Paid, l.ShortBy)));
+        Assert.Equal((480m, 479m, true), (loads[0].BilledMiles, loads[0].PaidMiles, loads[0].MilesDiffer));
+        Assert.All(loads.Skip(1), l => Assert.False(l.MilesDiffer));
+
+        // While nobody has said what the load's codes pay, nothing is called short.
+        await In<SettlementService, Carrier>(s => s.SetCodesAsync(_carrier.Id, [new(Revenue, "RV", Account("Freight Revenue")), new(Revenue, "FS", Account("Fuel Surcharge"))]));
+        loads = (await In<SettlementService, SettlementReview>(s => s.ReviewAsync(settlement))).Loads;
+        Assert.All(loads, l => Assert.Null(l.ShortBy));
+        Assert.Equal(["FS", "RV"], loads[0].Unsorted);
+        await In<SettlementService, Carrier>(s => s.SetCodesAsync(_carrier.Id,
+            [new(Revenue, "RV", Account("Freight Revenue"), Charge: LoadCharge.Linehaul), new(Revenue, "FS", Account("Fuel Surcharge"), Charge: LoadCharge.FuelSurcharge)]));
+
+        // Detention that comes a week later is counted.
+        await Enter(Details("2", Friday.AddDays(7), 36.00m, [Line(Revenue, "DT", 36.00m, "DETENTION", "L1")]));
+        Assert.Null((await In<SettlementService, SettlementReview>(s => s.ReviewAsync(settlement))).Loads.Single(l => l.Charge == LoadCharge.Detention).ShortBy);
+
+        Assert.Equal("settlement.percent_range", (await Refused<SettlementService, Carrier>(s => s.SetSharesAsync(_carrier.Id, [(LoadCharge.Tolls, 101m)]))).Code);
+        Assert.Equal("settlement.share_twice", (await Refused<SettlementService, Carrier>(s => s.SetSharesAsync(_carrier.Id, [(LoadCharge.Tolls, 1m), (LoadCharge.Tolls, 2m)]))).Code);
+        Assert.Equal("settlement.billed_load", (await Refused<SettlementService, Settlement>(s => s.CreateAsync(_carrier.Id, Details("3") with { Billed = [new(" ", LoadCharge.Tolls, 1m)] }))).Code);
+        await In<SettlementService, Carrier>(s => s.SetSharesAsync(_carrier.Id, [(LoadCharge.Linehaul, 70.5m), (LoadCharge.Tolls, 100m)]));
+        Assert.Equal([1057.50m, null, null, 17.25m], (await In<SettlementService, SettlementReview>(s => s.ReviewAsync(settlement))).Loads.Select(l => l.Expected));
+        // Taking the shares away stops the checking.
+        await In<SettlementService, Carrier>(s => s.SetSharesAsync(_carrier.Id, []));
+        Assert.All((await In<SettlementService, SettlementReview>(s => s.ReviewAsync(settlement))).Loads, l => Assert.Null(l.Expected));
+    }
+
+    [Fact]
     public async Task A_line_to_a_loans_account_is_pointed_out()
     {
         var liability = await _db.CreateAccount("Truck loan", AccountType.LongTermLiability);

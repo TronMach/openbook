@@ -28,6 +28,10 @@ public sealed record SettlementTotalDraft(SettlementSection Section, decimal Amo
 /// <summary>A balance the statement prints (a reserve, an advance still owed), in the account's own sign, to check the books against.</summary>
 public sealed record SettlementBalanceDraft(Guid AccountId, decimal Amount);
 
+/// <summary>What a load's customer was billed for one kind of charge, from its freight bill, to check what was paid against.</summary>
+/// <param name="Miles">The load's miles, to check those of the lines that paid it; null when not checked.</param>
+public sealed record SettlementBilledDraft(string Load, LoadCharge Charge, decimal Amount, decimal? Miles = null);
+
 /// <summary>Part of the net, paid into an account of its own.</summary>
 public sealed record SettlementDepositDraft(Guid AccountId, decimal Amount);
 
@@ -39,7 +43,8 @@ public sealed record SettlementDepositDraft(Guid AccountId, decimal Amount);
 public sealed record SettlementDetails(
     string Number, DateOnly Date, decimal NetPaid, IReadOnlyList<SettlementLineDraft> Lines, DateOnly? PeriodStart = null, DateOnly? PeriodEnd = null,
     decimal CarriedForward = 0m, IReadOnlyList<SettlementDepositDraft>? Deposits = null, string? Memo = null,
-    IReadOnlyList<SettlementTotalDraft>? StatedTotals = null, IReadOnlyList<SettlementBalanceDraft>? StatedBalances = null);
+    IReadOnlyList<SettlementTotalDraft>? StatedTotals = null, IReadOnlyList<SettlementBalanceDraft>? StatedBalances = null,
+    IReadOnlyList<SettlementBilledDraft>? Billed = null);
 
 /// <summary>How a settlement's lines were read from its statement; null when they were typed or imported.</summary>
 public static class SettlementReadMethods
@@ -165,6 +170,30 @@ public sealed class SettlementStatedTotal
     public decimal Amount { get; private set; }
 }
 
+public sealed class SettlementBilled
+{
+    private SettlementBilled() => Load = string.Empty;
+
+    internal SettlementBilled(int lineNumber, SettlementBilledDraft draft)
+    {
+        LineNumber = lineNumber;
+        Load = SettlementText.Fit(draft.Load, 40) ?? throw new DomainException("settlement.billed_load", "Say which load each billed charge is for.");
+        Charge = Enum.IsDefined(draft.Charge) ? draft.Charge : throw new DomainException("settlement.charge_invalid", "Unknown kind of charge.");
+        Amount = Settlement.Cents(draft.Amount, "A billed charge");
+        Miles = draft.Miles is not { } miles ? null
+            : miles is < 0m or > 1_000_000m ? throw new DomainException("settlement.quantity_range", $"Load {Load}: miles must be between 0 and 1,000,000.")
+            : decimal.Round(miles, 1, MidpointRounding.AwayFromZero);
+    }
+
+    public int LineNumber { get; private set; }
+    public string Load { get; private set; }
+    public LoadCharge Charge { get; private set; }
+    public decimal Amount { get; private set; }
+
+    /// <summary>The load's miles; null when they aren't checked.</summary>
+    public decimal? Miles { get; private set; }
+}
+
 public sealed class SettlementStatedBalance
 {
     private SettlementStatedBalance() { }
@@ -192,11 +221,13 @@ public sealed class Settlement
     public const int MaxLines = 500;
     public const int MaxDeposits = 5;
     public const int MaxBalances = 20;
+    public const int MaxBilled = 200;
 
     private readonly List<SettlementLine> _lines = [];
     private readonly List<SettlementDeposit> _deposits = [];
     private readonly List<SettlementStatedTotal> _statedTotals = [];
     private readonly List<SettlementStatedBalance> _statedBalances = [];
+    private readonly List<SettlementBilled> _billed = [];
 
     private Settlement() => Number = string.Empty;
 
@@ -273,6 +304,9 @@ public sealed class Settlement
 
     public IReadOnlyList<SettlementStatedBalance> StatedBalances => [.. _statedBalances.OrderBy(b => b.LineNumber)];
 
+    /// <summary>What the loads' customers were billed, when it was entered.</summary>
+    public IReadOnlyList<SettlementBilled> Billed => [.. _billed.OrderBy(b => b.LineNumber)];
+
     public decimal Total => _lines.Sum(l => l.Amount);
 
     public decimal SectionTotal(SettlementSection section) => _lines.Where(l => l.Section == section).Sum(l => l.Amount);
@@ -337,6 +371,10 @@ public sealed class Settlement
         if (balances.Select(b => b.AccountId).Distinct().Count() != balances.Count)
             throw new DomainException("settlement.balance_twice", "Each account has one printed balance.");
 
+        var billed = (details.Billed ?? []).Select((b, i) => new SettlementBilled(i + 1, b)).ToList();
+        if (billed.Count > MaxBilled)
+            throw new DomainException("settlement.too_many_billed", $"A settlement takes at most {MaxBilled} billed charges.");
+
         // What was pointed out on a scanned line stays until it's checked or the line is changed; a change asks for the whole to be checked again.
         var doubted = _lines.Where(l => l.Doubt is not null).ToList();
         foreach (var line in newLines)
@@ -356,6 +394,8 @@ public sealed class Settlement
         _statedTotals.AddRange(totals);
         _statedBalances.Clear();
         _statedBalances.AddRange(balances);
+        _billed.Clear();
+        _billed.AddRange(billed);
     }
 
     /// <summary>The line's own account, else what the carrier's code stands for; null while it has neither.</summary>

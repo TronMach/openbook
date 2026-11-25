@@ -55,6 +55,7 @@ public static class SettlementEndpoints
         {
             var back = AccessRules.LocalPath(form["back"]) ?? $"/settlements/carriers/{id}";
             var codes = new List<CarrierCodeDraft>();
+            var current = await settlements.GetCarrierAsync(id, ct);
             var forget = new List<(SettlementSection, string)>();
             for (var i = 0; form.ContainsKey($"code:{i}"); i++)
             {
@@ -64,7 +65,8 @@ public static class SettlementEndpoints
                 if (form[$"forget:{i}"] == "true")
                     forget.Add((section, code));
                 else if (code.Length > 0 && Guid.TryParse(form[$"account:{i}"], out var account))
-                    codes.Add(new CarrierCodeDraft(section, code, account, form[$"name:{i}"].ToString(), Id(form, $"class:{i}")));
+                    codes.Add(new CarrierCodeDraft(section, code, account, form[$"name:{i}"].ToString(), Id(form, $"class:{i}"),
+                        Enum.TryParse<LoadCharge>(form[$"charge:{i}"], out var charge) ? charge : form.ContainsKey($"charge:{i}") ? null : Kept(current, section, code)));
             }
 
             return await Back(back, () => settlements.SetCodesAsync(id, codes, forget, ct));
@@ -94,6 +96,23 @@ public static class SettlementEndpoints
             }
         }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxFileBytes * 2));
 
+        // The owner's share of each kind of charge: share:{charge}, blank for one that isn't checked.
+        app.MapPost("/settlements/carriers/{id:guid}/shares", async (Guid id, IFormCollection form, SettlementService settlements, CancellationToken ct) =>
+            await Back($"/settlements/carriers/{id}", () =>
+            {
+                var shares = new List<(LoadCharge, decimal)>();
+                foreach (var charge in Enum.GetValues<LoadCharge>())
+                {
+                    var text = form[$"share:{charge}"].ToString().Trim().TrimEnd('%');
+                    if (text.Length == 0)
+                        continue;
+                    shares.Add((charge, decimal.TryParse(text, System.Globalization.NumberStyles.AllowDecimalPoint, System.Globalization.CultureInfo.InvariantCulture, out var percent) ? percent
+                        : throw new DomainException("settlement.percent_range", $"{LoadCharges.Label(charge)}: type the share as a percentage, like 72.")));
+                }
+
+                return settlements.SetSharesAsync(id, shares, ct);
+            })).RequireAuthorization();
+
         app.MapPost("/settlements/{id:guid}/post", async (IFormCollection _, Guid id, SettlementService settlements, CancellationToken ct) =>
             await Back($"/settlements/{id}", () => settlements.PostAsync(id, ct))).RequireAuthorization();
 
@@ -119,6 +138,9 @@ public static class SettlementEndpoints
 
 
     private static Guid? Id(IFormCollection form, string name) => Guid.TryParse(form[name], out var id) ? id : null;
+
+    /// <summary>A form that doesn't ask about a code's charge leaves it as it is.</summary>
+    private static LoadCharge? Kept(Carrier? carrier, SettlementSection section, string code) => carrier?.CodeFor(section, code)?.Charge;
 
     private static CarrierDetails Details(IFormCollection form) => new(
         form["name"].ToString(), Id(form, "depositAccountId") ?? Guid.Empty, Id(form, "vendorId"), Id(form, "dueAccountId"), Id(form, "classId"), Id(form, "locationId"), form["unit"].ToString());

@@ -10,7 +10,7 @@
         {
             <p class="muted">@L["Compared with the settlements before it, the latest being {0} of {1}. Nothing here stops it posting.", previous, Labels.Date(Review.PreviousDate!.Value)]</p>
         }
-        @if (Review.Notes.Count == 0 && Review.Totals.All(t => !t.IsOff) && Review.Balances.All(b => b.Difference == 0m))
+        @if (Review.Notes.Count == 0 && Review.Totals.All(t => !t.IsOff) && Review.Balances.All(b => b.Difference == 0m) && Review.Loads.All(l => !l.StandsOut && l.Unsorted.Count == 0))
         {
             <p>@L["Nothing stands out."]</p>
         }
@@ -61,6 +61,36 @@
                 </table>
             </div>
         }
+        @if (Review.Loads.Count > 0)
+        {
+            <h3>@L["Loads against what was billed"]</h3>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>@L["Load"]</th><th>@L["Charge"]</th><th class="num">@L["Billed"]</th><th class="num">@L["Your share"]</th><th class="num">@L["Should pay"]</th><th class="num">@L["Paid so far"]</th><th class="num">@L["Short"]</th><th class="num">@L["Miles billed"]</th><th class="num">@L["Miles paid"]</th></tr></thead>
+                    <tbody>
+                        @foreach (var load in Review.Loads)
+                        {
+                            <tr>
+                                <td>@load.Load</td>
+                                <td>@LoadCharges.Label(load.Charge)</td>
+                                <td class="num">@Labels.Amount(load.Billed)</td>
+                                <td class="num">@(load.Percent is { } percent ? $"{percent.ToString("0.####", System.Globalization.CultureInfo.CurrentCulture)}%" : "")</td>
+                                <td class="num">@(load.Expected is { } expected ? Labels.Amount(expected) : "")</td>
+                                <td class="num">@Labels.Amount(load.Paid)</td>
+                                <td class="num @(load.ShortBy is null ? "" : "neg")">@(load.ShortBy is { } missing ? Labels.Amount(missing) : "")</td>
+                                <td class="num">@SettlementLabels.Miles(load.BilledMiles)</td>
+                                <td class="num @(load.MilesDiffer ? "neg" : "")">@(load.BilledMiles is null ? "" : SettlementLabels.Miles(load.PaidMiles))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (Review.Loads.SelectMany(l => l.Unsorted).Distinct().ToList() is { Count: > 0 } unsorted)
+            {
+                <p>@L["Choose what these codes pay of a load on the carrier's page, so this can be checked: {0}.", string.Join(", ", unsorted)] <ActionLink Href="@($"/settlements/carriers/{CarrierId}#codes")">@L["Carriers and codes"]</ActionLink></p>
+            }
+            <p class="hint">@L["Paid so far counts every settlement from this carrier. What's short may still come on a later one; ask the carrier if it doesn't."]</p>
+        }
         @if (Review.Balances.Count > 0)
         {
             <h3>@L["Reserves and balances"]</h3>
@@ -87,6 +117,8 @@
 
 @code {
     [Parameter, EditorRequired] public SettlementReview Review { get; set; } = default!;
+
+    [Parameter, EditorRequired] public Guid CarrierId { get; set; }
 
     [Parameter, EditorRequired] public ChartOfAccounts Chart { get; set; } = new([]);
 

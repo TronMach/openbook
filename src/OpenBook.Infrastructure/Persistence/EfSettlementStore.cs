@@ -8,9 +8,9 @@ namespace OpenBook.Infrastructure.Persistence;
 
 internal sealed class EfSettlementStore(OpenBookDbContext db) : ISettlementStore
 {
-    public async Task<IReadOnlyList<Carrier>> ListCarriersAsync(CancellationToken ct) => await db.Carriers.ToListAsync(ct);
+    public async Task<IReadOnlyList<Carrier>> ListCarriersAsync(CancellationToken ct) => await db.Carriers.AsSplitQuery().ToListAsync(ct);
 
-    public Task<Carrier?> GetCarrierAsync(Guid id, CancellationToken ct) => db.Carriers.SingleOrDefaultAsync(c => c.Id == id, ct);
+    public Task<Carrier?> GetCarrierAsync(Guid id, CancellationToken ct) => db.Carriers.AsSplitQuery().SingleOrDefaultAsync(c => c.Id == id, ct);
 
     // Lines and deposits both grow, so they're read apart. SQLite can't order by a DateTimeOffset: newest first is sorted here.
     public async Task<IReadOnlyList<Settlement>> ListSettlementsAsync(Guid? carrierId, CancellationToken ct) =>

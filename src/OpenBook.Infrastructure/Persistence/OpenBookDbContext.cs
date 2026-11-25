@@ -1311,7 +1311,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 x.Property(c => c.Code).HasMaxLength(OpenBook.Domain.Settlements.CarrierCode.MaxCodeLength);
                 x.Property(c => c.Name).HasMaxLength(100);
                 x.HasOne<Account>().WithMany().HasForeignKey(c => c.AccountId).OnDelete(DeleteBehavior.Restrict);
+                x.Property(c => c.Charge).HasConversion<string>().HasMaxLength(20);
             });
+            b.OwnsMany(c => c.Shares, x =>
+            {
+                x.ToTable("CarrierShares");
+                x.WithOwner().HasForeignKey("CarrierId");
+                x.HasKey("CarrierId", nameof(OpenBook.Domain.Settlements.CarrierShare.Charge));
+                x.Property(s => s.Charge).HasConversion<string>().HasMaxLength(20);
+                x.Property(s => s.Percent).HasColumnName("PercentTenThousandths").HasConversion(TenThousandths);
+            });
+            b.Navigation(c => c.Shares).UsePropertyAccessMode(PropertyAccessMode.Field);
             b.Navigation(c => c.Codes).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
@@ -1390,6 +1400,18 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 x.HasOne<Account>().WithMany().HasForeignKey(y => y.AccountId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(s => s.StatedBalances).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(s => s.Billed, x =>
+            {
+                x.ToTable("SettlementBilled");
+                x.WithOwner().HasForeignKey("SettlementId");
+                x.HasKey("SettlementId", nameof(OpenBook.Domain.Settlements.SettlementBilled.LineNumber));
+                x.Property(y => y.LineNumber).ValueGeneratedNever();
+                x.Property(y => y.Load).HasMaxLength(40);
+                x.Property(y => y.Charge).HasConversion<string>().HasMaxLength(20);
+                x.Property(y => y.Miles).HasColumnName("MilesTenThousandths").HasConversion(NullableTenThousandths);
+                x.Property(y => y.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            });
+            b.Navigation(s => s.Billed).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Channels.ChannelPayout>(b =>

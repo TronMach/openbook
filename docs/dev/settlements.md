@@ -37,6 +37,10 @@ Developer notes (index in `CLAUDE.md`). Read this file before changing this area
 - `OpenBook:Ocr:TesseractPath` (the inbox's setting) turns it on; without it pictures are refused here (`settlement.cannot_read_here`).
 - Pages `/settlements/new/statement` (interactive: file, page thumbnails, Claude first, this computer folded below with its warning), `SettlementScanCheck` and `SettlementReadBanner` on the settlement; API `POST /api/settlements/read?carrierId=&pages=1-4&with=` and `POST /{id}/confirm`. Tests use `FakeStatementPages` (words instead of Tesseract, small PDFs built by hand); fuzz targets `settlement-words`, `settlement-answer`, `settlement-pdf`.
 
+## Load check (A7, 2026-11-25)
+
+- `Carrier.Shares` (percent per `LoadCharge`), `CarrierCode.Charge` (which charge a code pays) and `Settlement.Billed` (load, charge, amount from the freight bills) give `ReviewLoad`s in the review: billed × share against what every settlement of the carrier, dismissed ones aside, has paid on that load's lines. Short only beyond a cent a line, which carriers lose rounding. A billed row's optional miles are compared with those of the lines that paid that charge (so surcharge lines repeating them don't count twice). While nothing known paid a charge and a revenue code on that load has no charge set, it isn't called short; the review names the codes (`Unsorted`). A code form without a `charge:i` field keeps the code's charge. Typed only: freight bills differ too much between carriers for a reader to say which of their amounts the share is of.
+
 ## The edition and the setting
 
 - `Company.UsesSettlements` puts settlements in the menus whatever the edition (`Editions.Menu(edition, settlements)`, `ViewState.Settlements`); `Edition.Trucking` puts them first. Choosing the edition (setup or Settings) turns the setting on; it can be turned off again. Neither changes data, rules or access.

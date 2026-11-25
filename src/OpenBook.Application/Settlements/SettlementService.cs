@@ -147,6 +147,22 @@ public sealed class SettlementService(
         return carrier;
     }
 
+    /// <summary>The owner's share of each kind of charge by contract, which loads are checked by; kinds left out aren't.</summary>
+    public async Task<Carrier> SetSharesAsync(Guid id, IReadOnlyCollection<(LoadCharge Charge, decimal Percent)> shares, CancellationToken ct = default)
+    {
+        var carrier = await CarrierAsync(id, ct);
+        var before = SharesSnapshot(carrier);
+        carrier.SetShares(shares);
+        var after = SharesSnapshot(carrier);
+        if (after == before)
+            return carrier;
+        store.Add(Audit(AuditAction.Updated, CarrierEntity, carrier.Id, before, after));
+        await store.SaveChangesAsync(ct);
+        return carrier;
+    }
+
+    private static string SharesSnapshot(Carrier c) => JsonSerializer.Serialize(c.Shares.ToDictionary(s => $"{LoadCharges.Label(s.Charge)} share", s => s.Percent));
+
     public async Task<Settlement> CreateAsync(Guid carrierId, SettlementDetails details, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(details);
@@ -223,8 +239,8 @@ public sealed class SettlementService(
     {
         ArgumentNullException.ThrowIfNull(settlement);
         var carrier = await CarrierAsync(settlement.CarrierId, ct);
-        var earlier = (await store.ListSettlementsAsync(settlement.CarrierId, ct))
-            .Where(s => s.Id != settlement.Id && s.Status != SettlementStatus.Dismissed
+        var all = await store.ListSettlementsAsync(settlement.CarrierId, ct);
+        var earlier = all.Where(s => s.Id != settlement.Id && s.Status != SettlementStatus.Dismissed
                 && (s.Date < settlement.Date || s.Date == settlement.Date && s.CreatedAt < settlement.CreatedAt))
             .Take(SettlementReview.Weeks).ToList();
         var accountIds = settlement.StatedBalances.Select(b => b.AccountId).ToList();
@@ -242,7 +258,8 @@ public sealed class SettlementService(
 
         var loans = (await assets.ListLoansAsync(ct)).Where(l => !l.IsVoided).Select(l => l.LiabilityAccountId).ToHashSet();
         return SettlementReview.Build(settlement, earlier, [.. settlement.StatedBalances.Select(b => new ReviewBalance(b.AccountId, Books(b.AccountId), b.Amount))],
-            [.. settlement.Lines.Where(l => (l.PostedAccountId ?? Settlement.AccountFor(carrier, l)) is { } id && loans.Contains(id))]);
+            [.. settlement.Lines.Where(l => (l.PostedAccountId ?? Settlement.AccountFor(carrier, l)) is { } id && loans.Contains(id))],
+            SettlementReview.CheckLoads(settlement, carrier, all));
     }
 
     /// <summary>
@@ -491,7 +508,7 @@ public sealed class SettlementService(
     });
 
     private static string CodesSnapshot(Carrier c, ChartOfAccounts chart) => JsonSerializer.Serialize(
-        c.Codes.ToDictionary(x => $"{SettlementSections.Label(x.Section)} {x.Code}", x => chart.Find(x.AccountId) is null ? x.AccountId.ToString() : chart.FullName(x.AccountId)));
+        c.Codes.ToDictionary(x => $"{SettlementSections.Label(x.Section)} {x.Code}", x => (chart.Find(x.AccountId) is null ? x.AccountId.ToString() : chart.FullName(x.AccountId)) + (x.Charge is { } charge ? $" ({LoadCharges.Label(charge)})" : "")));
 
     /// <summary>Codes and amounts only: descriptions can name people.</summary>
     internal static string Snapshot(Settlement s, Carrier c) => JsonSerializer.Serialize(new
@@ -507,6 +524,7 @@ public sealed class SettlementService(
         Lines = s.Lines.Select(l => $"{SettlementSections.Label(l.Section)} {l.Code}{(l.Load is { } load ? $" {load}" : "")}: {l.Amount:0.00}").ToList(),
         Deposits = s.Deposits.Select(d => $"{d.AccountId}: {d.Amount:0.00}").ToList(),
         StatedTotals = s.StatedTotals.Select(t => $"{SettlementSections.Label(t.Section)}: {t.Amount:0.00}").ToList(),
+        Billed = s.Billed.Select(b => $"{b.Load} {LoadCharges.Label(b.Charge)}: {b.Amount:0.00}{(b.Miles is { } miles ? $", {miles:0.#} miles" : "")}").ToList(),
         StatedBalances = s.StatedBalances.Select(b => $"{b.AccountId}: {b.Amount:0.00}").ToList(),
         s.ReadMethod,
         s.CheckedBy,

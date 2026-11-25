@@ -44,6 +44,9 @@
   <data name="(none)" xml:space="preserve">
     <value>(none)</value>
   </data>
+  <data name="(not a load charge)" xml:space="preserve">
+    <value>(not a load charge)</value>
+  </data>
   <data name="(optional)" xml:space="preserve">
     <value>(optional)</value>
   </data>
@@ -244,6 +247,9 @@
   </data>
   <data name="Add a bank account" xml:space="preserve">
     <value>Add a bank account</value>
+  </data>
+  <data name="Add a billed charge" xml:space="preserve">
+    <value>Add a billed charge</value>
   </data>
   <data name="Add a carrier" xml:space="preserve">
     <value>Add a carrier</value>
@@ -626,6 +632,9 @@
   <data name="Billed" xml:space="preserve">
     <value>Billed</value>
   </data>
+  <data name="Billed {0}" xml:space="preserve">
+    <value>Billed {0}</value>
+  </data>
   <data name="Bills by email" xml:space="preserve">
     <value>Bills by email</value>
   </data>
@@ -800,8 +809,17 @@
   <data name="Chapters" xml:space="preserve">
     <value>Chapters</value>
   </data>
+  <data name="Charge" xml:space="preserve">
+    <value>Charge</value>
+  </data>
   <data name="Charge sales tax on it" xml:space="preserve">
     <value>Charge sales tax on it</value>
+  </data>
+  <data name="Charge {0}" xml:space="preserve">
+    <value>Charge {0}</value>
+  </data>
+  <data name="Charge {0} pays" xml:space="preserve">
+    <value>Charge {0} pays</value>
   </data>
   <data name="Chart of Accounts" xml:space="preserve">
     <value>Chart of Accounts</value>
@@ -850,6 +868,9 @@
   </data>
   <data name="Choose what the dashboard shows" xml:space="preserve">
     <value>Choose what the dashboard shows</value>
+  </data>
+  <data name="Choose what these codes pay of a load on the carrier's page, so this can be checked: {0}." xml:space="preserve">
+    <value>Choose what these codes pay of a load on the carrier's page, so this can be checked: {0}.</value>
   </data>
   <data name="Choose what to change on all of them. Anything left as it is stays as each item has it. Nothing is saved until you've seen what will change." xml:space="preserve">
     <value>Choose what to change on all of them. Anything left as it is stays as each item has it. Nothing is saved until you've seen what will change.</value>
@@ -1517,6 +1538,9 @@
   <data name="From Account Info" xml:space="preserve">
     <value>From Account Info</value>
   </data>
+  <data name="From your contract, in percent. When you enter what a load's customer was billed, the settlement's page says what you should have been paid and what's short. Leave blank what you don't want checked." xml:space="preserve">
+    <value>From your contract, in percent. When you enter what a load's customer was billed, the settlement's page says what you should have been paid and what's short. Leave blank what you don't want checked.</value>
+  </data>
   <data name="Full view" xml:space="preserve">
     <value>Full view</value>
   </data>
@@ -1973,11 +1997,17 @@
   <data name="Load" xml:space="preserve">
     <value>Load</value>
   </data>
+  <data name="Load {0}" xml:space="preserve">
+    <value>Load {0}</value>
+  </data>
   <data name="Loaded miles" xml:space="preserve">
     <value>Loaded miles</value>
   </data>
   <data name="Loads" xml:space="preserve">
     <value>Loads</value>
+  </data>
+  <data name="Loads against what was billed" xml:space="preserve">
+    <value>Loads against what was billed</value>
   </data>
   <data name="Loans" xml:space="preserve">
     <value>Loans</value>
@@ -2047,6 +2077,15 @@
   </data>
   <data name="Miles" xml:space="preserve">
     <value>Miles</value>
+  </data>
+  <data name="Miles billed" xml:space="preserve">
+    <value>Miles billed</value>
+  </data>
+  <data name="Miles paid" xml:space="preserve">
+    <value>Miles paid</value>
+  </data>
+  <data name="Miles {0}" xml:space="preserve">
+    <value>Miles {0}</value>
   </data>
   <data name="Milestone" xml:space="preserve">
     <value>Milestone</value>
@@ -2555,6 +2594,9 @@
   <data name="Operating statement" xml:space="preserve">
     <value>Operating statement</value>
   </data>
+  <data name="Optional, from the freight bills sent with the statement: it checks that your share of each was paid, and the miles if you type them. The shares are on the carrier's page." xml:space="preserve">
+    <value>Optional, from the freight bills sent with the statement: it checks that your share of each was paid, and the miles if you type them. The shares are on the carrier's page.</value>
+  </data>
   <data name="Optional. From this day they can't sign in and are made inactive. Leave empty for no end." xml:space="preserve">
     <value>Optional. From this day they can't sign in and are made inactive. Leave empty for no end.</value>
   </data>
@@ -2666,6 +2708,12 @@
   <data name="Paid on, when the file doesn't say" xml:space="preserve">
     <value>Paid on, when the file doesn't say</value>
   </data>
+  <data name="Paid so far" xml:space="preserve">
+    <value>Paid so far</value>
+  </data>
+  <data name="Paid so far counts every settlement from this carrier. What's short may still come on a later one; ask the carrier if it doesn't." xml:space="preserve">
+    <value>Paid so far counts every settlement from this carrier. What's short may still come on a later one; ask the carrier if it doesn't.</value>
+  </data>
   <data name="Part" xml:space="preserve">
     <value>Part</value>
   </data>
@@ -2725,6 +2773,9 @@
   </data>
   <data name="Payouts whose tax moved: {0}." xml:space="preserve">
     <value>Payouts whose tax moved: {0}.</value>
+  </data>
+  <data name="Pays a load's" xml:space="preserve">
+    <value>Pays a load's</value>
   </data>
   <data name="PDF" xml:space="preserve">
     <value>PDF</value>
@@ -3377,6 +3428,9 @@
   <data name="Save the photo" xml:space="preserve">
     <value>Save the photo</value>
   </data>
+  <data name="Save the shares" xml:space="preserve">
+    <value>Save the shares</value>
+  </data>
   <data name="Saved." xml:space="preserve">
     <value>Saved.</value>
   </data>
@@ -3515,8 +3569,14 @@
   <data name="Shipping" xml:space="preserve">
     <value>Shipping</value>
   </data>
+  <data name="Short" xml:space="preserve">
+    <value>Short</value>
+  </data>
   <data name="Shortcuts" xml:space="preserve">
     <value>Shortcuts</value>
+  </data>
+  <data name="Should pay" xml:space="preserve">
+    <value>Should pay</value>
   </data>
   <data name="Show" xml:space="preserve">
     <value>Show</value>
@@ -4346,6 +4406,9 @@
   <data name="What the carrier takes out counts under this vendor in Expenses by vendor." xml:space="preserve">
     <value>What the carrier takes out counts under this vendor in Expenses by vendor.</value>
   </data>
+  <data name="What the loads' customers were billed" xml:space="preserve">
+    <value>What the loads' customers were billed</value>
+  </data>
   <data name="What the statement says, to check against" xml:space="preserve">
     <value>What the statement says, to check against</value>
   </data>
@@ -4579,6 +4642,12 @@
   </data>
   <data name="Your recovery codes" xml:space="preserve">
     <value>Your recovery codes</value>
+  </data>
+  <data name="Your share" xml:space="preserve">
+    <value>Your share</value>
+  </data>
+  <data name="Your share of each charge" xml:space="preserve">
+    <value>Your share of each charge</value>
   </data>
   <data name="Your two-factor sign-in" xml:space="preserve">
     <value>Your two-factor sign-in</value>

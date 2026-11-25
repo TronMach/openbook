@@ -9,18 +9,24 @@ namespace OpenBook.Api;
 public sealed record CarrierRequest(
     string Name, Guid DepositAccountId, Guid? VendorId = null, Guid? DueAccountId = null, Guid? ClassId = null, Guid? LocationId = null, string? Unit = null, bool? IsActive = null);
 
-public sealed record CarrierCodeResponse(SettlementSection Section, string Code, string? Name, Guid AccountId, Guid? ClassId);
+public sealed record CarrierCodeResponse(SettlementSection Section, string Code, string? Name, Guid AccountId, Guid? ClassId, LoadCharge? Charge);
+
+/// <summary>The owner's share of one kind of load charge, in percent.</summary>
+public sealed record CarrierShareRequest(LoadCharge Charge, decimal Percent);
 
 public sealed record CarrierResponse(
     Guid Id, string Name, string? Unit, Guid DepositAccountId, Guid? VendorId, Guid? DueAccountId, Guid? ClassId, Guid? LocationId, bool IsActive,
-    IReadOnlyList<CarrierCodeResponse> Codes)
+    IReadOnlyList<CarrierCodeResponse> Codes, IReadOnlyList<CarrierShareRequest> Shares)
 {
     public static CarrierResponse From(Carrier c) => new(
         c.Id, c.Name, c.Unit, c.DepositAccountId, c.VendorId, c.DueAccountId, c.ClassId, c.LocationId, c.IsActive,
-        c.Codes.Select(x => new CarrierCodeResponse(x.Section, x.Code, x.Name, x.AccountId, x.ClassId)).ToList());
+        c.Codes.Select(x => new CarrierCodeResponse(x.Section, x.Code, x.Name, x.AccountId, x.ClassId, x.Charge)).ToList(), c.Shares.Select(x => new CarrierShareRequest(x.Charge, x.Percent)).ToList());
 }
 
-public sealed record CarrierCodeRequest(SettlementSection Section, string Code, Guid AccountId, string? Name = null, Guid? ClassId = null);
+public sealed record CarrierCodeRequest(SettlementSection Section, string Code, Guid AccountId, string? Name = null, Guid? ClassId = null, LoadCharge? Charge = null);
+
+/// <summary>What a load's customer was billed for one kind of charge.</summary>
+public sealed record SettlementBilledRequest(string Load, LoadCharge Charge, decimal Amount, decimal? Miles = null);
 
 /// <summary>Codes to add or change, and codes to forget; the carrier's others stay.</summary>
 public sealed record CarrierCodesRequest(IReadOnlyList<CarrierCodeRequest>? Codes, IReadOnlyList<CarrierCodeName>? Forget = null);
@@ -42,13 +48,14 @@ public sealed record SettlementTotalRequest(SettlementSection Section, decimal A
 public sealed record SettlementRequest(
     string Number, DateOnly Date, decimal NetPaid, IReadOnlyList<SettlementLineRequest>? Lines, Guid? CarrierId = null, DateOnly? PeriodStart = null, DateOnly? PeriodEnd = null,
     decimal CarriedForward = 0m, IReadOnlyList<SettlementDepositRequest>? Deposits = null, string? Memo = null,
-    IReadOnlyList<SettlementTotalRequest>? StatedTotals = null, IReadOnlyList<SettlementDepositRequest>? StatedBalances = null)
+    IReadOnlyList<SettlementTotalRequest>? StatedTotals = null, IReadOnlyList<SettlementDepositRequest>? StatedBalances = null, IReadOnlyList<SettlementBilledRequest>? Billed = null)
 {
     public SettlementDetails ToDetails() => new(
         Number, Date, NetPaid,
         (Lines ?? []).Select(l => new SettlementLineDraft(l.Section, l.Code, l.Amount, l.Date, l.Load, l.Dispatch, l.Description, l.AccountId, l.ClassId, l.LoadedMiles, l.EmptyMiles, l.Gallons)).ToList(),
         PeriodStart, PeriodEnd, CarriedForward, (Deposits ?? []).Select(d => new SettlementDepositDraft(d.AccountId, d.Amount)).ToList(), Memo,
-        (StatedTotals ?? []).Select(t => new SettlementTotalDraft(t.Section, t.Amount)).ToList(), (StatedBalances ?? []).Select(b => new SettlementBalanceDraft(b.AccountId, b.Amount)).ToList());
+        (StatedTotals ?? []).Select(t => new SettlementTotalDraft(t.Section, t.Amount)).ToList(), (StatedBalances ?? []).Select(b => new SettlementBalanceDraft(b.AccountId, b.Amount)).ToList(),
+        (Billed ?? []).Select(b => new SettlementBilledDraft(b.Load, b.Charge, b.Amount, b.Miles)).ToList());
 }
 
 public sealed record SettlementLineResponse(
@@ -59,7 +66,7 @@ public sealed record SettlementResponse(
     Guid Id, Guid CarrierId, string Number, DateOnly Date, DateOnly? PeriodStart, DateOnly? PeriodEnd, SettlementStatus Status, decimal NetPaid, decimal CarriedForward,
     decimal Difference, decimal LoadedMiles, decimal EmptyMiles, decimal Gallons, Guid? JournalEntryId, string? Memo,
     IReadOnlyDictionary<SettlementSection, decimal> Totals, IReadOnlyList<SettlementLineResponse>? Lines, IReadOnlyList<SettlementDepositRequest>? Deposits,
-    IReadOnlyList<SettlementTotalRequest>? StatedTotals, IReadOnlyList<SettlementDepositRequest>? StatedBalances, string? ReadMethod, string? ReadNote, string? CheckedBy)
+    IReadOnlyList<SettlementTotalRequest>? StatedTotals, IReadOnlyList<SettlementDepositRequest>? StatedBalances, string? ReadMethod, string? ReadNote, string? CheckedBy, IReadOnlyList<SettlementBilledRequest>? Billed)
 {
     public static SettlementResponse From(Settlement s, bool lines = false) => new(
         s.Id, s.CarrierId, s.Number, s.Date, s.PeriodStart, s.PeriodEnd, s.Status, s.NetPaid, s.CarriedForward, s.Difference, s.LoadedMiles, s.EmptyMiles, s.Gallons,
@@ -68,7 +75,8 @@ public sealed record SettlementResponse(
             l.PostedAccountId, l.LoadedMiles, l.EmptyMiles, l.Gallons, l.Doubt, l.NeedsChecking)).ToList() : null,
         lines ? s.Deposits.Select(d => new SettlementDepositRequest(d.AccountId, d.Amount)).ToList() : null,
         lines ? s.StatedTotals.Select(t => new SettlementTotalRequest(t.Section, t.Amount)).ToList() : null,
-        lines ? s.StatedBalances.Select(b => new SettlementDepositRequest(b.AccountId, b.Amount)).ToList() : null, s.ReadMethod, s.ReadNote, s.CheckedBy);
+        lines ? s.StatedBalances.Select(b => new SettlementDepositRequest(b.AccountId, b.Amount)).ToList() : null, s.ReadMethod, s.ReadNote, s.CheckedBy,
+        lines ? s.Billed.Select(b => new SettlementBilledRequest(b.Load, b.Charge, b.Amount, b.Miles)).ToList() : null);
 }
 
 public sealed record VoidSettlementRequest(string? Reason);
@@ -98,8 +106,11 @@ public static class SettlementsApi
             return CarrierResponse.From(r.IsActive is { } active ? await s.SetCarrierActiveAsync(id, active, ct) : carrier);
         });
         settlements.MapPut("/carriers/{id:guid}/codes", async (Guid id, CarrierCodesRequest r, SettlementService s, CancellationToken ct) =>
-            CarrierResponse.From(await s.SetCodesAsync(id, (r.Codes ?? []).Select(c => new CarrierCodeDraft(c.Section, c.Code, c.AccountId, c.Name, c.ClassId)).ToList(),
+            CarrierResponse.From(await s.SetCodesAsync(id, (r.Codes ?? []).Select(c => new CarrierCodeDraft(c.Section, c.Code, c.AccountId, c.Name, c.ClassId, c.Charge)).ToList(),
                 (r.Forget ?? []).Select(c => (c.Section, c.Code)).ToList(), ct)));
+
+        settlements.MapPut("/carriers/{id:guid}/shares", async (Guid id, IReadOnlyList<CarrierShareRequest> shares, SettlementService s, CancellationToken ct) =>
+            CarrierResponse.From(await s.SetSharesAsync(id, [.. shares.Select(x => (x.Charge, x.Percent))], ct)));
 
         settlements.MapGet("", async (Guid? carrierId, SettlementService s, CancellationToken ct) => (await s.ListAsync(carrierId, ct)).Select(x => SettlementResponse.From(x)));
         settlements.MapPost("", async (SettlementRequest r, SettlementService s, CancellationToken ct) =>

@@ -167,10 +167,11 @@ internal static class EveryRecordKind
         await In<ChartTemplates, ChartImportResult>(s => s.AddTruckingAsync());
         chart = await In<AccountService, ChartOfAccounts>(s => s.GetChartAsync());
         var carrier = await In<SettlementService, Carrier>(s => s.CreateCarrierAsync(new CarrierDetails("Every Kind Freight", checking, vendor.Id, Unit: "12")));
-        await Do<SettlementService>(s => s.SetCodesAsync(carrier.Id, [new(SettlementSection.Revenue, "RV", Account("Freight Revenue"), "Trip revenue")]));
+        await Do<SettlementService>(s => s.SetCodesAsync(carrier.Id, [new(SettlementSection.Revenue, "RV", Account("Freight Revenue"), "Trip revenue", Charge: LoadCharge.Linehaul)]));
+        await Do<SettlementService>(s => s.SetSharesAsync(carrier.Id, [(LoadCharge.Linehaul, 72m)]));
         SettlementDetails Statement(string number, string code) => new(number, d, 850m,
             [new(SettlementSection.Revenue, code, 1000m, d, "L1", "01", "Trip revenue", LoadedMiles: 500m, EmptyMiles: 40m), new(SettlementSection.Deduction, "UF", -150m, d, "L1", null, "Fuel", Account("Fuel"), Gallons: 40m)]);
-        var settlement = await In<SettlementService, Settlement>(s => s.CreateAsync(carrier.Id, Statement("W1", "RV")));
+        var settlement = await In<SettlementService, Settlement>(s => s.CreateAsync(carrier.Id, Statement("W1", "RV") with { Billed = [new("L1", LoadCharge.Linehaul, 1400m, 541m)] }));
         await Do<SettlementService>(s => s.PostAsync(settlement.Id));
         await Do<SettlementService>(s => s.CreateAsync(carrier.Id, Statement("W2", "NEW")));
         var dismissed = await In<SettlementService, Settlement>(s => s.CreateAsync(carrier.Id, Statement("W3", "RV")));

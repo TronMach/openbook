@@ -13694,6 +13694,10 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("AccountId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Charge")
+                                .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
                             b1.Property<Guid?>("ClassId")
                                 .HasColumnType("TEXT");
 
@@ -13717,7 +13721,30 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("CarrierId");
                         });
 
+                    b.OwnsMany("OpenBook.Domain.Settlements.CarrierShare", "Shares", b1 =>
+                        {
+                            b1.Property<Guid>("CarrierId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Charge")
+                                .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Percent")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("PercentTenThousandths");
+
+                            b1.HasKey("CarrierId", "Charge");
+
+                            b1.ToTable("CarrierShares", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("CarrierId");
+                        });
+
                     b.Navigation("Codes");
+
+                    b.Navigation("Shares");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Settlements.Settlement", b =>
@@ -13732,6 +13759,40 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("JournalEntryId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.SettlementBilled", "Billed", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<string>("Charge")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Load")
+                                .IsRequired()
+                                .HasMaxLength(40)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long?>("Miles")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("MilesTenThousandths");
+
+                            b1.HasKey("SettlementId", "LineNumber");
+
+                            b1.ToTable("SettlementBilled", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
 
                     b.OwnsMany("OpenBook.Domain.Settlements.SettlementDeposit", "Deposits", b1 =>
                         {
@@ -13905,6 +13966,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("SettlementId");
                         });
+
+                    b.Navigation("Billed");
 
                     b.Navigation("Deposits");
 

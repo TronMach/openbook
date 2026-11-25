@@ -190,7 +190,7 @@
 
         @if (_review is not null)
         {
-            <SettlementReviewCard Review="_review" Chart="_chart" />
+            <SettlementReviewCard Review="_review" Chart="_chart" CarrierId="_settlement.CarrierId" />
         }
 
         <h2 style="margin-top: 1.5rem">@L["Lines"] <span class="muted">(@_settlement.Lines.Count)</span></h2>

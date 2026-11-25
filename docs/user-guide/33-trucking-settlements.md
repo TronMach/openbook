@@ -79,6 +79,8 @@ The settlement's page has **Check it**, which compares it with the last three:
 
 Nothing there stops it posting.
 
+**Were you paid your share?** On the carrier's page (accountant role), type **your share of each charge** from your contract (72 for linehaul, say) and choose which charge each code pays under **Pays a load's**. Then, on a settlement, open **What the loads' customers were billed** and type the charges from the freight bills that came with it. **Loads against what was billed** shows what you should have been paid, what you have been on every settlement so far, and what's **short**: detention billed and not passed on, say. Type a load's miles beside its linehaul too and they're compared with the miles you were paid for, since a load split between dispatches can lose some.
+
 ## Posting
 
 **Post settlement** makes one journal entry: the net to your bank, and each line's amount to its account. When the deposit shows in your bank feed, match it to this one rather than adding it. If the deposit was already entered as received, the page points it out: void that first, or the money counts twice.

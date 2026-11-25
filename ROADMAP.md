@@ -262,7 +262,7 @@ A real owner-operator's settlement statement was compared with OpenBook: its mon
 - **L16, the carrier** (we pay owner-operators), after L15: B1 owners, trucks, open charges, advances, reserves; B2 the weekly run (bills, zero net, void rules, 1099 on gross, backup withholding, approval); B3 recurring deductions and interest; B4 loads and a simple load board; B5 invoicing loads, detention, pay rules; B6 fuel and toll imports; B7 statement PDF and email, PPD. An accountant should confirm the 1099 treatment before B2 is released.
 - Not planned: payroll, IFTA returns, ELD or GPS links, EDI, factoring.
 
-**A1 to A6 (2026-11-25): complete.** Details in `docs/dev/settlements.md`.
+**L15, A1 to A7 (2026-11-25): complete.** L16 not started. Details in `docs/dev/settlements.md`.
 
 ### Second audit and what it led to (2026-11-24)
 
