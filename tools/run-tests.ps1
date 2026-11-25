@@ -123,9 +123,74 @@ $process.PriorityClass = 'BelowNormal'
 # The build's worker processes and the test host set their own priority back to normal (the processors limit holds),
 # so every few seconds anything this run started is put back to below normal while it lasts.
 $lowered = @{}
-# Two CI runs (2026-11-19) passed every test and then never ended, until the job's time limit: something dotnet waits for
-# at the end can stay (or the process query below can hang, hence its time limit). Once every test project's results are
-# in, the run gets $EndMinutes more; then what's left of it is listed and stopped, and the results files decide.
+# Some CI runs (2026-11-19, 2026-11-24) passed every test and then never ended, until the job's time limit: something dotnet
+# waits for at the end can stay. Once every test project's results are in, the run gets $EndMinutes more; then what's left of
+# it is listed and stopped, and the results files decide. Nothing in this loop may wait on a service: the list of processes
+# was asked of WMI at first (with a time limit), and on 2026-11-24 the loop itself stopped, so it comes from the kernel's
+# own snapshot, and the rest is stopped process by process (taskkill asks WMI too).
+Add-Type -IgnoreWarnings -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+
+public static class OpenBookProcessList
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct Entry
+    {
+        public uint Size, Usage, Id;
+        public IntPtr HeapId;
+        public uint ModuleId, Threads, ParentId;
+        public int BasePriority;
+        public uint Flags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string File;
+    }
+
+    public sealed class Item
+    {
+        public int Id;
+        public int ParentId;
+        public string Name;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint id);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "Process32FirstW")] private static extern bool First(IntPtr snapshot, ref Entry entry);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "Process32NextW")] private static extern bool Next(IntPtr snapshot, ref Entry entry);
+    [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+
+    /// <summary>What the given process started, and what that started, nearest first.</summary>
+    public static Item[] Under(int root)
+    {
+        var all = new List<Item>();
+        var snapshot = CreateToolhelp32Snapshot(2, 0);
+        if (snapshot == new IntPtr(-1)) return new Item[0];
+        try
+        {
+            var entry = new Entry();
+            entry.Size = (uint)Marshal.SizeOf(typeof(Entry));
+            for (var more = First(snapshot, ref entry); more; more = Next(snapshot, ref entry))
+                all.Add(new Item { Id = (int)entry.Id, ParentId = (int)entry.ParentId, Name = entry.File });
+        }
+        finally { CloseHandle(snapshot); }
+
+        var found = new List<Item>();
+        var seen = new HashSet<int> { root, 0 };
+        var queue = new Queue<int>();
+        queue.Enqueue(root);
+        while (queue.Count > 0)
+        {
+            var parent = queue.Dequeue();
+            foreach (var item in all)
+            {
+                if (item.ParentId != parent || !seen.Add(item.Id)) continue;
+                found.Add(item);
+                queue.Enqueue(item.Id);
+            }
+        }
+        return found.ToArray();
+    }
+}
+'@
 $EndMinutes = 3
 $projects = if ($Postgres) { 1 } else { 2 }
 $finishedAt = $null
@@ -139,38 +204,36 @@ while (-not $process.WaitForExit(3000)) {
         $note = "The tests finished $EndMinutes minutes ago but dotnet test didn't end, so it was stopped; the results files decide."
         Write-Host $note
         if ($env:GITHUB_ACTIONS) { Write-Host "::warning::$note" }
-        try {
-            Get-CimInstance Win32_Process -OperationTimeoutSec 20 -ErrorAction Stop | Where-Object { $_.Name -match '^(dotnet|testhost|vstest|node|msedge|chrome|MSBuild)' } |
-                ForEach-Object { Write-Host "  still running: $($_.ProcessId) (parent $($_.ParentProcessId)) $($_.Name) $(if ($_.CommandLine) { $_.CommandLine.Substring(0, [Math]::Min(160, $_.CommandLine.Length)) })" }
+        # Only what started after the run did is stopped, so a process number used again can't make a stranger's one of ours.
+        $left = @([OpenBookProcessList]::Under($process.Id))
+        Write-Host "  still running: $($process.Id) dotnet test"
+        foreach ($item in $left) { Write-Host "  still running: $($item.Id) (parent $($item.ParentId)) $($item.Name)" }
+        # Nearest first, so nothing is left to start another.
+        foreach ($id in @($process.Id) + @($left | ForEach-Object { $_.Id })) {
+            try {
+                $rest = [System.Diagnostics.Process]::GetProcessById($id)
+                if ($rest.StartTime -ge $process.StartTime) { $rest.Kill() }
+            }
+            catch { }
         }
-        catch { Write-Host "  (couldn't list what was still running: $($_.Exception.Message))" }
-        & taskkill.exe /PID $process.Id /T /F | Out-Null
         $stopped = $true
         $null = $process.WaitForExit(30000)
         break
     }
     try {
-        $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId -OperationTimeoutSec 20 -ErrorAction Stop)
-        $children = @{}
-        foreach ($p in $all) { $children[[int]$p.ParentProcessId] += @([int]$p.ProcessId) }
-        $queue = New-Object System.Collections.Queue
-        $queue.Enqueue($process.Id)
-        while ($queue.Count -gt 0) {
-            foreach ($id in @($children[[int]$queue.Dequeue()])) {
-                if ($null -eq $id -or $id -eq 0) { continue }
-                $queue.Enqueue($id)
-                if ($lowered.ContainsKey($id)) { continue }
-                try {
-                    $child = [System.Diagnostics.Process]::GetProcessById($id)
-                    if ($child.PriorityClass -eq 'Normal') { $child.PriorityClass = 'BelowNormal' }
-                    $lowered[$id] = $true
-                }
-                catch { }
+        foreach ($item in [OpenBookProcessList]::Under($process.Id)) {
+            if ($lowered.ContainsKey($item.Id)) { continue }
+            try {
+                $child = [System.Diagnostics.Process]::GetProcessById($item.Id)
+                if ($child.PriorityClass -eq 'Normal') { $child.PriorityClass = 'BelowNormal' }
+                $lowered[$item.Id] = $true
             }
+            catch { }
         }
     }
     catch { }
 }
+Write-Host "dotnet test has ended; reading the results."
 $code = if ($stopped) { 0 } else { $process.ExitCode }
 
 # The results files decide as well, so a failure can't be lost to how a shell reports exit codes.
