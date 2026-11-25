@@ -15,12 +15,14 @@ public sealed partial class SetupCode
 {
     private const string Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private readonly string _value;
+    private readonly string? _file;
 
     public SetupCode(Installation installation, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(installation);
         ArgumentNullException.ThrowIfNull(configuration);
         Required = !installation.IsDesktop;
+        _file = installation.SetupCodeFile;
         var configured = Normalize(configuration["OpenBook:SetupCode"]);
         Chosen = configured.Length > 0;
         _value = Chosen ? configured : RandomNumberGenerator.GetString(Alphabet, 8);
@@ -37,6 +39,24 @@ public sealed partial class SetupCode
     /// <summary>Whether the typed code is right, ignoring case, spaces and dashes; always when none is needed.</summary>
     public bool Matches(string? typed) =>
         !Required || CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(Normalize(typed)), Encoding.UTF8.GetBytes(_value));
+
+    /// <summary>Windows Server: where the code is written for whoever runs the computer (<see cref="Installation.SetupCodeFile"/>).</summary>
+    public string? File => Chosen ? null : _file;
+
+    /// <summary>A company exists now: the code is no use any more, so its file goes.</summary>
+    public void Used()
+    {
+        if (_file is null)
+            return;
+        try
+        {
+            System.IO.File.Delete(_file);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The next start takes it away.
+        }
+    }
 
     private static string Normalize(string? text) =>
         new([.. (text ?? string.Empty).Where(char.IsAsciiLetterOrDigit).Select(char.ToUpperInvariant)]);

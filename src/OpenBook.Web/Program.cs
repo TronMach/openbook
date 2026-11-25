@@ -11,6 +11,10 @@ using OpenBook.Web.Security;
 if (args is [HealthCheckCommand.Name, ..])
     return await HealthCheckCommand.RunAsync(args);
 
+// What the Windows installer runs (administrators only): they set up the service rather than use the app.
+if (args is [WindowsServerCommands.Install or WindowsServerCommands.Remove or WindowsServerCommands.Stop, ..])
+    return await WindowsServerCommands.RunAsync(args);
+
 var isResetPassword = args is [ResetPasswordCommand.Name, ..];
 var isRestoreBackup = args is [RestoreBackupCommand.Name, ..];
 var isMakeDemo = args is [DemoCompanyCommand.Name, ..];
@@ -19,25 +23,48 @@ var isMoveToPostgres = args is [MoveToPostgresCommand.Name, ..];
 var isVerifyAudit = args is [VerifyAuditCommand.Name, ..];
 var isRekeyDatabase = args is [RekeyCommands.Database, ..];
 var isRekeySecrets = args is [RekeyCommands.Secrets, ..];
+var isBringDesktop = args is [BringDesktopCommand.Name, ..];
 // Commands that use the app's services and then end, without serving pages.
-var isConsoleCommand = isResetPassword || isRestoreBackup || isMakeDemo || isVerifyAudit || isRekeySecrets;
+var isConsoleCommand = isResetPassword || isRestoreBackup || isMakeDemo || isVerifyAudit || isRekeySecrets || isBringDesktop;
 
 // "--safe-mode" starts without add-ins (for one that stops OpenBook starting); it isn't a configuration key.
 var safeModeArgument = args.Contains("--safe-mode", StringComparer.OrdinalIgnoreCase);
-var builder = WebApplication.CreateBuilder(args.Where(a => !string.Equals(a, "--safe-mode", StringComparison.OrdinalIgnoreCase)
-    && !string.Equals(a, ResetPasswordCommand.ClearTwoFactor, StringComparison.OrdinalIgnoreCase)
-    && !string.Equals(a, ResetPasswordCommand.RestoreAdmin, StringComparison.OrdinalIgnoreCase)).ToArray());
+var isWindowsService = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService();
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args.Where(a => !string.Equals(a, "--safe-mode", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(a, ResetPasswordCommand.ClearTwoFactor, StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(a, ResetPasswordCommand.RestoreAdmin, StringComparison.OrdinalIgnoreCase)).ToArray(),
+    // A service starts in the system folder; the app's own is where its pages' files are.
+    ContentRootPath = isWindowsService ? AppContext.BaseDirectory : null,
+});
 if (isConsoleCommand || encryptionCommand is not null || isMoveToPostgres || isRekeyDatabase)
     builder.Logging.ClearProviders();
 
-// Desktop or Server (L13). Desktop decides the company file and folders itself and ignores those settings.
+// Desktop, Server or Windows Server (L13). Desktop and Windows Server decide the company file and folders themselves and
+// ignore those settings.
 var installation = OpenBook.Web.Hosting.Installation.Read(builder.Configuration);
+if (OpenBook.Web.Hosting.WindowsServerHost.NoAccess(installation) is { } noAccess)
+{
+    await Console.Error.WriteLineAsync(noAccess);
+    return 1;
+}
+
+OpenBook.Web.Hosting.WindowsServerHost.AddSettings(builder.Configuration, installation);
 var connectionString = installation.CompanyFile is { } companyFile
     ? $"Data Source={companyFile}"
     : builder.Configuration.GetConnectionString("OpenBook") ?? "Data Source=openbook.db";
 var backupDirectory = installation.BackupFolder ?? builder.Configuration["OpenBook:BackupDirectory"];
 if (installation.DataFolder is not null)
     Directory.CreateDirectory(installation.DataFolder);
+
+// These move or rewrite the company file, so they need it to themselves.
+if ((isRestoreBackup || isRekeySecrets || isBringDesktop || isRekeyDatabase || isMoveToPostgres || encryptionCommand is not null)
+    && installation.IsWindowsServer && OpenBook.Web.Hosting.WindowsServerHost.IsRunning(installation))
+{
+    await Console.Error.WriteLineAsync(WindowsServerCommands.StopFirst);
+    return 1;
+}
 
 // Before anything opens the file: the conversion needs it to be closed.
 if (encryptionCommand is not null)
@@ -61,6 +88,30 @@ if (!isConsoleCommand && installation.IsDesktop)
     if (await OpenBook.Web.Hosting.DesktopHost.HandOverAsync(installation))
         return 0;
     OpenBook.Web.Hosting.DesktopHost.Listen(builder, installation);
+}
+
+// OpenBook Server for Windows: one copy for its folder, reachable from the office network.
+FileStream? folderLock = null;
+if (!isConsoleCommand && installation.IsWindowsServer)
+{
+    folderLock = OpenBook.Web.Hosting.WindowsServerHost.TakeLock(installation, out var whyNot);
+    if (folderLock is null)
+    {
+        await Console.Error.WriteLineAsync(whyNot);
+        return 1;
+    }
+
+    OpenBook.Web.Hosting.WindowsServerHost.Listen(builder);
+    if (isWindowsService)
+    {
+        // Backups being made and files being uploaded pass through the service's own folder, not one others may read.
+        var temp = Directory.CreateDirectory(Path.Combine(installation.DataFolder!, "temp")).FullName;
+        Environment.SetEnvironmentVariable("TEMP", temp);
+        Environment.SetEnvironmentVariable("TMP", temp);
+        builder.Services.AddWindowsService(o => o.ServiceName = OpenBook.Web.Hosting.WindowsServerHost.ServiceName);
+        // Before every other hosted service.
+        builder.Services.AddHostedService<OpenBook.Web.Hosting.WindowsServerHost.Startup>();
+    }
 }
 
 // Add services to the container.
@@ -123,7 +174,7 @@ builder.Services
         connectionString,
         backupDirectory,
         builder.Configuration["OpenBook:EncryptionKey"],
-        installation.IsDesktop ? DatabaseProvider.Sqlite : DatabaseProviders.Parse(builder.Configuration["OpenBook:Database"], connectionString))
+        installation.CompanyFile is not null ? DatabaseProvider.Sqlite : DatabaseProviders.Parse(builder.Configuration["OpenBook:Database"], connectionString))
     .AddOpenBookApi()
     .AddOpenBookWebSecurity(installation.KeysFolder ?? builder.Configuration["OpenBook:DataProtectionKeys"]);
 builder.Services.AddOpenBookRateLimits(builder.Configuration);
@@ -148,18 +199,20 @@ if (isVerifyAudit)
     return await VerifyAuditCommand.RunAsync(app.Services, args);
 if (isRekeySecrets)
     return await RekeyCommands.RekeySecretsAsync(app.Services);
+if (isBringDesktop)
+    return await BringDesktopCommand.RunAsync(app.Services, args);
 
 try
 {
-    await app.Services.MigrateOpenBookDatabaseAsync();
+    // A Windows service does this once it has told Windows it's starting (WindowsServerHost.Startup).
+    if (!isWindowsService)
+        await OpenBook.Web.Hosting.WindowsServerHost.PrepareDatabaseAsync(app.Services);
 }
 catch (OpenBook.Domain.Common.DomainException ex) when (ex.Code == "company.file_unreadable")
 {
     Console.Error.WriteLine(ex.Message);
     return 1;
 }
-await using (var scope = app.Services.CreateAsyncScope())
-    OpenBook.Application.CompanyTime.Use(await scope.ServiceProvider.GetRequiredService<OpenBook.Application.Companies.ICompanyStore>().GetCompanyAsync(default));
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -289,7 +342,7 @@ app.MapPost("/settings/system/updates/check", async (IFormCollection form, OpenB
 }).RequireAuthorization();
 app.MapPost("/settings/system/updates/auto", (IFormCollection form, OpenBook.Web.Hosting.Installation install, OpenBook.Web.Hosting.UpdateService updates) =>
 {
-    if (!install.IsDesktop)
+    if (!install.IsDesktop && !install.IsWindowsServer)
         return Results.NotFound();
     updates.SetEnabled(form["check"] == "true");
     return Results.Redirect("/settings/system#updates");
@@ -317,7 +370,7 @@ app.MapGet("/settings/system/support-file", (IServiceProvider services, OpenBook
     var now = DateTimeOffset.UtcNow;
     var facts = new OpenBook.Web.Diagnostics.SupportFacts(
         OpenBook.Web.Hosting.UpdateService.CurrentVersion,
-        install.IsDesktop ? "Desktop" : "Server",
+        install.Kind switch { OpenBook.Web.Hosting.InstallKind.Desktop => "Desktop", OpenBook.Web.Hosting.InstallKind.WindowsServer => "Server for Windows", _ => "Server" },
         $"{System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription} on {System.Runtime.InteropServices.RuntimeInformation.OSDescription}",
         storage.Provider == OpenBook.Infrastructure.DatabaseProvider.Postgres ? "PostgreSQL" : storage.Encrypted ? "SQLite, encrypted" : "SQLite",
         CompanyTime.Zone.Id,
@@ -345,6 +398,8 @@ app.MapRazorComponents<App>()
 
 if (installation.IsDesktop)
     OpenBook.Web.Hosting.DesktopHost.OnStarted(app, installation);
+if (folderLock is not null)
+    OpenBook.Web.Hosting.WindowsServerHost.OnStarted(app, installation, folderLock);
 SetupCode.AnnounceWhenStarted(app);
 app.Run();
 return 0;

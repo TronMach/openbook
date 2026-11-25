@@ -69,9 +69,21 @@
             {
                 <dt>Company file size</dt><dd>@Size(size)</dd>
             }
+            @if (Install.IsWindowsServer)
+            {
+                <dt>@L["Address for other computers"]</dt>
+                <dd>
+                    <code>@OpenBook.Web.Hosting.WindowsServerHost.Address(Services, Configuration)</code>
+                    @if (OpenBook.Web.Hosting.WindowsServerHost.AddressesByNumber(Services, Configuration) is { Count: > 0 } numbers)
+                    {
+                        <span class="muted">@L["or, where that name isn't found, {0}", string.Join(", ", numbers)]</span>
+                    }
+                </dd>
+                <dt>@L["Settings file"]</dt><dd>@Install.SettingsFile</dd>
+            }
             <dt>Backups folder</dt><dd>@(Storage.Provider == DatabaseProvider.Sqlite ? Storage.BackupDirectory : "PostgreSQL: use pg_dump")</dd>
             <dt>Log folder</dt><dd>@(_log?.Directory ?? "not written")</dd>
-            <dt>Data protection keys</dt><dd>@(Configuration["OpenBook:DataProtectionKeys"] ?? "the default location for this user")</dd>
+            <dt>Data protection keys</dt><dd>@(Install.KeysFolder ?? Configuration["OpenBook:DataProtectionKeys"] ?? "the default location for this user")</dd>
             <dt>Webhooks to private networks</dt><dd>@(Outbound.AllowPrivateNetworks ? "allowed" : "refused")</dd>
             <dt>Rate limits</dt><dd>@RateLimits.Describe(Configuration)</dd>
             <dt>Add-ins</dt><dd>@(Plugins.SafeMode ? "safe mode: none loaded" : $"{Plugins.Plugins.Count} found")</dd>
@@ -121,7 +133,11 @@
         {
             <p class="alert notice" role="status">@update.Warning</p>
         }
-        @if (!Install.IsDesktop && update.Available is not null)
+        @if (Install.IsWindowsServer && update.Available is { } newer)
+        {
+            <p><a href="@newer.Url">@L["Download OpenBook-Setup {0}", newer.Version]</a></p>
+        }
+        else if (!Install.IsDesktop && update.Available is not null)
         {
             <pre>git pull
 docker compose build --pull
@@ -144,7 +160,7 @@ docker compose up -d</pre>
                 <AntiforgeryToken />
                 <button type="submit" class="secondary">Check now</button>
             </PostForm>
-            @if (Install.IsDesktop)
+            @if (Install.IsDesktop || Install.IsWindowsServer)
             {
                 <PostForm Action="/settings/system/updates/auto" data-enhance="false" class="inline">
                     <AntiforgeryToken />

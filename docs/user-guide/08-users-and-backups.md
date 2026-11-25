@@ -126,11 +126,13 @@ Set OpenBook to back itself up:
 
 Each backup is checked the way a restore would check it before it's saved and before older ones are deleted, so a damaged company file can't push out your good copies. When a run fails, OpenBook tries again every hour, up to five times. Until one works, **Settings** shows the backup line as **Failing** and the home page's to-do list shows **Automatic backups aren't working**. The same happens when the last good backup is more than two periods old.
 
+On **OpenBook Server for Windows** this is already on too, to the `Backups` folder in `C:\ProgramData\OpenBook`. That's on the same computer as the books, so choose S3-compatible storage, or have the folder copied somewhere else.
+
 On **OpenBook Desktop** this is already on: every day from noon to the `Backups` folder beside your company file (`Documents\OpenBook\Backups`), keeping 14. Backups only run while OpenBook is running; if the computer was off at noon, the next start makes one. Change it like any schedule, and consider a folder on another drive or one your cloud storage syncs.
 
 ### Restoring on a new computer
 
-A backup holds your books. It doesn't hold the key that unlocks passwords saved in them: the email password, bank and sales channel connections, vendors' ACH numbers and two-factor sign-in. That key is in OpenBook's `keys` folder, on Desktop `%LOCALAPPDATA%\OpenBook\keys`. **Copy that folder somewhere safe too**, and put it in the same place on the new computer before starting OpenBook. Without it the books are all there, but those saved details have to be entered again.
+A backup holds your books. It doesn't hold the key that unlocks passwords saved in them: the email password, bank and sales channel connections, vendors' ACH numbers and two-factor sign-in. That key is in OpenBook's `keys` folder, on Desktop `%LOCALAPPDATA%\OpenBook\keys`, on Server for Windows `C:\ProgramData\OpenBook\keys`. **Copy that folder somewhere safe too**, and put it in the same place on the new computer before starting OpenBook. Without it the books are all there, but those saved details have to be entered again.
 
 Restoring happens on the Backup page, and a new copy of OpenBook only shows that page once a company exists: set up a throwaway company first, then restore over it.
 
@@ -155,17 +157,21 @@ The company file can be encrypted, so a stolen copy can't be read without the ke
 OpenBook comes in two installs of the same program:
 
 - **OpenBook Desktop** runs on one computer. The company file is `Documents\OpenBook\openbook.db`, backups go to `Documents\OpenBook\Backups` every day, and OpenBook can only be reached from that computer's browser. Starting OpenBook opens it in your browser; starting it again while it runs just opens the browser again. It keeps running after you close the browser (so backups and other jobs can run), with an OpenBook icon in the system tray by the clock, until you quit it or sign out of Windows. Right-click the tray icon for **Open OpenBook**, **Back up now** and **Quit OpenBook**. Quitting, there or with **Settings → System → Quit OpenBook**, backs up your books first (to the same place as the daily backups; the last five of these are kept), so closing OpenBook always leaves a fresh copy. If that backup doesn't work, the tray asks before quitting anyway. When a new version of OpenBook is out, it's downloaded in the background and the tray offers **Install OpenBook x.y.z** (so does **Settings → System → Updates**, which also has **Check now**). Installing backs up your books, closes OpenBook, updates it and starts it again by itself within a minute or two. It's installed on Windows from `OpenBook-Setup-x.y.z.exe` (for your Windows user, no administrator rights) and started from the Start menu; installing a newer version or uninstalling never touches the company file or its backups.
-- **OpenBook Server** runs on a server or in Docker, usually with PostgreSQL, for several people on several computers. Whoever runs it decides where the data lives and backs it up.
+- **OpenBook Server** is for several people on several computers, who open it in their browsers. **Server for Windows** comes with the same installer (**Several people on our network**): one Windows computer in the office keeps the books in a single company file and stays on. With **Docker**, usually with PostgreSQL, whoever runs the server decides where the data lives and backs it up.
 
 A company moved to a server with no time zone set follows the server's clock, so set one under **Settings → Company details** after moving. Backups made before a company file is encrypted stay unencrypted, and can only be restored once it's decrypted.
 
-Whoever installs or looks after OpenBook will find the details in `docs/admin/desktop.md` and `docs/admin/server.md` (HTTPS, keys, `pg_dump` backups, moving a company in).
+Whoever installs or looks after OpenBook will find the details in `docs/admin/desktop.md`, `docs/admin/windows-server.md` and `docs/admin/server.md` (HTTPS, keys, `pg_dump` backups, moving a company in).
 
 Your books are the same either way. Some things only make sense when others can reach OpenBook (invitations to people on other computers, customer portal links, sending from the capture app on a phone, Stripe telling OpenBook about payments); on Desktop those pages say so, and everything still works on the computer itself.
 
 ### Moving to a server
 
-When more people need the books, the company moves from OpenBook Desktop to OpenBook Server in one step, usually done by whoever looks after the server:
+When more people need the books, the company moves from OpenBook Desktop to OpenBook Server in one step.
+
+**To Server for Windows, on the same computer:** quit OpenBook Desktop, run `OpenBook-Setup`, choose **Several people on our network**, and keep **Bring the company from OpenBook Desktop** ticked. The company file is checked like a restore and copied; people, passwords, two-factor sign-in and connections come along, and daily backups go to the server's own folder from then on. For another computer, whoever looks after the server uses the `bring-desktop-company` command (`docs/admin/windows-server.md`).
+
+**To a server with PostgreSQL**, usually done by whoever looks after the server:
 
 1. Quit OpenBook Desktop (**Quit OpenBook** on its tray icon, or **Settings → System → Quit OpenBook**), so nothing changes during the move.
 2. Create an empty PostgreSQL database for the server.
@@ -176,7 +182,7 @@ The desktop company file isn't changed. Keep it as a backup, but stop using it: 
 
 ## The System page
 
-**Settings → System** (admins) shows how the server is set up: the OpenBook version, the database and where the company file is, the backups and log folders, and the company's time zone. On OpenBook Desktop it shows the company file, backups and log folders instead, with **Quit OpenBook**. Below that:
+**Settings → System** (admins) shows how the server is set up: the OpenBook version, the database and where the company file is, the backups and log folders, and the company's time zone. On Server for Windows it also gives the address for other computers. On OpenBook Desktop it shows the company file, backups and log folders instead, with **Quit OpenBook**. Below that:
 
 - **Background jobs**: the jobs OpenBook runs on its own (recurring documents, late fees and reminders, scheduled emails and reports, bank feeds, sales channels, scheduled backups, webhooks), each with when it last ran, whether it worked and its last failure. If automatic invoices or bank feeds seem to have stopped, look here first.
 - **Alerts**: OpenBook emails the admins who have an email address (on **Settings → Users and invitations**, select the person) when a background job fails twice in a row, a scheduled backup fails, or the daily books check finds a problem, at most once a day for each. Email has to be set up (**Settings → Email**). This section lists the latest alerts, and says when one couldn't be sent and why.

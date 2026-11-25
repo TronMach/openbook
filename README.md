@@ -5,20 +5,20 @@ Open-source bookkeeping for small businesses and nonprofits, in your browser, wi
 OpenBook comes in two installs of the same program:
 
 - **OpenBook Desktop** for one computer: a Windows installer, the company file in your Documents folder, daily backups, and an icon in the system tray. A **simple view** with a menu bar by task and a step-by-step home page suits a business one person runs.
-- **OpenBook Server** for several people: a Docker image, with PostgreSQL, behind your own HTTPS proxy.
+- **OpenBook Server** for several people. In an office with a Windows computer that stays on: the same installer, run as a Windows service that everyone opens in their browser. On Linux or over the internet: a Docker image, with PostgreSQL, behind your own HTTPS proxy.
 
 Moving in from QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks is built in.
 
 ## Getting it
 
-- **Windows:** download `OpenBook-Setup-<version>.exe` from [Releases](https://github.com/TronMach/openbook/releases) and run it. It installs for your Windows user, without administrator rights. The installer isn't code-signed yet, so Windows may warn before it runs (**More info → Run anyway**).
+- **Windows:** download `OpenBook-Setup-<version>.exe` from [Releases](https://github.com/TronMach/openbook/releases) and run it. Choose **Just me** (it installs for your Windows user, without administrator rights) or **Several people on our network** ([OpenBook Server for Windows](docs/admin/windows-server.md)). The installer isn't code-signed yet, so Windows may warn before it runs (**More info → Run anyway**).
 - **Docker:** `docker compose up -d` with the included `docker-compose.yml` (change its passwords first). See [docs/admin/server.md](docs/admin/server.md).
 - **From source:** install the [.NET 10 SDK](https://dotnet.microsoft.com/download), then `dotnet run --project src/OpenBook.Web` and open the address it prints.
 
 ## Documentation
 
 - [User guide](docs/user-guide/README.md): every area, written for bookkeepers.
-- [Desktop admin guide](docs/admin/desktop.md) and [server admin guide](docs/admin/server.md).
+- Admin guides: [Desktop](docs/admin/desktop.md), [Server for Windows](docs/admin/windows-server.md), [Server with Docker](docs/admin/server.md).
 - [Privacy](PRIVACY.md): what OpenBook sends to other services, and when.
 - [Roadmap](ROADMAP.md): what's built and what's planned.
 - [CLAUDE.md](CLAUDE.md): how the code is organized and the rules it keeps, for contributors, with each area's notes in [docs/dev](docs/dev).

@@ -10,17 +10,24 @@ public enum InstallKind
 
     /// <summary>One person's computer: SQLite in Documents, reachable from this computer only, backups on by default.</summary>
     Desktop,
+
+    /// <summary>
+    /// The Windows installer's "several people" choice: a server in every way, run as a Windows service
+    /// (<see cref="WindowsServerHost"/>), with its files in one folder only administrators and the service can open.
+    /// </summary>
+    WindowsServer,
 }
 
 /// <summary>
-/// The install (<c>OpenBook:Install</c>, else <see cref="InstallFile"/> beside the app, else Server) and, for Desktop, where its
-/// files go. Desktop ignores the database, URL and folder settings: the company file is <c>Documents/OpenBook/openbook.db</c>
-/// (<c>OpenBook:Desktop:DataFolder</c> moves it), keys, logs and <see cref="RunningFile"/> are in the user's local app data
-/// (<c>OpenBook:Desktop:AppFolder</c>).
+/// The install (<c>OpenBook:Install</c>, else <see cref="InstallFile"/> beside the app, else Server) and, for Desktop and Windows
+/// Server, where its files go. Desktop ignores the database, URL and folder settings: the company file is
+/// <c>Documents/OpenBook/openbook.db</c> (<c>OpenBook:Desktop:DataFolder</c> moves it), keys, logs and <see cref="RunningFile"/>
+/// are in the user's local app data (<c>OpenBook:Desktop:AppFolder</c>). Windows Server keeps everything in
+/// <c>%ProgramData%\OpenBook</c> (<c>OpenBook:WindowsServer:Folder</c>), settings in its <see cref="SettingsFile"/>.
 /// </summary>
 public sealed class Installation
 {
-    /// <summary>Shipped beside the desktop app (<c>{"Install": "Desktop"}</c>), so its commands act on the desktop company too.</summary>
+    /// <summary>Put beside the app by the installer (<c>{"Install": "Desktop"}</c> or <c>"WindowsServer"</c>), so its commands act on the same company.</summary>
     public const string InstallFile = "openbook.install.json";
 
     public const int DefaultPort = 5180;
@@ -36,11 +43,12 @@ public sealed class Installation
 
     public InstallKind Kind { get; }
     public bool IsDesktop => Kind == InstallKind.Desktop;
+    public bool IsWindowsServer => Kind == InstallKind.WindowsServer;
 
-    /// <summary>Desktop: the folder in Documents holding the company file and its backups.</summary>
+    /// <summary>Desktop: the folder in Documents holding the company file and its backups. Windows Server: its one folder.</summary>
     public string? DataFolder { get; }
 
-    /// <summary>Desktop: the folder in the user's local app data for keys, logs and <see cref="RunningFile"/>.</summary>
+    /// <summary>The folder for keys, logs and <see cref="RunningFile"/>: in the user's local app data on Desktop, the same as <see cref="DataFolder"/> on Windows Server.</summary>
     public string? AppFolder { get; }
 
     /// <summary>Desktop: the port tried first; a free one is used when it's taken.</summary>
@@ -57,13 +65,33 @@ public sealed class Installation
     /// <summary>Desktop: add-ins live outside the program folder, which an update replaces.</summary>
     public string? PluginsFolder => AppFolder is null ? null : Path.Combine(AppFolder, "plugins");
 
-    /// <summary>Where a running desktop copy writes its address, so starting it again opens the browser there.</summary>
+    /// <summary>
+    /// Where a running copy writes its address: on Desktop so starting it again opens the browser there, on Windows Server for
+    /// the installer.
+    /// </summary>
     public string? RunningFile => AppFolder is null ? null : Path.Combine(AppFolder, "running.json");
+
+    /// <summary>Windows Server: its settings (the port, certificates and any other OpenBook setting), read at startup.</summary>
+    public string? SettingsFile => IsWindowsServer ? Path.Combine(DataFolder!, "settings.json") : null;
+
+    /// <summary>Windows Server: held open while it runs, so two copies never serve one company file.</summary>
+    public string? LockFile => IsWindowsServer ? Path.Combine(DataFolder!, "running.lock") : null;
+
+    /// <summary>Windows Server: the setup code, until a company exists; the installer opens the setup page with it.</summary>
+    public string? SetupCodeFile => IsWindowsServer ? Path.Combine(DataFolder!, "setup-code.txt") : null;
 
     public static Installation Read(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         var configured = configuration["OpenBook:Install"] ?? FromFile(Path.Combine(AppContext.BaseDirectory, InstallFile));
+        if (string.Equals(configured?.Trim(), nameof(InstallKind.WindowsServer), StringComparison.OrdinalIgnoreCase))
+        {
+            var folder = configuration["OpenBook:WindowsServer:Folder"] is { Length: > 0 } chosen
+                ? chosen
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "OpenBook");
+            return new Installation(InstallKind.WindowsServer, Path.GetFullPath(folder), Path.GetFullPath(folder), 0, false);
+        }
+
         if (!string.Equals(configured?.Trim(), nameof(InstallKind.Desktop), StringComparison.OrdinalIgnoreCase))
             return new Installation(InstallKind.Server, null, null, 0, false);
 

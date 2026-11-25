@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-    Builds the OpenBook Desktop installer for Windows (OpenBook-Setup-<version>.exe).
+    Builds the OpenBook installer for Windows (OpenBook-Setup-<version>.exe): OpenBook Desktop and OpenBook Server for Windows.
 
 .DESCRIPTION
     Publishes the server (OpenBook.Web) and the launcher (OpenBook.Desktop) self-contained for win-x64 into one folder (with
     the QuickBooks export helper in its QuickBooks folder, from tools/package-qb-export.ps1), adds
-    openbook.install.json so that copy always runs as OpenBook Desktop (its commands too), and runs Inno Setup's compiler
+    openbook.install.json so that copy always runs as OpenBook Desktop (its commands too; openbook.install.server.json is
+    what the installer puts in its place for "several people"), and runs Inno Setup's compiler
     (ISCC.exe, free: winget install JRSoftware.InnoSetup) on packaging/windows/OpenBook.iss. Without Inno Setup, or with
     -SkipInstaller, it stops after publishing; the folder runs as it is (start OpenBook.Desktop.exe).
 
@@ -37,6 +38,8 @@ foreach ($project in 'src/OpenBook.Web', 'src/OpenBook.Desktop') {
 
 # Read at startup (Installation.InstallFile): this copy is OpenBook Desktop.
 Set-Content -Path (Join-Path $publish 'openbook.install.json') -Value '{ "Install": "Desktop" }' -Encoding ascii
+# The same file when the installer is told several people will use it.
+Set-Content -Path (Join-Path $publish 'openbook.install.server.json') -Value '{ "Install": "WindowsServer" }' -Encoding ascii
 # Development settings don't belong in an install.
 Remove-Item (Join-Path $publish 'appsettings.Development.json') -ErrorAction SilentlyContinue
 

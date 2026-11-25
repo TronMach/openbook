@@ -1,6 +1,6 @@
 # Running OpenBook Server
 
-For whoever looks after the server. OpenBook Server is the Docker image with PostgreSQL, for several people working on the books from their own computers. (One person on one Windows computer can use [OpenBook Desktop](desktop.md) instead; a company can move from Desktop to Server later, see [Moving a desktop company in](#moving-a-desktop-company-in).)
+For whoever looks after the server. This page is about the Docker image with PostgreSQL, for several people working on the books from their own computers. (In an office with a Windows computer that stays on, [OpenBook Server for Windows](windows-server.md) is easier: an installer, no Docker, no database to look after. One person on one Windows computer can use [OpenBook Desktop](desktop.md) instead; a company can move from Desktop to Server later, see [Moving a desktop company in](#moving-a-desktop-company-in).)
 
 ## Starting it
 
@@ -9,7 +9,7 @@ From the folder with `docker-compose.yml`:
 1. Change both `change-me` passwords in `docker-compose.yml` (the database's and the one in the app's connection string) to the same long random password. OpenBook refuses to start with `change-me`, since anyone who has read the file knows it. PostgreSQL keeps the password a database was first created with, so for a database already started with the sample one, change it there too: `docker compose exec db psql -U openbook -c "ALTER USER openbook PASSWORD 'your new password'"`.
 2. `docker compose up -d` builds the image and starts PostgreSQL and OpenBook. The first start creates the database tables.
 3. Get the setup code: `docker compose logs openbook` shows a line saying OpenBook has no company yet, with a code like `K7QM-3XRT`. Until a company exists, anyone who can reach the server could open the setup page, so it asks for this code. A new code is made each time OpenBook starts without a company; set `OpenBook:SetupCode` to choose one yourself (for automated installs).
-4. Open `http://<server>:8080`, enter the code and set up the company (or move a desktop company in first: the move needs an empty database). Do it straight away.
+4. On the server itself, open `http://localhost:8080`, enter the code and set up the company (or move a desktop company in first: the move needs an empty database). Do it straight away. Other computers can't open that port, on purpose; they come in through the HTTPS proxy below.
 
 `GET /healthz` answers `ok` while OpenBook runs and its database answers, for load balancers and monitoring. The image has a Docker `HEALTHCHECK` that asks it every 30 seconds (with `dotnet OpenBook.Web.dll healthcheck`, since the image has no curl), so `docker ps` and compose show the container as healthy or unhealthy; `healthcheck --url …` asks another address.
 

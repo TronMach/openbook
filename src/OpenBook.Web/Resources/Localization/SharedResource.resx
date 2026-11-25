@@ -242,6 +242,9 @@
   <data name="Address" xml:space="preserve">
     <value>Address</value>
   </data>
+  <data name="Address for other computers" xml:space="preserve">
+    <value>Address for other computers</value>
+  </data>
   <data name="Adds, for every rate in effect on the date, a new line from that date at the higher rate. Earlier lines stay, so time before the date keeps its rate." xml:space="preserve">
     <value>Adds, for every rate in effect on the date, a new line from that date at the higher rate. Earlier lines stay, so time before the date keeps its rate.</value>
   </data>
@@ -949,6 +952,9 @@
   </data>
   <data name="Download CSV" xml:space="preserve">
     <value>Download CSV</value>
+  </data>
+  <data name="Download OpenBook-Setup {0}" xml:space="preserve">
+    <value>Download OpenBook-Setup {0}</value>
   </data>
   <data name="Download SKUs (CSV)" xml:space="preserve">
     <value>Download SKUs (CSV)</value>
@@ -2096,6 +2102,9 @@
   <data name="OpenBook emails a problem to the people who look after it: a background job that fails twice in a row, a scheduled backup that fails, a books check that finds something wrong. The same problem isn't sent again within a day." xml:space="preserve">
     <value>OpenBook emails a problem to the people who look after it: a background job that fails twice in a row, a scheduled backup that fails, a books check that finds something wrong. The same problem isn't sent again within a day.</value>
   </data>
+  <data name="OpenBook Server backs up every day to the Backups folder beside the company file until you change it here. That folder is on the same computer as the books, so choose S3-compatible storage instead, or have the folder copied elsewhere. To save to another folder, give the service {0} permission to write there." xml:space="preserve">
+    <value>OpenBook Server backs up every day to the Backups folder beside the company file until you change it here. That folder is on the same computer as the books, so choose S3-compatible storage instead, or have the folder copied elsewhere. To save to another folder, give the service {0} permission to write there.</value>
+  </data>
   <data name="OpenBook starts counting their stock. You can give each one its starting stock on the next step." xml:space="preserve">
     <value>OpenBook starts counting their stock. You can give each one its starting stock on the next step.</value>
   </data>
@@ -2125,6 +2134,9 @@
   </data>
   <data name="Or with your OpenBook username and password:" xml:space="preserve">
     <value>Or with your OpenBook username and password:</value>
+  </data>
+  <data name="or, where that name isn't found, {0}" xml:space="preserve">
+    <value>or, where that name isn't found, {0}</value>
   </data>
   <data name="Order" xml:space="preserve">
     <value>Order</value>
@@ -2863,6 +2875,9 @@
   </data>
   <data name="Settings" xml:space="preserve">
     <value>Settings</value>
+  </data>
+  <data name="Settings file" xml:space="preserve">
+    <value>Settings file</value>
   </data>
   <data name="Settings for areas your menu doesn't lead with." xml:space="preserve">
     <value>Settings for areas your menu doesn't lead with.</value>

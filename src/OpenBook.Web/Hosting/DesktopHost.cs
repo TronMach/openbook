@@ -29,7 +29,7 @@ public static class DesktopHost
         // Another copy is starting or running: wait for it to answer. (A file left by a copy that crashed never answers.)
         for (var i = 0; i < 60; i++)
         {
-            if (await AnsweringAsync(installation) is { } url)
+            if (await RunningUrlAsync(installation) is { } url)
             {
                 Open(installation, url);
                 return true;
@@ -123,14 +123,15 @@ public static class DesktopHost
     }
 
     /// <summary>The address of the desktop copy running for this company, or null when none answers.</summary>
-    public static Task<string?> RunningUrlAsync(Installation installation) => AnsweringAsync(installation);
+    public static Task<string?> RunningUrlAsync(Installation installation) => RunningUrlAsync(installation.RunningFile);
 
-    private static async Task<string?> AnsweringAsync(Installation installation)
+    /// <summary>The same, going by a <see cref="Installation.RunningFile"/> anywhere.</summary>
+    internal static async Task<string?> RunningUrlAsync(string? runningFile)
     {
         Running? running;
         try
         {
-            running = File.Exists(installation.RunningFile) ? JsonSerializer.Deserialize<Running>(await File.ReadAllTextAsync(installation.RunningFile)) : null;
+            running = File.Exists(runningFile) ? JsonSerializer.Deserialize<Running>(await File.ReadAllTextAsync(runningFile)) : null;
         }
         catch (Exception ex) when (ex is IOException or JsonException)
         {

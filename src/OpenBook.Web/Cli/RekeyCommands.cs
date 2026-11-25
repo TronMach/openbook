@@ -31,7 +31,7 @@ public static class RekeyCommands
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(installation);
-        if (!installation.IsDesktop && DatabaseProviders.Parse(configuration["OpenBook:Database"], connectionString) != DatabaseProvider.Sqlite)
+        if (installation.CompanyFile is null && DatabaseProviders.Parse(configuration["OpenBook:Database"], connectionString) != DatabaseProvider.Sqlite)
         {
             Console.Error.WriteLine("This is for SQLite company files. This install keeps its company in PostgreSQL, whose encryption at rest is the database server's own.");
             return 1;
