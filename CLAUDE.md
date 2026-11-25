@@ -105,6 +105,7 @@ Pages and forms:
 Services and data:
 
 - Check everything, stage (`PostingEngine.StageAsync` / `StageVoidAsync`), then change documents, and save once (`banking.md`, `sales.md`).
+- A document with an automatic number is made inside a turn (`IUnitOfWork.BeginTurnAsync`), begun before anything is read and committed after the save (`sales.md`, `platform.md`).
 - Nothing that changes the books may skip its audit record (the report history cache depends on it); new audit entity types go in `Links.ForAuditEntity`; ledger lines link to documents through `Web/Components/Links.cs`; keep audit snapshots free of secrets, since webhooks send them (`ledger.md`, `platform.md`, `sales.md`).
 - A new accrual document type goes in `AccrualDocuments` with a derivation (`reports.md`); a new document source in the books check (`Documents`, `ReceivableSources`, `PayableSources`, `UndepositedSources`; `ledger.md`) and a label in `ReportCatalog.DocumentType` (`reports.md`). A new search kind needs a heading in `Search.razor` and an area in `SearchAreas` (`reports.md`).
 - Secrets: protect with `ISecretProtector`, name the column `Protected…` (the PostgreSQL move re-protects those), add it to `DataExporter.Excluded`; an endpoint that returns a secret goes in the idempotency `SecretPaths` (`install-and-moving-in.md`, `platform.md`).

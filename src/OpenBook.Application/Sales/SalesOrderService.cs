@@ -41,7 +41,7 @@ public sealed record InvoicingProgress(IReadOnlyList<Invoice> Invoices, IReadOnl
 }
 
 /// <summary>Sales orders: what customers have ordered, invoiced in full or in parts as it's delivered.</summary>
-public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, WarehouseService warehouses, CustomFields.CustomFieldStamper customFields, IClock clock, ICurrentUser user)
+public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, WarehouseService warehouses, CustomFields.CustomFieldStamper customFields, IUnitOfWork unitOfWork, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "sales_order";
 
@@ -55,15 +55,18 @@ public sealed class SalesOrderService(ISalesStore store, SalesLineBuilder lineBu
     public async Task<SalesOrder> CreateAsync(SaveSalesOrderCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var number = SalesOrder.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
-        if ((await store.ListSalesOrderNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("salesorder.number_taken", $"Sales order number {number} is already used.");
+
+        // Until it's saved: two orders made at the same moment mustn't draw the same number.
+        await using var turn = await unitOfWork.BeginTurnAsync(ct);
+        var number = SalesAccounts.TakeNumber(command.Number, await store.ListSalesOrderNumbersAsync(ct), SalesOrder.NormalizeNumber,
+            n => new DomainException("salesorder.number_taken", $"Sales order number {n} is already used."));
         var order = SalesOrder.Create(Guid.CreateVersion7(), number, clock.UtcNow);
         await FillAsync(order, command, ct);
         store.Add(order);
         store.Add(Audit(AuditAction.Created, order, null));
         await customFields.StampAsync(EntityType, order.Id, order.CustomerId, order.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return order;
     }
 

@@ -89,6 +89,7 @@ public sealed class CreditService(
     ILedgerStore ledger,
     Projects.IProjectStore projects,
     SalesReps salesReps,
+    IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser user)
 {
@@ -118,15 +119,18 @@ public sealed class CreditService(
     public async Task<CreditMemo> CreateCreditMemoAsync(CreateCreditMemoCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        // Until it's saved: two credit memos, or one and an invoice, made at the same moment mustn't draw the same number.
+        await using var turn = await unitOfWork.BeginTurnAsync(ct);
         var customer = await store.GetCustomerAsync(command.CustomerId, ct) ?? throw new EntityNotFoundException("customer", command.CustomerId);
         if (!customer.IsActive)
             throw new DomainException("customer.inactive", $"{customer.DisplayName} is inactive.");
 
-        var number = CreditMemo.NormalizeNumber(command.Number ?? await invoices.SuggestNumberAsync(ct));
-        if ((await store.ListCreditMemoNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("creditmemo.number_taken", $"Credit memo number {number} is already used.");
-        if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("creditmemo.number_taken", $"Number {number} is already used by an invoice.");
+        var memoNumbers = await store.ListCreditMemoNumbersAsync(ct);
+        var number = SalesAccounts.TakeNumber(command.Number, [.. await store.ListInvoiceNumbersAsync(ct), .. memoNumbers], CreditMemo.NormalizeNumber,
+            n => new DomainException("creditmemo.number_taken", memoNumbers.Contains(n, StringComparer.OrdinalIgnoreCase)
+                ? $"Credit memo number {n} is already used."
+                : $"Number {n} is already used by an invoice."));
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
@@ -149,6 +153,7 @@ public sealed class CreditService(
         store.Add(Audit(AuditAction.Created, CreditMemoType, credit.Id, null, Snapshot(credit)));
         await customFields.StampAsync(CreditMemoType, credit.Id, customer.Id, credit.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return credit;
     }
 

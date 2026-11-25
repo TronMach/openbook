@@ -303,6 +303,68 @@ public sealed class FormFlowTests(BrowserApp app)
         await page.AssertCleanAsync();
     }
 
+    [BrowserFact]
+    public async Task An_invoice_left_at_its_suggested_number_takes_the_next_one_when_its_gone_and_a_typed_one_is_refused()
+    {
+        var tag = Tag();
+        var (customer, _) = await InvoiceAsync(tag, 60m);
+        var item = (await Db(db => db.Items.AsNoTracking().SingleAsync(i => i.Name == $"Work {tag}"))).Id;
+
+        await using var page = await app.SignedInAsync();
+        var p = page.Page;
+        await p.GotoAsync($"/sales/invoices/new?customer={customer}&item={item}");
+        var number = p.Locator("#number");
+        var save = p.GetByRole(AriaRole.Button, new() { Name = "Save invoice" });
+        await Assertions.Expect(save).ToBeEnabledAsync(new() { Timeout = Slow });
+        var memo = p.Locator("#memo");
+        await memo.FillAsync($"Left as suggested {tag}");
+        await memo.PressAsync("Tab");
+        var suggested = await number.InputValueAsync();
+
+        // Someone else saves with that number first.
+        var theirs = await app.InScope(sp => sp.GetRequiredService<InvoiceService>().CreateAsync(new CreateInvoiceCommand(customer,
+            OpenBook.Application.CompanyTime.Today, [new SalesLineDraft(item, null, 1m, 60m)], Number: suggested)));
+        var deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (!Regex.IsMatch(p.Url, "/sales/invoices/[0-9a-f-]{36}$") && DateTime.UtcNow < deadline)
+        {
+            // The first click may come before the circuit is up.
+            try
+            {
+                await save.ClickAsync(new() { Timeout = 1000 });
+            }
+            catch (TimeoutException)
+            {
+                // Saving, or gone with the page.
+            }
+
+            await p.WaitForTimeoutAsync(1000);
+        }
+
+        await p.WaitForURLAsync(new Regex("/sales/invoices/[0-9a-f-]{36}$"), new() { Timeout = Slow });
+        var id = Guid.Parse(p.Url[^36..]);
+        var saved = await Db(db => db.Invoices.AsNoTracking().SingleAsync(i => i.Id == id));
+        Assert.Equal(SalesAccounts.NextNumber([theirs.Number]), saved.Number);
+
+        // A number typed in is the person's own choice.
+        await p.GotoAsync($"/sales/invoices/new?customer={customer}&item={item}");
+        await Assertions.Expect(save).ToBeEnabledAsync(new() { Timeout = Slow });
+        // The server greys the button out without a number: then the typing reaches it.
+        deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (await save.IsEnabledAsync() && DateTime.UtcNow < deadline)
+        {
+            await number.FillAsync(theirs.Number);
+            await number.FillAsync(string.Empty);
+            await number.PressAsync("Tab");
+            await p.WaitForTimeoutAsync(500);
+        }
+
+        await FillUntilAsync(number, theirs.Number, save);
+        await save.ClickAsync();
+        await Assertions.Expect(p.Locator(".alert.error")).ToContainTextAsync($"Invoice number {theirs.Number} is already used.", new() { Timeout = Slow });
+        Assert.Equal(3, await Db(db => db.Invoices.CountAsync(i => i.CustomerId == customer)));
+        await page.AssertCleanAsync();
+    }
+
     /// <summary>Types into a box until the button it unlocks is enabled: the first typing may come before the circuit is up.</summary>
     private static async Task FillUntilAsync(ILocator input, string value, ILocator unlocks)
     {

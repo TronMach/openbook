@@ -206,6 +206,9 @@ public sealed class GiftService(
     {
         ArgumentNullException.ThrowIfNull(command);
         Donation.Check(command.Kind, command.Amount, command.Description, command.GoodsValue, command.GoodsDescription, command.PledgeId);
+
+        // Until it's saved: two gifts recorded at the same moment mustn't draw the same number.
+        await using var turn = await unitOfWork.BeginTurnAsync(ct);
         var donor = await DonorAsync(command.DonorId, ct);
         var chart = await accounts.GetChartAsync(ct);
 
@@ -273,6 +276,7 @@ public sealed class GiftService(
         store.Add(donation);
         store.Add(Audit(AuditAction.Posted, donation, null));
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return donation;
     }
 
@@ -584,6 +588,9 @@ public sealed class GiftService(
     {
         ArgumentNullException.ThrowIfNull(command);
         Pledge.Check(command.Date, command.Amount, command.DueDate);
+
+        // As for a gift: the number is the next one until it's saved.
+        await using var turn = await unitOfWork.BeginTurnAsync(ct);
         var donor = await DonorAsync(command.DonorId, ct);
         var chart = await accounts.GetChartAsync(ct);
         var income = await IncomeAccountAsync(chart, command.IncomeAccountId, ContributionsName, ct);
@@ -600,6 +607,7 @@ public sealed class GiftService(
         store.Add(pledge);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Posted, PledgeEntity, pledge.Id, null, Snapshot(pledge)));
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return pledge;
     }
 

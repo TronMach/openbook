@@ -19,7 +19,7 @@ public sealed record SaveEstimateCommand(
 
 /// <summary>Estimates: quotes that post nothing, and become invoices when accepted.</summary>
 public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuilder, InvoiceService invoices, CustomFields.CustomFieldStamper customFields, IClock clock, ICurrentUser user,
-    SalesAccounts salesAccounts, ItemService items)
+    SalesAccounts salesAccounts, ItemService items, IUnitOfWork unitOfWork)
 {
     internal const string EntityType = "estimate";
 
@@ -33,10 +33,12 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
     public async Task<Estimate> CreateAsync(SaveEstimateCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        // Until it's saved: two estimates made at the same moment mustn't draw the same number.
+        await using var turn = await unitOfWork.BeginTurnAsync(ct);
         var customer = await ActiveCustomerAsync(command.CustomerId, ct);
-        var number = Estimate.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
-        if ((await store.ListEstimateNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("estimate.number_taken", $"Estimate number {number} is already used.");
+        var number = SalesAccounts.TakeNumber(command.Number, await store.ListEstimateNumbersAsync(ct), Estimate.NormalizeNumber,
+            n => new DomainException("estimate.number_taken", $"Estimate number {n} is already used."));
 
         var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(command.Lines ?? [], customer, command.TaxCodeId, command.Date, ct);
         var estimate = Estimate.Create(
@@ -47,6 +49,7 @@ public sealed class EstimateService(ISalesStore store, SalesLineBuilder lineBuil
         store.Add(Audit(AuditAction.Created, estimate, before: null));
         await customFields.StampAsync(EntityType, estimate.Id, customer.Id, estimate.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return estimate;
     }
 
