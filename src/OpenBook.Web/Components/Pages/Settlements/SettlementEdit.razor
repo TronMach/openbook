@@ -114,6 +114,43 @@
                 </details>
             </MoreOptions>
 
+            <details open="@(_stated.Any(s => s.Amount is not null) || _balances.Any(b => b.Amount is not null))">
+                <summary>@L["What the statement says, to check against"]</summary>
+                <p class="hint">@L["Optional. The page compares these with the lines and the books and says what's off; nothing is refused."]</p>
+                <div class="row">
+                    @foreach (var total in _stated)
+                    {
+                        var id = $"stated-{total.Section}";
+                        <div class="field">
+                            <label for="@id">@L["Total printed for {0}", SettlementSections.Label(total.Section)]</label>
+                            <input id="@id" class="amount" type="number" step="0.01" @bind="total.Amount" />
+                        </div>
+                    }
+                </div>
+                @for (var i = 0; i < _balances.Count; i++)
+                {
+                    var balance = _balances[i];
+                    var n = i + 1;
+                    <div class="row">
+                        <div class="field">
+                            <label for="balance-account-@n">@L["Reserve or balance {0}", n]</label>
+                            <select id="balance-account-@n" @bind="balance.AccountId">
+                                <option value="">@L["None"]</option>
+                                @foreach (var a in _balanceAccounts)
+                                {
+                                    <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="balance-amount-@n">@L["Balance printed {0}", n]</label>
+                            <input id="balance-amount-@n" class="amount" type="number" step="0.01" @bind="balance.Amount" />
+                        </div>
+                    </div>
+                }
+                <button type="button" class="secondary" @onclick="() => _balances.Add(new())">@L["Add a balance"]</button>
+            </details>
+
             <details class="paste-lines" open="@(Id is null)">
                 <summary>@L["Paste lines from a spreadsheet"]</summary>
                 <div class="field">
@@ -243,6 +280,9 @@
     private bool _showAccounts;
     private List<LineModel> _lines = [new()];
     private List<SplitModel> _splits = [new(), new()];
+    private List<StatedModel> _stated = [.. Enum.GetValues<SettlementSection>().Where(s => s != SettlementSection.Other).Select(s => new StatedModel { Section = s })];
+    private List<SplitModel> _balances = [new()];
+    private IReadOnlyList<Account> _balanceAccounts = [];
     private FormDraft<Draft>? _draft;
 
     [Parameter] public Guid? Id { get; set; }
@@ -275,11 +315,19 @@
                 .Where(a => a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable) && (a.IsActive || used.Contains(a.Id))), chart, useNumbers);
             var paidInto = settlement?.Deposits.Select(d => d.AccountId).ToHashSet() ?? [];
             _depositAccounts = [.. chart.Ordered(includeInactive: true).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset && (a.IsActive || paidInto.Contains(a.Id)))];
+            var balanced = settlement?.StatedBalances.Select(b => b.AccountId).ToHashSet() ?? [];
+            _balanceAccounts = [.. chart.Ordered(includeInactive: true).Select(x => x.Account).Where(a => a.Type is AccountType.OtherCurrentAsset or AccountType.OtherAsset or AccountType.OtherCurrentLiability or AccountType.LongTermLiability && (a.IsActive || balanced.Contains(a.Id)))];
             _carrierId = settlement?.CarrierId ?? (Preset is { } preset && _carriers.Any(c => c.Id == preset) ? preset : _carriers.FirstOrDefault()?.Id ?? Guid.Empty);
             if (Id is not null && settlement is not { Status: SettlementStatus.Waiting })
                 _problem = settlement is null ? L["That settlement doesn't exist."] : L["Only a settlement waiting to be posted can be changed. Void its entry first."];
             else if (settlement is not null)
                 Show(settlement);
+            else if (_carrierId != Guid.Empty)
+            {
+                // The balances checked last week are asked for again.
+                var again = await Ops.RunAsync<SettlementService, IReadOnlyList<Guid>>(s => s.CheckedAccountsAsync(_carrierId));
+                _balances = [.. again.Where(a => _balanceAccounts.Any(b => b.Id == a)).Select(a => new SplitModel { AccountId = a }), .. again.Count == 0 ? new[] { new SplitModel() } : []];
+            }
         }
         catch (DomainException ex)
         {
@@ -305,6 +353,14 @@
             (_splits[i].AccountId, _splits[i].Amount) = (s.Deposits[i].AccountId, s.Deposits[i].Amount);
         }
 
+        foreach (var total in s.StatedTotals)
+        {
+            if (_stated.Find(x => x.Section == total.Section) is { } row)
+                row.Amount = SettlementSections.Printed(total.Section, total.Amount);
+        }
+
+        if (s.StatedBalances.Count > 0)
+            _balances = [.. s.StatedBalances.Select(b => new SplitModel { AccountId = b.AccountId, Amount = b.Amount })];
         _showAccounts = _lines.Any(l => l.AccountId is not null || l.ClassId is not null);
     }
 
@@ -352,7 +408,9 @@
                 throw new DomainException("settlement.split", L["Give each account the money went into both an account and an amount."]);
             var details = new SettlementDetails(_number ?? string.Empty, _date, _net ?? 0m,
                 Filled.Select(l => new SettlementLineDraft(l.Section, l.Code, l.Counted, l.Date, l.Load, l.Dispatch, l.Description, l.AccountId, l.ClassId, l.LoadedMiles, l.EmptyMiles, l.Gallons)).ToList(),
-                _from, _to, _carried ?? 0m, _splits.Where(s => s.AccountId is not null).Select(s => new SettlementDepositDraft(s.AccountId!.Value, s.Amount!.Value)).ToList(), _memo);
+                _from, _to, _carried ?? 0m, _splits.Where(s => s.AccountId is not null).Select(s => new SettlementDepositDraft(s.AccountId!.Value, s.Amount!.Value)).ToList(), _memo,
+                _stated.Where(t => t.Amount is not null).Select(t => new SettlementTotalDraft(t.Section, SettlementSections.Counted(t.Section, t.Amount!.Value))).ToList(),
+                _balances.Where(b => b.AccountId is not null && b.Amount is not null).Select(b => new SettlementBalanceDraft(b.AccountId!.Value, b.Amount!.Value)).ToList());
             var saved = Id is { } id
                 ? await Ops.ChangeAsync<Settlement, SettlementService, Settlement>(id, _version, s => s.ChangeAsync(id, details))
                 : await Ops.RunAsync<SettlementService, Settlement>(s => s.CreateAsync(_carrierId, details));
@@ -371,7 +429,7 @@
     }
 
     private Draft? TakeDraft() => !Filled.Any() && string.IsNullOrWhiteSpace(_number) ? null
-        : new Draft(_carrierId, _number, _date, _net, _carried, _from, _to, _memo, _lines, _splits);
+        : new Draft(_carrierId, _number, _date, _net, _carried, _from, _to, _memo, _lines, _splits, _stated, _balances);
 
     private void Restore(Draft draft)
     {
@@ -382,10 +440,19 @@
         foreach (var line in _lines.Where(l => l.AccountId is { } a && _chart.Find(a) is null))
             line.AccountId = null;
         _splits = draft.Splits.Count > 0 ? draft.Splits : [new(), new()];
+        _stated = draft.Stated ?? _stated;
+        _balances = draft.Balances ?? _balances;
         _showAccounts = _lines.Any(l => l.AccountId is not null || l.ClassId is not null);
     }
 
-    internal sealed record Draft(Guid CarrierId, string? Number, DateOnly Date, decimal? Net, decimal? Carried, DateOnly? From, DateOnly? To, string? Memo, List<LineModel> Lines, List<SplitModel> Splits);
+    internal sealed record Draft(Guid CarrierId, string? Number, DateOnly Date, decimal? Net, decimal? Carried, DateOnly? From, DateOnly? To, string? Memo, List<LineModel> Lines, List<SplitModel> Splits,
+        List<StatedModel>? Stated = null, List<SplitModel>? Balances = null);
+
+    internal sealed class StatedModel
+    {
+        public SettlementSection Section { get; set; }
+        public decimal? Amount { get; set; }
+    }
 
     internal sealed class SplitModel
     {

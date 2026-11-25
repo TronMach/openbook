@@ -8356,6 +8356,10 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
+                    b.Property<string>("FileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<Guid?>("JournalEntryId")
                         .HasColumnType("uuid");
 
@@ -13905,9 +13909,65 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasForeignKey("SettlementId");
                         });
 
+                    b.OwnsMany("OpenBook.Domain.Settlements.SettlementStatedBalance", "StatedBalances", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.HasKey("SettlementId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("SettlementStatedBalances", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.SettlementStatedTotal", "StatedTotals", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Section")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.HasKey("SettlementId", "Section");
+
+                            b1.ToTable("SettlementStatedTotals", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
+
                     b.Navigation("Deposits");
 
                     b.Navigation("Lines");
+
+                    b.Navigation("StatedBalances");
+
+                    b.Navigation("StatedTotals");
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookDelivery", b =>

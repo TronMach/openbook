@@ -304,6 +304,82 @@ public sealed class SettlementTests : IAsyncLifetime
         Assert.Equal(660m, Assert.Single(await In<SettlementService, IReadOnlyList<PossibleDeposit>>(s => s.PossibleDepositsAsync(settlement))).Amount);
     }
 
+    private const string File =
+        "Settlement,Pay date,Net paid,Section,Code,Date,Load,Description,Amount,Loaded miles\n" +
+        "W10,2026-03-06,450.00,Revenue,RV,0302,L1,Trip revenue,1000.00,500\n" +
+        "W10,,,Deductions,NP,,,Truck payment,550.00,\n" +
+        "W11,2026-03-13,-30.00,Revenue,RV,0309,L2,Trip revenue,520.00,300\n" +
+        "W11,,,Deductions,NP,,,Truck payment,550.00,\n" +
+        "W12,2026-03-20,,Revenue,RV,0316,L3,Trip revenue,700.00,400\n";
+
+    private Task<SettlementImportResult> Import(string text, bool save = true) =>
+        In<SettlementService, SettlementImportResult>(s => s.ImportAsync(_carrier.Id, System.Text.Encoding.UTF8.GetBytes(text), Friday, save));
+
+    [Fact]
+    public async Task A_file_brings_in_each_settlement_once()
+    {
+        Assert.Equal(3, (await Import(File, save: false)).NewCount);
+        Assert.Empty(await In<SettlementService, IReadOnlyList<Settlement>>(s => s.ListAsync()));
+
+        var result = await Import(File);
+        Assert.Equal([("W10", 450m, 0m), ("W11", 0m, -30m), ("W12", 0m, 0m)], result.Settlements.Select(s => (s.Number, s.NetPaid, s.CarriedForward)));
+        Assert.Contains("W12", Assert.Single(result.Warnings), StringComparison.Ordinal);
+        var held = await In<SettlementService, IReadOnlyList<Settlement>>(s => s.ListAsync());
+        Assert.Equal([700m, 0m, 0m], held.Select(s => -s.Difference));
+        Assert.All(held, s => Assert.Equal(SettlementStatus.Waiting, s.Status));
+
+        var again = await Import(File);
+        Assert.Equal(0, again.NewCount);
+        Assert.Contains(again.Warnings, w => w.Contains("imported before", StringComparison.Ordinal));
+        Assert.Equal(3, (await In<SettlementService, IReadOnlyList<Settlement>>(s => s.ListAsync())).Count);
+
+        // One bad line and none of the file comes in.
+        await Assert.ThrowsAnyAsync<DomainException>(() => Import("Settlement,Pay date,Section,Code,Amount,Loaded miles\nA,2026-04-03,Revenue,RV,10,5\n" +
+            string.Concat(Enumerable.Repeat("B,2026-04-10,Revenue,RV,10,5\n", Settlement.MaxLines + 1))));
+        Assert.Equal(3, (await In<SettlementService, IReadOnlyList<Settlement>>(s => s.ListAsync())).Count);
+    }
+
+    [Fact]
+    public async Task A_review_points_out_what_is_new_missing_changed_or_off()
+    {
+        SettlementLineDraft[] Regular(decimal rent, decimal fuel) => [Line(Revenue, "RV", 1500m, "TRIP REVENUE", "L1", 500m), Line(Deduction, "NP", rent, "TRUCK PAYMENT"), Line(Deduction, "IM", 5m, "IMAGE TRIPS"), Line(Deduction, "UF", fuel, "FUEL")];
+        Settlement first = await Enter(Details("1", Friday, 900m, Regular(500m, 95m)));
+        Assert.Null((await In<SettlementService, SettlementReview>(s => s.ReviewAsync(first))).PreviousNumber);
+        await AssignAsync(first);
+        await Post(first.Id);
+        await Post((await Enter(Details("2", Friday.AddDays(7), 875m, Regular(500m, 120m)))).Id);
+
+        // Fuel varies every week and says nothing; the truck payment never did. The image fee is gone and a bond is new.
+        Settlement third = await Enter(new SettlementDetails("3", Friday.AddDays(14), 830m,
+            [Line(Revenue, "RV", 1500m, "TRIP REVENUE", "L1", 500m), Line(Deduction, "NP", 520m, "TRUCK PAYMENT"), Line(Deduction, "UF", 100m, "FUEL"), Line(Deduction, "PB", 50m, "PERFORMANCE BOND") with { AccountId = Account("Performance Bond") }],
+            StatedTotals: [new(Deduction, -671m)], StatedBalances: [new(Account("Performance Bond"), 50m), new(Account("Carrier Advances"), 25m)]));
+        var review = await In<SettlementService, SettlementReview>(s => s.ReviewAsync(third));
+        Assert.Equal("2", review.PreviousNumber);
+        Assert.Equal([(ReviewNoteKind.NewCode, "PB", (decimal?)null, (decimal?)-50m), (ReviewNoteKind.MissingCode, "IM", -5m, null), (ReviewNoteKind.ChangedAmount, "NP", -500m, -520m)],
+            review.Notes.Select(n => (n.Kind, n.Code, n.Usual, n.Now)));
+        var deductions = review.Totals.Single(t => t.Section == Deduction);
+        Assert.Equal((-670m, (decimal?)-625m, (decimal?)-671m, true), (deductions.Now, deductions.Last, deductions.Stated, deductions.IsOff));
+        // The bond counts this settlement though it isn't posted; nothing is owed, so 25 is off.
+        Assert.Equal([0m, 25m], review.Balances.Select(b => b.Difference));
+        third = await Post(third.Id);
+        Assert.Equal([0m, 25m], (await In<SettlementService, SettlementReview>(s => s.ReviewAsync(third))).Balances.Select(b => b.Difference));
+        Assert.Equal([Account("Performance Bond"), Account("Carrier Advances")], await In<SettlementService, IReadOnlyList<Guid>>(s => s.CheckedAccountsAsync(_carrier.Id)));
+
+        // A balance can only be a balance sheet account's, once each.
+        Assert.Equal("settlement.balance_type", (await Refused<SettlementService, Settlement>(s => s.CreateAsync(_carrier.Id, Details("4") with { StatedBalances = [new(Account("Fuel"), 1m)] }))).Code);
+        Assert.Equal("settlement.balance_twice", (await Refused<SettlementService, Settlement>(s => s.CreateAsync(_carrier.Id, Details("4") with { StatedBalances = [new(Account("Tire Reserve"), 1m), new(Account("Tire Reserve"), 2m)] }))).Code);
+        Assert.Equal("settlement.total_twice", (await Refused<SettlementService, Settlement>(s => s.CreateAsync(_carrier.Id, Details("4") with { StatedTotals = [new(Revenue, 1m), new(Revenue, 2m)] }))).Code);
+    }
+
+    [Fact]
+    public async Task A_line_to_a_loans_account_is_pointed_out()
+    {
+        var liability = await _db.CreateAccount("Truck loan", AccountType.LongTermLiability);
+        await In<Application.Assets.LoanService, Domain.Assets.Loan>(s => s.CreateAsync(new Application.Assets.CreateLoanCommand(new Domain.Assets.LoanDetails("Truck loan", liability.Id, Guid.Empty, 10000m, 6m, 24, new DateOnly(2026, 4, 1)))));
+        var settlement = await Enter(Details(net: 100m, lines: [Line(Revenue, "RV", 600m, "TRIP REVENUE"), Line(Deduction, "LN", 500m, "LOAN") with { AccountId = liability.Id }]));
+        Assert.Equal("LN", Assert.Single((await In<SettlementService, SettlementReview>(s => s.ReviewAsync(settlement))).Notes).Code);
+    }
+
     [Fact]
     public async Task Reports_search_and_lists_know_settlements()
     {

@@ -53,6 +53,7 @@ public sealed class FuzzTests
         new("ofx", b => Ofx.Parse(Text(b)), Seeds.SgmlOfx, Seeds.XmlOfx),
         new("csv", b => Csv.Parse(Text(b)), Seeds.Statement, Seeds.Wave, Seeds.Etsy),
         new("statement-values", b => StatementLine(Text(b)), Seeds.Statement),
+        new("settlement-csv", b => OpenBook.Application.Settlements.SettlementReader.Read(Text(b), new DateOnly(2026, 3, 13)), Seeds.Settlement),
         new("channel-amazon", b => ChannelReports.Read(ChannelKind.Amazon, Text(b)), Seeds.Amazon),
         new("channel-ebay", b => ChannelReports.Read(ChannelKind.Ebay, Text(b)), Seeds.Ebay),
         new("channel-etsy", b => ChannelReports.Read(ChannelKind.Etsy, Text(b)), Seeds.Etsy),

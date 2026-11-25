@@ -251,6 +251,13 @@ internal static class Seeds
         "113-1\t2026-03-02T10:00:00+00:00\tShipped\tBlue mug\tMUG-1\t2\t80.00\t6.80\t5.00\tWA\n" +
         "113-2\t2026-03-02T11:00:00+00:00\tCancelled\tBlue mug\tMUG-1\t1\t40.00\t0\t0\tOR\n";
 
+    public const string Settlement =
+        "Settlement,Pay date,Net paid,Section,Code,Date,Load,Dispatch,Description,Amount,Loaded miles,Empty miles,Gallons\n" +
+        "W10,2026-03-06,450.00,Revenue,RV,0302,L1,01,Trip revenue,\"1,000.00\",500,20.5,\n" +
+        "W10,,,Deductions,UF,03/04/2026,L1,01,Fuel 100.5 gals,600.00,,,100.500\n" +
+        "W10,,,Deductions,UD,,,,Fuel discount,50.00-,,,\n" +
+        "W11,2026-03-13,-30.00,Other,BF,1103,,,Balance forward,(30.00),,,\n";
+
     public const string EtsyOrders =
         "Sale Date,Item Name,Quantity,Price,Discount Amount,Order Shipping,Order Sales Tax,Ship State,Order ID,SKU\n" +
         "03/02/26,Blue mug,1,40.00,0,6.00,3.20,NY,900,MUG-1\n" +

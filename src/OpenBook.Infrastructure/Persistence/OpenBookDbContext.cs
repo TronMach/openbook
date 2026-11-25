@@ -1364,6 +1364,26 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 d.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(s => s.Deposits).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.Property(s => s.FileHash).HasMaxLength(64);
+            b.OwnsMany(s => s.StatedTotals, t =>
+            {
+                t.ToTable("SettlementStatedTotals");
+                t.WithOwner().HasForeignKey("SettlementId");
+                t.HasKey("SettlementId", nameof(OpenBook.Domain.Settlements.SettlementStatedTotal.Section));
+                t.Property(x => x.Section).HasConversion<string>().HasMaxLength(20);
+                t.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+            });
+            b.Navigation(s => s.StatedTotals).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(s => s.StatedBalances, x =>
+            {
+                x.ToTable("SettlementStatedBalances");
+                x.WithOwner().HasForeignKey("SettlementId");
+                x.HasKey("SettlementId", nameof(OpenBook.Domain.Settlements.SettlementStatedBalance.LineNumber));
+                x.Property(y => y.LineNumber).ValueGeneratedNever();
+                x.Property(y => y.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                x.HasOne<Account>().WithMany().HasForeignKey(y => y.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(s => s.StatedBalances).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Channels.ChannelPayout>(b =>

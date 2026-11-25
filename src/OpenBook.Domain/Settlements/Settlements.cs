@@ -21,6 +21,12 @@ public sealed record SettlementLineDraft(
     SettlementSection Section, string? Code, decimal Amount, DateOnly? Date = null, string? Load = null, string? Dispatch = null, string? Description = null,
     Guid? AccountId = null, Guid? ClassId = null, decimal? LoadedMiles = null, decimal? EmptyMiles = null, decimal? Gallons = null);
 
+/// <summary>What the statement prints as a section's total, signed as it counts, to check the lines against.</summary>
+public sealed record SettlementTotalDraft(SettlementSection Section, decimal Amount);
+
+/// <summary>A balance the statement prints (a reserve, an advance still owed), in the account's own sign, to check the books against.</summary>
+public sealed record SettlementBalanceDraft(Guid AccountId, decimal Amount);
+
 /// <summary>Part of the net, paid into an account of its own.</summary>
 public sealed record SettlementDepositDraft(Guid AccountId, decimal Amount);
 
@@ -31,7 +37,8 @@ public sealed record SettlementDepositDraft(Guid AccountId, decimal Amount);
 /// <param name="Deposits">Null or empty pays it all into the carrier's deposit account.</param>
 public sealed record SettlementDetails(
     string Number, DateOnly Date, decimal NetPaid, IReadOnlyList<SettlementLineDraft> Lines, DateOnly? PeriodStart = null, DateOnly? PeriodEnd = null,
-    decimal CarriedForward = 0m, IReadOnlyList<SettlementDepositDraft>? Deposits = null, string? Memo = null);
+    decimal CarriedForward = 0m, IReadOnlyList<SettlementDepositDraft>? Deposits = null, string? Memo = null,
+    IReadOnlyList<SettlementTotalDraft>? StatedTotals = null, IReadOnlyList<SettlementBalanceDraft>? StatedBalances = null);
 
 public sealed class SettlementLine
 {
@@ -112,6 +119,36 @@ public sealed class SettlementDeposit
     public decimal Amount { get; private set; }
 }
 
+public sealed class SettlementStatedTotal
+{
+    private SettlementStatedTotal() { }
+
+    internal SettlementStatedTotal(SettlementTotalDraft draft)
+    {
+        Section = Enum.IsDefined(draft.Section) ? draft.Section : throw new DomainException("settlement.section_invalid", "Unknown part of a settlement.");
+        Amount = Settlement.Cents(draft.Amount, "A printed total");
+    }
+
+    public SettlementSection Section { get; private set; }
+    public decimal Amount { get; private set; }
+}
+
+public sealed class SettlementStatedBalance
+{
+    private SettlementStatedBalance() { }
+
+    internal SettlementStatedBalance(int lineNumber, SettlementBalanceDraft draft)
+    {
+        LineNumber = lineNumber;
+        AccountId = draft.AccountId != Guid.Empty ? draft.AccountId : throw new DomainException("settlement.balance_account", "Choose the account each balance is of.");
+        Amount = Settlement.Cents(draft.Amount, "A printed balance");
+    }
+
+    public int LineNumber { get; private set; }
+    public Guid AccountId { get; private set; }
+    public decimal Amount { get; private set; }
+}
+
 /// <summary>
 /// A carrier's settlement statement: what a week's loads earned, what was taken out, and the net paid. It waits, and can
 /// be changed, until it's posted as one journal entry (Dr the deposit, each line to its code's account); voiding the entry
@@ -122,9 +159,12 @@ public sealed class Settlement
     public const string Source = "settlements.settlement";
     public const int MaxLines = 500;
     public const int MaxDeposits = 5;
+    public const int MaxBalances = 20;
 
     private readonly List<SettlementLine> _lines = [];
     private readonly List<SettlementDeposit> _deposits = [];
+    private readonly List<SettlementStatedTotal> _statedTotals = [];
+    private readonly List<SettlementStatedBalance> _statedBalances = [];
 
     private Settlement() => Number = string.Empty;
 
@@ -143,12 +183,22 @@ public sealed class Settlement
     /// <summary>The location its entry carries, kept when it posts.</summary>
     public Guid? LocationId { get; private set; }
 
+    /// <summary>SHA-256 (hex) of the file its lines came from; null when they were typed.</summary>
+    public string? FileHash { get; private set; }
+
+    public void SetFileHash(string hash) => FileHash = hash;
+
     public string? CreatedBy { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     public IReadOnlyList<SettlementLine> Lines => [.. _lines.OrderBy(l => l.LineNumber)];
 
     public IReadOnlyList<SettlementDeposit> Deposits => [.. _deposits.OrderBy(d => d.LineNumber)];
+
+    /// <summary>The section totals the statement prints, by section.</summary>
+    public IReadOnlyList<SettlementStatedTotal> StatedTotals => [.. _statedTotals.OrderBy(t => t.Section)];
+
+    public IReadOnlyList<SettlementStatedBalance> StatedBalances => [.. _statedBalances.OrderBy(b => b.LineNumber)];
 
     public decimal Total => _lines.Sum(l => l.Amount);
 
@@ -205,10 +255,23 @@ public sealed class Settlement
         if (newDeposits.Count > 0 && newDeposits.Sum(d => d.Amount) != NetPaid)
             throw new DomainException("settlement.deposits_unequal", $"The deposits add up to {newDeposits.Sum(d => d.Amount):N2}, but the net paid is {NetPaid:N2}.");
 
+        var totals = (details.StatedTotals ?? []).Select(t => new SettlementStatedTotal(t)).ToList();
+        if (totals.Select(t => t.Section).Distinct().Count() != totals.Count)
+            throw new DomainException("settlement.total_twice", "Each part of the statement has one printed total.");
+        var balances = (details.StatedBalances ?? []).Select((b, i) => new SettlementStatedBalance(i + 1, b)).ToList();
+        if (balances.Count > MaxBalances)
+            throw new DomainException("settlement.too_many_balances", $"A settlement takes at most {MaxBalances} balances.");
+        if (balances.Select(b => b.AccountId).Distinct().Count() != balances.Count)
+            throw new DomainException("settlement.balance_twice", "Each account has one printed balance.");
+
         _lines.Clear();
         _lines.AddRange(newLines);
         _deposits.Clear();
         _deposits.AddRange(newDeposits);
+        _statedTotals.Clear();
+        _statedTotals.AddRange(totals);
+        _statedBalances.Clear();
+        _statedBalances.AddRange(balances);
     }
 
     /// <summary>The line's own account, else what the carrier's code stands for; null while it has neither.</summary>

@@ -20,6 +20,9 @@
   <data name=" (with a password)" xml:space="preserve">
     <value> (with a password)</value>
   </data>
+  <data name=" Already entered and left out: {0}." xml:space="preserve">
+    <value> Already entered and left out: {0}.</value>
+  </data>
   <data name=" · single sign-on on" xml:space="preserve">
     <value> · single sign-on on</value>
   </data>
@@ -235,6 +238,9 @@
   </data>
   <data name="Add" xml:space="preserve">
     <value>Add</value>
+  </data>
+  <data name="Add a balance" xml:space="preserve">
+    <value>Add a balance</value>
   </data>
   <data name="Add a bank account" xml:space="preserve">
     <value>Add a bank account</value>
@@ -530,6 +536,9 @@
   <data name="Balance due" xml:space="preserve">
     <value>Balance due</value>
   </data>
+  <data name="Balance printed {0}" xml:space="preserve">
+    <value>Balance printed {0}</value>
+  </data>
   <data name="Balance Sheet" xml:space="preserve">
     <value>Balance Sheet</value>
   </data>
@@ -758,6 +767,9 @@
   <data name="Changed {0} by {1}: {2}" xml:space="preserve">
     <value>Changed {0} by {1}: {2}</value>
   </data>
+  <data name="Changed: {0}, from {1} to {2}." xml:space="preserve">
+    <value>Changed: {0}, from {1} to {2}.</value>
+  </data>
   <data name="Changes" xml:space="preserve">
     <value>Changes</value>
   </data>
@@ -796,6 +808,9 @@
   </data>
   <data name="Check in what arrives on an order" xml:space="preserve">
     <value>Check in what arrives on an order</value>
+  </data>
+  <data name="Check it" xml:space="preserve">
+    <value>Check it</value>
   </data>
   <data name="Check or expense" xml:space="preserve">
     <value>Check or expense</value>
@@ -910,6 +925,9 @@
   </data>
   <data name="Company name" xml:space="preserve">
     <value>Company name</value>
+  </data>
+  <data name="Compared with the settlements before it, the latest being {0} of {1}. Nothing here stops it posting." xml:space="preserve">
+    <value>Compared with the settlements before it, the latest being {0} of {1}. Nothing here stops it posting.</value>
   </data>
   <data name="Conditional grants with spending not yet recognized" xml:space="preserve">
     <value>Conditional grants with spending not yet recognized</value>
@@ -1087,6 +1105,9 @@
   </data>
   <data name="Device" xml:space="preserve">
     <value>Device</value>
+  </data>
+  <data name="Difference" xml:space="preserve">
+    <value>Difference</value>
   </data>
   <data name="Disconnect" xml:space="preserve">
     <value>Disconnect</value>
@@ -1409,6 +1430,9 @@
   <data name="For" xml:space="preserve">
     <value>For</value>
   </data>
+  <data name="For a carrier that gives you a file, or a spreadsheet saved as CSV. It needs an amount column; section, code, date, load, description, miles and gallons are read when they're there, and a settlement number column makes a settlement of each. Every one waits here to be checked." xml:space="preserve">
+    <value>For a carrier that gives you a file, or a spreadsheet saved as CSV. It needs an amount column; section, code, date, load, description, miles and gallons are read when they're there, and a settlement number column makes a settlement of each. Every one waits here to be checked.</value>
+  </data>
   <data name="For an account given to someone else at the provider; their next single sign-on links again by email." xml:space="preserve">
     <value>For an account given to someone else at the provider; their next single sign-on links again by email.</value>
   </data>
@@ -1646,6 +1670,9 @@
   <data name="Import" xml:space="preserve">
     <value>Import</value>
   </data>
+  <data name="Import a CSV file" xml:space="preserve">
+    <value>Import a CSV file</value>
+  </data>
   <data name="Import a payout report" xml:space="preserve">
     <value>Import a payout report</value>
   </data>
@@ -1819,6 +1846,9 @@
   </data>
   <data name="Last sent" xml:space="preserve">
     <value>Last sent</value>
+  </data>
+  <data name="Last time" xml:space="preserve">
+    <value>Last time</value>
   </data>
   <data name="Last used" xml:space="preserve">
     <value>Last used</value>
@@ -1994,6 +2024,12 @@
   <data name="Mine" xml:space="preserve">
     <value>Mine</value>
   </data>
+  <data name="Missing: {0}, usually {1}." xml:space="preserve">
+    <value>Missing: {0}, usually {1}.</value>
+  </data>
+  <data name="Missing: {0}, which is usually there." xml:space="preserve">
+    <value>Missing: {0}, which is usually there.</value>
+  </data>
   <data name="Mobile number" xml:space="preserve">
     <value>Mobile number</value>
   </data>
@@ -2116,6 +2152,9 @@
   </data>
   <data name="New vendor credit" xml:space="preserve">
     <value>New vendor credit</value>
+  </data>
+  <data name="New: {0}, {1}." xml:space="preserve">
+    <value>New: {0}, {1}.</value>
   </data>
   <data name="Next" xml:space="preserve">
     <value>Next</value>
@@ -2321,6 +2360,9 @@
   <data name="Nothing is waiting: no overdue invoices, bills due, bank lines to review or accounts to reconcile." xml:space="preserve">
     <value>Nothing is waiting: no overdue invoices, bills due, bank lines to review or accounts to reconcile.</value>
   </data>
+  <data name="Nothing stands out." xml:space="preserve">
+    <value>Nothing stands out.</value>
+  </data>
   <data name="Nothing to collect" xml:space="preserve">
     <value>Nothing to collect</value>
   </data>
@@ -2462,6 +2504,9 @@
   <data name="Optional. From this day they can't sign in and are made inactive. Leave empty for no end." xml:space="preserve">
     <value>Optional. From this day they can't sign in and are made inactive. Leave empty for no end.</value>
   </data>
+  <data name="Optional. The page compares these with the lines and the books and says what's off; nothing is refused." xml:space="preserve">
+    <value>Optional. The page compares these with the lines and the books and says what's off; nothing is refused.</value>
+  </data>
   <data name="Optional. Used to match single sign-on and shown on invitations." xml:space="preserve">
     <value>Optional. Used to match single sign-on and shown on invitations.</value>
   </data>
@@ -2554,6 +2599,9 @@
   </data>
   <data name="Paid on the spot, no invoice" xml:space="preserve">
     <value>Paid on the spot, no invoice</value>
+  </data>
+  <data name="Paid on, when the file doesn't say" xml:space="preserve">
+    <value>Paid on, when the file doesn't say</value>
   </data>
   <data name="Part" xml:space="preserve">
     <value>Part</value>
@@ -3053,6 +3101,12 @@
   <data name="Require two-factor sign-in" xml:space="preserve">
     <value>Require two-factor sign-in</value>
   </data>
+  <data name="Reserve or balance {0}" xml:space="preserve">
+    <value>Reserve or balance {0}</value>
+  </data>
+  <data name="Reserves and balances" xml:space="preserve">
+    <value>Reserves and balances</value>
+  </data>
   <data name="Restore" xml:space="preserve">
     <value>Restore</value>
   </data>
@@ -3353,6 +3407,9 @@
   <data name="Settlements are paid into" xml:space="preserve">
     <value>Settlements are paid into</value>
   </data>
+  <data name="Settlements imported: {0}." xml:space="preserve">
+    <value>Settlements imported: {0}.</value>
+  </data>
   <data name="Shipping" xml:space="preserve">
     <value>Shipping</value>
   </data>
@@ -3508,6 +3565,9 @@
   </data>
   <data name="Statement number" xml:space="preserve">
     <value>Statement number</value>
+  </data>
+  <data name="Statement says" xml:space="preserve">
+    <value>Statement says</value>
   </data>
   <data name="States past their sales tax threshold" xml:space="preserve">
     <value>States past their sales tax threshold</value>
@@ -3694,6 +3754,9 @@
   </data>
   <data name="The last good one was {0}" xml:space="preserve">
     <value>The last good one was {0}</value>
+  </data>
+  <data name="The lines" xml:space="preserve">
+    <value>The lines</value>
   </data>
   <data name="The lines add up to" xml:space="preserve">
     <value>The lines add up to</value>
@@ -3907,6 +3970,9 @@
   </data>
   <data name="Total before" xml:space="preserve">
     <value>Total before</value>
+  </data>
+  <data name="Total printed for {0}" xml:space="preserve">
+    <value>Total printed for {0}</value>
   </data>
   <data name="Transactions" xml:space="preserve">
     <value>Transactions</value>
@@ -4157,6 +4223,9 @@
   <data name="What the carrier takes out counts under this vendor in Expenses by vendor." xml:space="preserve">
     <value>What the carrier takes out counts under this vendor in Expenses by vendor.</value>
   </data>
+  <data name="What the statement says, to check against" xml:space="preserve">
+    <value>What the statement says, to check against</value>
+  </data>
   <data name="What they'll get" xml:space="preserve">
     <value>What they'll get</value>
   </data>
@@ -4325,6 +4394,12 @@
   <data name="Your bank's details for paying vendors by direct deposit with a NACHA file." xml:space="preserve">
     <value>Your bank's details for paying vendors by direct deposit with a NACHA file.</value>
   </data>
+  <data name="Your books" xml:space="preserve">
+    <value>Your books</value>
+  </data>
+  <data name="Your books count what's posted through this settlement's date, and this settlement. A difference that stays the same each week is usually a starting balance not entered yet." xml:space="preserve">
+    <value>Your books count what's posted through this settlement's date, and this settlement. A difference that stays the same each week is usually a starting balance not entered yet.</value>
+  </data>
   <data name="Your chart already has the trucking accounts." xml:space="preserve">
     <value>Your chart already has the trucking accounts.</value>
   </data>
@@ -4426,6 +4501,9 @@
   </data>
   <data name="{0} fields" xml:space="preserve">
     <value>{0} fields</value>
+  </data>
+  <data name="{0} goes to an account of the Loans page, whose schedule doesn't count it. Record the payment there instead, or use another account." xml:space="preserve">
+    <value>{0} goes to an account of the Loans page, whose schedule doesn't count it. Record the payment there instead, or use another account.</value>
   </data>
   <data name="{0} invited {1} to these books as {2}. Choose a username and password to sign in with." xml:space="preserve">
     <value>{0} invited {1} to these books as {2}. Choose a username and password to sign in with.</value>

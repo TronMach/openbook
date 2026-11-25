@@ -30,6 +30,10 @@ Then the lines, with amounts as the statement prints them:
 
 **Load**, **Dispatch**, **Loaded miles**, **Empty miles** and **Gallons** are kept for the reports; they don't go into the books. **Paste lines from a spreadsheet** adds many at once: rows copied with a header can have their columns in any order.
 
+**Import a CSV file** on the Settlements page does the same from a file, for a carrier that gives you one or a spreadsheet saved as CSV; a settlement number column makes a settlement of each. Ones already entered are left out. If the file doesn't say the net paid, **Change** the settlement and type it from the statement.
+
+Under **What the statement says, to check against**, you can type the total printed for each part, and the balances it prints for reserves and advances. They're compared, never refused.
+
 Below the lines you see what each part comes to and how much is **still to find**. You can save a half-finished settlement; it can't be posted until the lines add up to the net paid and anything carried forward.
 
 Under **More options**:
@@ -45,6 +49,18 @@ Statements mark each line with a code (RV, UF, NP…). The first time one turns 
 Change or forget them later on the carrier's page. Settlements already posted keep their entries.
 
 **Reserves are still your money.** What goes into a tire reserve, emergency fund or performance bond belongs on an asset account, not an expense: it's an expense when it's spent. **Advances aren't income.** When the carrier pays a repair and takes it back over several weeks, both the advance and the paybacks go to "Carrier Advances", and the repair itself is the expense. That's why your profit can differ from the statement's. Ask your accountant if your contract says a reserve isn't returned.
+
+## Checking it
+
+The settlement's page has **Check it**, which compares it with the last three:
+
+- **New** codes, and codes **missing** that were on every one of them.
+- Amounts that were the same each week and **changed**, such as the truck payment.
+- Each part's total beside last time's and, if you typed them, the statement's.
+- **Reserves and balances**: what your books say you have in the tire reserve, say, beside what the statement says. A difference that stays the same is usually a starting balance you haven't entered ([Moving in](24-moving-in.md)).
+- A line going to an account on the **Loans** page, whose schedule wouldn't see it.
+
+Nothing there stops it posting.
 
 ## Posting
 

@@ -1,0 +1,104 @@
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@* What a settlement's review found (SettlementReview): against the ones before it, and against what its statement prints. *@
+
+@if (Review.HasAnything)
+{
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["Check it"]</h2>
+        @if (Review.PreviousNumber is { } previous)
+        {
+            <p class="muted">@L["Compared with the settlements before it, the latest being {0} of {1}. Nothing here stops it posting.", previous, Labels.Date(Review.PreviousDate!.Value)]</p>
+        }
+        @if (Review.Notes.Count == 0 && Review.Totals.All(t => !t.IsOff) && Review.Balances.All(b => b.Difference == 0m))
+        {
+            <p>@L["Nothing stands out."]</p>
+        }
+        @if (Review.Notes.Count > 0)
+        {
+            <ul>
+                @foreach (var note in Review.Notes)
+                {
+                    <li>@Text(note)</li>
+                }
+            </ul>
+        }
+        @if (Review.Totals.Any(t => t.Last is not null || t.Stated is not null))
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>@L["Part"]</th><th class="num">@L["The lines"]</th>
+                            @if (Review.Totals.Any(t => t.Stated is not null))
+                            {
+                                <th class="num">@L["Statement says"]</th><th class="num">@L["Difference"]</th>
+                            }
+                            @if (Review.PreviousNumber is not null)
+                            {
+                                <th class="num">@L["Last time"]</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var total in Review.Totals)
+                        {
+                            <tr>
+                                <td>@SettlementSections.Label(total.Section)</td>
+                                <td class="num">@Labels.Amount(total.Now)</td>
+                                @if (Review.Totals.Any(t => t.Stated is not null))
+                                {
+                                    <td class="num">@(total.Stated is { } stated ? Labels.Amount(stated) : "")</td>
+                                    <td class="num @(total.IsOff ? "neg" : "")">@(total.Stated is { } s ? Labels.Amount(s - total.Now) : "")</td>
+                                }
+                                @if (Review.PreviousNumber is not null)
+                                {
+                                    <td class="num">@(total.Last is { } last ? Labels.Amount(last) : "")</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (Review.Balances.Count > 0)
+        {
+            <h3>@L["Reserves and balances"]</h3>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>@L["Account"]</th><th class="num">@L["Your books"]</th><th class="num">@L["Statement says"]</th><th class="num">@L["Difference"]</th></tr></thead>
+                    <tbody>
+                        @foreach (var b in Review.Balances)
+                        {
+                            <tr>
+                                <td><a href="/accounts/@b.AccountId/register">@(Chart.Find(b.AccountId) is null ? "" : Chart.FullName(b.AccountId))</a></td>
+                                <td class="num">@Labels.Amount(b.Books)</td>
+                                <td class="num">@Labels.Amount(b.Stated)</td>
+                                <td class="num @(b.Difference != 0m ? "neg" : "")">@Labels.Amount(b.Difference)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="hint">@L["Your books count what's posted through this settlement's date, and this settlement. A difference that stays the same each week is usually a starting balance not entered yet."]</p>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public SettlementReview Review { get; set; } = default!;
+
+    [Parameter, EditorRequired] public ChartOfAccounts Chart { get; set; } = new([]);
+
+    private string Text(ReviewNote note)
+    {
+        var what = $"{SettlementSections.Label(note.Section)} {note.Code}{(note.Name is null || note.Name == note.Code ? "" : $" ({note.Name})")}";
+        return note.Kind switch
+        {
+            ReviewNoteKind.NewCode => L["New: {0}, {1}.", what, Labels.Amount(note.Now ?? 0m)],
+            ReviewNoteKind.MissingCode => note.Usual is { } usual ? L["Missing: {0}, usually {1}.", what, Labels.Amount(usual)] : L["Missing: {0}, which is usually there.", what],
+            ReviewNoteKind.ChangedAmount => L["Changed: {0}, from {1} to {2}.", what, Labels.Amount(note.Usual ?? 0m), Labels.Amount(note.Now ?? 0m)],
+            _ => L["{0} goes to an account of the Loans page, whose schedule doesn't count it. Record the payment there instead, or use another account.", what],
+        };
+    }
+}

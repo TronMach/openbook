@@ -575,6 +575,8 @@ public sealed class AccessRulesTests
     [InlineData("/settlements/carriers", "GET", UserRole.ViewOnly)]
     [InlineData("/settlements/carriers", "POST", UserRole.Accountant)]
     [InlineData("/settlements/carriers/0190a7a2-0000-7000-8000-000000000000/codes", "POST", UserRole.Accountant)]
+    [InlineData("/settlements/import", "POST", UserRole.Standard)]
+    [InlineData("/api/settlements/import", "POST", UserRole.Standard)]
     [InlineData("/api/settlements", "POST", UserRole.Standard)]
     [InlineData("/api/settlements/carriers", "GET", UserRole.ViewOnly)]
     [InlineData("/api/settlements/carriers", "POST", UserRole.Accountant)]

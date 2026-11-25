@@ -34,16 +34,21 @@ public sealed record SettlementLineRequest(
 
 public sealed record SettlementDepositRequest(Guid AccountId, decimal Amount);
 
+/// <summary>A section's printed total, signed like the lines.</summary>
+public sealed record SettlementTotalRequest(SettlementSection Section, decimal Amount);
+
 /// <summary>A settlement as its statement has it. Changing one replaces all of its lines and deposits.</summary>
 /// <param name="CarrierId">Needed for a new one; a settlement never changes carrier.</param>
 public sealed record SettlementRequest(
     string Number, DateOnly Date, decimal NetPaid, IReadOnlyList<SettlementLineRequest>? Lines, Guid? CarrierId = null, DateOnly? PeriodStart = null, DateOnly? PeriodEnd = null,
-    decimal CarriedForward = 0m, IReadOnlyList<SettlementDepositRequest>? Deposits = null, string? Memo = null)
+    decimal CarriedForward = 0m, IReadOnlyList<SettlementDepositRequest>? Deposits = null, string? Memo = null,
+    IReadOnlyList<SettlementTotalRequest>? StatedTotals = null, IReadOnlyList<SettlementDepositRequest>? StatedBalances = null)
 {
     public SettlementDetails ToDetails() => new(
         Number, Date, NetPaid,
         (Lines ?? []).Select(l => new SettlementLineDraft(l.Section, l.Code, l.Amount, l.Date, l.Load, l.Dispatch, l.Description, l.AccountId, l.ClassId, l.LoadedMiles, l.EmptyMiles, l.Gallons)).ToList(),
-        PeriodStart, PeriodEnd, CarriedForward, (Deposits ?? []).Select(d => new SettlementDepositDraft(d.AccountId, d.Amount)).ToList(), Memo);
+        PeriodStart, PeriodEnd, CarriedForward, (Deposits ?? []).Select(d => new SettlementDepositDraft(d.AccountId, d.Amount)).ToList(), Memo,
+        (StatedTotals ?? []).Select(t => new SettlementTotalDraft(t.Section, t.Amount)).ToList(), (StatedBalances ?? []).Select(b => new SettlementBalanceDraft(b.AccountId, b.Amount)).ToList());
 }
 
 public sealed record SettlementLineResponse(
@@ -53,14 +58,17 @@ public sealed record SettlementLineResponse(
 public sealed record SettlementResponse(
     Guid Id, Guid CarrierId, string Number, DateOnly Date, DateOnly? PeriodStart, DateOnly? PeriodEnd, SettlementStatus Status, decimal NetPaid, decimal CarriedForward,
     decimal Difference, decimal LoadedMiles, decimal EmptyMiles, decimal Gallons, Guid? JournalEntryId, string? Memo,
-    IReadOnlyDictionary<SettlementSection, decimal> Totals, IReadOnlyList<SettlementLineResponse>? Lines, IReadOnlyList<SettlementDepositRequest>? Deposits)
+    IReadOnlyDictionary<SettlementSection, decimal> Totals, IReadOnlyList<SettlementLineResponse>? Lines, IReadOnlyList<SettlementDepositRequest>? Deposits,
+    IReadOnlyList<SettlementTotalRequest>? StatedTotals, IReadOnlyList<SettlementDepositRequest>? StatedBalances)
 {
     public static SettlementResponse From(Settlement s, bool lines = false) => new(
         s.Id, s.CarrierId, s.Number, s.Date, s.PeriodStart, s.PeriodEnd, s.Status, s.NetPaid, s.CarriedForward, s.Difference, s.LoadedMiles, s.EmptyMiles, s.Gallons,
         s.JournalEntryId, s.Memo, s.Lines.GroupBy(l => l.Section).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount)),
         lines ? s.Lines.Select(l => new SettlementLineResponse(l.LineNumber, l.Section, l.Code, l.Amount, l.Date, l.Load, l.Dispatch, l.Description, l.AccountId, l.ClassId,
             l.PostedAccountId, l.LoadedMiles, l.EmptyMiles, l.Gallons)).ToList() : null,
-        lines ? s.Deposits.Select(d => new SettlementDepositRequest(d.AccountId, d.Amount)).ToList() : null);
+        lines ? s.Deposits.Select(d => new SettlementDepositRequest(d.AccountId, d.Amount)).ToList() : null,
+        lines ? s.StatedTotals.Select(t => new SettlementTotalRequest(t.Section, t.Amount)).ToList() : null,
+        lines ? s.StatedBalances.Select(b => new SettlementDepositRequest(b.AccountId, b.Amount)).ToList() : null);
 }
 
 public sealed record VoidSettlementRequest(string? Reason);
@@ -100,6 +108,15 @@ public static class SettlementsApi
             await s.GetAsync(id, ct) is { } x ? Results.Ok(SettlementResponse.From(x, lines: true)) : Results.NotFound());
         settlements.MapPut("/{id:guid}", async (Guid id, SettlementRequest r, SettlementService s, CancellationToken ct) =>
             SettlementResponse.From(await s.ChangeAsync(id, r.ToDetails(), ct), lines: true));
+        // A CSV file as the body; ?date= is the pay date of settlements the file gives none for, ?dryRun=true shows what's in it.
+        settlements.MapPost("/import", async (HttpRequest request, Guid carrierId, DateOnly? date, bool? dryRun, SettlementService s, CancellationToken ct) =>
+        {
+            using var memory = new MemoryStream();
+            await request.Body.CopyToAsync(memory, ct);
+            return await s.ImportAsync(carrierId, memory.ToArray(), date ?? OpenBook.Application.CompanyTime.Today, save: dryRun != true, ct);
+        });
+        settlements.MapGet("/{id:guid}/review", async (Guid id, SettlementService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } x ? Results.Ok(await s.ReviewAsync(x, ct)) : Results.NotFound());
         settlements.MapGet("/{id:guid}/unassigned", async (Guid id, SettlementService s, CancellationToken ct) =>
             await s.GetAsync(id, ct) is { } x ? Results.Ok(await s.UnassignedAsync(x, ct)) : Results.NotFound());
         settlements.MapPost("/{id:guid}/post", async (Guid id, SettlementService s, CancellationToken ct) => SettlementResponse.From(await s.PostAsync(id, ct)));

@@ -1,13 +1,18 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using OpenBook.Application.Accounts;
+using OpenBook.Application.Assets;
 using OpenBook.Application.Banking;
+using OpenBook.Application.Import;
 using OpenBook.Application.Ledger;
 using OpenBook.Application.Purchases;
+using OpenBook.Application.Reporting;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Ledger;
 using OpenBook.Domain.Settlements;
 
 namespace OpenBook.Application.Settlements;
@@ -41,6 +46,16 @@ public interface ISettlementStore
 /// <summary>A code on a settlement that has no account yet, with the account its words suggest.</summary>
 public sealed record UnassignedCode(SettlementSection Section, string Code, string? Name, int Lines, decimal Amount, Guid? SuggestedAccountId);
 
+/// <summary>One settlement found in an imported file.</summary>
+/// <param name="Id">The settlement made from it; null for one already entered, or before saving.</param>
+/// <param name="AlreadyEntered">The carrier has a settlement with this number, so it's left out.</param>
+public sealed record ImportedSettlement(string Number, DateOnly Date, decimal NetPaid, decimal CarriedForward, int Lines, decimal Total, bool AlreadyEntered, Guid? Id);
+
+public sealed record SettlementImportResult(IReadOnlyList<ImportedSettlement> Settlements, IReadOnlyList<string> Warnings)
+{
+    public int NewCount => Settlements.Count(s => !s.AlreadyEntered);
+}
+
 /// <summary>A deposit of a settlement's net already in the books another way: posting the settlement too would count the money twice.</summary>
 public sealed record PossibleDeposit(Guid TransactionId, DateOnly Date, string? Payee, decimal Amount);
 
@@ -50,7 +65,8 @@ public sealed record PossibleDeposit(Guid TransactionId, DateOnly Date, string? 
 /// stands for. Nothing about a load or a mile is posted: those stay on the settlement's lines, for the reports.
 /// </summary>
 public sealed class SettlementService(
-    ISettlementStore store, AccountService accounts, PostingEngine engine, IPurchasesStore purchases, ISalesStore sales, IBankingStore banking, IClock clock, ICurrentUser user)
+    ISettlementStore store, AccountService accounts, PostingEngine engine, IPurchasesStore purchases, ISalesStore sales, IBankingStore banking,
+    ReportLedger ledger, IAssetStore assets, IClock clock, ICurrentUser user)
 {
     public const string CarrierEntity = "carrier";
     public const string SettlementEntity = "settlement";
@@ -145,6 +161,93 @@ public sealed class SettlementService(
         await store.SaveChangesAsync(ct);
         return settlement;
     }
+
+    /// <summary>
+    /// Settlements from a CSV file (<see cref="SettlementReader"/>), each waiting to be checked and posted; ones whose number
+    /// the carrier already has are left out. All of them come in, or none.
+    /// </summary>
+    /// <param name="date">The pay date of settlements the file gives none for.</param>
+    public async Task<SettlementImportResult> ImportAsync(Guid carrierId, byte[] content, DateOnly date, bool save, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        var carrier = await CarrierAsync(carrierId, ct);
+        if (!carrier.IsActive)
+            throw new DomainException("settlement.carrier_inactive", $"{carrier.Name} is inactive.");
+        var read = SettlementReader.Read(TextFiles.Decode(content), date);
+        var hash = Convert.ToHexStringLower(SHA256.HashData(content));
+        var warnings = read.Warnings.ToList();
+        var held = (await store.ListSettlementsAsync(carrierId, ct)).Where(s => s.Status != SettlementStatus.Dismissed).ToList();
+        if (held.FirstOrDefault(s => s.FileHash == hash) is { } same)
+            warnings.Add($"This file was imported before, as settlement {same.Number}.");
+
+        var taken = held.Select(s => s.Number).ToHashSet(StringComparer.Ordinal);
+        var result = new List<ImportedSettlement>();
+        foreach (var reading in read.Settlements)
+        {
+            var paid = reading.Date ?? date;
+            var number = reading.Number ?? $"{paid:yyyy-MM-dd}";
+            var (net, carried) = (reading.NetPaid ?? 0m, reading.CarriedForward ?? 0m);
+            // A net below zero is paid by nobody: it's owed, and carried to the next one.
+            if (net < 0m)
+                (net, carried) = (0m, carried + net);
+            var total = reading.Lines.Sum(l => l.Amount);
+            if (!taken.Add(number))
+            {
+                result.Add(new ImportedSettlement(number, paid, net, carried, reading.Lines.Count, total, true, null));
+                continue;
+            }
+
+            if (reading.NetPaid is null)
+                warnings.Add($"The file doesn't say what settlement {number} paid: enter the net paid from the statement.");
+            Settlement? made = null;
+            if (save)
+            {
+                var details = new SettlementDetails(number, paid, net, reading.Lines, reading.PeriodStart, reading.PeriodEnd, carried);
+                await CheckAsync(details, null, ct);
+                made = Settlement.Create(carrierId, details, clock.UtcNow, user.Actor);
+                made.SetFileHash(hash);
+                store.Add(made);
+                store.Add(Audit(AuditAction.Created, SettlementEntity, made.Id, null, Snapshot(made, carrier)));
+            }
+
+            result.Add(new ImportedSettlement(number, paid, net, carried, reading.Lines.Count, total, false, made?.Id));
+        }
+
+        if (save)
+            await store.SaveChangesAsync(ct);
+        return new SettlementImportResult(result, warnings);
+    }
+
+    /// <summary>How a settlement compares with the ones before it and with what its statement prints.</summary>
+    public async Task<SettlementReview> ReviewAsync(Settlement settlement, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(settlement);
+        var carrier = await CarrierAsync(settlement.CarrierId, ct);
+        var earlier = (await store.ListSettlementsAsync(settlement.CarrierId, ct))
+            .Where(s => s.Id != settlement.Id && s.Status != SettlementStatus.Dismissed
+                && (s.Date < settlement.Date || s.Date == settlement.Date && s.CreatedAt < settlement.CreatedAt))
+            .Take(SettlementReview.Weeks).ToList();
+        var accountIds = settlement.StatedBalances.Select(b => b.AccountId).ToList();
+        var chart = await accounts.GetChartAsync(ct);
+        var balances = accountIds.Count == 0 ? new Dictionary<Guid, decimal>() : await ledger.BalancesAsync(ReportBasis.Accrual, accountIds, settlement.Date, ct);
+        // Still waiting, what it would do to each account isn't in the books yet.
+        var effects = settlement.Status == SettlementStatus.Waiting
+            ? settlement.Lines.Where(l => Settlement.AccountFor(carrier, l) is not null).GroupBy(l => Settlement.AccountFor(carrier, l)!.Value).ToDictionary(g => g.Key, g => -g.Sum(l => l.Amount))
+            : [];
+        decimal Books(Guid id)
+        {
+            var debit = balances.GetValueOrDefault(id) + effects.GetValueOrDefault(id);
+            return chart.Find(id)?.Type.ClassOf() is AccountClass.Asset or AccountClass.Expense ? debit : -debit;
+        }
+
+        var loans = (await assets.ListLoansAsync(ct)).Where(l => !l.IsVoided).Select(l => l.LiabilityAccountId).ToHashSet();
+        return SettlementReview.Build(settlement, earlier, [.. settlement.StatedBalances.Select(b => new ReviewBalance(b.AccountId, Books(b.AccountId), b.Amount))],
+            [.. settlement.Lines.Where(l => (l.PostedAccountId ?? Settlement.AccountFor(carrier, l)) is { } id && loans.Contains(id))]);
+    }
+
+    /// <summary>The accounts whose balances were checked on the carrier's latest settlement, to ask for again.</summary>
+    public async Task<IReadOnlyList<Guid>> CheckedAccountsAsync(Guid carrierId, CancellationToken ct = default) =>
+        (await store.ListSettlementsAsync(carrierId, ct)).FirstOrDefault(s => s.Status != SettlementStatus.Dismissed && s.StatedBalances.Count > 0)?.StatedBalances.Select(b => b.AccountId).ToList() ?? [];
 
     /// <summary>Changes a settlement still waiting to be posted.</summary>
     public async Task<Settlement> ChangeAsync(Guid id, SettlementDetails details, CancellationToken ct = default)
@@ -297,6 +400,16 @@ public sealed class SettlementService(
         var lines = details.Lines ?? [];
         await CheckLineAccountsAsync(lines.Select(l => l.AccountId).Except(current?.Lines.Select(l => l.AccountId) ?? []), ct);
         await engine.EnsureSegmentsAsync(lines.Select(l => l.ClassId).Except(current?.Lines.Select(l => l.ClassId) ?? []), null, [], ct);
+        if (details.StatedBalances is { Count: > 0 } balances)
+        {
+            var known = await accounts.GetChartAsync(ct);
+            foreach (var id in balances.Select(b => b.AccountId).Where(id => id != Guid.Empty))
+            {
+                if (!(known.Find(id) ?? throw new EntityNotFoundException("account", id)).Type.IsBalanceSheet())
+                    throw new DomainException("settlement.balance_type", $"'{known.Find(id)!.Name}' is an income or expense account: only reserves, advances and other balance sheet accounts have a balance to check.");
+            }
+        }
+
         if (details.Deposits is { Count: > 0 } deposits)
         {
             var chart = await accounts.GetChartAsync(ct);
@@ -377,6 +490,8 @@ public sealed class SettlementService(
         s.CarriedForward,
         Lines = s.Lines.Select(l => $"{SettlementSections.Label(l.Section)} {l.Code}{(l.Load is { } load ? $" {load}" : "")}: {l.Amount:0.00}").ToList(),
         Deposits = s.Deposits.Select(d => $"{d.AccountId}: {d.Amount:0.00}").ToList(),
+        StatedTotals = s.StatedTotals.Select(t => $"{SettlementSections.Label(t.Section)}: {t.Amount:0.00}").ToList(),
+        StatedBalances = s.StatedBalances.Select(b => $"{b.AccountId}: {b.Amount:0.00}").ToList(),
         s.JournalEntryId,
     });
 }

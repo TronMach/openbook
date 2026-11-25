@@ -18,6 +18,11 @@ Developer notes (index in `CLAUDE.md`). Read this file before changing this area
 - Pages `/settlements`, `/settlements/new`, `/settlements/{id}`, `/settlements/{id}/edit` (one interactive page for both, with `FormDraft`), `/settlements/carriers[/{id}]`; form posts in `SettlementEndpoints`; API `/api/settlements` and `/api/settlements/carriers`.
 - Also: books check documents, the to-do list, Close the books, the cash forecast (waiting nets, and last year's), expenses by vendor and the report builder's Name (the carrier's vendor), search, erasing a vendor (an active carrier blocks it).
 
+## Import and review (A2, A3, 2026-11-25)
+
+- `SettlementService.ImportAsync(carrierId, bytes, date, save)`: every settlement of a CSV file waits, or none of them comes in; a number the carrier has is left out; a net below zero becomes carried forward; a file without a net leaves 0 and says so (never the lines' total, which would prove nothing). `Settlement.FileHash` warns about the same file. Form `POST /settlements/import` (one new settlement opens its page), API `POST /api/settlements/import?carrierId=&date=&dryRun=`. Fuzz target `settlement-csv`.
+- `SettlementReview` (`SettlementService.ReviewAsync`, `GET /api/settlements/{id}/review`, `SettlementReviewCard`): against up to `Weeks` (3) earlier settlements of the carrier, new codes, codes on every one of them but this, and codes that came to the same amount on at least `RegularAfter` (2) of them until now; lines to a loan's liability account; section totals against the last and `StatedTotals`; account balances against `StatedBalances` (balance sheet accounts, in their own sign). A waiting settlement's own effect is added to the books' balance. Nothing is refused. The form asks again for the balances checked last time.
+
 ## The edition and the setting
 
 - `Company.UsesSettlements` puts settlements in the menus whatever the edition (`Editions.Menu(edition, settlements)`, `ViewState.Settlements`); `Edition.Trucking` puts them first. Choosing the edition (setup or Settings) turns the setting on; it can be turned off again. Neither changes data, rules or access.

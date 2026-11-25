@@ -11,6 +11,8 @@ namespace OpenBook.Web.Endpoints;
 /// <summary>Form posts for carriers and their settlements.</summary>
 public static class SettlementEndpoints
 {
+    public const long MaxFileBytes = 5L * 1024 * 1024;
+
     public static IEndpointRouteBuilder MapSettlementEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/settlements/carriers", async (IFormCollection form, SettlementService settlements, CancellationToken ct) =>
@@ -67,6 +69,30 @@ public static class SettlementEndpoints
 
             return await Back(back, () => settlements.SetCodesAsync(id, codes, forget, ct));
         }).RequireAuthorization();
+
+        // Form-bound (the file), so the page's antiforgery token is checked automatically.
+        app.MapPost("/settlements/import", async (IFormFile? file, [Microsoft.AspNetCore.Mvc.FromForm] Guid carrierId, [Microsoft.AspNetCore.Mvc.FromForm] DateOnly? date, SettlementService settlements, CancellationToken ct) =>
+        {
+            if (file is null || file.Length == 0)
+                return Results.Redirect($"/settlements?error={Uri.EscapeDataString("Choose the CSV file to import.")}#import");
+            if (file.Length > MaxFileBytes)
+                return Results.Redirect($"/settlements?error={Uri.EscapeDataString("The file is larger than 5 MB.")}#import");
+            using var memory = new MemoryStream();
+            await file.CopyToAsync(memory, ct);
+            try
+            {
+                var result = await settlements.ImportAsync(carrierId, memory.ToArray(), date ?? CompanyTime.Today, save: true, ct);
+                var made = result.Settlements.Where(s => s.Id is not null).ToList();
+                var note = result.Warnings.Count > 0 ? $"note={Uri.EscapeDataString(string.Join(" ", result.Warnings))}" : "";
+                return made.Count == 1
+                    ? Results.Redirect($"/settlements/{made[0].Id}?{note}")
+                    : Results.Redirect($"/settlements?imported={made.Count}&skipped={result.Settlements.Count - made.Count}&{note}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/settlements?error={Uri.EscapeDataString(ex.Message)}#import");
+            }
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(MaxFileBytes * 2));
 
         app.MapPost("/settlements/{id:guid}/post", async (IFormCollection _, Guid id, SettlementService settlements, CancellationToken ct) =>
             await Back($"/settlements/{id}", () => settlements.PostAsync(id, ct))).RequireAuthorization();

@@ -27,6 +27,10 @@
         {
             <div class="alert error" role="alert">@Error</div>
         }
+        @if (Note is not null)
+        {
+            <div class="alert notice" role="status">@Note</div>
+        }
         @if (_settlement.Status == SettlementStatus.Waiting)
         {
             @foreach (var deposit in _deposits)
@@ -171,6 +175,11 @@
             </div>
         }
 
+        @if (_review is not null)
+        {
+            <SettlementReviewCard Review="_review" Chart="_chart" />
+        }
+
         <h2 style="margin-top: 1.5rem">@L["Lines"] <span class="muted">(@_settlement.Lines.Count)</span></h2>
         <div class="table-wrap">
             <table class="data">
@@ -212,9 +221,11 @@
     private ChartOfAccounts _chart = new([]);
     private IReadOnlyList<UnassignedCode> _unassigned = [];
     private IReadOnlyList<PossibleDeposit> _deposits = [];
+    private SettlementReview? _review;
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Note { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -223,6 +234,8 @@
             return;
         _carrier = await SettlementService.GetCarrierAsync(_settlement.CarrierId);
         _chart = await AccountService.GetChartAsync();
+        if (_settlement.Status != SettlementStatus.Dismissed)
+            _review = await SettlementService.ReviewAsync(_settlement);
         if (_settlement.Status == SettlementStatus.Waiting)
         {
             _unassigned = await SettlementService.UnassignedAsync(_settlement);
