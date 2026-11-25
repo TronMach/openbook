@@ -732,6 +732,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Channels.ChannelPayout.TaxMoveSource => "Channel payout tax move",
         Domain.Channels.ChannelOrderBatch.Source => "Channel orders",
         Domain.Channels.ChannelReturn.Source => "Channel return",
+        Domain.Settlements.Settlement.Source => "Settlement",
         Domain.Assets.FixedAsset.DisposalSource => "Asset disposal",
         Domain.Assets.Loan.Source => "Loan",
         Domain.Assets.Loan.PaymentSource => "Loan payment",

@@ -18,6 +18,7 @@ public static class RecordAreas
         "fixed_asset" or "loan" => "assets",
         "grant" or "donation" or "pledge" => "nonprofit",
         "project" or "expense_claim" => "projects",
+        "settlement" => "settlements",
         _ => "data",
     };
 }

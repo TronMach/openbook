@@ -57,6 +57,7 @@ This guide is for the people who use OpenBook day to day. It explains what each 
 21. [Bank connections, checks, positive pay and petty cash](21-banking-tools.md): SimpleFIN connections, printing checks, positive pay files, petty cash boxes, recurring expenses.
 22. [Sales channels](22-sales-channels.md): payouts from Shopify, Stripe, Amazon, eBay, Etsy and PayPal, orders and stock.
 23. [Nonprofits](23-nonprofits.md): donor restrictions and releases, functional expenses, gifts and letters, pledges, grants.
+33. [Trucking settlements](33-trucking-settlements.md): for owner-operators a carrier pays by settlement statement: weekly statements, reserves and advances, and costs per mile.
 
 ## Moving in and extending
 

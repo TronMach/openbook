@@ -36,7 +36,7 @@ public sealed record CashForecast(DateOnly AsOf, decimal Opening, ForecastScenar
 public sealed class ForecastService(
     IReportingStore store, ReportLedger ledger, AccountService accounts, ReceivablesService receivables, PayablesService payables,
     LoanService loans, ICompanyStore companies, IClock clock, ICurrentUser user,
-    Purchases.IPurchasesStore purchases, Purchases.PurchaseOrderService orders, Channels.IChannelStore channels,
+    Purchases.IPurchasesStore purchases, Purchases.PurchaseOrderService orders, Channels.IChannelStore channels, Settlements.ISettlementStore settlements,
     Sales.ISalesStore sales, Nonprofit.INonprofitStore nonprofit)
 {
     public const string EntityType = "forecast_scenario";
@@ -140,6 +140,9 @@ public sealed class ForecastService(
 
         foreach (var payout in (await channels.ListPayoutsAsync(null, ct)).Where(p => p.Status == Domain.Channels.PayoutStatus.Pending))
             collections[WeekOf(payout.Date)] += payout.Net;
+        var weekly = await settlements.ListSettlementsAsync(null, ct);
+        foreach (var settlement in weekly.Where(s => s.Status == Domain.Settlements.SettlementStatus.Waiting))
+            collections[WeekOf(settlement.Date)] += settlement.NetPaid;
 
         foreach (var loan in await loans.ListAsync(ct))
         {
@@ -165,6 +168,8 @@ public sealed class ForecastService(
                 repeated[WeekOf(gift.Date.AddDays(Back))] += gift.Amount;
             foreach (var payout in (await channels.ListPayoutsAsync(null, ct)).Where(p => p.Status == Domain.Channels.PayoutStatus.Posted && p.Date >= from && p.Date <= to))
                 repeated[WeekOf(payout.Date.AddDays(Back))] += payout.Net;
+            foreach (var settlement in weekly.Where(s => s.Status == Domain.Settlements.SettlementStatus.Posted && s.Date >= from && s.Date <= to))
+                repeated[WeekOf(settlement.Date.AddDays(Back))] += settlement.NetPaid;
         }
 
         var result = new List<ForecastWeek>();

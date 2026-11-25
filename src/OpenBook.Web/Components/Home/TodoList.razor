@@ -107,6 +107,8 @@
         Add(waitingBatches, L["Channel orders waiting to be posted"], "/sales/channels", L["Their stock and cost aren't in the books until they are"]);
         var waitingPayouts = (await Get<OpenBook.Application.Channels.ChannelService>().PayoutsAsync()).Count(p => p.Status == OpenBook.Domain.Channels.PayoutStatus.Pending);
         Add(waitingPayouts, L["Channel payouts waiting to be posted"], "/sales/channels", L["Their sales and fees aren't in the books until they are"]);
+        Add(await Get<OpenBook.Application.Settlements.SettlementService>().CountWaitingAsync(),
+            L["Carrier settlements waiting to be posted"], "/settlements", L["Their pay and charges aren't in the books until they are"]);
         var notices = await Get<OnlinePaymentService>().NoticesAsync(openOnly: true);
         if (notices.Count > 0)
             Add(notices.Count, L["Refunds and disputes made at your payment provider"], $"/sales/invoices/{notices[0].InvoiceId}#online", L["On invoices paid online: record them in the books"], urgent: true);

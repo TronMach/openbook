@@ -441,6 +441,8 @@
         {
             var template = Input.Edition == Edition.Nonprofit ? "nonprofit" : ChartTemplates.ForBusinessType(Input.BusinessType).Key;
             await Templates.ApplyAsync(template, new StarterAnswers(Input.Sells ?? StarterSales.Both, Input.KeepsStock), HttpContext.RequestAborted);
+            if (Input.Edition == Edition.Trucking)
+                await Templates.AddTruckingAsync(HttpContext.RequestAborted);
             if (Input.Sells != StarterSales.Products)
                 await Items.CreateStarterServiceAsync(HttpContext.RequestAborted);
             return true;

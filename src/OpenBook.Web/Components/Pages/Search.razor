@@ -90,6 +90,7 @@
         SearchKind.PurchaseOrder => "Purchase orders",
         SearchKind.VendorCredit => "Vendor credits",
         SearchKind.ChannelOrder => "Channel orders",
+        SearchKind.Settlement => "Settlements",
         _ => "Journal entries",
     };
 
@@ -115,6 +116,7 @@
         SearchKind.PurchaseOrder => $"/purchases/orders/{hit.Id}",
         SearchKind.VendorCredit => $"/purchases/vendor-credits/{hit.Id}",
         SearchKind.ChannelOrder => $"/sales/channels/orders/{hit.Id}",
+        SearchKind.Settlement => $"/settlements/{hit.Id}",
         _ => $"/journal/{hit.Id}",
     };
 }

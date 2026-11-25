@@ -23,7 +23,7 @@ public sealed record StarterAnswers(StarterSales Sells, bool KeepsStock);
 /// Starter charts of accounts by type of business, shipped as CSV files embedded in this assembly and
 /// applied through the chart import (so they follow the same rules and skip accounts that already exist).
 /// </summary>
-public sealed class ChartTemplates(ChartImportService import, ICompanyStore companies)
+public sealed class ChartTemplates(ChartImportService import, ICompanyStore companies, AccountService accounts)
 {
     public static IReadOnlyList<ChartTemplate> All { get; } =
     [
@@ -45,6 +45,11 @@ public sealed class ChartTemplates(ChartImportService import, ICompanyStore comp
     {
         if (All.All(t => t.Key != key))
             throw new DomainException("template.unknown", $"There's no chart template '{key}'.");
+        return Read(key);
+    }
+
+    private static string Read(string key)
+    {
         using var stream = typeof(ChartTemplates).Assembly.GetManifestResourceStream($"OpenBook.Application.Accounts.Templates.{key}.csv")
             ?? throw new InvalidOperationException($"Template resource '{key}' is missing.");
         using var reader = new StreamReader(stream);
@@ -87,6 +92,52 @@ public sealed class ChartTemplates(ChartImportService import, ICompanyStore comp
 
     public async Task<ChartImportResult> ApplyAsync(string key, CancellationToken ct = default) =>
         await import.ImportAsync(await ForCompanyAsync(Csv(key), ct), ct);
+
+    /// <summary>The accounts a trucking company paid by settlement uses, added to whichever chart it has.</summary>
+    public const string TruckingKey = "trucking";
+
+    // Schedule C's lines on the other returns, for the trucking accounts.
+    private static readonly Dictionary<string, (string P, string S, string K)> TruckingTaxLines = new(StringComparer.Ordinal)
+    {
+        ["c.1"] = ("p.1a", "s.1a", "k.1a"),
+        ["c.20a"] = ("p.13", "s.11", "k.16"),
+        ["c.21"] = ("p.11", "s.9", "k.14"),
+        ["c.23"] = ("p.14", "s.12", "k.17"),
+        ["c.26"] = ("p.9", "s.8", "k.13"),
+        ["c.9"] = ("p.21", "s.20", "k.26"),
+        ["c.10"] = ("p.21", "s.20", "k.26"),
+        ["c.15"] = ("p.21", "s.20", "k.26"),
+    };
+
+    /// <summary>Adds the trucking accounts the chart doesn't have by name; a number already used is left off.</summary>
+    public async Task<ChartImportResult> AddTruckingAsync(CancellationToken ct = default)
+    {
+        var form = TaxLines.FormFor((await companies.GetRequiredCompanyAsync(ct)).BusinessType);
+        var used = (await accounts.GetChartAsync(ct)).All.Select(a => a.Number).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var lines = Read(TruckingKey).ReplaceLineEndings("\n").TrimEnd('\n').Split('\n').Select((line, i) =>
+        {
+            if (i == 0)
+                return line;
+            var (first, last) = (line.IndexOf(',', StringComparison.Ordinal), line.LastIndexOf(','));
+            var number = used.Contains(line[..first]) ? "" : line[..first];
+            var tax = line[(last + 1)..];
+            if (form != TaxForm.ScheduleC && tax.Length > 0)
+            {
+                tax = !TruckingTaxLines.TryGetValue(tax, out var other) ? "" : form switch
+                {
+                    TaxForm.Form1065 => other.P,
+                    TaxForm.Form1120S => other.S,
+                    TaxForm.Form1120 => other.K,
+                    _ => "",
+                };
+            }
+
+            return $"{number}{line[first..last]},{tax}";
+        });
+        var csv = string.Join('\n', lines) + "\n";
+        var preview = await import.PreviewAsync(csv, ct);
+        return preview.NewCount == 0 ? preview : await import.ImportAsync(csv, ct);
+    }
 
     // The corporation chart is written for Form 1120-S: a C corporation's lines are on Form 1120.
     private async Task<string> ForCompanyAsync(string csv, CancellationToken ct)

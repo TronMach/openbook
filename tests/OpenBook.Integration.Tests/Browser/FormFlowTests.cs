@@ -63,6 +63,67 @@ public sealed class FormFlowTests(BrowserApp app)
     }
 
     [BrowserFact]
+    public async Task A_carrier_settlement_is_pasted_given_accounts_and_posted()
+    {
+        var tag = Tag();
+        var bank = await NewAccount($"Truck bank {tag}", AccountType.Bank);
+        await NewAccount($"Freight {tag}", AccountType.Income);
+        await NewAccount($"Truck lease {tag}", AccountType.Expense);
+        await app.InScope(sp => sp.GetRequiredService<OpenBook.Application.Settlements.SettlementService>().CreateCarrierAsync(
+            new OpenBook.Domain.Settlements.CarrierDetails($"Lines {tag}", bank.Id)));
+
+        await using var page = await app.SignedInAsync();
+        var p = page.Page;
+        await p.GotoAsync("/settlements/new");
+        // A click before the circuit is up reaches only the page: a second line shows the server is listening.
+        var deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (true)
+        {
+            await p.GetByRole(AriaRole.Button, new() { Name = "Add line" }).ClickAsync();
+            try
+            {
+                await Assertions.Expect(p.Locator("input[aria-label='Code']").Nth(1)).ToBeVisibleAsync(new() { Timeout = 1000 });
+                break;
+            }
+            catch (PlaywrightException) when (DateTime.UtcNow < deadline)
+            {
+            }
+        }
+
+        await p.Locator("#carrier").SelectOptionAsync(new SelectOptionValue { Label = $"Lines {tag}" });
+        await p.Locator("#number").FillAsync($"S-{tag}");
+        await p.Locator("#net").FillAsync("600");
+        await p.Locator("#paste").FillAsync("Section,Code,Description,Amount,Loaded miles\nRevenue,RV,Trip revenue,\"1,000.00\",500\nDeductions,ZL,Monthly lease,400.00,\n");
+        await p.Locator("#paste").PressAsync("Tab");
+        await p.GetByRole(AriaRole.Button, new() { Name = "Add these lines" }).ClickAsync();
+        await Assertions.Expect(p.GetByText("Lines added: 2.")).ToBeVisibleAsync(new() { Timeout = Slow });
+        await p.GetByRole(AriaRole.Button, new() { Name = "Save settlement" }).ClickAsync();
+        await p.WaitForURLAsync(new Regex("/settlements/[0-9a-f-]{36}$"), new() { Timeout = Slow });
+        var id = Guid.Parse(p.Url[^36..]);
+
+        // The codes get accounts on the settlement's own page, and then it posts.
+        var post = p.GetByRole(AriaRole.Button, new() { Name = "Post settlement" });
+        await Assertions.Expect(post).ToBeDisabledAsync();
+        await app.InScope(async sp =>
+        {
+            var service = sp.GetRequiredService<OpenBook.Application.Settlements.SettlementService>();
+            var settlement = (await service.GetAsync(id))!;
+            var chart = await sp.GetRequiredService<AccountService>().GetChartAsync();
+            return await service.SetCodesAsync(settlement.CarrierId,
+            [
+                new(OpenBook.Domain.Settlements.SettlementSection.Revenue, "RV", chart.FindByFullName($"Freight {tag}")!.Id),
+                new(OpenBook.Domain.Settlements.SettlementSection.Deduction, "ZL", chart.FindByFullName($"Truck lease {tag}")!.Id),
+            ]);
+        });
+        await p.ReloadAsync();
+        await post.ClickAsync();
+        await Assertions.Expect(p.GetByRole(AriaRole.Button, new() { Name = "Void the entry" })).ToBeVisibleAsync(new() { Timeout = Slow });
+        var posted = await Db(db => db.Settlements.AsNoTracking().SingleAsync(s => s.Id == id));
+        Assert.Equal((OpenBook.Domain.Settlements.SettlementStatus.Posted, 500m, 600m), (posted.Status, posted.LoadedMiles, posted.NetPaid));
+        await page.AssertCleanAsync();
+    }
+
+    [BrowserFact]
     public async Task A_bill_is_entered_with_a_category_line()
     {
         var tag = Tag();

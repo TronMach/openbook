@@ -33,6 +33,7 @@ public enum SearchKind
     PurchaseOrder,
     VendorCredit,
     ChannelOrder,
+    Settlement,
 }
 
 /// <summary>The area (as in permission sets and API key scopes) each kind of result belongs to.</summary>
@@ -46,6 +47,7 @@ public static class SearchAreas
         SearchKind.BankTransaction or SearchKind.Deposit => "banking",
         SearchKind.Gift or SearchKind.Pledge or SearchKind.Grant => "nonprofit",
         SearchKind.ChannelOrder => "channels",
+        SearchKind.Settlement => "settlements",
         _ => "ledger",
     };
 }
@@ -67,7 +69,7 @@ public sealed class SearchService(
     IBankingStore banking,
     ILedgerStore ledger,
     CustomFields.CustomFieldService customFields, Nonprofit.INonprofitStore nonprofit,
-    Channels.IChannelOrderStore channelOrders, Channels.IChannelStore channels)
+    Channels.IChannelOrderStore channelOrders, Channels.IChannelStore channels, Settlements.ISettlementStore settlements)
 {
     public const int MaxPerKind = 20;
 
@@ -159,6 +161,11 @@ public sealed class SearchService(
                     .Select(o => new SearchHit(SearchKind.ChannelOrder, b.Id, $"Order {o.Key}", channelNames.GetValueOrDefault(b.ChannelId),
                         o.Min(l => l.Date), o.Sum(l => l.Sales + l.Shipping + l.Tax)))));
         }
+
+        // Carrier settlements by number, load, carrier, memo or net paid.
+        var carriers = (await settlements.ListCarriersAsync(ct)).ToDictionary(c => c.Id, c => c.Name);
+        AddAll((await settlements.SearchAsync(For(carriers.Where(c => Text(c.Value)).Select(c => c.Key)), ct))
+            .Select(s => new SearchHit(SearchKind.Settlement, s.Id, $"Settlement {s.Number}", carriers.GetValueOrDefault(s.CarrierId), s.Date, s.NetPaid)));
 
         // Journal entries (by hand, moved in, opening balances, recurring); documents' entries are found through their documents above.
         AddAll((await ledger.SearchManualEntriesAsync(For([]), entryNumber, ct))

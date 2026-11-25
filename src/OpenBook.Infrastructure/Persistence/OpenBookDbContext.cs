@@ -35,6 +35,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Channels.ChannelOrderBatch> ChannelOrderBatches => Set<OpenBook.Domain.Channels.ChannelOrderBatch>();
     public DbSet<OpenBook.Domain.Channels.ChannelSku> ChannelSkus => Set<OpenBook.Domain.Channels.ChannelSku>();
     public DbSet<OpenBook.Domain.Channels.ChannelReturn> ChannelReturns => Set<OpenBook.Domain.Channels.ChannelReturn>();
+    public DbSet<OpenBook.Domain.Settlements.Carrier> Carriers => Set<OpenBook.Domain.Settlements.Carrier>();
+    public DbSet<OpenBook.Domain.Settlements.Settlement> Settlements => Set<OpenBook.Domain.Settlements.Settlement>();
     public DbSet<OpenBook.Domain.Nonprofit.RestrictionRelease> RestrictionReleases => Set<OpenBook.Domain.Nonprofit.RestrictionRelease>();
     public DbSet<OpenBook.Domain.Nonprofit.Donation> Donations => Set<OpenBook.Domain.Nonprofit.Donation>();
     public DbSet<OpenBook.Domain.Nonprofit.Pledge> Pledges => Set<OpenBook.Domain.Nonprofit.Pledge>();
@@ -215,6 +217,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         // An approver approves what they read: the claimant may hand it in again changed meanwhile.
         typeof(Domain.Projects.ExpenseClaim),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
+        typeof(Domain.Settlements.Carrier), typeof(Domain.Settlements.Settlement),
         typeof(Item), typeof(Customer), typeof(Vendor), typeof(BankTransaction), typeof(BankDeposit),
         // Settings pages note the version when they open and check it when they save (2026-11-14).
         typeof(Company), typeof(EmailSettings), typeof(SignInSettings), typeof(OnlinePaymentSettings), typeof(OpenBook.Domain.Documents.DocumentReadingSettings), typeof(OpenBook.Domain.Documents.BillsMailbox),
@@ -1288,6 +1291,79 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 r.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(c => c.Rules).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Settlements.Carrier>(b =>
+        {
+            b.ToTable("Carriers");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Name).HasMaxLength(100);
+            b.Property(c => c.Unit).HasMaxLength(40);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.DepositAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Account>().WithMany().HasForeignKey(c => c.DueAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<Vendor>().WithMany().HasForeignKey(c => c.VendorId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(c => c.Codes, x =>
+            {
+                x.ToTable("CarrierCodes");
+                x.WithOwner().HasForeignKey("CarrierId");
+                x.HasKey("CarrierId", nameof(OpenBook.Domain.Settlements.CarrierCode.Section), nameof(OpenBook.Domain.Settlements.CarrierCode.Code));
+                x.Property(c => c.Section).HasConversion<string>().HasMaxLength(20);
+                x.Property(c => c.Code).HasMaxLength(OpenBook.Domain.Settlements.CarrierCode.MaxCodeLength);
+                x.Property(c => c.Name).HasMaxLength(100);
+                x.HasOne<Account>().WithMany().HasForeignKey(c => c.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(c => c.Codes).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Settlements.Settlement>(b =>
+        {
+            b.ToTable("Settlements");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Number).HasMaxLength(60);
+            // A statement issued again keeps its number: the first one is dismissed.
+            b.HasIndex(s => new { s.CarrierId, s.Number }).IsUnique().HasFilter("\"Status\" <> 'Dismissed'");
+            b.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
+            b.Property(s => s.NetPaid).HasColumnName("NetPaidMinor").HasConversion(MinorUnits);
+            b.Property(s => s.CarriedForward).HasColumnName("CarriedForwardMinor").HasConversion(MinorUnits);
+            b.Property(s => s.Memo).HasMaxLength(1000);
+            b.Property(s => s.CreatedBy).HasMaxLength(100);
+            b.Ignore(s => s.Total);
+            b.Ignore(s => s.Difference);
+            b.Ignore(s => s.LoadedMiles);
+            b.Ignore(s => s.EmptyMiles);
+            b.Ignore(s => s.Gallons);
+            b.HasOne<OpenBook.Domain.Settlements.Carrier>().WithMany().HasForeignKey(s => s.CarrierId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(s => s.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(s => s.Lines, l =>
+            {
+                l.ToTable("SettlementLines");
+                l.WithOwner().HasForeignKey("SettlementId");
+                l.HasKey("SettlementId", nameof(OpenBook.Domain.Settlements.SettlementLine.LineNumber));
+                l.Property(x => x.LineNumber).ValueGeneratedNever();
+                l.Property(x => x.Section).HasConversion<string>().HasMaxLength(20);
+                l.Property(x => x.Code).HasMaxLength(OpenBook.Domain.Settlements.CarrierCode.MaxCodeLength);
+                l.Property(x => x.Load).HasMaxLength(40);
+                l.Property(x => x.Dispatch).HasMaxLength(20);
+                l.Property(x => x.Description).HasMaxLength(300);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.Property(x => x.LoadedMiles).HasColumnName("LoadedMilesTenThousandths").HasConversion(NullableTenThousandths);
+                l.Property(x => x.EmptyMiles).HasColumnName("EmptyMilesTenThousandths").HasConversion(NullableTenThousandths);
+                l.Property(x => x.Gallons).HasColumnName("GallonsTenThousandths").HasConversion(NullableTenThousandths);
+                l.Ignore(x => x.Miles);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+                l.HasOne<Account>().WithMany().HasForeignKey(x => x.PostedAccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(s => s.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(s => s.Deposits, d =>
+            {
+                d.ToTable("SettlementDeposits");
+                d.WithOwner().HasForeignKey("SettlementId");
+                d.HasKey("SettlementId", nameof(OpenBook.Domain.Settlements.SettlementDeposit.LineNumber));
+                d.Property(x => x.LineNumber).ValueGeneratedNever();
+                d.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                d.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(s => s.Deposits).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Channels.ChannelPayout>(b =>

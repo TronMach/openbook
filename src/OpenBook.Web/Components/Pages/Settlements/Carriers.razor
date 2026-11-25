@@ -1,0 +1,77 @@
+@page "/settlements/carriers"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Settlements
+@inject SettlementService SettlementService
+@inject AccountService AccountService
+
+<PageTitle>@L["Carriers and codes"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Carriers and codes"]</h1>
+        <HelpLink Chapter="33-trucking-settlements" />
+        <ActionLink Class="button secondary" Href="/settlements">@L["All settlements"]</ActionLink>
+    </div>
+    <p class="muted">@L["The carriers that pay you by settlement statement, and the account each of their codes stands for."]</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Added is { } added)
+    {
+        <div class="alert notice" role="status">@(added == 0 ? L["Your chart already has the trucking accounts."] : L["Accounts added to your chart: {0}.", added])</div>
+    }
+
+    @if (_carriers.Count > 0)
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Carrier"]</th><th>@L["Truck or unit number"]</th><th>@L["Paid into"]</th><th class="num">@L["Codes with an account"]</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _carriers)
+                    {
+                        <tr class="@(c.IsActive ? "" : "muted")">
+                            <td><a href="/settlements/carriers/@c.Id">@c.Name</a>@(c.IsActive ? "" : L[" (inactive)"])</td>
+                            <td>@c.Unit</td>
+                            <td>@(_chart.Find(c.DepositAccountId) is null ? "" : _chart.FullName(c.DepositAccountId))</td>
+                            <td class="num">@c.Codes.Count</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["Add a carrier"]</h2>
+        <PostForm Action="/settlements/carriers" data-enhance="false">
+            <AntiforgeryToken />
+            <CarrierForm Chart="_chart" />
+            <div class="actions"><button type="submit">@L["Add"]</button></div>
+        </PostForm>
+    </div>
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["Trucking accounts"]</h2>
+        <p class="muted">@L["Adds the accounts settlements usually need that your chart doesn't have yet: freight revenue, fuel surcharge, fuel, tolls, truck rent, the carrier's reserves and so on. Nothing you have is changed."]</p>
+        <PostForm Action="/settlements/carriers/accounts" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="actions"><button type="submit" class="secondary">@L["Add the usual trucking accounts"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<Carrier> _carriers = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Added { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _carriers = await SettlementService.ListCarriersAsync(includeInactive: true);
+        _chart = await AccountService.GetChartAsync();
+    }
+}

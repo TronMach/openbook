@@ -197,6 +197,7 @@ public static class HelpTopics
         ("/vendors/center", "28-simple-view"),
         ("/items/center", "28-simple-view"),
         ("/sales/channels", "22-sales-channels"),
+        ("/settlements", "33-trucking-settlements"),
         ("/sales/collections", "10-collections"),
         ("/sales/write-offs", "10-collections"),
         ("/sales/commissions", "09-more-sales"),

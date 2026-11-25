@@ -1,0 +1,100 @@
+@inject OpenBook.Application.Segments.SegmentService Segments
+@inject VendorService Vendors
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@* The fields of a carrier, for the new carrier form and the carrier's page (static forms posting to SettlementEndpoints). *@
+
+<div class="row">
+    <div class="field">
+        <label for="carrier-name">@L["Carrier's name"]</label>
+        <input id="carrier-name" name="name" maxlength="100" required value="@Carrier?.Name" />
+    </div>
+    <div class="field">
+        <label for="carrier-unit">@L["Truck or unit number"] <span class="muted">@L["(optional)"]</span></label>
+        <input id="carrier-unit" name="unit" maxlength="40" value="@Carrier?.Unit" />
+    </div>
+    <div class="field">
+        <label for="carrier-deposit">@L["Settlements are paid into"]</label>
+        <select id="carrier-deposit" name="depositAccountId" required data-search>
+            <option value="">@L["Choose…"]</option>
+            @foreach (var a in Accounts.Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset))
+            {
+                <option value="@a.Id" selected="@(a.Id == Carrier?.DepositAccountId)">@Chart.FullName(a.Id)</option>
+            }
+        </select>
+    </div>
+</div>
+<div class="row">
+    <div class="field">
+        <label for="carrier-vendor">@L["Vendor record"] <span class="muted">@L["(optional)"]</span></label>
+        <select id="carrier-vendor" name="vendorId" data-search>
+            <option value="">@L["None"]</option>
+            @foreach (var v in _vendors)
+            {
+                <option value="@v.Id" selected="@(v.Id == Carrier?.VendorId)">@v.DisplayName</option>
+            }
+        </select>
+        <span class="hint">@L["What the carrier takes out counts under this vendor in Expenses by vendor."]</span>
+    </div>
+    @if (_classes.Count > 0)
+    {
+        <div class="field">
+            <label for="carrier-class">@L["Class"] <span class="muted">@L["(optional)"]</span></label>
+            <select id="carrier-class" name="classId">
+                <option value="">@L["None"]</option>
+                @foreach (var c in _classes)
+                {
+                    <option value="@c.Segment.Id" selected="@(c.Segment.Id == Carrier?.ClassId)">@c.FullName</option>
+                }
+            </select>
+            <span class="hint">@L["Usually the truck, so reports by class show each truck's income and costs."]</span>
+        </div>
+    }
+    @if (_locations.Count > 0)
+    {
+        <div class="field">
+            <label for="carrier-location">@_locationLabel <span class="muted">@L["(optional)"]</span></label>
+            <select id="carrier-location" name="locationId">
+                <option value="">@L["None"]</option>
+                @foreach (var l in _locations)
+                {
+                    <option value="@l.Segment.Id" selected="@(l.Segment.Id == Carrier?.LocationId)">@l.FullName</option>
+                }
+            </select>
+        </div>
+    }
+    <div class="field">
+        <label for="carrier-due">@L["Balances carried forward go to"]</label>
+        <select id="carrier-due" name="dueAccountId" data-search>
+            <option value="">@L["{0} (made when needed)", SettlementService.DueName]</option>
+            @foreach (var a in Accounts.Where(a => a.Type is AccountType.OtherCurrentLiability or AccountType.OtherCurrentAsset))
+            {
+                <option value="@a.Id" selected="@(a.Id == Carrier?.DueAccountId)">@Chart.FullName(a.Id)</option>
+            }
+        </select>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<Vendor> _vendors = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _locations = [];
+    private string _locationLabel = string.Empty;
+
+    [Parameter]
+    public Carrier? Carrier { get; set; }
+
+    [Parameter, EditorRequired]
+    public ChartOfAccounts Chart { get; set; } = new([]);
+
+    private IEnumerable<Account> Accounts => Chart.Ordered(includeInactive: false).Select(x => x.Account);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // What the carrier already has stays offered, though it's been deactivated since.
+        _vendors = [.. (await Vendors.ListRecordsAsync(includeInactive: true)).Where(v => v.IsActive || v.Id == Carrier?.VendorId)];
+        _classes = [.. (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class)).Where(c => c.Segment.IsActive || c.Segment.Id == Carrier?.ClassId)];
+        _locations = [.. (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Location)).Where(c => c.Segment.IsActive || c.Segment.Id == Carrier?.LocationId)];
+        _locationLabel = (await Segments.GetTrackingAsync()).LocationLabel;
+    }
+}
