@@ -79,6 +79,42 @@ public sealed class SquareGateway : IPaymentGateway, IDisposable
             : throw Square.Error(answer, (int)status);
     }
 
+    public async Task<ProviderRefund> RefundAsync(GatewayKeys keys, RefundRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var body = JsonSerializer.Serialize(new
+        {
+            idempotency_key = request.Key,
+            payment_id = request.Reference,
+            amount_money = new { amount = (long)decimal.Round(request.Amount * 100m, 0, MidpointRounding.AwayFromZero), currency = request.Currency.ToUpperInvariant() },
+            // The key is found again by FindRefundAsync and in Square's webhook.
+            reason = request.Reason is { } reason ? $"{reason} ({request.Key})" : request.Key,
+        }, Json);
+        var (status, answer) = await SendAsync(keys, HttpMethod.Post, "v2/refunds", body, ct);
+        if (status == HttpStatusCode.OK)
+            return Square.Refund(answer);
+        throw ProviderAnswers.IsUnclear((int)status) ? ProviderAnswers.Unreachable(PaymentProvider.Square) : Square.Error(answer, (int)status);
+    }
+
+    /// <summary>From the payment, which lists its refunds.</summary>
+    public async Task<ProviderRefund?> FindRefundAsync(GatewayKeys keys, RefundRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var (status, answer) = await SendAsync(keys, HttpMethod.Get, $"v2/payments/{Uri.EscapeDataString(request.Reference)}", null, ct);
+        if (status != HttpStatusCode.OK)
+            throw Square.Error(answer, (int)status);
+        foreach (var id in Square.RefundIds(answer))
+        {
+            var (refundStatus, refund) = await SendAsync(keys, HttpMethod.Get, $"v2/refunds/{Uri.EscapeDataString(id)}", null, ct);
+            if (refundStatus != HttpStatusCode.OK)
+                throw Square.Error(refund, (int)refundStatus);
+            if (Square.RefundReason(refund)?.Contains(request.Key, StringComparison.Ordinal) == true)
+                return Square.Refund(refund);
+        }
+
+        return null;
+    }
+
     public void Dispose() => _client.Dispose();
 
     private async Task<string> LocationAsync(GatewayKeys keys, CancellationToken ct)

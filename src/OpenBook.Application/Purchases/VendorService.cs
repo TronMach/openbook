@@ -113,5 +113,6 @@ public sealed class VendorService(IPurchasesStore store, AccountService accounts
         v.DefaultExpenseAccountId,
         v.Notes,
         v.IsActive,
+        v.BackupWithholdingFrom,
     });
 }

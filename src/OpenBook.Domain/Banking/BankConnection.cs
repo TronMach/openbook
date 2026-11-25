@@ -189,7 +189,8 @@ public sealed class BankConnectionAccount
 
     internal void Link(Guid? accountId, DateOnly? importFrom)
     {
-        if (accountId != AccountId)
+        // An earlier start date means fetching again from there; lines already fetched are skipped by their ids.
+        if (accountId != AccountId || (importFrom is { } from && (ImportFrom is not { } old || from < old)))
             FetchedThrough = null;
         AccountId = accountId;
         ImportFrom = accountId is null ? null : importFrom;

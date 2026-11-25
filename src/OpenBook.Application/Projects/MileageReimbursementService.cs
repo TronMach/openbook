@@ -43,8 +43,15 @@ public sealed class MileageReimbursementService(
             ?? await accounts.CreateUsualAsync(new CreateAccountCommand(AccountName, AccountType.Expense, Description: "Paying people back for business trips in their own cars."), ct);
         var lines = trips.Select(t => new BillLineDraft(account.Id, decimal.Round(t.Miles * MileageRate.For(rates, t.Date.Year), 2, MidpointRounding.AwayFromZero),
             TextCleaning.Cut($"{t.Date:MMM d, yyyy} · {t.Purpose} ({t.Miles:0.#} mi)", 1000))).Where(l => l.Amount > 0m).ToList();
+        // Another bill may have the same days: a trip entered late, or two people paid through one vendor record.
+        var reference = $"Miles {trips[0].Date:yyMMdd}-{trips[^1].Date:yyMMdd}";
+        var taken = (await purchases.ListBillsAsync(vendorId, ct)).Where(b => b.Status == DocumentStatus.Posted).Select(b => b.Reference).OfType<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var days = reference;
+        for (var n = 2; taken.Contains(reference); n++)
+            reference = $"{days} ({n})";
         var bill = await bills.CreateAsync(new CreateBillCommand(vendorId, billDate, lines,
-            Reference: $"Miles {trips[0].Date:yyMMdd}-{trips[^1].Date:yyMMdd}", Memo: $"Mileage for {worker.Name}, {trips[0].Date:MMM d} to {trips[^1].Date:MMM d, yyyy}"), ct);
+            Reference: reference, Memo: $"Mileage for {worker.Name}, {trips[0].Date:MMM d} to {trips[^1].Date:MMM d, yyyy}"), ct);
         var tracked = await store.GetMileageTripsAsync([.. trips.Select(t => t.Id)], ct);
         foreach (var trip in tracked)
         {

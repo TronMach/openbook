@@ -48,7 +48,7 @@ public static class Twilio
             using var document = JsonDocument.Parse(json ?? "");
             if (document.RootElement.ValueKind == JsonValueKind.Object
                 && document.RootElement.TryGetProperty("sid", out var sid) && sid.ValueKind == JsonValueKind.String
-                && sid.GetString() is { Length: > 2 and <= 64 } id && id.All(char.IsAsciiLetterOrDigit))
+                && sid.Text() is { Length: > 2 and <= 64 } id && id.All(char.IsAsciiLetterOrDigit))
                 return id;
         }
         catch (JsonException)
@@ -71,7 +71,7 @@ public static class Twilio
                 if (document.RootElement.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.Number && c.TryGetInt32(out var n))
                     code = n;
                 if (document.RootElement.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String)
-                    message = m.GetString()?.Trim();
+                    message = m.Text()?.Trim();
             }
         }
         catch (JsonException)

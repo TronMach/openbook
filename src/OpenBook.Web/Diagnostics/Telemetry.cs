@@ -13,7 +13,8 @@ namespace OpenBook.Web.Diagnostics;
 /// Off unless an OTLP endpoint is given (<c>OpenBook:Telemetry:OtlpEndpoint</c>, or the standard
 /// <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>): nothing is collected or sent otherwise. Paths go out with record ids, tokens and
 /// other long values replaced by <c>{id}</c>, and query strings with their values redacted, so links that grant access
-/// (a customer's portal, an invitation) don't reach the collector.
+/// (a customer's portal, an invitation) don't reach the collector. Of the addresses OpenBook calls only the server goes
+/// out (a webhook's path can be its password), and error texts go through <see cref="LogScrubber"/>.
 /// </summary>
 public static partial class Telemetry
 {
@@ -58,6 +59,8 @@ public static partial class Telemetry
                     };
                 })
                 .AddHttpClientInstrumentation()
+                // Before the exporter, so it sees what's left.
+                .AddProcessor<TelemetryRedaction>()
                 .AddOtlpExporter(o => o.Endpoint = uri))
             .WithMetrics(m => m
                 .AddMeter(Name)
@@ -74,6 +77,26 @@ public static partial class Telemetry
         if (string.IsNullOrEmpty(path))
             return "/";
         return string.Join('/', path.Split('/').Select(segment => Identifying().IsMatch(segment) ? "{id}" : segment));
+    }
+
+    /// <summary>The scheme and server of an address OpenBook calls: the rest can be a secret, whatever it looks like.</summary>
+    public static string ServerOf(string? address) =>
+        Uri.TryCreate(address, UriKind.Absolute, out var parsed) ? $"{parsed.Scheme}://{parsed.Authority}/" : "[address]";
+
+    private static readonly string[] CalledAddresses = ["url.full", "http.url"];
+    private static readonly string[] RequestedPaths = ["url.path", "http.target"];
+
+    /// <summary>Takes out of a finished span what mustn't reach the collector, whichever instrumentation put it there.</summary>
+    internal static void Clean(Activity span)
+    {
+        foreach (var name in CalledAddresses)
+            if (span.GetTagItem(name) is string address)
+                span.SetTag(name, ServerOf(address));
+        foreach (var name in RequestedPaths)
+            if (span.GetTagItem(name) is string path)
+                span.SetTag(name, Redact(path.Split('?')[0]));
+        if (span.StatusDescription is { Length: > 0 } error)
+            span.SetStatus(span.Status, LogScrubber.Scrub(error));
     }
 
     // A GUID, anything with a digit in it, or anything long: page names are short words with dashes.
@@ -98,4 +121,14 @@ public static partial class Telemetry
 
     internal static void AlertRaised(string key, bool sent) =>
         Alerts.Add(1, new TagList { { "kind", key.Split(':')[0] }, { "sent", sent } });
+}
+
+/// <summary>Cleans each span as it ends (<see cref="Telemetry.Clean"/>).</summary>
+public sealed class TelemetryRedaction : OpenTelemetry.BaseProcessor<Activity>
+{
+    public override void OnEnd(Activity data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        Telemetry.Clean(data);
+    }
 }

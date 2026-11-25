@@ -15,7 +15,8 @@ public sealed record SentAlert(DateTimeOffset At, string Subject, IReadOnlyList<
 /// a row (a scheduled backup at its first failure), and a books check that finds something wrong (a broken audit chain
 /// is one of its checks). Each is emailed to the active admins who have an address (or <c>OpenBook:Alerts:To</c>), through
 /// the company's email settings, at most once a day per problem. <c>OpenBook:Alerts:Enabled=false</c> turns them off.
-/// Raising one only queues it; <see cref="AdminAlertSender"/> sends it.
+/// Raising one only queues it; <see cref="AdminAlertSender"/> sends it. What was sent is kept in the JobLeases table (a
+/// lease nobody renews, until the alert may go again), so a restart doesn't send it twice.
 /// </summary>
 public sealed class AdminAlerts(IConfiguration configuration)
 {
@@ -28,8 +29,11 @@ public sealed class AdminAlerts(IConfiguration configuration)
     /// <summary>Jobs that never alert: being offline now and then is normal for them.</summary>
     private static readonly HashSet<string> Never = new(StringComparer.Ordinal) { "Update check" };
 
-    private readonly ConcurrentQueue<(string Key, string Subject, string Body)> _pending = new();
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _lastRaised = new(StringComparer.Ordinal);
+    /// <summary>Longer than a grant report's stage (a week), which the alert's key names: each stage alerts once.</summary>
+    private static readonly TimeSpan GrantQuiet = TimeSpan.FromDays(8);
+
+    private readonly ConcurrentQueue<(string Key, string Subject, string Body, TimeSpan Quiet)> _pending = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _quietUntil = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<SentAlert> _sent = new();
 
     public bool Enabled => configuration.GetValue("OpenBook:Alerts:Enabled", true);
@@ -81,43 +85,51 @@ public sealed class AdminAlerts(IConfiguration configuration)
 
     /// <summary>
     /// Grant reports not yet marked sent (C322): an alert a week before the due date, on the day, and each week while
-    /// late. The hourly job calls this every hour; each report's alert goes out at most once that day.
+    /// late, or the first time OpenBook runs after that (a desktop may be off that day). The hourly job calls this every hour.
     /// </summary>
     public void GrantReportsDue(IEnumerable<(OpenBook.Domain.Nonprofit.Grant Grant, OpenBook.Domain.Nonprofit.GrantReportDue Report)> reports, DateOnly today, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(reports);
         foreach (var (grant, report) in reports)
         {
-            if (report.SentOn is not null)
-                continue;
             var days = report.DueOn.DayNumber - today.DayNumber;
-            if (days is not (7 or 0) && !(days < 0 && -days % 7 == 0))
+            if (report.SentOn is not null || days > 7)
                 continue;
-            var when = days switch { 7 => "is due in a week", 0 => "is due today", _ => $"was due {-days} days ago" };
-            Raise($"grant-report:{grant.Id}:{report.DueOn:yyyy-MM-dd}:{report.Title}", $"OpenBook: the {report.Title} report for {grant.Name} {when}",
+            var when = days switch
+            {
+                7 => "is due in a week",
+                1 => "is due tomorrow",
+                > 0 => $"is due in {days} days",
+                0 => "is due today",
+                -1 => "was due yesterday",
+                _ => $"was due {-days} days ago",
+            };
+            var stage = days > 0 ? "before" : $"late{-days / 7}";
+            Raise($"grant-report:{grant.Id}:{report.DueOn:yyyy-MM-dd}:{report.Title}:{stage}", $"OpenBook: the {report.Title} report for {grant.Name} {when}",
                 $"""
                 The {report.Title} report for the grant "{grant.Name}" {when} ({report.DueOn:d}).
 
                 Once it's sent, mark it sent on the grant's page (Nonprofit > Grants) and these reminders stop.
-                """, now);
+                """, now, GrantQuiet);
         }
     }
 
-    /// <summary>Queues an alert unless the same one was raised within <see cref="Quiet"/>.</summary>
-    public void Raise(string key, string subject, string body, DateTimeOffset now)
+    /// <summary>Queues an alert unless the same one was raised within <paramref name="quiet"/> (<see cref="Quiet"/> when not given).</summary>
+    public void Raise(string key, string subject, string body, DateTimeOffset now, TimeSpan? quiet = null)
     {
         if (!Enabled)
             return;
         var raised = false;
-        _lastRaised.AddOrUpdate(key, _ => { raised = true; return now; }, (_, last) =>
+        var silence = quiet ?? Quiet;
+        _quietUntil.AddOrUpdate(key, _ => { raised = true; return now + silence; }, (_, until) =>
         {
-            if (now - last < Quiet)
-                return last;
+            if (now < until)
+                return until;
             raised = true;
-            return now;
+            return now + silence;
         });
         if (raised)
-            _pending.Enqueue((key, subject, body));
+            _pending.Enqueue((key, subject, body, silence));
     }
 
     /// <summary>Sends what's waiting. A message that can't be sent is noted on the System page and not tried again.</summary>
@@ -129,11 +141,19 @@ public sealed class AdminAlerts(IConfiguration configuration)
             await using var scope = services.CreateAsyncScope();
             var sp = scope.ServiceProvider;
             var email = sp.GetRequiredService<EmailService>();
+            var db = sp.GetRequiredService<OpenBookDbContext>();
             IReadOnlyList<string> to = [];
             string? problem = null;
             try
             {
-                to = ConfiguredTo.Count > 0 ? ConfiguredTo : await AdminAddressesAsync(sp.GetRequiredService<OpenBookDbContext>(), ct);
+                // Sent before a restart: quiet until then, not a whole spell from now.
+                if (await SentUntilAsync(db, alert.Key, ct) is { } quietUntil)
+                {
+                    _quietUntil[alert.Key] = quietUntil;
+                    continue;
+                }
+
+                to = ConfiguredTo.Count > 0 ? ConfiguredTo : await AdminAddressesAsync(db, ct);
                 if (!await email.CanSendAsync(ct))
                     problem = "Email isn't set up (Settings > Email), so it wasn't sent.";
                 else if (to.Count == 0)
@@ -150,7 +170,39 @@ public sealed class AdminAlerts(IConfiguration configuration)
             _sent.Enqueue(new SentAlert(DateTimeOffset.UtcNow, alert.Subject, to, problem));
             while (_sent.Count > 20)
                 _sent.TryDequeue(out _);
+            if (problem is null)
+                await RememberAsync(db, alert.Key, alert.Quiet, ct);
         }
+    }
+
+    private const string LeasePrefix = "alert:";
+
+    // Keys hold names and can be long; a lease's name can't.
+    private static string LeaseName(string key) =>
+        LeasePrefix + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)));
+
+    private static async Task<DateTimeOffset?> SentUntilAsync(OpenBookDbContext db, string key, CancellationToken ct)
+    {
+        var name = LeaseName(key);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        return await db.JobLeases.Where(l => l.Name == name && l.UntilUnixMs > now).Select(l => (long?)l.UntilUnixMs).FirstOrDefaultAsync(ct) is { } until
+            ? DateTimeOffset.FromUnixTimeMilliseconds(until)
+            : null;
+    }
+
+    private static async Task RememberAsync(OpenBookDbContext db, string key, TimeSpan quiet, CancellationToken ct)
+    {
+        var name = LeaseName(key);
+        var now = DateTimeOffset.UtcNow;
+        // An hour short of the quiet: the next one, raised right when it ends, mustn't be held back by the seconds sending took.
+        var until = now + quiet - TimeSpan.FromHours(1);
+        var (nowMs, untilMs) = (now.ToUnixTimeMilliseconds(), until.ToUnixTimeMilliseconds());
+        await db.JobLeases.Where(l => EF.Functions.Like(l.Name, LeasePrefix + "%") && l.UntilUnixMs < nowMs).ExecuteDeleteAsync(ct);
+        if (await db.JobLeases.Where(l => l.Name == name).ExecuteUpdateAsync(s => s.SetProperty(l => l.UntilUnixMs, untilMs), ct) > 0)
+            return;
+        // Not this process's holder, so a clean stop doesn't give it up with the job leases.
+        db.JobLeases.Add(new JobLease(name, "admin alerts", until));
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task<IReadOnlyList<string>> AdminAddressesAsync(OpenBookDbContext db, CancellationToken ct)

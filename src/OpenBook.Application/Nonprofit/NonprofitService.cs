@@ -59,6 +59,10 @@ public interface INonprofitStore
 
     /// <summary>Gifts started on the public giving page (C091), by the processor's session.</summary>
     Task<DonationCheckout?> FindDonationCheckoutAsync(string sessionId, CancellationToken ct);
+    Task<DonationCheckout?> GetDonationCheckoutAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Those neither recorded nor closed, untracked, newest first.</summary>
+    Task<IReadOnlyList<DonationCheckout>> ListOpenDonationCheckoutsAsync(CancellationToken ct);
     void Add(DonationCheckout checkout);
 
     /// <summary>Gifts from before the move (C080), one donor's or all.</summary>
@@ -181,6 +185,20 @@ public sealed class NonprofitService(
         }
 
         return purposes.OrderBy(p => p.ClassId is null).ThenBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// Refuses taking back restricted income (a gift, a pledge, a grant) that's been released: the purpose would fall below
+    /// zero, so the release goes first. Counted as of today, or of <paramref name="date"/> when that's later.
+    /// </summary>
+    public async Task EnsureNotReleasedAsync(Guid incomeAccountId, Guid? classId, decimal amount, DateOnly date, CancellationToken ct = default)
+    {
+        if (amount <= 0m || !(await accounts.GetChartAsync(ct)).Get(incomeAccountId).DonorRestricted)
+            return;
+        var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
+        var held = (await PurposesAsync(date > today ? date : today, ct)).FirstOrDefault(p => p.ClassId == classId)?.Balance ?? 0m;
+        if (held < amount)
+            throw new DomainException("gift.released", $"Only {held:N2} of this purpose is still restricted; the rest has been released. Void that release first.");
     }
 
     /// <summary>

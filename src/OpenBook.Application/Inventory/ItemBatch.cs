@@ -267,6 +267,7 @@ public sealed class ItemBatchService(
                 if (change.Price is { } priceChange)
                     after = after with { Rate = NewPrice(item.Rate, priceChange) };
 
+                item.EnsureRetainageKept(after);
                 Item.EnsureIncomeAccount(income ?? chart.Get(after.IncomeAccountId), after.Type);
                 Describe(row.Changes, chart, before, after);
                 row.Details = row.Changes.Count > 0 ? after : null;

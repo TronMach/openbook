@@ -1,0 +1,66 @@
+@page "/portal/{Token}/card"
+@attribute [AllowAnonymous]
+@layout OpenBook.Web.Components.Layout.PortalLayout
+@inject CustomerPortalService Portal
+
+<PageTitle>@(_view is null ? "Account" : $"{_view.Company.Name} · automatic payment")</PageTitle>
+
+@if (_view is null)
+{
+    <div class="card narrow">
+        <h1>This link doesn't work</h1>
+        <p>It may have been replaced or switched off. Ask the business that sent it for a new one.</p>
+    </div>
+    return;
+}
+
+<div class="card narrow">
+    <h1>Automatic payment</h1>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (!_view.CanSaveCard)
+    {
+        <p>@(_view.Company.LegalName ?? _view.Company.Name) doesn't take automatic payments at the moment.</p>
+    }
+    else
+    {
+        @if (_view.Card is { } card)
+        {
+            <p>Your invoices are charged to <strong>@card.Label</strong> already. You can use another card instead.</p>
+        }
+        <p>If you agree, <strong>@(_view.Company.LegalName ?? _view.Company.Name)</strong> charges the invoices of <strong>@_view.Customer.DisplayName</strong> to your card:</p>
+        <ul>
+            <li>Each invoice is charged on its due date, for what's still owed on it then. An invoice that's already due is charged within about an hour.</li>
+            <li>If a charge is declined, it's tried again 3 and 5 days later, and then no more.</li>
+            <li>It goes on for every invoice until you stop it. You can stop it at any time on your account's page, or by asking @(_view.Company.Email is { } email ? email : "us").</li>
+            <li>You enter the card on the next page, which is Stripe's. @_view.Company.Name never sees its number: Stripe keeps it.</li>
+        </ul>
+        @if (_view.OpenInvoices.Where(i => i.DueDate <= _today).Sum(i => i.Balance) is > 0m and var due)
+        {
+            <p>Due now: <strong>@Labels.Amount(due)</strong>.</p>
+        }
+        <form method="post" action="/portal/@Token/card/agree" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="via" value="@Via" />
+            <label class="check">
+                <input type="checkbox" name="agree" value="true" required />
+                <span>I agree to my invoices being charged to my card on their due dates until I stop it</span>
+            </label>
+            <div class="actions"><button type="submit">Continue to enter the card</button></div>
+        </form>
+    }
+    <p><a href="/portal/@Token">See your account</a></p>
+</div>
+
+@code {
+    private PortalView? _view;
+    private readonly DateOnly _today = CompanyTime.Today;
+
+    [Parameter] public string Token { get; set; } = "";
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Via { get; set; }
+
+    protected override async Task OnInitializedAsync() => _view = await Portal.ViewAsync(Token);
+}

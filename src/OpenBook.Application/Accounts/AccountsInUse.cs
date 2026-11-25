@@ -19,6 +19,8 @@ internal sealed class AccountsInUse(ISalesStore sales, IPurchasesStore purchases
             return "open bills are in it.";
         if ((await tax.ListAgenciesAsync(ct)).FirstOrDefault(a => a.IsActive && a.LiabilityAccountId == account.Id) is { } agency)
             return $"it holds the sales tax owed to {agency.Name}.";
+        if ((await purchases.GetPurchasingSettingsAsync(ct))?.BackupWithholdingAccountId == account.Id && (await purchases.ListVendorsAsync(ct)).Any(v => v.BackupWithholdingFrom is not null))
+            return "backup withholding held back from vendors goes to it.";
         if (await sales.GetOnlinePaymentSettingsAsync(ct) is { Enabled: true } online && online.DepositAccountId == account.Id)
             return "online payments are deposited into it.";
         return null;

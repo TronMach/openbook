@@ -66,7 +66,7 @@
                 <table class="data">
                     <thead>
                         <tr>
-                            <th>Vendor</th><th>Tax ID</th><th>Form and box</th><th class="num">Paid by cash, check or bank</th><th class="num">Paid by card (1099-K)</th><th class="num">Refunds received</th><th>File a 1099?</th>
+                            <th>Vendor</th><th>Tax ID</th><th>Form and box</th><th class="num">Paid by cash, check or bank</th><th class="num">Paid by card (1099-K)</th><th class="num">Refunds received</th><th class="num">Withheld (box 4)</th><th>File a 1099?</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -79,6 +79,7 @@
                                 <td class="num">@Labels.Amount(v.Total)@if (v.Prior > 0m) { <br /><span class="muted">incl. @Labels.Amount(v.Prior) before OpenBook</span> }@if (v.NotReportable > 0m) { <br /><span class="muted">not counting @Labels.Amount(v.NotReportable) for materials and the like</span> }</td>
                                 <td class="num">@Labels.AmountOrBlank(v.CardPayments)</td>
                                 <td class="num">@Labels.AmountOrBlank(v.Refunds)</td>
+                                <td class="num">@Labels.AmountOrBlank(v.Withheld)</td>
                                 <td>
                                     @if (v.MeetsThreshold && _filed.GetValueOrDefault(v.Vendor.Id) is { } filing)
                                     {
@@ -117,6 +118,7 @@
                             <td class="num">@Labels.Amount(_report.Vendors.Where(v => v.MeetsThreshold).Sum(v => v.Total))</td>
                             <td></td>
                             <td></td>
+                            <td class="num">@Labels.AmountOrBlank(_report.Vendors.Sum(v => v.Withheld))</td>
                             <td></td>
                         </tr>
                     </tfoot>
@@ -194,7 +196,7 @@
                     </PostForm>
                 </section>
                 <p class="hint">
-                    Counts bill payments and expenses dated in the year, and what you entered as paid before OpenBook. Card payments are left out because the card company reports
+                    Counts bill payments and expenses dated in the year (with any backup withholding, which makes a 1099 due whatever the amount), and what you entered as paid before OpenBook. Card payments are left out because the card company reports
                     them on Form 1099-K. This summary is a starting point: check it with your tax adviser before filing.
                 </p>
             }

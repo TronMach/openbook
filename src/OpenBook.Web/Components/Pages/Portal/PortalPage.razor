@@ -38,6 +38,36 @@
         }
     </div>
 
+    @if (_view.Card is not null || _view.CanSaveCard)
+    {
+        <div class="card" id="card">
+            <h2>Automatic payment</h2>
+            @if (_view.Card is { } card)
+            {
+                <p>
+                    Your invoices are charged to <strong>@card.Label</strong> on their due dates@(card is { ExpiryMonth: { } month, ExpiryYear: { } year } ? $" (it expires {month:00}/{year})" : "").
+                    You agreed on @card.AgreedAt.InCompanyTime().ToString("d").
+                </p>
+                @if (!_view.CanSaveCard)
+                {
+                    <p class="muted">Automatic payments are switched off at the moment, so nothing is charged.</p>
+                }
+                <form method="post" action="/portal/@Token/card/stop" data-enhance="false" class="inline">
+                    <AntiforgeryToken />
+                    <button type="submit" class="secondary" data-confirm="Stop automatic payment and remove this card?">Stop</button>
+                </form>
+                @if (_view.CanSaveCard)
+                {
+                    <a href="/portal/@Token/card">Use another card</a>
+                }
+            }
+            else
+            {
+                <p>Have your invoices charged to your card on their due dates, until you stop it. <a href="/portal/@Token/card">Set up automatic payment</a></p>
+            }
+        </div>
+    }
+
     <h2>Open invoices</h2>
     @if (_view.OpenInvoices.Count == 0)
     {

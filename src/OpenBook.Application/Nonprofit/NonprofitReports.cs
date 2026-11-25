@@ -58,8 +58,15 @@ public sealed class NonprofitReports(
         // Equity entries (opening balances, say) change net assets without being income or expense.
         var change = NetAssets(chart, period);
         var other = (Without: closing.Without - opening.Without - change.Without, With: closing.With - opening.With - change.With);
-        if (other.Without != 0m || other.With != 0m)
-            rows.Add(new ReportTableRow(Line("Other changes in net assets", other, earlier is null ? null : (0m, 0m)), 0));
+        (decimal Without, decimal With)? priorOther = null;
+        if (earlier is not null && priorOpening is { } from0 && priorClosing is { } to0)
+        {
+            var priorChange = NetAssets(chart, all.Where(l => l.Date >= earlier.From && l.Date <= earlier.To && !chart.Get(l.AccountId).Type.IsBalanceSheet()));
+            priorOther = (to0.Without - from0.Without - priorChange.Without, to0.With - from0.With - priorChange.With);
+        }
+
+        if (other != (0m, 0m) || priorOther is { } then0 && then0 != (0m, 0m))
+            rows.Add(new ReportTableRow(Line("Other changes in net assets", other, priorOther), 0));
         rows.Add(new ReportTableRow(Line("Net assets, end of period", closing, priorClosing), 0, ReportRowStyle.Total));
 
         return new ReportTable(
@@ -213,7 +220,7 @@ public sealed class NonprofitReports(
         rows.Add(new ReportTableRow(["Total", budget, atEnd.Spent - atStart.Spent, atEnd.Spent, budget - atEnd.Spent], 0, ReportRowStyle.Total));
         return new ReportTable(
             $"Grant budget vs. actual: {grant.Name}",
-            [company.Name, $"{atEnd.Funder}{(grant.Reference is { } reference ? $" · {reference}" : "")} · {Comparisons.Describe(from, to)} · Award {grant.Amount:N2}"],
+            [company.Name, $"{atEnd.Funder}{(grant.Reference is { } reference ? $" · {reference}" : "")} · {Comparisons.Describe(from, to)} · Award {grant.NetAward:N2}"],
             [new("Budget line"), new("Budget", ColumnFormat.Money), new("This period", ColumnFormat.Money), new("To date", ColumnFormat.Money), new("Left", ColumnFormat.Money)],
             rows,
             ReportBasis.Accrual,
@@ -266,8 +273,9 @@ public sealed class NonprofitReports(
             var agencyTotal = 0m;
             foreach (var grant in agency.OrderBy(g => g.AssistanceListing, StringComparer.Ordinal).ThenBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase))
             {
-                var spent = (await grants.PositionAsync(grant.Id, to, ct))!.Spent - (await grants.PositionAsync(grant.Id, from.AddDays(-1), ct))!.Spent;
-                var expenditures = grant.ClaimableOn(spent);
+                // Up to the award: what's spent beyond it isn't the government's money.
+                decimal Federal(GrantPosition? p) => Math.Min(grant.ClaimableOn(p!.Spent), grant.NetAward);
+                var expenditures = Federal(await grants.PositionAsync(grant.Id, to, ct)) - Federal(await grants.PositionAsync(grant.Id, from.AddDays(-1), ct));
                 agencyTotal += expenditures;
                 rows.Add(new ReportTableRow([new ReportCell(grant.Name, new ReportLink("grant", grant.Id)), grant.AssistanceListing,
                     grant.PassThroughEntity ?? "Direct", grant.Reference, expenditures], 1));
@@ -285,7 +293,7 @@ public sealed class NonprofitReports(
             [company.Name, Comparisons.Describe(from, to)],
             [new("Federal agency / program"), new("Assistance Listing"), new("Pass-through entity"), new("Award or pass-through number"), new("Expenditures", ColumnFormat.Money)],
             rows, ReportBasis.Accrual,
-            "Expenditures: the funder's share of spending on each award's class in the period, with the indirect costs its rate allows. A worksheet for the single audit's SEFA and its notes.");
+            "Expenditures: the funder's share of spending on each award's class in the period, with the indirect costs its rate allows, up to the award. A worksheet for the single audit's SEFA and its notes.");
     }
 
     /// <summary>Every grant on a date: awarded, earned as income, paid by the funder, spent and what's left.</summary>
@@ -295,10 +303,10 @@ public sealed class NonprofitReports(
         var positions = (await grants.PositionsAsync(asOf, ct)).Where(p => p.Grant.Status != GrantStatus.Voided && p.Grant.AwardedOn <= asOf).ToList();
         var rows = positions.Select(p => new ReportTableRow([
             new ReportCell($"{p.Grant.Name}{(p.Grant.Status == GrantStatus.Closed ? " (closed)" : "")}", new ReportLink("grant", p.Grant.Id)), p.Funder,
-            p.Grant.EndsOn.ToString("d", System.Globalization.CultureInfo.CurrentCulture), p.Grant.NetAward, p.Grant.RecognizedBy(asOf), p.Grant.ReceivedBy(asOf),
-            p.Grant.RecognizedBy(asOf) - p.Grant.ReceivedBy(asOf), p.Spent, p.Unspent])).ToList();
-        rows.Add(new ReportTableRow(["Total", null, null, positions.Sum(p => p.Grant.NetAward), positions.Sum(p => p.Grant.RecognizedBy(asOf)), positions.Sum(p => p.Grant.ReceivedBy(asOf)),
-            positions.Sum(p => p.Grant.RecognizedBy(asOf) - p.Grant.ReceivedBy(asOf)), positions.Sum(p => p.Spent), positions.Sum(p => p.Unspent)], 0, ReportRowStyle.Total));
+            p.Grant.EndsOn.ToString("d", System.Globalization.CultureInfo.CurrentCulture), p.Grant.NetAwardBy(asOf), p.Grant.RecognizedBy(asOf), p.Grant.ReceivedBy(asOf),
+            p.Grant.DueBy(asOf), p.Spent, p.Grant.NetAwardBy(asOf) - p.Spent])).ToList();
+        rows.Add(new ReportTableRow(["Total", null, null, positions.Sum(p => p.Grant.NetAwardBy(asOf)), positions.Sum(p => p.Grant.RecognizedBy(asOf)), positions.Sum(p => p.Grant.ReceivedBy(asOf)),
+            positions.Sum(p => p.Grant.DueBy(asOf)), positions.Sum(p => p.Spent), positions.Sum(p => p.Grant.NetAwardBy(asOf) - p.Spent)], 0, ReportRowStyle.Total));
         return new ReportTable(
             "Grants",
             [company.Name, $"As of {asOf:MMM d, yyyy}"],
@@ -440,13 +448,15 @@ public sealed class NonprofitReports(
                 reportBasis);
 
         var lines = (await ledger.LinesAsync(reportBasis, null, to, ct)).Where(l => l.ClassId is { } c && funds.Contains(c)
-            && chart.Get(l.AccountId).Type.ClassOf() is AccountClass.Income or AccountClass.Expense).ToList();
+            && chart.Get(l.AccountId).Type.ClassOf() is AccountClass.Income or AccountClass.Expense or AccountClass.Equity).ToList();
         // By the account's tax line (its own or its nearest parent's) or its full name, so "Contributions:Restricted" counts.
         string LineOf(Account a) => TaxLines.Find(a.TaxLineKey)?.Key ?? (a.ParentId is { } p && chart.Find(p) is { } parent ? LineOf(parent) : "");
-        bool IsContribution(Account a) => LineOf(a) == "n.8.1"
-            || GiftWords.Any(w => chart.FullName(a.Id).Contains(w, StringComparison.OrdinalIgnoreCase));
-        bool IsReturn(Account a) => LineOf(a) is "n.8.3" or "n.8.7"
-            || ReturnWords.Any(w => chart.FullName(a.Id).Contains(w, StringComparison.OrdinalIgnoreCase));
+        // Gifts are income only (an expense named for gifts is spending). The return is net of the investments' own costs
+        // and losses, so an expense named for investing counts there and not as spending too.
+        bool IsContribution(Account a) => a.Type.ClassOf() == AccountClass.Income && (LineOf(a) == "n.8.1"
+            || GiftWords.Any(w => chart.FullName(a.Id).Contains(w, StringComparison.OrdinalIgnoreCase)));
+        bool IsReturn(Account a) => a.Type.ClassOf() != AccountClass.Equity && !IsContribution(a) && (LineOf(a) is "n.8.3" or "n.8.7"
+            || ReturnWords.Any(w => chart.FullName(a.Id).Contains(w, StringComparison.OrdinalIgnoreCase)));
         (decimal Without, decimal With) Sum(Func<LedgerLine, bool> test)
         {
             decimal free = 0m, held = 0m;
@@ -464,8 +474,8 @@ public sealed class NonprofitReports(
         bool InPeriod(LedgerLine l) => l.Date >= from && l.Date <= to;
         var start = Sum(l => l.Date < from);
         var gifts = Sum(l => InPeriod(l) && l.Source != RestrictionRelease.Source && IsContribution(chart.Get(l.AccountId)));
-        var investment = Sum(l => InPeriod(l) && l.Source != RestrictionRelease.Source && IsReturn(chart.Get(l.AccountId)) && !IsContribution(chart.Get(l.AccountId)));
-        var spent = Sum(l => InPeriod(l) && chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense);
+        var investment = Sum(l => InPeriod(l) && l.Source != RestrictionRelease.Source && IsReturn(chart.Get(l.AccountId)));
+        var spent = Sum(l => InPeriod(l) && chart.Get(l.AccountId).Type.ClassOf() == AccountClass.Expense && !IsReturn(chart.Get(l.AccountId)));
         var end = Sum(_ => true);
         var other = (end.Without - start.Without - gifts.Without - investment.Without - spent.Without, end.With - start.With - gifts.With - investment.With - spent.With);
         ReportTableRow Row(string label, (decimal Without, decimal With) v, int depth = 1, ReportRowStyle style = ReportRowStyle.Normal) =>
@@ -482,7 +492,7 @@ public sealed class NonprofitReports(
                 Row("Endowment net assets at the end", end, 0, ReportRowStyle.Total),
             ],
             reportBasis,
-            "Activity on the classes named for an endowment (and the classes under them), by whether each account holds donor-restricted amounts. Investment return is income on investment, interest, dividend and gain accounts (or Form 990 Part VIII lines 3 and 7).");
+            "Activity on the classes named for an endowment (and the classes under them), by whether each account holds donor-restricted amounts. Balances brought in on equity accounts with the class count. Investment return is what's on investment, interest, dividend and gain accounts (or Form 990 Part VIII lines 3 and 7), less fees and losses on accounts named for them.");
     }
 
     private static readonly string[] ReturnWords = ["invest", "gain", "dividend", "interest", "appreciation"];

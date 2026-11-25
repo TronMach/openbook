@@ -58,6 +58,55 @@ public sealed class Vendor
 
     public Form1099Box Form1099Box { get; private set; }
 
+    /// <summary>Backup withholding applies to payments from this date on; null when it doesn't.</summary>
+    public DateOnly? BackupWithholdingFrom { get; private set; }
+
+    /// <summary>Why: the IRS's notice, or no tax ID given.</summary>
+    public string? BackupWithholdingNote { get; private set; }
+
+    public bool WithholdsOn(DateOnly date) => BackupWithholdingFrom is { } from && date >= from;
+
+    public void SetBackupWithholding(DateOnly? from, string? note)
+    {
+        EnsureNotErased();
+        if (from is { Year: < 2004 or > 2100 })
+            throw new DomainException("vendor.withholding_date", "Check the date backup withholding applies from.");
+        BackupWithholdingNote = from is null ? null : Text.Optional(note, 500, "vendor.withholding_note_too_long", "Note");
+        BackupWithholdingFrom = from;
+    }
+
+    /// <summary>When the personal details were erased at the person's request; null on every other record. There's no way back.</summary>
+    public DateTimeOffset? ErasedAt { get; private set; }
+
+    /// <summary>
+    /// Takes away everything that says who this is, leaving the record for the documents that stay: the name becomes
+    /// <paramref name="placeholder"/>. Refused while it's tracked for a 1099, which the payer has to keep for years.
+    /// </summary>
+    public void Erase(string placeholder, DateTimeOffset now)
+    {
+        EnsureNotErased();
+        if (IsActive)
+            throw new DomainException("vendor.erase_active", "Make the vendor inactive first.");
+        if (Track1099)
+            throw new DomainException("vendor.erase_1099", "The vendor is tracked for a 1099: what was reported about them has to be kept.");
+        DisplayName = NormalizeName(placeholder);
+        CompanyName = null;
+        Email = null;
+        Phone = null;
+        Address = null;
+        AccountNumber = null;
+        Notes = null;
+        TaxId = null;
+        BackupWithholdingNote = null;
+        ErasedAt = now.ToUniversalTime();
+    }
+
+    public void EnsureNotErased()
+    {
+        if (ErasedAt is not null)
+            throw new DomainException("vendor.erased", "This vendor's personal details were erased, so the record can't be changed or used again.");
+    }
+
     /// <summary>"•••••6789": what screens show instead of the full tax ID.</summary>
     /// <summary>On a merge: payments move here, so what they're reported with has to come too, or they'd drop off the 1099s.</summary>
     public void Take1099DetailsFrom(Vendor other)
@@ -66,6 +115,9 @@ public sealed class Vendor
         TaxId ??= other.TaxId;
         if (!Track1099 && other.Track1099)
             (Track1099, Form1099Box) = (true, other.Form1099Box);
+        // The earlier date, so nothing that had to be held back stops being.
+        if (other.BackupWithholdingFrom is { } theirs && !(BackupWithholdingFrom <= theirs))
+            (BackupWithholdingFrom, BackupWithholdingNote) = (theirs, other.BackupWithholdingNote ?? BackupWithholdingNote);
     }
 
     public string? MaskedTaxId => TaxId is { Length: >= 4 } id ? $"•••••{id[^4..]}" : null;
@@ -80,6 +132,7 @@ public sealed class Vendor
     public void Update(VendorDetails details)
     {
         ArgumentNullException.ThrowIfNull(details);
+        EnsureNotErased();
         DisplayName = NormalizeName(details.DisplayName);
         CompanyName = Text.Optional(details.CompanyName, 200, "vendor.company_too_long", "Company name");
         Email = Text.Optional(details.Email, 320, "vendor.email_too_long", "Email");
@@ -103,11 +156,19 @@ public sealed class Vendor
     }
 
     /// <summary>Only the name (a merged duplicate's "(merged)"); other details go through Update.</summary>
-    public void Rename(string name) => DisplayName = NormalizeName(name);
+    public void Rename(string name)
+    {
+        EnsureNotErased();
+        DisplayName = NormalizeName(name);
+    }
 
     public void Deactivate() => IsActive = false;
 
-    public void Reactivate() => IsActive = true;
+    public void Reactivate()
+    {
+        EnsureNotErased();
+        IsActive = true;
+    }
 
     public DateOnly DueDateFor(DateOnly billDate) => billDate.AddDays(PaymentTermsDays);
 

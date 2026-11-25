@@ -52,7 +52,8 @@ public sealed class TaxBalanceSheet(ReportLedger ledger, AccountService accounts
                 decimal Shown(decimal amount) => credit ? -amount : amount;
                 var (lineStart, lineEnd) = (items.Sum(i => Shown(i.Start)), items.Sum(i => Shown(i.End)));
                 rows.Add(new ReportTableRow([line.Line, line.Name, lineStart, lineEnd], 0, ReportRowStyle.Subtotal));
-                rows.AddRange(items.Select(i => new ReportTableRow([null, i.Name, Shown(i.Start), Shown(i.End)], 1)));
+                // Profit and loss to date is one row, not one for each income and expense account.
+                rows.AddRange(items.GroupBy(i => i.Name).Select(g => new ReportTableRow([null, g.Key, Shown(g.Sum(i => i.Start)), Shown(g.Sum(i => i.End))], 1)));
                 if (credit)
                     (othersStart, othersEnd) = (othersStart + lineStart, othersEnd + lineEnd);
                 else

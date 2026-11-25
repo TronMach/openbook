@@ -1,0 +1,122 @@
+@* A customer's saved card for automatic payment: the card, removing it, and the link they agree on. Nothing while cards can't be saved and there's none. *@
+@inject OnlinePaymentService Online
+@inject AutomaticPaymentService Automatic
+@inject EmailService EmailService
+
+@if (_view is { } view && (view.Available || view.Card is not null))
+{
+    <div class="card no-print" id="card" style="margin-top: 1.5rem">
+        <h2>@L["Automatic payment"]</h2>
+        @if ((_error ?? CardError) is { } error)
+        {
+            <div class="alert error" role="alert">@error</div>
+        }
+        @if (CardDone == "removed")
+        {
+            <div class="alert success" role="status">@L["The card is removed: invoices aren't charged to it any more."]</div>
+        }
+        @if (_sent)
+        {
+            <div class="alert success" role="status">@L["Emailed to {0}.", Email ?? ""]</div>
+        }
+        @if (_link is not null)
+        {
+            <div class="alert notice" role="status">
+                <p>@L["Copy this link now: it won't be shown again."]</p>
+                <p><code class="secret">@_link</code></p>
+            </div>
+        }
+        @if (view.Card is { } card)
+        {
+            <p>
+                <strong>@card.Label</strong>@(card is { ExpiryMonth: { } month, ExpiryYear: { } year } ? L[", expires {0}", $"{month:00}/{year}"] : "")
+            </p>
+            <p class="muted">
+                @(card.How == CardAgreement.Link
+                    ? L["Agreed on {0}, on a link you sent. Their invoices are charged to it on the due date, unless one is ticked Don't charge automatically.", card.AgreedAt.InCompanyTime().ToString("d")]
+                    : L["Agreed on {0}, in the customer portal. Their invoices are charged to it on the due date, unless one is ticked Don't charge automatically.", card.AgreedAt.InCompanyTime().ToString("d")])
+                @if (view.CustomerId != CustomerId)
+                {
+                    <span> @L["The card belongs to the customer billed for this one."]</span>
+                }
+            </p>
+            @if (!view.Available)
+            {
+                <p class="muted">@L["Online payments are switched off, so nothing is charged to it at the moment."]</p>
+            }
+            <PostForm Action="@($"/customers/{CustomerId}/card/remove")" data-enhance="false" class="actions">
+                <AntiforgeryToken />
+                <button type="submit" class="secondary" data-confirm="@L["Stop charging this card, and have it removed at {0}?", card.Provider]">@L["Remove the card"]</button>
+            </PostForm>
+        }
+        else
+        {
+            @if (view.Last is { } last)
+            {
+                <p class="muted">@last.Label: @last.RemovedReason @(last.RemovedAt is { } at ? at.InCompanyTime().ToString("d") : "")</p>
+            }
+            <p class="muted">
+                @L["{0} can agree to have their invoices charged to a card when they're due. They enter it on Stripe's own page, so no card number reaches OpenBook, and can stop it in their portal. The link below opens their portal at the page that says what they agree to; it lets whoever has it see their account.", CustomerName ?? ""]
+            </p>
+            <div class="inline-actions">
+                <form method="post" @formname="card-link" @onsubmit="LinkAsync" class="inline">
+                    <AntiforgeryToken />
+                    <FormAccess><button type="submit" class="secondary">@L["Make a link to copy"]</button></FormAccess>
+                </form>
+                @if (Email is not null && _canEmail)
+                {
+                    <form method="post" @formname="card-email" @onsubmit="EmailAsync" class="inline">
+                        <AntiforgeryToken />
+                        <FormAccess><button type="submit" class="secondary">@L["Email the link to {0}", Email]</button></FormAccess>
+                    </form>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private SavedCardView? _view;
+    private string? _link;
+    private string? _error;
+    private bool _sent;
+    private bool _canEmail;
+
+    [Parameter, EditorRequired] public Guid CustomerId { get; set; }
+    [Parameter] public string? CustomerName { get; set; }
+    [Parameter] public string? Email { get; set; }
+
+    [SupplyParameterFromQuery(Name = "cardError")] private string? CardError { get; set; }
+    [SupplyParameterFromQuery(Name = "cardDone")] private string? CardDone { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _view = await Online.CardViewAsync(CustomerId);
+        _canEmail = _view is { Available: true, Card: null } && await EmailService.CanSendAsync();
+    }
+
+    private async Task LinkAsync()
+    {
+        try
+        {
+            _link = await Automatic.LinkAsync(CustomerId);
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task EmailAsync()
+    {
+        try
+        {
+            await Automatic.EmailLinkAsync(CustomerId);
+            _sent = true;
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}

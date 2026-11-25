@@ -180,6 +180,10 @@
 (() => {
     // Loads a PDF into a hidden frame and opens the print dialog; where a browser won't print a frame, the PDF opens in a tab.
     function printPdf(url, after) {
+        // Only OpenBook's own addresses: never a script, or another site, in a frame of this one.
+        const address = new URL(url, location.href);
+        if (address.origin !== location.origin || !address.protocol.startsWith('http')) return;
+        url = address.href;
         let frame = document.getElementById('ob-print-frame');
         if (frame) frame.remove();
         frame = document.createElement('iframe');

@@ -25,9 +25,11 @@ public sealed record SegmentFilter(Guid? ClassId = null, Guid? LocationId = null
 /// from an unapplied payment counts on the payment's date. A refund of a credit memo reverses income on the
 /// refund date; a refund of an unapplied payment just reverses that cash. The inventory cost lines on invoices
 /// and credit memos (cost of goods sold against the inventory asset) are kept as posted: stock leaves when it's sold. So
-/// are a bill's corrections of the cost of stock sold before it came in (<see cref="Inventory.InventoryService.ShortfallMemo"/>).
+/// are a bill's corrections of the cost of stock sold before it came in (<see cref="Inventory.InventoryService.ShortfallMemo"/>),
+/// and the use tax on bills and vendor credits: it's owed to the state from the day of the purchase, whatever the basis.
 /// </summary>
-public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases, Companies.ICompanyStore companies, ReportHistoryCache history)
+public sealed class ReportLedger(
+    ILedgerStore ledger, ISalesStore sales, IPurchasesStore purchases, SalesTax.ISalesTaxStore taxes, Companies.ICompanyStore companies, ReportHistoryCache history)
 {
     /// <summary>Entries whose effect cash basis replaces with payment-time recognition.</summary>
     private static readonly HashSet<string> AccrualDocuments =
@@ -85,7 +87,8 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
         // Not kept: one pass over everything, as before, and the history it gives is kept for the next report.
         var lines = await LinesAsync(basis, null, to, filter, ct);
         var folded = Fold(lines.Where(l => l.Date < detailFrom), broughtForward);
-        if (stamp is not null)
+        // A period that ends before it starts (dates the wrong way round) read only part of that history.
+        if (stamp is not null && to >= broughtForward)
             history.Put(stamp, basis, broughtForward, filter, folded);
         return [.. folded, .. lines.Where(l => l.Date >= detailFrom)];
     }
@@ -207,14 +210,21 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
                 stockAccounts.Add(id);
         }
 
+        // A gift card redeemed for all of an invoice is its payment, so it counts as posted: no payment will recognize it.
+        var zeroInvoices = (await sales.ListZeroInvoiceIdsAsync(ct)).ToHashSet();
         var cash = lines.Where(l => l.Basis.AppliesTo(ReportBasis.Cash)
             && (!AccrualDocuments.Contains(l.Source) || l.Source is Invoice.Source or CreditMemo.Source && stockAccounts.Contains(l.AccountId)
+                || l.Source == Invoice.Source && l.SourceId is { } invoiceId && zeroInvoices.Contains(invoiceId)
                 // A bill's correction of the cost of stock sold before it came in: cost of goods sold, recognized as posted.
                 || l.Source == Bill.Source && l.LineMemo?.StartsWith(Inventory.InventoryService.ShortfallMemo, StringComparison.Ordinal) == true)).ToList();
         var entryNumbers = lines.GroupBy(l => l.JournalEntryId).ToDictionary(g => g.Key, g => g.First().EntryNumber);
         // Each document's posted lines, looked up once rather than by scanning every line per document.
         var byEntry = lines.ToLookup(l => l.JournalEntryId);
         bool InRange(DateOnly d) => d <= to && (from is null || d >= from);
+
+        // Use tax on an expense is in its entry, kept as posted already.
+        foreach (var tax in (await taxes.ListUseTaxesAsync(from, to, ct)).Where(t => t.Kind != Domain.SalesTax.UseTaxDocument.Expense))
+            cash.AddRange(byEntry[tax.JournalEntryId].Where(l => tax.Covers(l.JournalEntryId, l.LineNumber)));
 
         // Only what's dated in the range, the documents it settles, and whatever else settles those.
         var customerPayments = await sales.ListPostedPaymentsAsync(from, to, ct);
@@ -328,7 +338,10 @@ public sealed class ReportLedger(ILedgerStore ledger, ISalesStore sales, IPurcha
             {
                 var number = entryNumbers.GetValueOrDefault(payment.JournalEntryId);
                 var memo = byEntry[payment.JournalEntryId].FirstOrDefault()?.EntryMemo;
-                cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.PaymentAccountId, -payment.Amount, memo, BillPayment.Source, payment.Id));
+                cash.Add(Derived(payment.JournalEntryId, number, payment.Date, payment.PaymentAccountId, -payment.NetPaid, memo, BillPayment.Source, payment.Id));
+                // Backup withholding held back: the entry's line on the account it's owed on.
+                if (payment.Withheld != 0m)
+                    cash.AddRange(byEntry[payment.JournalEntryId].Where(l => l.AccountId != payment.PaymentAccountId && l.AccountId != payment.PayableAccountId));
                 foreach (var application in payment.Applications)
                 {
                     var bill = bills[application.BillId];

@@ -80,8 +80,8 @@
                 <tbody>
                     @foreach (var g in _payments)
                     {
-                        <tr class="@(g.Status == DocumentStatus.Voided ? "muted" : "")">
-                            <td><a href="/nonprofit/gifts/@g.Id">@g.Number@(g.Status == DocumentStatus.Voided ? " (voided)" : "")</a></td>
+                        <tr class="@(g.Counts ? "" : "muted")">
+                            <td><a href="/nonprofit/gifts/@g.Id">@g.Number@(g.Status == DocumentStatus.Voided ? " (voided)" : g.Counts ? "" : " (returned)")</a></td>
                             <td>@Labels.Date(g.Date)</td>
                             <td class="num">@Labels.Amount(g.Amount)</td>
                         </tr>

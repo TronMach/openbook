@@ -157,7 +157,7 @@ public sealed class MigrationImportService(
         var heldCustomers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.DisplayName, c => c.Id, StringComparer.OrdinalIgnoreCase);
         foreach (var c in plan.Customers.OrderBy(c => c.FullName.Count(x => x == ':')))
         {
-            Guid? parent = c.Parent is null ? null : madeCustomers.TryGetValue(c.Parent, out var made) ? made : heldCustomers.GetValueOrDefault(c.Parent[(c.Parent.LastIndexOf(':') + 1)..]);
+            Guid? parent = c.Parent is null ? null : madeCustomers.TryGetValue(c.Parent, out var made) ? made : heldCustomers.GetValueOrDefault(c.ParentName!);
             var created = await customers.CreateAsync(parent is { } id && id != Guid.Empty ? c.Details with { ParentId = id, BillWithParent = true } : c.Details, ct);
             madeCustomers[c.FullName] = created.Id;
         }
@@ -195,7 +195,7 @@ public sealed class MigrationImportService(
             await engine.SaveAsync(ct);
 
         // Stock on hand: on the last date of the history, whose inventory account already holds its value.
-        if (stock.Count > 0)
+        if (stock.Any(l => Worth(l.Quantity, l.UnitCost) != 0m))
             await openingStock.RecordAsync(plan.Transactions.Count > 0 ? plan.Transactions.Max(t => t.Date) : CompanyTime.Today, stock, alreadyInBooks: plan.Transactions.Count > 0, ct);
 
         // Inactive ones last, jobs before their customers (a customer with active jobs stays active).
@@ -246,7 +246,10 @@ public sealed class MigrationImportService(
 
     private sealed record PlannedAccount(string FullName, AccountType Type, string? Number, string? Description, string? TaxLine = null);
 
-    private sealed record PlannedCustomer(CustomerDetails Details, string FullName, string? Parent);
+    /// <param name="ParentName">What the parent is called here: a repeated job name is told apart from the source's.</param>
+    private sealed record PlannedCustomer(CustomerDetails Details, string FullName, string? Parent, string? ParentName);
+
+    private static decimal Worth(decimal quantity, decimal unitCost) => decimal.Round(quantity * unitCost, 2, MidpointRounding.AwayFromZero);
 
     private static string? LineMemo(string? memo) => memo is { Length: > 1000 } ? memo[..1000] : memo;
 
@@ -339,7 +342,10 @@ public sealed class MigrationImportService(
         // Customers and vendors: new names only.
         // What was inactive in the old program comes in, then is made inactive, so its history still has somewhere to go.
         var inactive = new HashSet<(string Kind, string Name)>();
-        var existingCustomers = (await sales.ListCustomersAsync(ct)).Select(c => c.DisplayName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existingCustomers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.DisplayName, StringComparer.OrdinalIgnoreCase);
+        var customerNames = existingCustomers.Values.ToDictionary(c => c.Id, c => c.DisplayName);
+        // What each of the file's customers is called here, by its full name there.
+        var calledHere = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var plannedCustomers = new List<PlannedCustomer>();
         foreach (var c in data.Customers)
         {
@@ -352,14 +358,19 @@ public sealed class MigrationImportService(
 
             // Names are unique across all customers, so a job called "Kitchen" under two customers needs telling apart.
             var fullName = c.Parent is null ? name.Trim() : $"{c.Parent}:{name.Trim()}";
-            var taken = existingCustomers.Contains(name.Trim()) || plannedCustomers.Any(p => string.Equals(p.Details.DisplayName, name.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (taken && c.Parent is not null)
+            var parentName = c.Parent is null ? null : calledHere.GetValueOrDefault(c.Parent) ?? c.Parent[(c.Parent.LastIndexOf(':') + 1)..].Trim();
+            bool Taken(string n) => existingCustomers.ContainsKey(n) || plannedCustomers.Any(p => string.Equals(p.Details.DisplayName, n, StringComparison.OrdinalIgnoreCase));
+            // Their job by that name came in with an earlier import.
+            bool IsThatJob(string n) => existingCustomers.TryGetValue(n, out var held) && held.ParentId is { } parentId
+                && string.Equals(customerNames.GetValueOrDefault(parentId), parentName, StringComparison.OrdinalIgnoreCase);
+            var taken = Taken(name.Trim());
+            if (taken && c.Parent is not null && !IsThatJob(name.Trim()))
             {
-                var distinct = $"{c.Parent[(c.Parent.LastIndexOf(':') + 1)..]} - {name.Trim()}";
-                taken = existingCustomers.Contains(distinct) || plannedCustomers.Any(p => string.Equals(p.Details.DisplayName, distinct, StringComparison.OrdinalIgnoreCase));
-                name = distinct;
+                name = $"{parentName} - {name.Trim()}";
+                taken = Taken(name);
             }
 
+            calledHere[fullName] = name.Trim();
             if (taken)
             {
                 rows.Add(new MigrationRow(MigrationKind.Customer, c.Line, name, null, MigrationRowStatus.Exists));
@@ -369,7 +380,7 @@ public sealed class MigrationImportService(
             var error = Try(() => Customer.Create(c.Details with { DisplayName = name }));
             if (error is null)
             {
-                plannedCustomers.Add(new PlannedCustomer(c.Details with { DisplayName = name.Trim() }, fullName, c.Parent));
+                plannedCustomers.Add(new PlannedCustomer(c.Details with { DisplayName = name.Trim() }, fullName, c.Parent, parentName));
                 if (c.Inactive)
                     inactive.Add(("c", name.Trim()));
             }
@@ -432,20 +443,28 @@ public sealed class MigrationImportService(
                 continue;
             }
 
+            // To four decimals, as quantities and costs are kept; only what's counted has stock.
+            var unitCost = decimal.Round(Math.Max(i.UnitCost, 0m), SalesLine.Precision, MidpointRounding.AwayFromZero);
+            var quantity = Item.IsTracked(i.Type.Value) ? decimal.Round(Math.Max(i.Quantity, 0m), SalesLine.Precision, MidpointRounding.AwayFromZero) : 0m;
             var error = Try(() => Item.NormalizeName(name))
                 ?? (!Known(income) ? $"Its income account '{income}' isn't in the file or the chart." : null)
                 ?? Try(() => SalesLine.ValidRate(i.Price))
+                ?? Try(() => SalesLine.ValidRate(unitCost))
+                ?? Try(() => SalesLine.ValidQuantity(quantity))
                 ?? Try(() => Item.Create(new ItemDetails(name, i.Type.Value, Guid.NewGuid(), i.Price, i.Description, InventoryAssetAccountId: Guid.NewGuid(), CostAccountId: Guid.NewGuid())));
             if (error is null)
             {
-                plannedItems.Add((new ItemDetails(name, i.Type.Value, Guid.Empty, i.Price, i.Description, PurchaseCost: Math.Max(i.UnitCost, 0m), Taxable: i.Taxable ?? true),
-                    income, Math.Max(i.Quantity, 0m)));
+                plannedItems.Add((new ItemDetails(name, i.Type.Value, Guid.Empty, i.Price, i.Description, PurchaseCost: unitCost, Taxable: i.Taxable ?? true),
+                    income, quantity));
                 if (i.Inactive)
                     inactive.Add(("i", name));
             }
 
             rows.Add(new MigrationRow(MigrationKind.Item, i.Line, name, i.KindLabel, error is null ? MigrationRowStatus.New : MigrationRowStatus.Error, error ?? i.Note));
         }
+
+        if (plannedItems.Any(p => p.Item3 > 0m) && plannedItems.All(p => Worth(p.Item3, p.Item1.PurchaseCost) == 0m))
+            warnings.Add("The file says how much is on hand but not what it cost, so no stock comes in. Bring it in under Inventory → Import stock on hand, with a unit cost.");
 
         // Transactions: one journal entry each, unless an earlier import brought it in.
         var plannedTransactions = new List<PlannedTransaction>();

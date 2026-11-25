@@ -1,0 +1,105 @@
+@page "/account/passkeys"
+@using OpenBook.Domain.Companies
+@inject PasskeyService Passkeys
+@inject PasskeyChallenges Challenges
+
+<PageTitle>@L["Passkeys"] · OpenBook</PageTitle>
+
+<div class="card">
+    <div class="toolbar">
+        <h1>@L["Passkeys"]</h1>
+        <a class="button secondary" href="/account/password">@L["Password and sessions"]</a>
+    </div>
+    <p class="muted">@L["Sign in with your fingerprint, face or PIN instead of your password. The key stays on your device or security key; OpenBook keeps only its public half. A passkey also counts as two-factor sign-in."]</p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is "added" or "removed")
+    {
+        <div class="alert notice" role="status">@(Done == "added" ? L["Passkey added. You can sign in with it from now on."] : L["Passkey removed. Remove it on the device too, or it will go on being offered."])</div>
+    }
+
+    @if (_passkeys.Count == 0)
+    {
+        <p>@L["You have no passkeys yet."]</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Name"]</th><th>@L["Works at"]</th><th>@L["Added"]</th><th>@L["Last used"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
+                <tbody>
+                    @foreach (var passkey in _passkeys)
+                    {
+                        <tr>
+                            <td>@passkey.Name</td>
+                            <td>@passkey.Site</td>
+                            <td>@passkey.CreatedAt.InCompanyTime().ToString("g")</td>
+                            <td>@(passkey.LastUsedAt is { } used ? used.InCompanyTime().ToString("g") : L["Not yet"])</td>
+                            <td>
+                                <PostForm Action="@($"/account/passkeys/{passkey.Id}/remove")" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="link danger" data-confirm="@L["Remove this passkey? It can't be signed in with any more."]" aria-label="@L["Remove {0}", passkey.Name]">@L["Remove"]</button>
+                                </PostForm>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <h2>@L["Add a passkey"]</h2>
+    <p data-passkey-missing class="hint">@L["This browser can't make passkeys here: they need a recent browser, and OpenBook opened at an https address (or on this computer)."]</p>
+    <PostForm Action="/account/passkeys/add" data-enhance="false" data-passkey="create" data-passkey-part="1" hidden="hidden"
+              data-challenge="@_challenge" data-site="@_site" data-user-id="@_userHandle" data-user-name="@_userName" data-known="@string.Join(' ', _passkeys.Select(p => p.CredentialId))"
+              data-failed-text="@L["No passkey was made. Try again."]" data-known-text="@L["That device already has a passkey for you."]">
+        <AntiforgeryToken />
+        <input type="hidden" name="token" value="@_token" />
+        <input type="hidden" name="clientData" />
+        <input type="hidden" name="authenticatorData" />
+        <input type="hidden" name="publicKey" />
+        <input type="hidden" name="algorithm" />
+        <div class="row">
+            <div class="field">
+                <label for="passkey-name">@L["What is it on?"]</label>
+                <input id="passkey-name" name="name" maxlength="60" placeholder="@L["Work laptop"]" />
+            </div>
+            <div class="field">
+                <label for="passkey-password">@L["Your password"]</label>
+                <input id="passkey-password" name="password" type="password" autocomplete="current-password" required />
+            </div>
+        </div>
+        <div class="alert error" role="alert" data-passkey-error hidden></div>
+        <div class="actions"><button type="submit">@L["Add a passkey"]</button></div>
+    </PostForm>
+</div>
+<script src="@Assets["passkeys.js"]"></script>
+
+@code {
+    private IReadOnlyList<UserPasskey> _passkeys = [];
+    private string _challenge = "";
+    private string _token = "";
+    private string _site = "";
+    private string _userHandle = "";
+    private string _userName = "";
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = HttpContext.User.GetUserId();
+        _passkeys = (await Passkeys.ListAsync(user)).OrderBy(p => p.CreatedAt).ToList();
+        (_challenge, _token) = Challenges.Make(user);
+        _site = PasskeyEndpoints.Here(HttpContext.Request).Site;
+        // What the device keeps to know whose it is: the user's id, not their name.
+        _userHandle = Convert.ToBase64String(user.ToByteArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        _userName = HttpContext.User.Identity?.Name ?? "";
+    }
+}

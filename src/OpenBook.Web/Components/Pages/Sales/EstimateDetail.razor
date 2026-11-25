@@ -94,6 +94,7 @@
             <PostForm Action="@($"/sales/estimates/{_estimate.Id}/retainage")" data-enhance="false" class="inline">
                 <AntiforgeryToken />
                 <input type="date" name="date" aria-label="@L["Invoice date"]" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <button type="submit">@L["Bill retainage"]</button>
             </PostForm>
         </div>

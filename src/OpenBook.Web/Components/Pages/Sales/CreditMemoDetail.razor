@@ -2,6 +2,7 @@
 @using System.ComponentModel.DataAnnotations
 @inject CreditService Credits
 @inject InvoiceService Invoices
+@inject WorkerService WorkerService
 @inject CustomerService CustomerService
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
@@ -165,7 +166,11 @@
     // Removing a credit from a document dated in a closed period was refused for want of the password.
     private bool NeedsPassword => RemovePassword == "true";
 
-    private List<(string, string)> Facts => [("Credit memo", _credit!.Number), ("Date", Labels.Date(_credit.Date))];
+    private List<(string, string)> Facts => _salesRep is null
+        ? [("Credit memo", _credit!.Number), ("Date", Labels.Date(_credit.Date))]
+        : [("Credit memo", _credit!.Number), ("Date", Labels.Date(_credit.Date)), (L["Sales rep"], _salesRep)];
+
+    private string? _salesRep;
 
     private List<(string, decimal)> Totals
     {
@@ -190,6 +195,7 @@
         if (_credit is null)
             return;
         _customer = await CustomerService.GetAsync(_credit.CustomerId);
+        _salesRep = _credit.SalesRepId is { } rep ? (await WorkerService.GetAsync(rep))?.Name : null;
         _company = await Settings.GetAsync();
         _invoiceNumbers = (await Invoices.ListAsync(_credit.CustomerId)).ToDictionary(i => i.Id, i => i.Number);
         _refunds = (await Credits.ListRefundsAsync(_credit.CustomerId)).Where(r => r.CreditMemoId == _credit.Id).ToList();

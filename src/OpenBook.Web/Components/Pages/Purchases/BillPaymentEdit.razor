@@ -80,6 +80,10 @@
                 </tbody>
                 <tfoot>
                     <tr><td colspan="4">Total paid</td><td class="num">@Labels.Amount(Total)</td></tr>
+                    @if (_payment.Withheld > 0m)
+                    {
+                        <tr><td colspan="4">Backup withholding held back now (worked out again if the bills, date or account change)</td><td class="num">-@Labels.Amount(_payment.Withheld)</td></tr>
+                    }
                 </tfoot>
             </table>
         </div>

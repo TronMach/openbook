@@ -37,6 +37,7 @@
                     <span class="menu-note">@L["Signed in as {0} ({1})", context.User.Identity?.Name ?? "", AccessMiddleware.Describe(AccessRules.RoleOf(context.User) ?? UserRole.ViewOnly)]</span>
                     <a href="/account/password">@L["Password and sessions"]</a>
                     <a href="/account/two-factor">@L["Two-factor sign-in"]</a>
+                    <a href="/account/passkeys">@L["Passkeys"]</a>
                     @if (context.User.CanReach("/capture"))
                     {
                         <a href="/capture">@L["Offline capture on your phone"]</a>

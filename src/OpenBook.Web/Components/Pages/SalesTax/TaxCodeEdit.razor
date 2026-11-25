@@ -55,7 +55,7 @@
                     <input type="hidden" name="Input.Rates[@i].Id" value="@choice.Id" />
                     <label class="check">
                         <input type="checkbox" name="Input.Rates[@i].Selected" value="true" checked="@choice.Selected" />
-                        <span>@r.Name · @Labels.Percent(r.Percent) <span class="muted">· @_agencyNames.GetValueOrDefault(r.AgencyId)</span></span>
+                        <span>@r.Name · @Labels.Percent(r.PercentOn(CompanyTime.Today)) <span class="muted">· @_agencyNames.GetValueOrDefault(r.AgencyId)</span></span>
                     </label>
                 }
                 @if (_rates.Count == 0)

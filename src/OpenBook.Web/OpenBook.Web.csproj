@@ -19,7 +19,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.21.0" />
-    <PackageReference Include="QRCoder" Version="1.8.1" />
+    <PackageReference Include="QRCoder" Version="1.9.0" />
   </ItemGroup>
 
   <!-- The user guide, shown in the app at /help (HelpGuide reads it from the help folder beside the app). -->

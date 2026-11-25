@@ -316,6 +316,33 @@ internal static class Seeds
                    {"sku": "TN-12", "description": "Toner", "quantity": 2, "unit_price": 61.00, "amount": 122.00}]}
         """;
 
+    public const string Passkey = "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiYyIsIm9yaWdpbiI6Imh0dHBzOi8vYi50ZXN0In0|u6Ya3F6kq0mF3yFQkM0Z8tF9hC4bq2yq9m3o1cV0aQdFAAAAAQAAAAAAAAAAAAAAAAAAAAAABAECAwQ|MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE";
+
+    public const string MicrosoftToken = """
+        {"token_type":"Bearer","expires_in":3599,"access_token":"EwB4A8l6","refresh_token":"M.C5_BAY","error":"invalid_grant","error_description":"AADSTS70008: Expired.",
+         "id_token":"eyJhbGciOiJub25lIn0.eyJwcmVmZXJyZWRfdXNlcm5hbWUiOiJib29rc0BzdHVkaW8uZXhhbXBsZSJ9.c2ln"}
+        """;
+
+    public const string BillMessage = """
+        From: Ana <ana@paper.example>
+        To: bills@studio.example
+        Subject: Invoice 1042
+        MIME-Version: 1.0
+        Content-Type: multipart/mixed; boundary="b"
+
+        --b
+        Content-Type: text/plain
+
+        Attached.
+        --b
+        Content-Type: application/pdf; name="../Invoice 1042.pdf"
+        Content-Disposition: attachment; filename="../Invoice 1042.pdf"
+        Content-Transfer-Encoding: base64
+
+        JVBERi0xLjQ=
+        --b--
+        """;
+
     public const string Plaid = """
         {"accounts":[{"account_id":"a1","name":"Plaid Checking","mask":"0000","type":"depository","subtype":"checking",
           "balances":{"available":100.5,"current":110,"iso_currency_code":"USD"}},
@@ -337,6 +364,33 @@ internal static class Seeds
           "supplementary_data":{"related_ids":{"order_id":"5O190127TN364715T"}},"disputed_transactions":[{"seller_transaction_id":"3C679366HH908993F"}],
           "links":[{"rel":"up","href":"https://api.paypal.com/v2/payments/captures/3C679366HH908993F"}]},
          "name":"UNPROCESSABLE_ENTITY","details":[{"issue":"INSTRUMENT_DECLINED","description":"The instrument presented was declined."}]}
+        """;
+
+    public const string PayPalRefund = """
+        {"id":"1JU08902781691411","status":"COMPLETED","custom_id":"obr-1","amount":{"currency_code":"USD","value":"50.00"},
+         "purchase_units":[{"payments":{"captures":[{"id":"3C679366HH908993F"}],"refunds":[{"id":"1JU08902781691411","status":"COMPLETED","custom_id":"obr-1"}]}}]}
+        """;
+
+    public const string SquareRefund = """
+        {"refund":{"id":"rf1","status":"PENDING","payment_id":"pay1","reason":"Ordered twice (obr-1)","amount_money":{"amount":5000,"currency":"USD"}},
+         "payment":{"id":"pay1","refund_ids":["rf1","rf2"]}}
+        """;
+
+    public const string StripeRefund = """
+        {"id":"re_1","object":"refund","status":"succeeded","amount":5000,"metadata":{"openbook_refund":"obr-1"},
+         "data":[{"id":"re_1","status":"succeeded","metadata":{"openbook_refund":"obr-1"}},{"id":"re_2","status":"failed","metadata":{}}]}
+        """;
+
+    public const string StripeCharge = """
+        {"id":"pi_1","object":"payment_intent","status":"succeeded","amount_received":30000,"metadata":{"openbook_charge":"obc-1"},
+         "last_payment_error":{"type":"card_error","code":"card_declined","message":"Your card was declined."},
+         "error":{"type":"card_error","code":"authentication_required","message":"This payment needs the customer.","payment_intent":{"id":"pi_1","status":"requires_payment_method"}},
+         "data":[{"id":"pi_1","status":"requires_action","metadata":{"openbook_charge":"obc-1"}}]}
+        """;
+
+    public const string StripeSetup = """
+        {"id":"cs_1","object":"checkout.session","mode":"setup","status":"complete","url":"https://checkout.stripe.com/c/pay/cs_1","customer":"cus_1",
+         "setup_intent":{"id":"seti_1","status":"succeeded","customer":"cus_1","payment_method":{"id":"pm_1","card":{"brand":"visa","last4":"4242","exp_month":8,"exp_year":2030}}}}
         """;
 
     public const string TwilioMessage = """

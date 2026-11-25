@@ -1,0 +1,87 @@
+@inject Operations Ops
+
+@* "We owe use tax on this", on bills, expenses and vendor credits: a tax code, the tax worked out on the lines that can
+   carry it, and a box to type over it. Hidden until the company has tax codes. *@
+<MoreOptions HasContent="@(_choices.Count > 0)" Open="Model.Owed" Title="Use tax">
+    @if (_choices.Count > 0)
+    {
+        <div class="field">
+            <label class="check">
+                <input type="checkbox" checked="@Model.Owed" @onchange="Tick" />
+                <span>@(Credit ? "Take back use tax we recorded on this" : "We owe use tax on this")</span>
+            </label>
+            <span class="hint">@(Credit
+                ? "When the purchase this credits had use tax on it."
+                : "For things you use yourself, bought without sales tax. Don't tick it for stock you bought to resell. It's owed to the state, not the vendor.")</span>
+        </div>
+        @if (Model.Owed)
+        {
+            <div class="row">
+                <div class="field">
+                    <label for="use-tax-code">Use tax at</label>
+                    <select id="use-tax-code" value="@Model.CodeId" @onchange="Pick">
+                        @foreach (var c in _choices)
+                        {
+                            <option value="@c.Code.Id">@c.Code.Name (@Labels.Percent(c.CombinedPercent))</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="use-tax-amount">Use tax <span class="muted">(blank: @Labels.Amount(WorkedOut))</span></label>
+                    <input id="use-tax-amount" class="amount" type="number" step="0.01" min="0" value="@Model.Amount?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" @onchange="TypeAmount" />
+                    <span class="hint">On @Labels.Amount(Taxable) of expense and fixed asset lines. Item lines received into stock aren't taxed.</span>
+                </div>
+            </div>
+        }
+    }
+</MoreOptions>
+
+@code {
+    private IReadOnlyList<TaxCodeChoice> _choices = [];
+    private DateOnly? _loadedFor;
+
+    [Parameter, EditorRequired]
+    public UseTaxModel Model { get; set; } = new();
+
+    /// <summary>The document's date: the codes are at their rates on it.</summary>
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    /// <summary>What the document's lines come to that use tax is worked out on.</summary>
+    [Parameter, EditorRequired]
+    public decimal Taxable { get; set; }
+
+    /// <summary>The document being corrected, whose own code stays on the list at the rates charged.</summary>
+    [Parameter]
+    public Guid? DocumentId { get; set; }
+
+    /// <summary>On a vendor credit.</summary>
+    [Parameter]
+    public bool Credit { get; set; }
+
+    private decimal WorkedOut => Taxable <= 0m ? 0m
+        : TaxCalculator.TaxOn(Taxable, _choices.FirstOrDefault(c => c.Code.Id == Model.CodeId)?.CombinedPercent ?? 0m);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == Date)
+            return;
+        _loadedFor = Date;
+        var (date, document) = (Date, DocumentId);
+        _choices = await Ops.RunAsync<UseTaxService, IReadOnlyList<TaxCodeChoice>>(s => s.ChoicesAsync(date, document));
+        // A draft's code may have been made inactive since.
+        if (Model.Owed && _choices.All(c => c.Code.Id != Model.CodeId))
+            Model.CodeId = _choices.Count > 0 ? _choices[0].Code.Id : null;
+    }
+
+    private void Tick(ChangeEventArgs e)
+    {
+        Model.Owed = e.Value is true;
+        Model.CodeId ??= _choices.Count > 0 ? _choices[0].Code.Id : null;
+    }
+
+    private void Pick(ChangeEventArgs e) => Model.CodeId = Guid.TryParse(e.Value as string, out var id) ? id : null;
+
+    private void TypeAmount(ChangeEventArgs e) =>
+        Model.Amount = decimal.TryParse(e.Value as string, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount) ? amount : null;
+}

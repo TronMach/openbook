@@ -10,6 +10,7 @@
 @inject ReminderService Reminders
 @inject ScheduledEmailService ScheduledEmails
 @inject RetainerService RetainerService
+@inject WorkerService WorkerService
 
 <PageTitle>Invoice @(_invoice?.Number) · OpenBook</PageTitle>
 
@@ -82,6 +83,10 @@
                 <dt>@L["Warehouse"]</dt><dd>@_place(new StockPlace(warehouseId, null))</dd>
             }
                 <dt>@L["Terms"]</dt><dd>@Terms.Label</dd>
+                @if (_salesRep is not null)
+                {
+                    <dt class="no-print">@L["Sales rep"]</dt><dd class="no-print">@_salesRep</dd>
+                }
                 @if (_invoice.EarlyPaymentDiscountDate is { } discountDate)
                 {
                     <dt>Discount</dt><dd>@Terms.DiscountPercent.ToString("0.##")% if paid by @Labels.Date(discountDate)</dd>
@@ -303,7 +308,7 @@
         </div>
     }
 
-    <OnlinePaymentPanel InvoiceId="_invoice.Id" IsOpen="_invoice.IsOpen" />
+    <OnlinePaymentPanel InvoiceId="_invoice.Id" IsOpen="_invoice.IsOpen" CustomerId="_invoice.CustomerId" HoldAutoCharge="_invoice.HoldAutoCharge" />
     @if (_invoice.Status == DocumentStatus.Posted)
     {
         <RetainerOffer InvoiceId="_invoice.Id" CustomerId="_invoice.CustomerId" Balance="_invoice.Balance" />
@@ -340,6 +345,7 @@
     [SupplyParameterFromQuery(Name = "error")] private string? EmailError { get; set; }
     [SupplyParameterFromQuery(Name = "timeError")] private string? TimeError { get; set; }
     private Guid? _billTo;
+    private string? _salesRep;
     private bool _needsClosingPassword;
 
     [Parameter]
@@ -361,6 +367,7 @@
         _retainerApplications = [.. (await RetainerService.AvailableForInvoiceAsync(_invoice.CustomerId)).Concat(await RetainerService.ListAsync(_invoice.CustomerId))
             .DistinctBy(r => r.Id)
             .SelectMany(r => r.Applications.Where(a => !a.IsVoided && a.InvoiceId == _invoice.Id).Select(a => (r, a)))];
+        _salesRep = _invoice.SalesRepId is { } rep ? (await WorkerService.GetAsync(rep))?.Name : null;
         _company = await Settings.GetAsync();
         _payments = await Invoices.ListPaymentsAsync(Id);
         _credits = await Invoices.ListCreditsAsync(Id);

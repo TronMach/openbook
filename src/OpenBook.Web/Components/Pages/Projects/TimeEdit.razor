@@ -25,6 +25,16 @@
     }
     else
     {
+        @if (_entry.BilledAmount is { } billed && _entry.Billable)
+        {
+            <div class="card" style="margin-bottom: 1rem">
+                <p>@(billed == 0m ? $"Written off, so it won't be billed (worked {Labels.Amount(_entry.Worked)})" : $"Billed at {Labels.Amount(billed)} instead of {Labels.Amount(_entry.Worked)}"): @(_entry.WriteDownReason ?? "no reason given"). Changing its hours, rate or customer bills it as worked again.</p>
+                <PostForm Action="@($"/time/{_entry.Id}/put-back")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="actions"><button type="submit" class="secondary">Bill it as worked again</button></div>
+                </PostForm>
+            </div>
+        }
         <div class="card">
             <PostForm Action="@($"/time/{_entry.Id}")" data-enhance="false">
                 <AntiforgeryToken />

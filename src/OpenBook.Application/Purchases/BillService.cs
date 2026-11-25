@@ -3,15 +3,18 @@ using OpenBook.Application.Accounts;
 using OpenBook.Application.Companies;
 using OpenBook.Application.Inventory;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.SalesTax;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Inventory;
 using OpenBook.Domain.Purchases;
+using OpenBook.Domain.SalesTax;
 
 namespace OpenBook.Application.Purchases;
 
 /// <param name="DueDate">Defaults to the bill date plus the vendor's payment terms.</param>
 /// <param name="Reference">The vendor's invoice number; unique per vendor.</param>
+/// <param name="UseTax">The use tax owed on it; null for none.</param>
 public sealed record CreateBillCommand(
     Guid VendorId,
     DateOnly Date,
@@ -21,7 +24,8 @@ public sealed record CreateBillCommand(
     string? Memo = null,
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
-    Guid? WarehouseId = null);
+    Guid? WarehouseId = null,
+    UseTaxInput? UseTax = null);
 
 /// <summary>A correction to a posted bill (<see cref="BillService.ChangeAsync"/>). The vendor can't change.</summary>
 /// <param name="Lines">Every line the bill should have (item lines with an empty account, as for a new bill).</param>
@@ -32,6 +36,7 @@ public sealed record CreateBillCommand(
 /// <param name="WarehouseId">As for a new bill: null is the default warehouse.</param>
 /// <param name="FromLines">For each of <paramref name="Lines"/>, the number of the line it continues (null for a new one), so
 /// its custom field values follow it; null takes the lines as continuing the old ones in order.</param>
+/// <param name="UseTax">Null keeps the use tax, worked out again when the lines change; an empty code takes it off.</param>
 public sealed record ChangeBillCommand(
     DateOnly Date,
     IReadOnlyList<BillLineDraft> Lines,
@@ -42,7 +47,8 @@ public sealed record ChangeBillCommand(
     Guid? LocationId = null,
     IReadOnlyCollection<Guid>? TagIds = null,
     Guid? WarehouseId = null,
-    IReadOnlyList<int?>? FromLines = null);
+    IReadOnlyList<int?>? FromLines = null,
+    UseTaxInput? UseTax = null);
 
 /// <summary>What part of a purchase order a bill bills, the 3-way match differences found, and whether that finishes it.</summary>
 internal sealed record BillSource(Guid PurchaseOrderId, IReadOnlyList<BillSourceLine> Lines, IReadOnlyList<string> Exceptions, bool Completes, int LinesFromOrder = 0);
@@ -56,6 +62,7 @@ public sealed class BillService(
     WarehouseService warehouses,
     Sales.ISalesStore sales,
     CustomFields.CustomFieldStamper customFields,
+    UseTaxService useTaxes,
     ICompanyStore companies,
     ILedgerStore ledger,
     IClock clock,
@@ -110,13 +117,16 @@ public sealed class BillService(
         var chart = await accounts.GetChartAsync(ct);
         foreach (var accountId in lines.Select(l => l.AccountId).Distinct())
             Bill.EnsureCategoryAccount(chart.Get(accountId));
+        var useTax = await useTaxes.PlanAsync(command.UseTax, null, UseTaxDocument.Bill, command.Date, TaxLines(lines), ct);
         var payables = await purchaseAccounts.GetOrCreatePayablesAsync(ct);
 
         var id = Guid.CreateVersion7();
         var memo = reference is null ? $"Bill · {vendor.DisplayName}" : $"Bill {reference} · {vendor.DisplayName}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, [.. Bill.Postings(payables.Id, lines, memo), .. stock.Postings], memo, Bill.Source, id,
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
+            [.. Bill.Postings(payables.Id, lines, memo), .. stock.Postings, .. useTax?.Postings ?? []], memo, Bill.Source, id,
             LocationId: command.LocationId, TagIds: command.TagIds), ct);
         inventory.Apply(stock, InventorySources.Bill, id);
+        var owed = useTaxes.Apply(useTax, null, UseTaxDocument.Bill, id, command.Date, entry);
 
         var bill = Bill.Create(id, vendor.Id, payables.Id, command.Date, command.DueDate ?? vendor.DueDateFor(command.Date),
             lines, entry.Id, clock.UtcNow, reference, command.Memo, recurringBillId);
@@ -143,7 +153,7 @@ public sealed class BillService(
         }
 
         store.Add(bill);
-        store.Add(Audit(AuditAction.Created, bill, before: null));
+        store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, EntityType, bill.Id, null, UseTaxService.Snapshot(Snapshot(bill), owed)));
         await customFields.StampAsync(EntityType, bill.Id, bill.VendorId, bill.Lines.Select(l => (l.LineNumber, l.ItemId)), ct, sourceId: source?.PurchaseOrderId);
         await store.SaveChangesAsync(ct);
         return bill;
@@ -192,7 +202,8 @@ public sealed class BillService(
         var oldLines = bill.Lines.ToList();
         var warehouseId = command.WarehouseId == bill.WarehouseId ? bill.WarehouseId : await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([bill.JournalEntryId], ct)).Select(t => t.TagId).ToList();
-        var before = Snapshot(bill);
+        var taxedBefore = await useTaxes.ForAsync(bill.Id, ct);
+        var before = UseTaxService.Snapshot(Snapshot(bill), taxedBefore);
 
         // Stock it brought in goes back first, so the new receipt (and its serial numbers) sees it gone.
         var back = await inventory.PlanReversalAsync(InventorySources.Bill, bill.Id, bill.Date, "this bill", ct);
@@ -207,6 +218,8 @@ public sealed class BillService(
         if (lines.Sum(l => l.Amount) < bill.AmountPaid)
             throw new DomainException("bill.total_below_paid", $"This bill has {bill.AmountPaid:N2} paid or credited, so its total can't go below that.");
 
+        var useTax = await useTaxes.PlanAsync(command.UseTax, taxedBefore, UseTaxDocument.Bill, command.Date, TaxLines(lines), ct);
+
         // Cash basis spreads each payment over the bill's current lines: changing them changes the periods paid in.
         if (bill.AmountPaid > 0m && !SamePostings(oldLines, lines))
         {
@@ -216,9 +229,11 @@ public sealed class BillService(
         }
 
         var memo = reference is null ? $"Bill · {vendor.DisplayName}" : $"Bill {reference} · {vendor.DisplayName}";
-        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date, [.. Bill.Postings(bill.PayableAccountId, lines, memo), .. stock.Postings], memo, Bill.Source, bill.Id,
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(command.Date,
+            [.. Bill.Postings(bill.PayableAccountId, lines, memo), .. stock.Postings, .. useTax?.Postings ?? []], memo, Bill.Source, bill.Id,
             LocationId: command.LocationId, TagIds: tagIds), ct);
         inventory.Apply(stock, InventorySources.Bill, bill.Id);
+        var owed = useTaxes.Apply(useTax, taxedBefore, UseTaxDocument.Bill, bill.Id, command.Date, entry);
 
         var dueDate = command.DueDate ?? command.Date.AddDays(bill.DueDate.DayNumber - bill.Date.DayNumber);
         bill.Change(reference, command.Date, dueDate, lines, entry.Id, command.Memo);
@@ -248,10 +263,13 @@ public sealed class BillService(
         // Drafts become lines 1, 2, ... in order; custom field values follow their line.
         await customFields.MoveLinesAsync(EntityType, bill.Id, lines.Count, command.FromLines, ct);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, bill.Id, before,
-            DocumentChanges.WithReason(Snapshot(bill), command.Reason)));
+            DocumentChanges.WithReason(UseTaxService.Snapshot(Snapshot(bill), owed), command.Reason)));
         await store.SaveChangesAsync(ct);
         return bill;
     }
+
+    private static IEnumerable<(Guid AccountId, Guid? ClassId, Guid? ItemId, decimal Amount)> TaxLines(IEnumerable<BillLine> lines) =>
+        lines.Select(l => (l.AccountId, l.ClassId, l.ItemId, l.Amount));
 
     /// <summary>The bill's corrections, oldest first.</summary>
     public Task<IReadOnlyList<DocumentChange>> ChangesAsync(Guid id, CancellationToken ct = default) =>
@@ -301,6 +319,7 @@ public sealed class BillService(
         var before = Snapshot(bill);
         await engine.StageVoidAsync(bill.JournalEntryId, reason, fromDocument: true, ct);
         inventory.Apply(stock, InventorySources.Bill, bill.Id);
+        await useTaxes.VoidAsync(bill.Id, ct);
         bill.Void();
         store.Add(Audit(AuditAction.Voided, bill, before));
         if (bill.PurchaseOrderId is { } orderId && await store.GetPurchaseOrderAsync(orderId, ct) is { Status: PurchaseOrderStatus.Closed } order)

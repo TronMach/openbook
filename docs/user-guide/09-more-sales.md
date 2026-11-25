@@ -12,6 +12,7 @@
 | Give money back | Refund |
 | Bill the same thing every month | Recurring invoice |
 | Charge for costs you paid on a customer's behalf | Billable expenses |
+| Pay salespeople a share of what they sell | Sales commissions |
 
 ## Estimates
 
@@ -107,3 +108,20 @@ When you pay for something on a customer's behalf, such as materials for a job o
 Voiding the invoice puts the costs back on the waiting list. A bill or expense whose cost has been invoiced can't be voided until that invoice is.
 
 Billable time and mileage work the same way; see [Projects, time and mileage](18-projects-and-time.md#billing-time-mileage-and-expenses).
+
+## Sales reps and commissions
+
+A sales rep is a person on **People and rates** (see [Projects, time and mileage](18-projects-and-time.md)). Once anyone is there, invoices, sales receipts and credit memos have a **Sales rep** (under **More options** in the simple view). It starts as the customer's **Responsible** person; choose someone else, or **Nobody**, on the form or later with **Change**.
+
+Set rates under **Settings → Sales commissions** (accountant): **Add a rate** with the person, the **Rate %**, and if you like an **Item category** with its own rate and a day it **Starts**. A document takes the rate in force on its own date, so a raise is another rate from a new date. The same page says when commission is earned: **When the invoice is paid** (each payment earns its share) or **When it's invoiced**.
+
+Commission counts lines on income accounts, before sales tax and after discounts. Gift cards, deposits and retainage don't count, nor what's written off when commission is earned on payment. A returned payment or a credit memo takes its commission back from the sales rep it names.
+
+**Reports → Sales commissions** shows each rep's documents in a period, the amount counted, the rate, the commission and the run it was paid in. People below the accountant role see only their own.
+
+To pay, open **Sales → Sales commissions** (accountant, with access to purchases):
+
+1. Choose **Earned through** and **Show**. Everything not in a run yet is listed by rep.
+2. Leave the people to pay ticked, choose the **Bill date** and **Expense account** ("Commissions" is made the first time, and your choice is remembered), and **Make bills**.
+
+Each rep gets one bill, to the vendor record linked to them on **People and rates**, paid like any bill. Each payment on an invoice is paid in one run only. If a sale is corrected, voided or given to someone else afterwards, the next run makes up the difference; someone left with less than nothing gets no bill, and it comes off what they earn next. Voiding a bill frees its lines for the next run.

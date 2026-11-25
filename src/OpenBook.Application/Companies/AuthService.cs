@@ -263,8 +263,12 @@ public sealed class AuthService(ICompanyStore store, IPasswordHasher hasher, Sig
 
         User.ValidatePassword(newPassword);
         user.ResetPassword(hasher.Hash(newPassword));
+        // A reset is how a taken-over account is taken back: passkeys added meanwhile mustn't go on signing in.
+        var passkeys = await store.ListPasskeysAsync(user.Id, ct);
+        foreach (var passkey in passkeys)
+            store.Remove(passkey);
         store.Add(AuditRecord.Create(clock.UtcNow, actor, AuditAction.Updated, "user", user.Id, null,
-            JsonSerializer.Serialize(new { Changed = "password", Via = "reset" })));
+            JsonSerializer.Serialize(new { Changed = "password", Via = "reset", PasskeysRemoved = passkeys.Count })));
         if (clearTwoFactor && user.HasTwoFactor)
         {
             user.DisableTwoFactor();

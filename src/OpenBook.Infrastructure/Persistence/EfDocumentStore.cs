@@ -8,6 +8,14 @@ namespace OpenBook.Infrastructure.Persistence;
 // SQLite can't ORDER BY DateTimeOffset, so newest-first ordering happens in memory.
 internal sealed class EfDocumentStore(OpenBookDbContext db) : IDocumentStore
 {
+    public Task<BillsMailbox?> GetBillsMailboxAsync(CancellationToken ct) => db.BillsMailboxes.SingleOrDefaultAsync(ct);
+
+    public Task<BillsMailboxProgress?> GetBillsMailboxProgressAsync(CancellationToken ct) => db.BillsMailboxProgress.SingleOrDefaultAsync(ct);
+
+    public void Add(BillsMailbox mailbox) => db.BillsMailboxes.Add(mailbox);
+
+    public void Add(BillsMailboxProgress progress) => db.BillsMailboxProgress.Add(progress);
+
     public Task<CapturedDocument?> GetDocumentAsync(Guid id, CancellationToken ct) => db.CapturedDocuments.SingleOrDefaultAsync(d => d.Id == id, ct);
 
     public Task<int> CountNewDocumentsAsync(CancellationToken ct) => db.CapturedDocuments.CountAsync(d => d.Status == CapturedDocumentStatus.New, ct);

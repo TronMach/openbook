@@ -72,10 +72,14 @@ public sealed class PositivePayService(
             .Select(t => new PositivePayCheck(CheckKind.Expense, t.Id, t.Date, t.Reference!.Trim(), t.Amount,
                 t.Payee ?? (t.VendorId is { } v ? vendors.GetValueOrDefault(v) : null) ?? string.Empty, t.Status == BankTransactionStatus.Voided));
         var payments = (await purchases.ListPaymentsAsync(null, ct))
-            .Where(p => p.PaymentAccountId == accountId && p.AchBatchId is null && IsCheckNumber(p.Reference)
+            .Where(p => p.PaymentAccountId == accountId && p.AchBatchId is null && p.ImportBatchId is null && IsCheckNumber(p.Reference)
                 && wanted(p.Date, p.NeedsSendingToBank(p.Status == DocumentStatus.Voided)))
-            .Select(p => new PositivePayCheck(CheckKind.BillPayment, p.Id, p.Date, p.Reference!.Trim(), p.Amount,
+            .Select(p => new PositivePayCheck(CheckKind.BillPayment, p.Id, p.Date, p.Reference!.Trim(), p.NetPaid,
                 vendors.GetValueOrDefault(p.VendorId) ?? string.Empty, p.Status == DocumentStatus.Voided));
+        var deposits = (await purchases.ListVendorDepositsAsync(null, ct))
+            .Where(d => d.PaidFromAccountId == accountId && IsCheckNumber(d.Reference) && wanted(d.Date, d.NeedsSendingToBank(d.Status == DocumentStatus.Voided)))
+            .Select(d => new PositivePayCheck(CheckKind.VendorDeposit, d.Id, d.Date, d.Reference!.Trim(), d.Amount,
+                vendors.GetValueOrDefault(d.VendorId) ?? string.Empty, d.Status == DocumentStatus.Voided));
         var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id, c => c.DisplayName);
         var refunds = (await sales.ListRefundsAsync(null, ct))
             .Where(r => r.PaymentAccountId == accountId && IsCheckNumber(r.Reference) && wanted(r.Date, r.NeedsSendingToBank(r.Status == DocumentStatus.Voided)))
@@ -87,7 +91,7 @@ public sealed class PositivePayService(
                 && wanted(x.Refund.Date, x.Refund.NeedsSendingToBank(x.Refund.IsVoided)))
             .Select(x => new PositivePayCheck(CheckKind.RetainerRefund, x.Refund.Id, x.Refund.Date, x.Refund.Reference!.Trim(), x.Refund.Amount,
                 customers.GetValueOrDefault(x.Retainer.CustomerId) ?? string.Empty, x.Refund.IsVoided));
-        return expenses.Concat(payments).Concat(refunds).Concat(retainerRefunds)
+        return expenses.Concat(payments).Concat(deposits).Concat(refunds).Concat(retainerRefunds)
             .OrderBy(c => c.Date)
             .ThenBy(c => c.Number.Length)
             .ThenBy(c => c.Number, StringComparer.Ordinal)
@@ -138,6 +142,9 @@ public sealed class PositivePayService(
                     break;
                 case CheckKind.CustomerRefund:
                     (await sales.GetRefundAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
+                    break;
+                case CheckKind.VendorDeposit:
+                    (await purchases.GetVendorDepositAsync(check.Id, ct))!.MarkSentToBank(now, check.Void);
                     break;
                 case CheckKind.RetainerRefund:
                     (await sales.GetRetainerByRefundAsync(check.Id, ct))!.Refunds.Single(f => f.Id == check.Id).MarkSentToBank(now, check.Void);

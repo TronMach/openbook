@@ -25,11 +25,34 @@ public sealed class FakeSquare : HttpMessageHandler
         public required long Cents { get; init; }
         public string State { get; set; } = "OPEN";
         public string? PaymentId { get; set; }
+
+        /// <summary>The part paid with a gift card before the rest.</summary>
+        public long GiftCardCents { get; set; }
     }
 
     public List<JsonNode> Created { get; } = [];
     public List<string> Deleted { get; } = [];
     public int LocationLookups { get; private set; }
+
+    /// <summary>The next refund is made, but its answer never arrives.</summary>
+    public bool LoseNextAnswer { get; set; }
+
+    public sealed record MadeRefund(string Id, string PaymentId, long Cents, string Key, string Reason);
+
+    public List<MadeRefund> Refunds { get; } = [];
+
+    /// <summary>Square's report of a refund OpenBook made.</summary>
+    public static string RefundEvent(MadeRefund refund) => Event("refund.updated", "refund", new
+    {
+        id = refund.Id,
+        payment_id = refund.PaymentId,
+        status = "COMPLETED",
+        reason = refund.Reason,
+        amount_money = new { amount = refund.Cents, currency = "USD" },
+    });
+
+    /// <summary>Square can't be reached.</summary>
+    public bool Down { get; set; }
 
     public Order this[string orderId] => _orders[orderId];
 
@@ -39,6 +62,13 @@ public sealed class FakeSquare : HttpMessageHandler
         order.PaymentId = "pay" + orderId;
         order.State = "COMPLETED";
         return order.PaymentId;
+    }
+
+    /// <summary>Part of the order paid with a gift card: the rest is still due.</summary>
+    public string PayPart(string orderId, long cents)
+    {
+        _orders[orderId].GiftCardCents = cents;
+        return "card" + orderId;
     }
 
     public static string Event(string type, string objectType, object value) => JsonSerializer.Serialize(new
@@ -56,6 +86,14 @@ public sealed class FakeSquare : HttpMessageHandler
         order_id = orderId,
         status,
         total_money = new { amount = _orders[orderId].Cents, currency = "USD" },
+    });
+
+    public static string PaymentEvent(string orderId, string paymentId, long cents) => Event("payment.updated", "payment", new
+    {
+        id = paymentId,
+        order_id = orderId,
+        status = "COMPLETED",
+        total_money = new { amount = cents, currency = "USD" },
     });
 
     public string RefundEvent(string type, string orderId, long cents, string status) => Event(type, "refund", new
@@ -78,6 +116,8 @@ public sealed class FakeSquare : HttpMessageHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (Down)
+            throw new HttpRequestException("No route to host.");
         if (request.Headers.Authorization?.Parameter != AccessToken)
             return Answer(HttpStatusCode.Unauthorized, new { errors = new[] { new { category = "AUTHENTICATION_ERROR", code = "UNAUTHORIZED", detail = "This request could not be authorized." } } });
         if (!request.Headers.Contains("Square-Version"))
@@ -88,6 +128,32 @@ public sealed class FakeSquare : HttpMessageHandler
             LocationLookups++;
             return Answer(HttpStatusCode.OK, new { location = new { id = Location, name = "Studio", status = "ACTIVE" } });
         }
+
+        if (request.Method == HttpMethod.Post && path == "/v2/refunds")
+        {
+            var json = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!;
+            var key = (string)json["idempotency_key"]!;
+            Assert.True(key.Length <= 45);
+            if (Refunds.FirstOrDefault(r => r.Key == key) is not { } refund)
+            {
+                refund = new MadeRefund($"rf{Refunds.Count + 1}", (string)json["payment_id"]!, (long)json["amount_money"]!["amount"]!, key, (string)json["reason"]!);
+                Refunds.Add(refund);
+            }
+
+            if (LoseNextAnswer)
+            {
+                LoseNextAnswer = false;
+                throw new HttpRequestException("Connection reset before the answer came.");
+            }
+
+            // Square's refunds are PENDING at first.
+            return Answer(HttpStatusCode.OK, new { refund = new { id = refund.Id, status = "PENDING", payment_id = refund.PaymentId, reason = refund.Reason } });
+        }
+
+        if (request.Method == HttpMethod.Get && path.StartsWith("/v2/payments/", StringComparison.Ordinal))
+            return Answer(HttpStatusCode.OK, new { payment = new { id = path["/v2/payments/".Length..], refund_ids = Refunds.Where(r => r.PaymentId == path["/v2/payments/".Length..]).Select(r => r.Id).ToArray() } });
+        if (request.Method == HttpMethod.Get && path.StartsWith("/v2/refunds/", StringComparison.Ordinal) && Refunds.FirstOrDefault(r => r.Id == path["/v2/refunds/".Length..]) is { } made)
+            return Answer(HttpStatusCode.OK, new { refund = new { id = made.Id, status = "COMPLETED", reason = made.Reason } });
 
         const string links = "/v2/online-checkout/payment-links";
         if (request.Method == HttpMethod.Post && path == links)
@@ -122,8 +188,9 @@ public sealed class FakeSquare : HttpMessageHandler
                     location_id = Location,
                     state = found.State,
                     total_money = new { amount = found.Cents, currency = "USD" },
-                    net_amount_due_money = new { amount = found.PaymentId is null ? found.Cents : 0, currency = "USD" },
-                    tenders = found.PaymentId is null ? null : new[] { new { id = found.PaymentId, payment_id = found.PaymentId, type = "CARD", amount_money = new { amount = found.Cents, currency = "USD" } } },
+                    net_amount_due_money = new { amount = found.PaymentId is null ? found.Cents - found.GiftCardCents : 0, currency = "USD" },
+                    tenders = new[] { (Id: found.PaymentId, Cents: found.Cents - found.GiftCardCents), (Id: found.GiftCardCents > 0 ? "card" + found.Id : null, Cents: found.GiftCardCents) }
+                        .Where(t => t.Id is not null).Select(t => new { id = t.Id, payment_id = t.Id, type = "CARD", amount_money = new { amount = t.Cents, currency = "USD" } }).ToArray(),
                 },
             });
         return Answer(HttpStatusCode.NotFound, new { errors = new[] { new { code = "NOT_FOUND", detail = "Not found." } } });

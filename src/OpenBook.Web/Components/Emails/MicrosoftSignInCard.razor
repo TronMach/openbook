@@ -1,0 +1,85 @@
+@using OpenBook.Domain.Companies
+@inject NavigationManager Navigation
+
+@* A mailbox's sign-in at Microsoft: the app registration, and signing in and out. Posts to @Page/microsoft… *@
+<section class="card" id="microsoft">
+    <h2>Microsoft's sign-in</h2>
+    <p>
+        @if (SignIn.IsConnected)
+        {
+            <span class="badge ok">Signed in</span>
+            <span>as @(SignIn.Mailbox ?? "the mailbox"), since @Labels.Date(DateOnly.FromDateTime(SignIn.ConnectedAt!.Value.InCompanyTime().DateTime)).</span>
+        }
+        else
+        {
+            <span class="badge warn">Not signed in</span>
+        }
+    </p>
+    <details class="setup-steps" open="@(!SignIn.HasApp)">
+        <summary>Setting it up, step by step</summary>
+        <ol>
+            <li>An administrator of your Microsoft 365 signs in at <strong>entra.microsoft.com</strong> and, under <strong>App registrations</strong>, makes a <strong>New registration</strong> (for Outlook.com, any personal Microsoft account can).</li>
+            <li>
+                Under <strong>Authentication</strong>, add the redirect address <code>@Redirect</code>:
+                as <strong>Mobile and desktop applications</strong> when it starts with <code>http://localhost</code> (leave the client secret empty), else as <strong>Web</strong>.
+            </li>
+            <li>For <strong>Web</strong>, make a client secret under <strong>Certificates &amp; secrets</strong> and copy its value. Note when it ends: you'll need a new one then.</li>
+            <li>Under <strong>API permissions</strong>, add <strong>Office 365 Exchange Online → Delegated → @Permission</strong> and give admin consent.</li>
+            <li>Copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> from the overview into the form below and save.</li>
+            <li>Press <strong>Sign in at Microsoft</strong> and sign in as @SignInAs.</li>
+        </ol>
+    </details>
+    <PostForm Action="@($"{Page}/microsoft")" data-enhance="false">
+        <AntiforgeryToken />
+        <div class="row">
+            <div class="field">
+                <label for="ms-client">Application (client) ID</label>
+                <input id="ms-client" name="clientId" value="@SignIn.ClientId" maxlength="40" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="ms-tenant">Directory (tenant) ID</label>
+                <input id="ms-tenant" name="tenant" value="@SignIn.Tenant" maxlength="100" autocomplete="off" />
+                <span class="hint"><code>consumers</code> for Outlook.com.</span>
+            </div>
+            <div class="field">
+                <label for="ms-secret">Client secret @(SignIn.ProtectedSecret is not null ? "(saved; leave blank to keep it)" : "(none for a desktop app)")</label>
+                <input id="ms-secret" name="secret" type="password" autocomplete="new-password" />
+            </div>
+        </div>
+        @if (SignIn.ProtectedSecret is not null)
+        {
+            <label class="check"><input type="checkbox" name="clearSecret" value="true" /> <span>Forget the saved secret</span></label>
+        }
+        <div class="actions"><button type="submit" class="secondary">Save the app</button></div>
+    </PostForm>
+    @if (SignIn.HasApp)
+    {
+        <div class="actions">
+            <PostForm Action="@($"{Page}/microsoft/sign-in")" data-enhance="false" class="inline">
+                <AntiforgeryToken />
+                <button type="submit">@(SignIn.IsConnected ? "Sign in again" : "Sign in at Microsoft")</button>
+            </PostForm>
+            @if (SignIn.IsConnected)
+            {
+                <PostForm Action="@($"{Page}/microsoft/sign-out")" data-enhance="false" class="inline">
+                    <AntiforgeryToken />
+                    <button type="submit" class="link danger" data-confirm="Forget this sign-in? The mailbox can't be used until it's signed in again.">Sign out</button>
+                </PostForm>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public MicrosoftMailSignIn SignIn { get; set; } = default!;
+
+    /// <summary>The settings page it's on, which its forms post under and go back to.</summary>
+    [Parameter, EditorRequired] public string Page { get; set; } = "";
+
+    /// <summary>The permission the app registration needs.</summary>
+    [Parameter, EditorRequired] public string Permission { get; set; } = "";
+
+    [Parameter, EditorRequired] public string SignInAs { get; set; } = "";
+
+    private string Redirect => OpenBook.Web.Endpoints.MicrosoftMailEndpoints.RedirectUri(new Uri(Navigation.BaseUri), Page);
+}

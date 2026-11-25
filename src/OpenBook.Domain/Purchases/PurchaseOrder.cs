@@ -338,6 +338,11 @@ public sealed class PurchasingSettings
     /// </summary>
     public bool Net1099Refunds { get; private set; }
 
+    /// <summary>Where backup withholding is kept until it's paid over to the IRS; null until the first is held back.</summary>
+    public Guid? BackupWithholdingAccountId { get; private set; }
+
+    public void SetBackupWithholdingAccount(Guid accountId) => BackupWithholdingAccountId = accountId;
+
     public static PurchasingSettings Create() => new() { Id = Guid.CreateVersion7(), RequireReceipt = true };
 
     public void Update(decimal? approvalThreshold, decimal priceTolerancePercent, bool requireReceipt, bool allowSelfApproval, bool? receiveIntoStock = null, bool? net1099Refunds = null)

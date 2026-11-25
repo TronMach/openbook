@@ -126,6 +126,10 @@
         </div>
         <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
         <div class="actions">
+            @if (_needsClosingPassword && _preview.Problem is not null)
+            {
+                <button type="button" class="secondary" @onclick="CheckAgainAsync" disabled="@_busy">Check again</button>
+            }
             <button type="button" @onclick="ImportAsync" disabled="@(!_preview.CanImport || _busy)">Make @(_preview.NewCount + _preview.ChangedCount) change(s)</button>
         </div>
     }
@@ -176,12 +180,39 @@
         {
             await using var stream = e.File.OpenReadStream(ItemFiles.MaxBytes);
             _csv = await OpenBook.Application.Import.TextFiles.ReadAsync(stream);
-            var options = Options;
-            _preview = await Ops.RunAsync<ItemFileService, ItemFilePlan>(s => s.PreviewAsync(_csv, options), _closingPassword);
+            await PreviewAsync();
         }
         catch (Exception ex) when (ex is DomainException or IOException)
         {
             _error = ex is DomainException ? ex.Message : "That file is larger than 5 MB.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // The preview tries the import, so a closed date is refused here, before there's an import to enter the password for.
+    private async Task PreviewAsync()
+    {
+        var (csv, options) = (_csv!, Options);
+        _preview = await Ops.RunAsync<ItemFileService, ItemFilePlan>(s => s.PreviewAsync(csv, options), _closingPassword);
+        _needsClosingPassword |= ClosedPeriod.NeedsPassword(_preview.ProblemCode);
+    }
+
+    private async Task CheckAgainAsync()
+    {
+        if (_busy || _csv is null)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            await PreviewAsync();
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
         }
         finally
         {

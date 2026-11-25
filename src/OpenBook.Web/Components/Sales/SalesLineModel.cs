@@ -65,6 +65,14 @@ public sealed class SalesLineModel
     /// <summary>The total before tax.</summary>
     public static decimal Total(IReadOnlyList<SalesLineModel> lines) => Amounts(lines).Sum();
 
+    /// <summary>
+    /// Whether the lines can be saved as a sale: they come to more than nothing, or have a negative item line, which may be
+    /// a gift card paying for all of it (the save checks that).
+    /// </summary>
+    /// <param name="also">What the document has besides these lines.</param>
+    public static bool MakesSale(IReadOnlyList<SalesLineModel> lines, decimal also = 0m) =>
+        Total(lines) + also > 0m || lines.Any(l => !l.IsDiscount && l.ItemId is not null && l.ItemAmount < 0m);
+
     /// <summary>Whether a line is taxed: its own setting, else its item's.</summary>
     public bool IsTaxable(IReadOnlyList<Item> items) =>
         !IsDiscount && ItemId is { } id && (Taxable ?? items.FirstOrDefault(i => i.Id == id)?.Taxable ?? false);

@@ -103,8 +103,8 @@ public sealed class ChannelSyncService(
             if (other.Count > 0)
                 ordersError = $"{other.Count} payout(s) in {other[0].Currency!.ToUpperInvariant()} were left out: these books are in {home}.{(ordersError is null ? "" : " " + ordersError)}";
 
-            var result = await channels.AddAsync(channel, payouts, [], save: true, ct);
-            var added = fetched.Count > 0 || gone.Count > 0 ? await orders.AddAsync(channel, fetched, [], ct, gone) : null;
+            var result = await channels.AddAsync(channel, payouts, [], save: true, ct, live: true);
+            var added = fetched.Count > 0 || gone.Count > 0 ? await orders.AddAsync(channel, fetched, [], ct, gone, live: true) : null;
             var newOrders = added?.Orders ?? 0;
             if (added?.Warnings.FirstOrDefault(w => w.StartsWith("Already posted", StringComparison.Ordinal)) is { } posted)
                 ordersError = ordersError is null ? posted : $"{ordersError} {posted}";

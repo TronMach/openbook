@@ -110,6 +110,9 @@ public interface IEmailStore
     /// <summary>Tracked; null until first saved.</summary>
     Task<TextSettings?> GetTextSettingsAsync(CancellationToken ct);
 
+    /// <summary>Tracked; null until first saved.</summary>
+    Task<MicrosoftMailSignIn?> GetMicrosoftMailAsync(MailPurpose purpose, CancellationToken ct);
+
     /// <summary>Newest first.</summary>
     Task<IReadOnlyList<SentText>> ListSentTextsAsync(string entityType, Guid entityId, CancellationToken ct);
 
@@ -118,6 +121,7 @@ public interface IEmailStore
     void Add(SentEmail email);
     void Add(DocumentLink link);
     void Add(TextSettings settings);
+    void Add(MicrosoftMailSignIn signIn);
     void Add(SentText text);
     void Add(AuditRecord record);
 

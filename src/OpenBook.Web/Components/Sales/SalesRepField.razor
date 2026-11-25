@@ -1,0 +1,29 @@
+@* The sales rep a document is credited to, on an interactive form; nothing while nobody is on People and rates. *@
+@if (People.Count > 0)
+{
+    <div class="field">
+        <label for="sales-rep">@L["Sales rep"]</label>
+        <SearchSelect Id="sales-rep" Options="_options" Value="Value" ValueChanged="ValueChanged" EmptyText="@_nobody" Placeholder="@_nobody" />
+    </div>
+}
+
+@code {
+    private IReadOnlyList<PickerOption> _options = [];
+    private string _nobody = string.Empty;
+
+    /// <summary>The people to choose from (SalesReps.ListAsync).</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Worker> People { get; set; } = [];
+
+    [Parameter]
+    public Guid? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid?> ValueChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _options = [.. People.Select(w => new PickerOption(w.Id, w.Name))];
+        _nobody = L["Nobody"];
+    }
+}

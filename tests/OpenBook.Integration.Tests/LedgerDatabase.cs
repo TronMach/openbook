@@ -68,6 +68,9 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     /// <summary>Stands in for Square behind the real payment gateway.</summary>
     public FakeSquare Square { get; } = new();
 
+    /// <summary>Stands in for the mailbox bills are forwarded to.</summary>
+    public FakeMailbox Mailbox { get; } = new();
+
     /// <summary>Stands in for Stripe's and Shopify's payout APIs behind the real channel client.</summary>
     public FakeChannelApis ChannelApis { get; } = new();
 
@@ -99,7 +102,7 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             provider = DatabaseProvider.Sqlite;
         }
 
-        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis, Claude, GoogleFonts, Plaid, PayPal, Square, Twilio);
+        Services = BuildServices(connectionString, provider, Clock, Mail, Webhooks, Bridge, BackupDirectory, Stripe, ChannelApis, Claude, GoogleFonts, Plaid, PayPal, Square, Twilio, Mailbox);
         if (setUpCompany)
             Owner = await InDb(db => db.Users.SingleAsync(u => u.Username == OwnerUsername));
     }
@@ -171,7 +174,8 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
     private static ServiceProvider BuildServices(
         string connectionString, DatabaseProvider provider, FixedClock clock, RecordingEmailSender mail, RecordingWebhookSender webhooks,
         FakeSimpleFinBridge bridge, string backupDirectory, FakeStripe? stripe = null, FakeChannelApis? channels = null, FakeClaude? claude = null,
-        FakeGoogleFonts? googleFonts = null, FakePlaid? plaid = null, FakePayPal? payPal = null, FakeSquare? square = null, FakeTwilio? twilio = null) =>
+        FakeGoogleFonts? googleFonts = null, FakePlaid? plaid = null, FakePayPal? payPal = null, FakeSquare? square = null, FakeTwilio? twilio = null,
+        FakeMailbox? mailbox = null) =>
         new ServiceCollection()
             .AddOpenBookApplication()
             .AddOpenBookInfrastructure(connectionString, backupDirectory, provider: provider)
@@ -188,6 +192,8 @@ public sealed class LedgerDatabase(bool setUpCompany = true) : IAsyncLifetime
             .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Banking.PlaidTransport(plaid ?? new FakePlaid())))
             .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Payments.PayPalGateway(payPal ?? new FakePayPal())))
             .Replace(ServiceDescriptor.Singleton(new OpenBook.Infrastructure.Payments.SquareGateway(square ?? new FakeSquare())))
+            .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Documents.IMailboxReader>(mailbox ?? new FakeMailbox()))
+            .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Forms.IMicrosoftMailClient>(new OpenBook.Infrastructure.Forms.MicrosoftMailClient(new FakeMicrosoft())))
             .Replace(ServiceDescriptor.Singleton<OpenBook.Application.Forms.ITextSender>(new OpenBook.Infrastructure.Forms.TwilioTextSender(twilio ?? new FakeTwilio())))
             .BuildServiceProvider(validateScopes: true);
 

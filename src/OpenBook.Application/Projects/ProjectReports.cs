@@ -118,9 +118,11 @@ public sealed class ProjectReports(
         // Work billed on the client's invoice: by the line's owner, or on older invoices by the group, which is the project's name.
         var customers = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.Id);
         var billTo = CustomerTree.BillTo(customerId, customers);
-        var onClientInvoices = billTo == customerId ? 0m : (await sales.ListInvoicesAsync(billTo, ct))
-            .Where(i => i.Status == DocumentStatus.Posted && InRange(i.Date))
-            .Sum(i => i.Lines.Where(l => l.Kind != SalesLineKind.Tax && (l.OwnerCustomerId == customerId || (l.OwnerCustomerId is null && l.Group == project.Customer.DisplayName))).Sum(l => l.Amount));
+        decimal OwnedHere(IEnumerable<SalesLine> lines) => lines
+            .Where(l => l.Kind != SalesLineKind.Tax && (l.OwnerCustomerId == customerId || (l.OwnerCustomerId is null && l.Group == project.Customer.DisplayName))).Sum(l => l.Amount);
+        var onClientInvoices = billTo == customerId ? 0m
+            : (await sales.ListInvoicesAsync(billTo, ct)).Where(i => i.Status == DocumentStatus.Posted && InRange(i.Date)).Sum(i => OwnedHere(i.Lines))
+                - (await sales.ListCreditMemosAsync(billTo, ct)).Where(c => c.Status == DocumentStatus.Posted && InRange(c.Date)).Sum(c => OwnedHere(c.Lines));
 
         var income = onClientInvoices
             + (await sales.ListInvoicesAsync(customerId, ct)).Where(i => i.Status == DocumentStatus.Posted && InRange(i.Date)).Sum(i => Net(i.Lines))
@@ -139,7 +141,8 @@ public sealed class ProjectReports(
             time.Where(t => InRange(t.Date)).Sum(t => t.Cost),
             trips.Where(t => InRange(t.Date)).Sum(t => decimal.Round(t.Miles * MileageRate.For(rates, t.Date.Year), 2, MidpointRounding.AwayFromZero)),
             time.Where(t => InRange(t.Date)).Sum(t => t.Hours),
-            time.Where(t => t.Billable && t.InvoiceId is null).Sum(t => t.Amount),
+            // A fixed fee is billed as the fee: its time isn't waiting to be billed.
+            project.Project.Arrangement == BillingArrangement.FixedFee ? 0m : time.Where(t => t.Billable && t.InvoiceId is null).Sum(t => t.Amount),
             expenses.Where(e => e.IsBillable && e.InvoiceId is null).Sum(e => e.Amount),
             trips.Where(t => t.Billable && t.InvoiceId is null).Sum(t => t.Amount));
     }

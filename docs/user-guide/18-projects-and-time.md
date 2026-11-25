@@ -61,7 +61,7 @@ Billable time needs a customer or project and a service. A **rate per hour** typ
 
 The mileage log by year is your record for taxes. The IRS business rates are filled in at the bottom of the page; check them before filing, and an accountant can add later years as they're announced (**Set rate**).
 
-**Pay people back for their trips** (on the Mileage page, once someone on **People and rates** is linked to a vendor record): choose the person and **Trips through** a date, and **Enter the bill**. OpenBook bills their trips not paid back yet, each at its year's mileage rate, to their vendor record on "Mileage Reimbursement" (an expense account it adds the first time), to pay with **Pay bills** like any other. Voiding that bill makes the trips due again. Other out-of-pocket costs go on an expense claim (below).
+A trip that's been paid back keeps its date, miles and driver, and can't be deleted, until its bill is voided. **Pay people back for their trips** (on the Mileage page, once someone on **People and rates** is linked to a vendor record): choose the person and **Trips through** a date, and **Enter the bill**. OpenBook bills their trips not paid back yet, each at its year's mileage rate, to their vendor record on "Mileage Reimbursement" (an expense account it adds the first time), to pay with **Pay bills** like any other. Voiding that bill makes the trips due again. Other out-of-pocket costs go on an expense claim (below).
 
 ## Expense claims
 
@@ -82,7 +82,7 @@ An invoice for a client can include the work of all its projects billed with it.
 
 Voiding the invoice puts everything back on the unbilled list.
 
-An invoice with a payment or credit on it can't be voided or have its time lines changed. To take some of its time back anyway, use **Take time back off this invoice** on the invoice's page: tick the entries, give the date and **Why**, and choose whether to **Write it off**. OpenBook makes a credit memo for that time at what it was billed (with the invoice's sales tax), applies it to what the invoice still owes (anything more is the customer's credit, for a refund or their next invoice), and the time either goes back with unbilled work or is written off.
+An invoice with a payment or credit on it can't be voided or have its time lines changed. To take some of its time back anyway, use **Take time back off this invoice** on the invoice's page: tick the entries, give the date and **Why**, and choose whether to **Write it off**. OpenBook makes a credit memo for that time at what it was billed (with the invoice's sales tax), applies it to what the invoice still owes (anything more is the customer's credit, for a refund or their next invoice), and the time either goes back with unbilled work or is written off. Voiding that credit memo puts the time back on the invoice, unless it has been billed again since.
 
 ## Project costs
 
@@ -90,7 +90,7 @@ Bill and expense lines can be charged to a project for its profitability without
 
 ## The billing run
 
-**Time → Billing run** (`/time/billing`) lists who has time, mileage and costs waiting to be billed through a date, with sub-customers billed with their client under the client. Tick clients and **Make drafts**. A draft posts nothing: open it to change what a line is billed at, time, mileage or a cost passed on, with a reason (0 writes it off: a trip or cost written off is no longer billable, and keeps the reason), take lines off for a later bill, or add a message. **Save and post** makes the invoice; or tick several drafts on the run page and **Post ticked drafts**, emailing each if you like. **Discard** puts the work back.
+**Time → Billing run** (`/time/billing`) lists who has time, mileage and costs waiting to be billed through a date, with sub-customers billed with their client under the client. Tick clients and **Make drafts**. A draft posts nothing: open it to change what a line is billed at, time, mileage or a cost passed on, with a reason (0 writes it off: a trip or cost written off is no longer billable, and keeps the reason), take lines off for a later bill, or add a message. If the work has changed since the draft was made (hours corrected, time repriced), posting shows you the new amounts first. **Save and post** makes the invoice, with sales tax by the client's tax code (posting needs access to Sales); or tick several drafts on the run page and **Post ticked drafts**, emailing each if you like. **Discard** puts the work back. Time written up, down or off says so on the Time page; on its edit page **Bill it as worked again** undoes that, and so does changing its hours, rate or customer.
 
 **Realization** shows what billed time came to against what it was worth when worked, by client, and **Time written up or down** lists each change with its reason.
 

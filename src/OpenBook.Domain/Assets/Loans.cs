@@ -144,7 +144,7 @@ public sealed class Loan
     public LoanDraw VoidDraw(Guid drawId)
     {
         var draw = _draws.FirstOrDefault(d => d.Id == drawId && !d.IsVoided) ?? throw new DomainException("loan.draw_unknown", "There's no such draw standing.");
-        if (Balance - draw.Amount < 0m)
+        if (!IsVoided && Balance - draw.Amount < 0m)
             throw new DomainException("loan.draw_repaid", "Payments since have repaid this draw. Void them first.");
         draw.Void();
         return draw;
@@ -181,7 +181,13 @@ public sealed class Loan
 
     public decimal Balance => IsVoided ? 0m : Principal + Drawn - _payments.Where(p => !p.IsVoided).Sum(p => p.Principal);
 
-    public bool IsPaidOff => Balance == 0m;
+    /// <summary>What's left of an advance's fee.</summary>
+    public decimal FeeLeft => IsVoided || FactorFee is not { } fee ? 0m : fee - FeePaid;
+
+    /// <summary>What repaying it all takes before this month's interest: the balance, and on an advance what's left of its fee.</summary>
+    public decimal Owed => Balance + FeeLeft;
+
+    public bool IsPaidOff => Owed == 0m;
 
     public static Loan Create(LoanDetails details, DateTimeOffset createdAt)
     {
@@ -197,7 +203,7 @@ public sealed class Loan
             throw new DomainException("loan.voided", "This loan is voided.");
         var termsChange = details.LiabilityAccountId != LiabilityAccountId || details.InterestAccountId != InterestAccountId || details.Principal != Principal
             || details.AnnualRatePercent != AnnualRatePercent || details.Payments != Payments || details.FirstPaymentDate != FirstPaymentDate
-            || (details.PaymentAmount is { } amount && amount != PaymentAmount);
+            || (details.PaymentAmount is { } amount && amount != PaymentAmount) || details.FactorFee != FactorFee;
         if (termsChange && _payments.Any(p => !p.IsVoided))
             throw new DomainException("loan.has_payments", "The terms can't change once payments are recorded.");
         Money.EnsureCents(details.Principal);
@@ -220,7 +226,7 @@ public sealed class Loan
         AnnualRatePercent = details.AnnualRatePercent;
         Payments = details.Payments;
         FirstPaymentDate = details.FirstPaymentDate;
-        var payment = details.PaymentAmount ?? Amortization.Payment(details.Principal, details.AnnualRatePercent, details.Payments);
+        var payment = details.PaymentAmount ?? Amortization.Payment(details.Principal + (details.FactorFee ?? 0m), details.AnnualRatePercent, details.Payments);
         Money.EnsureCents(payment);
         if (payment <= decimal.Round(details.Principal * details.AnnualRatePercent / 1200m, 2, MidpointRounding.AwayFromZero))
             throw new DomainException("loan.payment_too_small", "The payment doesn't cover the first month's interest, so the loan would never be repaid.");
@@ -241,6 +247,8 @@ public sealed class Loan
             throw new DomainException("loan.voided", "This loan is voided.");
         if (_payments.Any(p => !p.IsVoided))
             throw new DomainException("loan.has_payments", "Void its payments first, latest first.");
+        if (_draws.Any(d => !d.IsVoided))
+            throw new DomainException("loan.has_draws", "Void its draws first: their entries would stay in the books without the loan.");
         VoidedAt = at.ToUniversalTime();
     }
 
@@ -260,8 +268,8 @@ public sealed class Loan
         var interest = FactorFee is { } fee
             ? FeeShare(amount, fee)
             : decimal.Round(Balance * RateOn(date) / 1200m, 2, MidpointRounding.AwayFromZero);
-        if (FactorFee is { } total && amount > Balance + total - FeePaid)
-            throw new DomainException("loan.overpaid", $"Only {Balance + total - FeePaid:N2} is left to repay with the fee.");
+        if (FactorFee is not null && amount > Owed)
+            throw new DomainException("loan.overpaid", $"Only {Owed:N2} is left to repay with the fee.");
         if (amount <= 0m)
             throw new DomainException("loan.payment_not_positive", "Enter the amount paid.");
         if (amount > Balance + interest)
@@ -270,18 +278,17 @@ public sealed class Loan
     }
 
     // An advance's fee is repaid in proportion: the last repayment takes what's left of it.
-    private decimal FeeShare(decimal amount, decimal fee)
-    {
-        var left = fee - FeePaid;
-        var owed = Balance + left;
-        return amount >= owed ? left : Math.Min(left, decimal.Round(amount * fee / (Principal + Drawn + fee), 2, MidpointRounding.AwayFromZero));
-    }
+    private decimal FeeShare(decimal amount, decimal fee) => Amortization.FeeShare(amount, Balance, FeeLeft, fee, Principal + Drawn + fee);
 
-    /// <summary>The next scheduled payment: the regular payment, or what's left with interest.</summary>
-    public decimal NextPayment => Math.Min(PaymentAmount, Balance + decimal.Round(Balance * MonthlyRate, 2, MidpointRounding.AwayFromZero));
+    /// <summary>The next scheduled payment: the regular payment, or what's left with interest (and an advance's fee).</summary>
+    public decimal NextPayment => Math.Min(PaymentAmount, Owed + decimal.Round(Balance * MonthlyRate, 2, MidpointRounding.AwayFromZero));
 
-    /// <summary>The payment due on a date, at the rate and payment then: the regular payment, or what's left with interest.</summary>
-    public decimal NextPaymentOn(DateOnly date) => Math.Min(PaymentOn(date), Balance + decimal.Round(Balance * RateOn(date) / 1200m, 2, MidpointRounding.AwayFromZero));
+    /// <summary>The payment due on a date, at the rate and payment then: the regular payment, or what's left with interest (and an advance's fee).</summary>
+    public decimal NextPaymentOn(DateOnly date) => Math.Min(PaymentOn(date), Owed + decimal.Round(Balance * RateOn(date) / 1200m, 2, MidpointRounding.AwayFromZero));
+
+    /// <summary>What's owed of the principal on a date: what was borrowed and drawn by then, less what was repaid.</summary>
+    public decimal BalanceOn(DateOnly date) => IsVoided ? 0m
+        : Principal + _draws.Where(d => !d.IsVoided && d.Date <= date).Sum(d => d.Amount) - _payments.Where(p => !p.IsVoided && p.Date <= date).Sum(p => p.Principal);
 
     public void AddPayment(LoanPayment payment)
     {
@@ -341,6 +348,36 @@ public static class Amortization
             factor *= 1m + r;
         var payment = principal * r * factor / (factor - 1m);
         return Math.Ceiling(decimal.Round(payment, 6) * 100m) / 100m;
+    }
+
+    /// <summary>
+    /// How much of a repayment of an advance is its fee: its part of the whole, the last repayment taking what's left; at
+    /// least what the principal can't take.
+    /// </summary>
+    public static decimal FeeShare(decimal amount, decimal balance, decimal feeLeft, decimal fee, decimal whole)
+    {
+        if (amount >= balance + feeLeft)
+            return feeLeft;
+        var share = Math.Min(feeLeft, decimal.Round(amount * fee / whole, 2, MidpointRounding.AwayFromZero));
+        return Math.Max(share, amount - balance);
+    }
+
+    /// <summary>An advance's schedule: the payment each month, split between principal and fee as it's repaid, until both are.</summary>
+    public static IReadOnlyList<Installment> AdvanceSchedule(Loan loan, decimal payment, int startNumber = 1, int monthsIn = 0)
+    {
+        ArgumentNullException.ThrowIfNull(loan);
+        var (balance, left, fee) = (loan.Balance, loan.FeeLeft, loan.FactorFee ?? 0m);
+        var whole = loan.Principal + loan.Drawn + fee;
+        var result = new List<Installment>();
+        while (payment > 0m && balance + left > 0m && result.Count < 1200)
+        {
+            var pay = Math.Min(payment, balance + left);
+            var share = FeeShare(pay, balance, left, fee, whole);
+            (balance, left) = (balance - (pay - share), left - share);
+            result.Add(new Installment(startNumber + result.Count, loan.FirstPaymentDate.AddMonths(monthsIn + result.Count), pay, share, pay - share, balance));
+        }
+
+        return result;
     }
 
     /// <summary>The schedule from a balance: each month's interest on the balance, the rest to principal, the last payment clearing it.</summary>

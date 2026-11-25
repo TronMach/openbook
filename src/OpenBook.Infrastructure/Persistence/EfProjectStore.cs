@@ -66,6 +66,9 @@ internal sealed class EfProjectStore(OpenBookDbContext db) : IProjectStore
     public async Task<IReadOnlyList<TimeEntry>> ListTimeForInvoiceAsync(Guid invoiceId, CancellationToken ct) =>
         await db.TimeEntries.Where(t => t.InvoiceId == invoiceId).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<TimeEntry>> ListTimeTakenBackByAsync(Guid memoId, CancellationToken ct) =>
+        await db.TimeEntries.Where(t => t.TakenBackMemoId == memoId).ToListAsync(ct);
+
     public async Task<IReadOnlyList<MileageTrip>> ListMileageAsync(DateOnly? fromDate, DateOnly? toDate, Guid? customerId, CancellationToken ct)
     {
         var query = db.MileageTrips.AsQueryable();

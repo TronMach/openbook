@@ -1,0 +1,35 @@
+@inject UseTaxService UseTaxes
+@inject SalesTaxService Taxes
+
+@* The use tax on a bill, expense or vendor credit, on its page; nothing when there's none. *@
+@if (_tax is { } tax)
+{
+    <div class="card" style="margin-top: 1rem">
+        <dl class="facts">
+            <dt>Use tax@(tax.Sign < 0m ? " taken back" : "")</dt>
+            <dd>@Labels.Amount(tax.Total) on @Labels.Amount(tax.Taxable)@(_code is null ? "" : $", {_code}")@(tax.IsVoided ? " (voided)" : "")</dd>
+            @if (tax.Lines.Count > 1)
+            {
+                @foreach (var line in tax.Lines.OrderBy(l => l.Position))
+                {
+                    <dt>@TaxCalculator.Describe(line.RateName, line.Percent)</dt><dd>@Labels.Amount(line.Amount)</dd>
+                }
+            }
+        </dl>
+        <p class="hint">Owed to the state, and on its <ActionLink Href="/reports/sales-tax">sales tax liability report</ActionLink>; it isn't part of what you owe the vendor.</p>
+    </div>
+}
+
+@code {
+    private UseTax? _tax;
+    private string? _code;
+
+    [Parameter, EditorRequired]
+    public Guid DocumentId { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _tax = await UseTaxes.ForAsync(DocumentId);
+        _code = _tax is { } tax ? (await Taxes.GetCodeAsync(tax.TaxCodeId))?.Name : null;
+    }
+}

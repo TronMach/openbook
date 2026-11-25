@@ -16,7 +16,9 @@ public interface IChannelOrderStore
 {
     Task<IReadOnlyList<ChannelOrderBatch>> ListBatchesAsync(Guid? channelId, CancellationToken ct);
     Task<ChannelOrderBatch?> GetBatchAsync(Guid id, CancellationToken ct);
-    Task<IReadOnlySet<string>> OrderIdsAsync(Guid channelId, CancellationToken ct);
+
+    /// <summary>The channel's order ids; those of dismissed batches only with <paramref name="dismissed"/>.</summary>
+    Task<IReadOnlySet<string>> OrderIdsAsync(Guid channelId, bool dismissed, CancellationToken ct);
 
     /// <summary>The ship-to state of each of these orders that has one (C052).</summary>
     Task<IReadOnlyDictionary<string, string>> OrderRegionsAsync(Guid channelId, IReadOnlyCollection<string> orderIds, CancellationToken ct);
@@ -92,8 +94,10 @@ public sealed class ChannelOrderService(
     /// <param name="warnings">What reading it found.</param>
     /// <param name="ct">Cancels it.</param>
     /// <param name="cancelled">Orders it shows cancelled.</param>
+    /// <param name="live">From a live connection, which fetches the last weeks every time: orders dismissed stay out (an imported file can bring them back).</param>
     internal async Task<OrderImportResult> AddAsync(
-        SalesChannel channel, IReadOnlyList<ChannelOrderDraft> lines, IReadOnlyList<string> warnings, CancellationToken ct, IReadOnlyList<string>? cancelled = null)
+        SalesChannel channel, IReadOnlyList<ChannelOrderDraft> lines, IReadOnlyList<string> warnings, CancellationToken ct, IReadOnlyList<string>? cancelled = null,
+        bool live = false)
     {
         // Orders waiting to be posted follow what the channel says now; posted ones can only be pointed out.
         var waiting = (await store.ListBatchesAsync(channel.Id, ct)).Where(b => b.Status == PayoutStatus.Pending).ToList();
@@ -116,7 +120,7 @@ public sealed class ChannelOrderService(
         foreach (var tracked in batches.Values)
             store.Add(Audit(AuditAction.Updated, tracked, channel, null));
         var unposted = waiting.SelectMany(b => b.Lines).Select(l => l.OrderId).ToHashSet(StringComparer.Ordinal);
-        var known = await store.OrderIdsAsync(channel.Id, ct);
+        var known = await store.OrderIdsAsync(channel.Id, dismissed: false, ct);
         var taken = (cancelled ?? []).Where(id => known.Contains(id) && !unposted.Contains(id)).ToList();
         warnings =
         [
@@ -124,6 +128,8 @@ public sealed class ChannelOrderService(
             .. updated == 0 ? [] : new[] { $"{updated} order(s) waiting to be posted were updated from this report." },
             .. taken.Count == 0 ? [] : new[] { $"Already posted, and cancelled since: {string.Join(", ", taken.Take(10))}{(taken.Count > 10 ? " and more" : "")}. Their stock and sales tax stay until you record a return." },
         ];
+        if (live)
+            known = await store.OrderIdsAsync(channel.Id, dismissed: true, ct);
         // An order can be known by another name: a store's exports say "#1001" where its live connection says a long number.
         bool Known(ChannelOrderDraft l) => known.Contains(l.OrderId) || (l.OtherId is { } other && known.Contains(other));
         var fresh = lines.Where(l => !Known(l)).ToList();
@@ -144,10 +150,12 @@ public sealed class ChannelOrderService(
 
     private static bool Same(IEnumerable<ChannelOrderLine> held, IReadOnlyList<ChannelOrderDraft> now)
     {
-        static string Key(string? sku, decimal quantity, decimal sales, decimal shipping, decimal tax, DateOnly date) =>
-            FormattableString.Invariant($"{sku}|{quantity}|{sales}|{shipping}|{tax}|{date}");
-        return held.Select(l => Key(l.Sku, l.Quantity, l.Sales, l.Shipping, l.Tax, l.Date)).Order(StringComparer.Ordinal)
-            .SequenceEqual(now.Select(l => Key(l.Sku, l.Quantity, l.Sales, l.Shipping, l.Tax, l.Date)).Order(StringComparer.Ordinal));
+        // The amounts as they're kept, whatever decimals they came with: 40.00 is 40.
+        static string Key(string? sku, decimal quantity, decimal sales, decimal shipping, decimal tax, DateOnly date, bool? byMarketplace) =>
+            FormattableString.Invariant($"{sku?.Trim()}|{quantity:0.####}|{Cents(sales):0.##}|{Cents(shipping):0.##}|{Cents(tax):0.##}|{date}|{byMarketplace}");
+        static decimal Cents(decimal amount) => decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
+        return held.Select(l => Key(l.Sku, l.Quantity, l.Sales, l.Shipping, l.Tax, l.Date, l.ByMarketplace)).Order(StringComparer.Ordinal)
+            .SequenceEqual(now.Select(l => Key(l.Sku, l.Quantity, l.Sales, l.Shipping, l.Tax, l.Date, l.ByMarketplace)).Order(StringComparer.Ordinal));
     }
 
     /// <summary>Every SKU in the channel's orders, with its mapping: chosen, automatic (an item's barcode or name), or none yet.</summary>
@@ -464,6 +472,7 @@ public sealed class ChannelOrderService(
                 byOrder.TryAdd(line.OrderId, batch);
         var returnedBy = new Dictionary<Guid, Dictionary<int, decimal>>();
         var existing = new Dictionary<Guid, IReadOnlyList<ChannelReturn>>();
+        var recordedBefore = new Dictionary<(Guid Batch, DateOnly Date, string Key), decimal>();
 
         var planned = new List<(ReturnImportRow Row, List<(int OrderLine, decimal Quantity)> Lines, string Memo)>();
         foreach (var row in read.Rows)
@@ -482,7 +491,13 @@ public sealed class ChannelOrderService(
                 memo = memo[..ChannelReturn.MaxMemoLength];
             if (!existing.TryGetValue(batch.Id, out var returns))
                 existing[batch.Id] = returns = await store.ListReturnsAsync(batch.Id, ct);
-            if (returns.Any(r => r.Status == DocumentStatus.Posted && r.Date == row.Date && r.Memo is not null && r.Memo.StartsWith(key, StringComparison.Ordinal)))
+            // A report can have a row for each unit, so what's recorded already answers for as many units and no more.
+            if (!recordedBefore.TryGetValue((batch.Id, row.Date, key), out var recordedUnits))
+                recordedUnits = returns.Where(r => r.Status == DocumentStatus.Posted && r.Date == row.Date && r.Memo is not null && r.Memo.StartsWith(key, StringComparison.Ordinal))
+                    .SelectMany(r => r.Lines).Sum(l => l.Quantity);
+            var answered = Math.Min(recordedUnits, row.Quantity);
+            recordedBefore[(batch.Id, row.Date, key)] = recordedUnits - answered;
+            if (answered == row.Quantity)
             {
                 planned.Add((Result(ReturnImportRow.AlreadyRecorded, batch.Id), [], memo));
                 continue;
@@ -503,7 +518,7 @@ public sealed class ChannelOrderService(
 
             if (!returnedBy.TryGetValue(batch.Id, out var returned))
                 returnedBy[batch.Id] = returned = new Dictionary<int, decimal>(await ReturnedAsync(batch.Id, ct));
-            var left = row.Quantity;
+            var left = row.Quantity - answered;
             var lines = new List<(int OrderLine, decimal Quantity)>();
             foreach (var line in candidates)
             {

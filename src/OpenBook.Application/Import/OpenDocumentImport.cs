@@ -39,6 +39,8 @@ public sealed class OpenDocumentImportService(
     InvoiceService invoices,
     BillService bills,
     AccountService accounts,
+    ReceivablesService receivables,
+    PayablesService payables,
     Reporting.ReportLedger ledger,
     IUnitOfWork unitOfWork)
 {
@@ -67,8 +69,7 @@ public sealed class OpenDocumentImportService(
         if (kind == OpenDocumentKind.Invoices)
         {
             var known = (await sales.ListCustomersAsync(ct)).ToDictionary(c => c.DisplayName, StringComparer.OrdinalIgnoreCase);
-            var item = (await sales.ListItemsAsync(ct)).FirstOrDefault(i => string.Equals(i.Name, OpeningItemName, StringComparison.OrdinalIgnoreCase))
-                ?? await items.CreateAsync(new ItemDetails(OpeningItemName, ItemType.Service, accountId, Taxable: false), ct);
+            var item = await OpeningItemAsync(accountId, ct);
             foreach (var row in rows)
             {
                 if (!known.TryGetValue(row.Party!, out var customer))
@@ -91,6 +92,27 @@ public sealed class OpenDocumentImportService(
 
         await transaction.CommitAsync(ct);
         return plan;
+    }
+
+    /// <summary>
+    /// The "Opening balance" service that posts to the income account chosen, made when there's none: an earlier file's
+    /// may be on another account, and takes the account's name after it then.
+    /// </summary>
+    private async Task<Item> OpeningItemAsync(Guid accountId, CancellationToken ct)
+    {
+        var all = await sales.ListItemsAsync(ct);
+        var found = all.Where(i => i.Type == ItemType.Service && i.IncomeAccountId == accountId && !i.IsRetainage
+                && (string.Equals(i.Name, OpeningItemName, StringComparison.OrdinalIgnoreCase) || i.Name.StartsWith(OpeningItemName + " (", StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(i => i.IsActive).ThenBy(i => i.Id).FirstOrDefault();
+        if (found is not null)
+            return found.IsActive ? found : await items.SetActiveAsync(found.Id, true, ct);
+
+        bool Taken(string name) => all.Any(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
+        var account = (await accounts.GetChartAsync(ct)).Get(accountId).Name;
+        var name = OpeningItemName;
+        for (var n = 1; Taken(name); n++)
+            name = $"{OpeningItemName} ({(account.Length > 60 ? account[..60].TrimEnd() : account)}{(n == 1 ? "" : $" {n}")})";
+        return await items.CreateAsync(new ItemDetails(name, ItemType.Service, accountId, Taxable: false), ct);
     }
 
     private static async Task Named<T>(OpenDocumentRow row, Func<Task<T>> make)
@@ -173,9 +195,10 @@ public sealed class OpenDocumentImportService(
         var held = chart.Ordered(includeInactive: true).Where(x => x.Account.Type == type).Select(x => x.Account.Id).ToHashSet();
         var today = CompanyTime.Today;
         var balance = (await ledger.TotalsAsync(Domain.Ledger.ReportBasis.Accrual, today, today, ct)).Where(l => held.Contains(l.AccountId)).Sum(l => l.Amount);
+        // As the agings have it on the same day: money on account and open credits explain the accounts too.
         var inDocuments = isInvoice
-            ? (await sales.ListOpenInvoicesAsync(null, ct)).Sum(i => i.Balance)
-            : -(await purchases.ListOpenBillsAsync(null, ct)).Sum(b => b.Balance);
+            ? (await receivables.AgingAsync(today, ct)).Totals.Total
+            : -(await payables.AgingAsync(today, ct)).Totals.Total;
         if (balance != inDocuments)
             warnings.Add($"The {(isInvoice ? "receivables" : "payables")} accounts hold {Math.Abs(balance - inDocuments):N2} that no {(isInvoice ? "invoice" : "bill")} explains, from imported history or a journal entry. Importing these adds to that, so check it first.");
         var added = rows.Where(r => r.Status == ImportRowStatus.New).ToList();

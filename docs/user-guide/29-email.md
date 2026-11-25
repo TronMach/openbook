@@ -4,6 +4,16 @@ Invoices, estimates, credit memos, sales receipts, statements, purchase orders a
 
 Before the first email, an administrator sets up **Settings → Email** (see [Sales](04-sales.md#sending-it)).
 
+## Sending through Microsoft 365 or Outlook.com
+
+Microsoft is closing password sign-in for sending email. From the end of December 2026 it's switched off for existing organizations unless an administrator turns it back on, and new organizations don't have it. OpenBook signs in Microsoft's own way instead:
+
+1. On **Settings → Email**, choose **Send with an SMTP server** and, under **Signs in with**, **Microsoft's sign-in**. Leave the server empty (it becomes `smtp.office365.com`; for Outlook.com enter `smtp-mail.outlook.com`) with port 587 and STARTTLS. Enter the **From address** and save.
+2. Follow **Setting it up, step by step** under **Microsoft's sign-in** on the same page. Your Microsoft 365 administrator registers an app for OpenBook and copies two ids (and, on OpenBook Server, a client secret) into the form.
+3. Press **Sign in at Microsoft**, sign in as the mailbox the email is sent from, and send a test message.
+
+If the sign-in is withdrawn (a changed password can do that) or the app's client secret ends, sending stops with a message saying what to do. To send from a shared mailbox, enter its address as the **User name** and sign in as someone allowed to send as it.
+
 ## Writing an email
 
 Open the document and select **Email**. The page has the message on the left and the **preview** on the right:

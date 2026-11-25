@@ -39,10 +39,10 @@
     }
     else if (_loaded && _status == BankFeedStatus.Pending)
     {
-        @if (_rows.Count(r => r.CategoryId is not null && r.Matches.Count == 0) is var ready and > 0)
+        @if (_rows.Count(r => r.IsReady) is var ready and > 0)
         {
             <div class="actions">
-                <button type="button" class="secondary" @onclick="AddAllReadyAsync" disabled="@_busy">Add the @ready with a category and no match</button>
+                <button type="button" class="secondary" @onclick="AddAllReadyAsync" disabled="@_busy">Add the @ready with a category and nothing to match or pay</button>
             </div>
         }
         <div class="table-wrap">
@@ -70,6 +70,10 @@
                                 {
                                     <span class="badge ok" title="Suggested by a bank rule">Rule: @row.RuleName</span>
                                 }
+                                @if (item.PossibleDuplicate)
+                                {
+                                    <span class="badge warn" title="Another line in this feed has this date and amount, from a file or another bank connection. If they're the same, exclude this one.">Possible duplicate</span>
+                                }
                             </td>
                             <td class="num">@(item.Amount < 0m ? Labels.Amount(-item.Amount) : "")</td>
                             <td class="num">@(item.Amount > 0m ? Labels.Amount(item.Amount) : "")</td>
@@ -87,13 +91,20 @@
                                     </div>
                                     <div class="muted">or add it as a new transaction:</div>
                                 }
-                                @if (row.Documents.Count > 0)
+                                @if (row.Documents.Count > 0 && !MayPay(row.Documents[0].Kind))
+                                {
+                                    @* Kept out of "add all ready" all the same: adding it would count the sale or the bill twice. *@
+                                    <p class="muted">@(item.IsMoneyIn
+                                        ? L["An open invoice has this amount. Receiving the payment needs standard access to sales: ask an admin."]
+                                        : L["An open bill has this amount. Paying it needs standard access to purchases: ask an admin."])</p>
+                                }
+                                else if (row.Documents.Count > 0)
                                 {
                                     <div class="inline">
                                         <select aria-label="Pays" @bind="row.DocumentKey">
                                             @foreach (var d in row.Documents)
                                             {
-                                                <option value="@($"{d.Kind}:{d.Id}")">@d.Label · @d.Party · due @Labels.Date(d.DueDate)</option>
+                                                <option value="@($"{d.Kind}:{d.Id}")">@d.Label · @d.Party · due @Labels.Date(d.DueDate)@(d.Withheld > 0m ? $" · {Labels.Amount(d.Withheld)} withheld" : "")</option>
                                             }
                                         </select>
                                         <button type="button" @onclick="() => PayDocumentAsync(row)" disabled="@_busy">@(item.IsMoneyIn ? "Receive payment and match" : "Pay bill and match")</button>
@@ -243,8 +254,16 @@
     [SupplyParameterFromQuery(Name = "show")]
     private string? Show { get; set; }
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private System.Security.Claims.ClaimsPrincipal _user = new();
+
+    private bool MayPay(FeedDocumentKind kind) => AuthClaims.MayWrite(_user, FeedDocumentService.AreaOf(kind));
+
     protected override async Task OnInitializedAsync()
     {
+        if (AuthState is not null)
+            _user = (await AuthState).User;
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         (_chart, _useNumbers, var vendors, var customers) = await Ops.RunAsync(async sp => (
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
@@ -286,17 +305,28 @@
         {
             ClassId = chosen.GetValueOrDefault(r.Item.Id)?.ClassId ?? r.Suggestion?.ClassId,
             LocationId = chosen.GetValueOrDefault(r.Item.Id)?.LocationId ?? r.Suggestion?.LocationId,
-            Splits = chosen.GetValueOrDefault(r.Item.Id)?.Splits
-                ?? (r.Suggestion?.Splits is { } ruleSplits ? [.. ruleSplits.Select(s => new SplitRow { AccountId = s.AccountId, Amount = s.Amount, ClassId = s.ClassId })] : null),
+            // A line already shown keeps its split as it is, "one category" included; only a new one takes its rule's.
+            Splits = chosen.TryGetValue(r.Item.Id, out var shown) ? shown.Splits
+                : r.Suggestion?.Splits?.Select(s => new SplitRow { AccountId = s.AccountId, Amount = s.Amount, ClassId = s.ClassId }).ToList(),
             CategoryId = chosen.GetValueOrDefault(r.Item.Id)?.CategoryId ?? r.Suggestion?.CategoryAccountId,
             VendorId = chosen.GetValueOrDefault(r.Item.Id)?.VendorId ?? r.Suggestion?.VendorId,
             Payee = chosen.GetValueOrDefault(r.Item.Id)?.Payee ?? r.Suggestion?.Payee,
             RuleName = r.Suggestion?.Rule.Name,
             MatchEntryId = chosen.GetValueOrDefault(r.Item.Id)?.MatchEntryId ?? r.Matches.FirstOrDefault()?.JournalEntryId,
             Documents = documents.GetValueOrDefault(r.Item.Id) ?? [],
-            DocumentKey = documents.GetValueOrDefault(r.Item.Id)?.FirstOrDefault() is { } first ? $"{first.Kind}:{first.Id}" : null,
+            DocumentKey = Document(documents.GetValueOrDefault(r.Item.Id) ?? [], chosen.GetValueOrDefault(r.Item.Id)?.DocumentKey),
+            BillTo = chosen.GetValueOrDefault(r.Item.Id)?.BillTo,
+            Choosing = chosen.GetValueOrDefault(r.Item.Id)?.Choosing ?? false,
+            Chosen = [.. (chosen.GetValueOrDefault(r.Item.Id)?.Chosen ?? []).Where(id => r.Matches.Concat(r.PartMatches).Any(m => m.JournalEntryId == id))],
         }).ToList();
         _loaded = true;
+    }
+
+    /// <summary>The document chosen before, while it's still owed; else the first.</summary>
+    private static string? Document(IReadOnlyList<FeedDocument> documents, string? chosen)
+    {
+        var keys = documents.Select(d => $"{d.Kind}:{d.Id}").ToList();
+        return chosen is not null && keys.Contains(chosen) ? chosen : keys.FirstOrDefault();
     }
 
     private static AddFeedItemCommand CommandFor(Row row) => new(
@@ -360,7 +390,7 @@
     private Task AddAllReadyAsync() => RunAsync(async () =>
     {
         var added = 0;
-        foreach (var row in _rows.Where(r => r.CanAdd && r.Matches.Count == 0).ToList())
+        foreach (var row in _rows.Where(r => r.IsReady).ToList())
         {
             var command = CommandFor(row);
             await Ops.RunAsync<BankFeedService, BankTransaction>(s => s.AddAsync(row.Item.Id, command), _closingPassword);
@@ -372,7 +402,8 @@
 
     private Task PayDocumentAsync(Row row) => RunAsync(async () =>
     {
-        if (row.DocumentKey?.Split(':') is not [var kindText, var idText] || !Enum.TryParse<FeedDocumentKind>(kindText, out var kind) || !Guid.TryParse(idText, out var id))
+        if (row.DocumentKey?.Split(':') is not [var kindText, var idText] || !Enum.TryParse<FeedDocumentKind>(kindText, out var kind) || !Guid.TryParse(idText, out var id)
+            || !MayPay(kind))
             return;
         await Ops.RunAsync<FeedDocumentService, Guid>(s => s.ApplyAsync(row.Item.Id, kind, id), _closingPassword);
         _message = kind == FeedDocumentKind.Invoice ? "Payment received and matched." : "Bill paid and matched.";
@@ -424,7 +455,7 @@
         public IReadOnlyList<FeedMatch> Matches { get; } = matches;
         public IReadOnlyList<FeedMatch> PartMatches { get; } = partMatches;
         public bool Choosing { get; set; }
-        public HashSet<Guid> Chosen { get; } = [];
+        public HashSet<Guid> Chosen { get; init; } = [];
         public decimal ChosenTotal => Math.Abs(Matches.Concat(PartMatches).Where(m => Chosen.Contains(m.JournalEntryId)).Sum(m => m.Amount));
         public Guid? ClassId { get; set; }
         public Guid? LocationId { get; set; }
@@ -434,6 +465,12 @@
         public bool CanAdd => Splits is null
             ? CategoryId is not null
             : Splits.All(s => s.AccountId is not null && s.Amount > 0m) && SplitTotal == Math.Abs(Item.Amount);
+
+        /// <summary>
+        /// Can be added with the rest at once: it has what it needs, and nothing recorded or owed explains it. A line that
+        /// pays an open bill or invoice would otherwise be counted twice.
+        /// </summary>
+        public bool IsReady => CanAdd && Matches.Count == 0 && Documents.Count == 0 && !Item.PossibleDuplicate;
 
         public Guid? CategoryId { get; set; }
         public Guid? VendorId { get; set; }

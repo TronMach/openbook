@@ -28,6 +28,10 @@
         }
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_document.Id}")">History</ActionLink>
     </div>
+    @if (_document.ReceivedFrom is { } emailed)
+    {
+        <p class="muted">Emailed by @emailed. Who an email says it's from can be made up: check it as you would any bill.</p>
+    }
 
     @if (Error is not null)
     {

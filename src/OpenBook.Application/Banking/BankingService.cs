@@ -2,14 +2,21 @@ using System.Globalization;
 using System.Text.Json;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Ledger;
+using OpenBook.Application.SalesTax;
 using OpenBook.Domain.Accounts;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Banking;
 using OpenBook.Domain.Common;
 using OpenBook.Domain.Ledger;
+using OpenBook.Domain.SalesTax;
 
 namespace OpenBook.Application.Banking;
 
+/// <param name="UseTax">The use tax owed on a spend; null for none.</param>
+/// <param name="HoldBack">
+/// Hold backup withholding back from a spend to a vendor it applies to: the splits are the whole payment, and what's held
+/// back is taken off with a line to the withholding account, so the bank pays the rest.
+/// </param>
 public sealed record RecordBankTransactionCommand(
     BankTransactionKind Kind,
     Guid AccountId,
@@ -20,13 +27,17 @@ public sealed record RecordBankTransactionCommand(
     string? Memo = null,
     Guid? VendorId = null,
     Guid? LocationId = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    UseTaxInput? UseTax = null,
+    bool HoldBack = false);
 
 /// <summary>A correction to a posted spend or receive (<see cref="BankingService.ChangeAsync"/>). The account can't change.</summary>
 /// <param name="Splits">Every category line the transaction should have.</param>
 /// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
 /// <param name="Payee">Defaults to the vendor's name when a vendor is given.</param>
 /// <param name="TagIds">Null keeps the entry's tags.</param>
+/// <param name="UseTax">Null keeps the use tax, worked out again when the lines change; an empty code takes it off.</param>
+/// <param name="HoldBack">Hold backup withholding back, as for a new one; not when a line of the splits does already.</param>
 public sealed record ChangeBankTransactionCommand(
     DateOnly Date,
     IReadOnlyCollection<BankSplit> Splits,
@@ -36,7 +47,9 @@ public sealed record ChangeBankTransactionCommand(
     string? Memo = null,
     Guid? VendorId = null,
     Guid? LocationId = null,
-    IReadOnlyCollection<Guid>? TagIds = null);
+    IReadOnlyCollection<Guid>? TagIds = null,
+    UseTaxInput? UseTax = null,
+    bool HoldBack = false);
 
 /// <summary>A correction to a posted transfer (<see cref="BankingService.ChangeTransferAsync"/>).</summary>
 /// <param name="Reason">Why it's changed; kept in the audit log and on the reversed entry.</param>
@@ -80,6 +93,8 @@ public sealed class BankingService(
     AccountService accounts,
     PostingEngine engine,
     Sales.ISalesStore sales,
+    UseTaxService useTaxes,
+    Purchases.BackupWithholdingService withholding,
     IClock clock,
     ICurrentUser user)
 {
@@ -200,6 +215,7 @@ public sealed class BankingService(
         await Sales.BillableExpenseService.ReleaseAsync(sales, Domain.Sales.BillableSource.Expense, transaction.Id, clock, user, ct);
         // Entry next: it refuses reconciled transactions, and the transaction shouldn't change in memory before that.
         await engine.StageVoidAsync(transaction.JournalEntryId, reason, fromDocument: true, ct);
+        await useTaxes.VoidAsync(transaction.Id, ct);
         transaction.MarkVoided();
         bank.Add(Audit(AuditAction.Voided, transaction, before));
         await bank.SaveChangesAsync(ct);
@@ -235,15 +251,22 @@ public sealed class BankingService(
         }
 
         var payee = command.Payee;
+        Domain.Purchases.Vendor? payTo = null;
         if (command.VendorId is { } vendorId)
         {
             if (transaction.Kind != BankTransactionKind.Spend)
                 throw new DomainException("bank.vendor_on_spend_only", "Only payments and charges can name a vendor.");
-            var vendor = await purchases.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
-            if (!vendor.IsActive && vendorId != transaction.VendorId)
-                throw new DomainException("vendor.inactive", $"{vendor.DisplayName} is inactive.");
+            payTo = await purchases.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
+            if (!payTo.IsActive && vendorId != transaction.VendorId)
+                throw new DomainException("vendor.inactive", $"{payTo.DisplayName} is inactive.");
             if (string.IsNullOrWhiteSpace(payee))
-                payee = vendor.DisplayName;
+                payee = payTo.DisplayName;
+        }
+
+        if (command.HoldBack)
+        {
+            var paidFrom = (await accounts.GetChartAsync(ct)).Get(transaction.AccountId);
+            command = command with { Splits = [.. command.Splits, await withholding.SplitAsync(payTo, transaction.Kind, paidFrom, command.Date, command.Splits, ct)] };
         }
 
         await EnsureNotReceivablesAsync(command.Splits, await SplitAccountsAsync(transaction, ct), ct);
@@ -262,27 +285,38 @@ public sealed class BankingService(
         var old = await ledger.GetEntryAsync(transaction.JournalEntryId, ct) ?? throw new EntityNotFoundException("journal_entry", transaction.JournalEntryId);
         await EnsureMarkedLinesKeptAsync(transaction, old, postings, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([transaction.JournalEntryId], ct)).Select(t => t.TagId).ToList();
-        var before = Snapshot(transaction);
+        var taxedBefore = await useTaxes.ForAsync(transaction.Id, ct);
+        var useTax = await PlanUseTaxAsync(command.UseTax, taxedBefore, transaction.Kind, command.Date, command.Splits, ct);
+        var before = UseTaxService.Snapshot(Snapshot(transaction), taxedBefore);
 
         await engine.StageVoidAsync(transaction.JournalEntryId, $"Transaction changed: {command.Reason.Trim()}", fromDocument: true, keepFeedLines: true, ct);
         var entryMemo = JournalEntry.Fit(string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim())));
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date,
-            postings,
+            [.. postings, .. useTax?.Postings ?? []],
             entryMemo.Length == 0 ? null : entryMemo,
             BankTransaction.SourceFor(transaction.Kind),
             transaction.Id,
             LocationId: command.LocationId,
             TagIds: tagIds), ct);
+        var owed = useTaxes.Apply(useTax, taxedBefore, UseTaxDocument.Expense, transaction.Id, command.Date, entry);
 
         transaction.Change(command.Date, amount, entry.Id, payee, command.Reference, command.Memo, command.VendorId);
         transaction.SetLocation(command.LocationId);
         foreach (var item in feed.Where(i => i.Status == BankFeedStatus.Matched))
             item.FollowEntry(oldEntry, entry.Id);
         bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, transaction.Id, before,
-            DocumentChanges.WithReason(Snapshot(transaction), command.Reason)));
+            DocumentChanges.WithReason(UseTaxService.Snapshot(Snapshot(transaction), owed), command.Reason)));
         await bank.SaveChangesAsync(ct);
         return transaction;
+    }
+
+    private async Task<UseTaxPlan?> PlanUseTaxAsync(
+        UseTaxInput? input, UseTax? existing, BankTransactionKind kind, DateOnly date, IEnumerable<BankSplit> splits, CancellationToken ct)
+    {
+        if (kind != BankTransactionKind.Spend && input is not null && input.TaxCodeId != Guid.Empty)
+            throw new DomainException("usetax.spend_only", "Use tax goes on money spent, not on money received.");
+        return await useTaxes.PlanAsync(input, existing, UseTaxDocument.Expense, date, splits.Select(s => (s.AccountId, s.ClassId, (Guid?)null, s.Amount)), ct);
     }
 
     /// <summary>
@@ -333,14 +367,15 @@ public sealed class BankingService(
         return transaction;
     }
 
-    /// <summary>A spend's or receive's category lines as they stand, in order, in the form <see cref="ChangeAsync"/> takes.</summary>
+    /// <summary>A spend's or receive's category lines as they stand, in order, in the form <see cref="ChangeAsync"/> takes (not its use tax).</summary>
     public async Task<IReadOnlyList<BankSplit>> SplitsAsync(BankTransaction transaction, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(transaction);
         var entry = await ledger.GetEntryAsync(transaction.JournalEntryId, ct) ?? throw new EntityNotFoundException("journal_entry", transaction.JournalEntryId);
         var classes = (await ledger.GetLineSegmentsAsync([entry.Id], ct)).ToDictionary(s => s.JournalLineId, s => s.ClassId);
         var sign = transaction.Kind == BankTransactionKind.Spend ? 1m : -1m;
-        return entry.Lines.Where(l => l.LineNumber > 1).OrderBy(l => l.LineNumber)
+        var useTax = await useTaxes.ForAsync(transaction.Id, ct);
+        return entry.Lines.Where(l => l.LineNumber > 1 && useTax?.Covers(entry.Id, l.LineNumber) != true).OrderBy(l => l.LineNumber)
             .Select(l => new BankSplit(l.AccountId, sign * l.Amount, l.Memo, classes.GetValueOrDefault(l.Id)))
             .ToList();
     }
@@ -422,27 +457,33 @@ public sealed class BankingService(
 
         // An expense can name a vendor; the payee defaults to their name.
         var payee = command.Payee;
+        Domain.Purchases.Vendor? payTo = null;
         if (command.VendorId is { } vendorId)
         {
-            var vendor = await purchases.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
-            if (!vendor.IsActive)
-                throw new DomainException("vendor.inactive", $"{vendor.DisplayName} is inactive.");
+            payTo = await purchases.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId);
+            if (!payTo.IsActive)
+                throw new DomainException("vendor.inactive", $"{payTo.DisplayName} is inactive.");
             if (string.IsNullOrWhiteSpace(payee))
-                payee = vendor.DisplayName;
+                payee = payTo.DisplayName;
         }
 
         await EnsureNotReceivablesAsync(command.Splits, null, ct);
-        var postings = BankTransaction.SplitPostings(command.Kind, account.Id, command.Splits);
+        var useTax = await PlanUseTaxAsync(command.UseTax, null, command.Kind, command.Date, command.Splits, ct);
+        IReadOnlyCollection<BankSplit> splits = command.HoldBack
+            ? [.. command.Splits, await withholding.SplitAsync(payTo, command.Kind, account, command.Date, command.Splits, ct)]
+            : command.Splits;
+        var postings = BankTransaction.SplitPostings(command.Kind, account.Id, splits);
         var id = Guid.CreateVersion7();
         var entryMemo = JournalEntry.Fit(string.Join(" · ", new[] { payee, command.Memo }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim())));
         var entry = await engine.StageAsync(new PostJournalEntryCommand(
             command.Date,
-            postings,
+            [.. postings, .. useTax?.Postings ?? []],
             entryMemo.Length == 0 ? null : entryMemo,
             BankTransaction.SourceFor(command.Kind),
             id,
             LocationId: command.LocationId,
             TagIds: command.TagIds), ct);
+        var owed = useTaxes.Apply(useTax, null, UseTaxDocument.Expense, id, command.Date, entry);
 
         var transaction = BankTransaction.Create(
             id,
@@ -450,7 +491,7 @@ public sealed class BankingService(
             account.Id,
             transferAccountId: null,
             command.Date,
-            command.Splits.Sum(s => s.Amount),
+            splits.Sum(s => s.Amount),
             entry.Id,
             clock.UtcNow,
             payee,
@@ -460,7 +501,8 @@ public sealed class BankingService(
             command.VendorId);
         transaction.SetLocation(command.LocationId);
         bank.Add(transaction);
-        bank.Add(Audit(AuditAction.Created, transaction, before: null));
+        bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, EntityType, transaction.Id, null,
+            UseTaxService.Snapshot(Snapshot(transaction), owed)));
         return transaction;
     }
 

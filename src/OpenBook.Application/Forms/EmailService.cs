@@ -21,7 +21,8 @@ public sealed record EmailSettingsCommand(
     string? FromAddress,
     string? FromName,
     string? BccAddress,
-    string? LinkAddress = null);
+    string? LinkAddress = null,
+    SmtpSignIn? SignIn = null);
 
 /// <summary>
 /// Email settings, the wording of each kind of email (<see cref="EmailTemplate"/>), and writing, previewing and
@@ -36,6 +37,7 @@ public sealed class EmailService(
     FormDesignService designs,
     IEmailSender sender,
     ISecretProtector secrets,
+    IMicrosoftMailTokens microsoft,
     OnlinePaymentService online,
     IClock clock,
     ICurrentUser user)
@@ -63,7 +65,7 @@ public sealed class EmailService(
         var before = Snapshot(settings);
         var password = command.ClearPassword ? "" : string.IsNullOrEmpty(command.NewPassword) ? null : secrets.Protect(command.NewPassword);
         settings.Update(command.Delivery, command.Host, command.Port, command.Security, command.Username, password,
-            command.FromAddress, command.FromName, command.BccAddress, command.LinkAddress);
+            command.FromAddress, command.FromName, command.BccAddress, command.LinkAddress, command.SignIn);
         companies.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, SettingsEntity, company.Id, before, Snapshot(settings)));
         await companies.SaveChangesAsync(ct);
         return settings;
@@ -171,7 +173,7 @@ public sealed class EmailService(
             notes.Add($"Sample values. The {string.Join(" and ", buttons.Select(b => b[..b.IndexOf(" (", StringComparison.Ordinal)]))} button shows {string.Join("; ", buttons.Select(b => b[(b.IndexOf(" (", StringComparison.Ordinal) + 2)..^1]))}.");
         var settings = await GetSettingsAsync(ct);
         return new EmailPreview(From(settings), "pat@example.com", null, null, composed.Subject, composed.Html ?? EmailFormatter.TextPage(composed.Text),
-            composed.Text, kind is EmailKind.Report or EmailKind.Invitation or EmailKind.PaymentReceipt or EmailKind.W9Request ? null : $"{EmailTemplates.Label(kind)}.pdf", buttons, notes);
+            composed.Text, kind is EmailKind.Report or EmailKind.Invitation or EmailKind.PaymentReceipt or EmailKind.W9Request or EmailKind.CardAgreement ? null : $"{EmailTemplates.Label(kind)}.pdf", buttons, notes);
     }
 
     // ---- Writing and sending a document's email ----
@@ -439,8 +441,9 @@ public sealed class EmailService(
         var address = EmailSettings.Address(to, "To") ?? throw new DomainException("email.to_required", "Enter the address to send to.");
         await TransportAsync(Message([address], [], [], composed, attachments), ct);
 
-        // An invitation's link signs someone up: it goes in the email and nowhere else (the history is in backups and exports).
-        var kept = kind == EmailKind.Invitation
+        // An invitation's link signs someone up, and an automatic payment link opens the customer's account: they go in the
+        // email and nowhere else (the history is in backups and exports).
+        var kept = kind is EmailKind.Invitation or EmailKind.CardAgreement
             ? EmailTemplates.Fill(wording.Body, new Dictionary<string, string>(values) { ["link"] = "(link removed)" })
             : body;
         store.Add(SentEmail.Create(kind, entityType, entityId, clock.UtcNow, user.Actor, address, null, null, subject, kept,
@@ -564,7 +567,9 @@ public sealed class EmailService(
     {
         var settings = await ConfiguredAsync(ct);
         string? password = null;
-        if (settings.ProtectedPassword is { } stored)
+        if (settings is { Delivery: EmailDelivery.Smtp, SignIn: SmtpSignIn.Microsoft })
+            password = await microsoft.AccessTokenAsync(MailPurpose.Sending, ct);
+        else if (settings.ProtectedPassword is { } stored)
             password = secrets.Unprotect(stored)
                 ?? throw new DomainException("email.password_unreadable", "The saved SMTP password can't be read on this computer. Enter it again in Settings.");
         try

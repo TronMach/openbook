@@ -3,6 +3,7 @@
 @using OpenBook.Application.Forms
 @using OpenBook.Domain.Companies
 @inject EmailService Email
+@inject MicrosoftMailService MicrosoftMailbox
 @inject OpenBook.Application.IRecordVersions Versions
 @inject NavigationManager Navigation
 
@@ -48,7 +49,7 @@
                     <dt>Gmail or Google Workspace</dt>
                     <dd>Server <code>smtp.gmail.com</code>, port 587, STARTTLS. Your Google account needs 2-Step Verification; use an <em>app password</em> from your Google account's security page as the password, not your usual one.</dd>
                     <dt>Microsoft 365, Outlook.com</dt>
-                    <dd>Server <code>smtp.office365.com</code>, port 587, STARTTLS, your full email address as the user name. Your administrator may need to allow "authenticated SMTP" for the mailbox.</dd>
+                    <dd>Choose <strong>Microsoft's sign-in</strong> below. Microsoft is closing password sign-in for sending: from the end of December 2026 it's off unless your administrator turns it back on, and new organizations don't have it. Your administrator may need to allow "authenticated SMTP" for the mailbox.</dd>
                     <dt>Others</dt>
                     <dd>Look for "SMTP settings" in your email provider's help: they give the server, port and whether to use STARTTLS or SSL. Port 587 with STARTTLS is the usual choice.</dd>
                 </dl>
@@ -72,12 +73,20 @@
                     </InputSelect>
                 </div>
             </div>
+            <div class="field">
+                <label for="sign-in">Signs in with</label>
+                <InputSelect id="sign-in" @bind-Value="Input.SignIn">
+                    <option value="@SmtpSignIn.Password">A user name and password, or none</option>
+                    <option value="@SmtpSignIn.Microsoft">Microsoft's sign-in (Microsoft 365, Outlook.com)</option>
+                </InputSelect>
+            </div>
+            <p class="hint" data-shown-by="#sign-in" data-shown-for="Microsoft">Server <code>smtp.office365.com</code>, port 587, STARTTLS (<code>smtp-mail.outlook.com</code> for Outlook.com). Save this, then set up the app and sign in under <strong>Microsoft's sign-in</strong> below.</p>
             <div class="row">
                 <div class="field">
                     <label for="username">User name <span class="muted">(optional)</span></label>
                     <InputText id="username" @bind-Value="Input.Username" autocomplete="off" />
                 </div>
-                <div class="field">
+                <div class="field" data-shown-by="#sign-in" data-shown-for="Password">
                     <label for="password">Password @(_hasPassword ? "(saved; leave blank to keep it)" : "")</label>
                     <InputText id="password" type="password" @bind-Value="Input.NewPassword" autocomplete="new-password" />
                 </div>
@@ -118,6 +127,11 @@
     </EditForm>
     <p class="hint">The wording of each email is in <ActionLink Href="/settings/email-templates">Email messages</ActionLink>.</p>
 
+    @if (_settings.SignIn == SmtpSignIn.Microsoft)
+    {
+        <OpenBook.Web.Components.Emails.MicrosoftSignInCard SignIn="_microsoft" Page="/settings/email" Permission="SMTP.Send" SignInAs="the mailbox the email is sent from" />
+    }
+
     @if (_configured)
     {
         <form method="post" @formname="test" @onsubmit="TestAsync" class="inline" style="margin-top: 1.5rem">
@@ -132,6 +146,8 @@
 @code {
     private bool _hasPassword;
     private bool _configured;
+    private EmailSettings _settings = EmailSettings.Default();
+    private MicrosoftMailSignIn _microsoft = MicrosoftMailSignIn.Create(MailPurpose.Sending);
     private string? _message;
     private string? _error;
 
@@ -144,6 +160,12 @@
     [SupplyParameterFromQuery(Name = "saved")]
     private bool Saved { get; set; }
 
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Failed { get; set; }
+
+    [SupplyParameterFromQuery(Name = "done")]
+    private string? Done { get; set; }
+
     // The version the page opened with, kept through a refused save so it's refused again until the page is reopened.
     [SupplyParameterFromForm(Name = SettingsVersions.Field, FormName = "email-settings")]
     private int? PostedVersion { get; set; }
@@ -154,6 +176,8 @@
     {
         _version = PostedVersion ?? await Versions.GetOnlyAsync<OpenBook.Domain.Companies.EmailSettings>();
         var settings = await Email.GetSettingsAsync();
+        _settings = settings;
+        _microsoft = await MicrosoftMailbox.GetAsync(MailPurpose.Sending);
         _hasPassword = settings.ProtectedPassword is not null;
         _configured = settings.IsConfigured;
         Input ??= new SettingsModel
@@ -163,6 +187,7 @@
             Port = settings.Port,
             Security = settings.Security,
             Username = settings.Username,
+            SignIn = settings.SignIn,
             FromAddress = settings.FromAddress,
             FromName = settings.FromName,
             BccAddress = settings.BccAddress,
@@ -170,6 +195,14 @@
         };
         if (Saved)
             _message = "Email settings saved.";
+        _error ??= Failed;
+        _message ??= Done switch
+        {
+            "app" => "Saved. Sign in at Microsoft next.",
+            "signed-in" => "The mailbox is signed in. Send a test message to check it.",
+            "signed-out" => "The sign-in is forgotten.",
+            _ => null,
+        };
     }
 
     private async Task SaveAsync()
@@ -178,7 +211,7 @@
         {
             await Versions.EnsureOnlyUnchangedAsync<OpenBook.Domain.Companies.EmailSettings>(PostedVersion);
             await Email.SaveSettingsAsync(new EmailSettingsCommand(Input.Delivery, Input.Host, Input.Port ?? 587, Input.Security, Input.Username,
-                Input.NewPassword, Input.ClearPassword, Input.FromAddress, Input.FromName, Input.BccAddress, Input.LinkAddress));
+                Input.NewPassword, Input.ClearPassword, Input.FromAddress, Input.FromName, Input.BccAddress, Input.LinkAddress, Input.SignIn));
             Navigation.NavigateTo("/settings/email?saved=true");
         }
         catch (DomainException ex)
@@ -213,6 +246,7 @@
         [StringLength(320)]
         public string? Username { get; set; }
 
+        public SmtpSignIn SignIn { get; set; }
         public string? NewPassword { get; set; }
         public bool ClearPassword { get; set; }
 

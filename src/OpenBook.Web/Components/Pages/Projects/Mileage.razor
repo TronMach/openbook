@@ -36,6 +36,7 @@
                 </select>
                 <label for="pay-back-through">Trips through</label>
                 <input id="pay-back-through" name="through" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
                 <button type="submit" class="secondary">Enter the bill</button>
             </PostForm>
         </div>
@@ -186,6 +187,7 @@
 
     [SupplyParameterFromQuery] private int? Year { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
 
     protected override async Task OnInitializedAsync()
     {

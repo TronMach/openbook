@@ -247,6 +247,8 @@ app.MapGet("/healthz", async (OpenBook.Infrastructure.Persistence.OpenBookDbCont
 app.MapOpenBookApi();
 app.MapAccountEndpoints();
 app.MapNexusEndpoints();
+app.MapMicrosoftMailEndpoints();
+app.MapPasskeyEndpoints();
 app.MapSingleSignOn();
 app.MapAttachmentEndpoints();
 app.MapCheckEndpoints();
@@ -264,6 +266,7 @@ app.MapChannelEndpoints();
 app.MapDashboardEndpoints();
 app.MapAuditRequestEndpoints();
 app.MapExpenseClaimEndpoints();
+app.MapCommissionEndpoints();
 app.MapPluginEndpoints();
 app.MapGet("/capture/drafts/{id:guid}/photo", async (Guid id, HttpContext http, OpenBook.Application.Capture.CaptureService capture, CancellationToken ct) =>
 {
@@ -385,6 +388,7 @@ app.MapGet("/settings/system/support-file", (IServiceProvider services, OpenBook
 }).RequireAuthorization();
 app.MapPurchasingEndpoints();
 app.MapMergeEndpoints();
+app.MapErasureEndpoints();
 app.MapOnlineEndpoints();
 app.MapDocumentEndpoints();
 app.MapCustomFieldEndpoints();

@@ -61,6 +61,11 @@
             </MoreOptions>
             @if (_kind == BankTransactionKind.Spend)
             {
+                @if (Withholding is { } held)
+                {
+                    <WithholdingNotice Vendor="@held.Vendor.DisplayName" Amount="held.Amount" Date="_date" @bind-HoldBack="_holdBack" />
+                }
+                <UseTaxField Model="_useTax" Date="_date" Taxable="Taxable" />
                 <MoreOptions HasContent="@(_customers.Count > 0)" Open="@(_billTo is not null)" Title="Billing a customer">
                     <BillableToField Customers="_customers" @bind-Value="_billTo" @bind-Markup="_billMarkup" />
                 </MoreOptions>
@@ -160,20 +165,39 @@
     private string? _reference;
     private string? _memo;
     private List<LineModel> _lines = [new()];
+    private UseTaxModel _useTax = new();
+    private bool _holdBack = true;
+    private Guid? _withholdingAccount;
+    private decimal Taxable => UseTaxService.TaxableAmount(_chart, _lines.Select(l => (l.AccountId ?? Guid.Empty, (Guid?)null, l.Amount ?? 0m)));
+
+    /// <summary>What to hold back for the IRS from a vendor marked for it, paid from a bank.</summary>
+    private (Vendor Vendor, decimal Amount)? Withholding
+    {
+        get
+        {
+            if (!IsCheck || _vendors.FirstOrDefault(v => v.Id == _vendorId) is not { } vendor || !vendor.WithholdsOn(_date))
+                return null;
+            var amount = BackupWithholdingService.OnExpense(_chart, _date, Splits);
+            return amount > 0m ? (vendor, amount) : null;
+        }
+    }
+
+    private List<BankSplit> Splits => Filled.Where(l => l.AccountId is not null).Select(l => new BankSplit(l.AccountId!.Value, l.Amount ?? 0m, l.Memo, l.ClassId)).ToList();
 
     /// <summary>What's typed, kept in the tab in case the connection drops (C302); one per account and kind.</summary>
-    internal sealed record Draft(DateOnly Date, string? Payee, Guid? VendorId, string? Reference, string? Memo, Guid? BillTo, decimal? BillMarkup, List<LineModel> Lines);
+    internal sealed record Draft(DateOnly Date, string? Payee, Guid? VendorId, string? Reference, string? Memo, Guid? BillTo, decimal? BillMarkup, List<LineModel> Lines, UseTaxModel? UseTax = null, bool HoldBack = true);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => _vendorId is null && string.IsNullOrWhiteSpace(_payee) && !Filled.Any() ? null
-        : new Draft(_date, _payee, _vendorId, _reference, _memo, _billTo, _billMarkup, _lines);
+        : new Draft(_date, _payee, _vendorId, _reference, _memo, _billTo, _billMarkup, _lines, _useTax, _holdBack);
 
     private void Restore(Draft draft)
     {
         (_date, _payee, _reference, _memo, _billTo, _billMarkup) = (draft.Date, draft.Payee, draft.Reference, draft.Memo, draft.BillTo, draft.BillMarkup);
         _vendorId = _vendors.Any(v => v.Id == draft.VendorId) ? draft.VendorId : null;
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+        (_useTax, _holdBack) = (draft.UseTax ?? new(), draft.HoldBack);
     }
 
     [Parameter]
@@ -220,6 +244,7 @@
                 (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers,
                 await sp.GetRequiredService<BankingService>().SuggestCheckNumberAsync(AccountId),
                 (IReadOnlyList<Vendor>)(await sp.GetRequiredService<VendorService>().ListRecordsAsync()).ToList()));
+            _withholdingAccount = (await Ops.RunAsync<BackupWithholdingService, Account?>(s => s.AccountAsync()))?.Id;
             _account = _chart.Get(AccountId);
             BankingRules.EnsurePayFrom(_account, _kind);
             if (_kind == BankTransactionKind.Spend)
@@ -247,7 +272,8 @@
                     _payee = source.Payee;
                     _memo = source.Memo;
                     _locationId = source.LocationId;
-                    _lines = splits.Select(s => new LineModel { AccountId = s.AccountId, Amount = s.Amount, Memo = s.Memo, ClassId = s.ClassId }).ToList();
+                    // What was held back is worked out again for the new one.
+                    _lines = splits.Where(s => s.AccountId != _withholdingAccount || s.Amount > 0m).Select(s => new LineModel { AccountId = s.AccountId, Amount = s.Amount, Memo = s.Memo, ClassId = s.ClassId }).ToList();
                     if (_lines.Count == 0)
                         _lines.Add(new());
                 }
@@ -279,7 +305,8 @@
             }
 
             var splits = Filled.Select(l => new BankSplit(l.AccountId!.Value, l.Amount!.Value, l.Memo, l.ClassId)).ToList();
-            var command = new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null, LocationId: _locationId);
+            var command = new RecordBankTransactionCommand(_kind, AccountId, _date, splits, _payee, _reference, _memo, _kind == BankTransactionKind.Spend ? _vendorId : null, LocationId: _locationId,
+                UseTax: _kind == BankTransactionKind.Spend ? _useTax.ForNew : null, HoldBack: Withholding is not null && _holdBack);
             var (billTo, markup) = (_kind == BankTransactionKind.Spend ? _billTo : null, _billMarkup);
             var saved = await Ops.RunAsync(async sp =>
             {

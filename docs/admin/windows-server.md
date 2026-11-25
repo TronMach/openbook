@@ -70,7 +70,7 @@ The service doesn't install updates by itself: its account has no rights to chan
 
 OpenBook Server speaks plain HTTP on the office network: passwords and the books can be read by someone able to listen in on it. On a wired network, or Wi-Fi only your people use, many offices accept that. It isn't good enough for guest Wi-Fi shared with strangers, and **never** forward the port from your router to the internet.
 
-Two things need HTTPS: installing OpenBook as an app from the browser, and offline capture on phones.
+These need HTTPS, or work only in a browser on the server itself at `localhost`: passkeys, installing OpenBook as an app from the browser, and offline capture on phones. Single sign-on and Microsoft mail need it too, when the provider refuses an address without it.
 
 - **A virtual private network with certificates**, such as Tailscale, gives HTTPS and reaches people at home too, without opening anything to the internet.
 - **Your own certificate** (`.pfx`), in `C:\ProgramData\OpenBook\settings.json`:

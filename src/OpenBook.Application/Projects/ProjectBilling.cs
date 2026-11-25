@@ -114,8 +114,10 @@ public sealed class ProjectBilling(IProjectStore store, ISalesStore sales, ItemS
         if (charges.Mileage.Count > 0)
         {
             var itemId = await MileageItemIdAsync(ct);
+            // A written-down trip bills its miles at a rate when that comes to the amount, else the amount once.
+            static bool ByMile(MileageTrip m) => decimal.Round(m.Miles * m.RateBilled, 2, MidpointRounding.AwayFromZero) == m.Amount;
             drafts.AddRange(charges.Mileage.Select(m => new SalesLineDraft(
-                itemId, $"{m.Date:MMM d, yyyy} · {m.Purpose} ({m.Miles:0.#} mi)", m.Miles, m.RateBilled, Taxable: false, PriceSource: MileagePriceSource, Group: Group(m.CustomerId), OwnerCustomerId: groups is null ? null : m.CustomerId,
+                itemId, $"{m.Date:MMM d, yyyy} · {m.Purpose} ({m.Miles:0.#} mi)", ByMile(m) ? m.Miles : 1m, ByMile(m) ? m.RateBilled : m.Amount, Taxable: false, PriceSource: MileagePriceSource, Group: Group(m.CustomerId), OwnerCustomerId: groups is null ? null : m.CustomerId,
                 ServiceDate: m.Date)));
         }
 

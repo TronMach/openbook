@@ -10,7 +10,7 @@ namespace OpenBook.Application.Inventory;
 /// <summary>A tracked item's stock beside what's on order from vendors and still to deliver on customers' sales orders.</summary>
 /// <param name="OnPurchaseOrders">Units on open purchase orders that haven't come into stock yet.</param>
 /// <param name="OnSalesOrders">Units on open sales orders not invoiced yet (bundles count as their components).</param>
-/// <param name="SoldPerMonth">Units sold per 30 days over the last <see cref="ReorderService.SalesDays"/> days (sales less returns).</param>
+/// <param name="SoldPerMonth">Units sold, or used in builds, per 30 days over the last <see cref="ReorderService.SalesDays"/> days (less returns).</param>
 public sealed record StockOutlook(Item Item, decimal OnHand, decimal OnPurchaseOrders, decimal OnSalesOrders, decimal SoldPerMonth = 0m)
 {
     /// <summary>On hand less what's promised to customers.</summary>
@@ -57,7 +57,12 @@ public sealed class ReorderService(
     private static readonly HashSet<string> SaleSources = new(StringComparer.Ordinal)
     {
         InventorySources.Invoice, InventorySources.SalesReceipt, InventorySources.CreditMemo, InventorySources.ChannelOrders, InventorySources.ChannelReturn,
+        InventorySources.AssemblyBuild,
     };
+
+    /// <summary>What these bring in was built (by a sale that was short, or a build), so it isn't something coming back.</summary>
+    private static bool Builds(string source) =>
+        source is InventorySources.Invoice or InventorySources.SalesReceipt or InventorySources.ChannelOrders or InventorySources.AssemblyBuild;
 
     /// <summary>Every active tracked item's outlook, by name; with a warehouse, only its stock and the orders for it.</summary>
     public async Task<IReadOnlyList<StockOutlook>> OutlookAsync(Warehouse? warehouse = null, CancellationToken ct = default)
@@ -106,11 +111,14 @@ public sealed class ReorderService(
                     Promise(line.ItemId!.Value, left);
         }
 
-        // Units sold lately, net of returns and voids (each void moves the stock back under the same source).
+        // Units sold or built with lately, net of returns and voids (each void moves the stock back under the same source).
         var today = CompanyTime.TodayAt(clock.UtcNow, CompanyTime.Zone);
         var since = today.AddDays(-SalesDays + 1);
-        var sold = (await movements.ListMovementsAsync(null, ct))
-            .Where(m => SaleSources.Contains(m.SourceType) && m.Date >= since && m.Date <= today && Counts(m.WarehouseId))
+        var all = await movements.ListMovementsAsync(null, ct);
+        var built = all.Where(m => m.IsReceipt && m.Quantity > 0m && Builds(m.SourceType)).Select(m => m.Id).ToHashSet();
+        var sold = all
+            .Where(m => SaleSources.Contains(m.SourceType) && m.Date >= since && m.Date <= today && Counts(m.WarehouseId)
+                && !built.Contains(m.Id) && !(m.ReversalOf is { } undone && built.Contains(undone)))
             .GroupBy(m => m.ItemId).ToDictionary(g => g.Key, g => Math.Max(0m, -g.Sum(m => m.Quantity)));
 
         return stock

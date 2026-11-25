@@ -1,0 +1,127 @@
+@page "/sales/commissions/settings"
+@inject CommissionService Service
+@inject WorkerService WorkerService
+
+<PageTitle>@L["Commission rates and settings"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Commission rates and settings"]</h1>
+        <ActionLink Class="button secondary" Href="/sales/commissions">@L["Sales commissions"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/time/people">@L["People and rates"]</ActionLink>
+    </div>
+    <p class="muted">@L["Sales reps are the people on People and rates. A new invoice, sales receipt or credit memo takes the customer's responsible person as its sales rep, and each one can be given another. Commission counts lines on income accounts, before tax and after discounts."]</p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done == "saved")
+    {
+        <div class="alert notice" role="status">@L["Saved."]</div>
+    }
+
+    <div class="card">
+        <h2>@L["When commission is earned"]</h2>
+        <PostForm Action="/sales/commissions/settings" data-enhance="false">
+            <AntiforgeryToken />
+            <SettingsVersion TRecord="CommissionSettings" />
+            <fieldset>
+                <legend class="visually-hidden">@L["When commission is earned"]</legend>
+                <label class="check"><input type="radio" name="basis" value="Paid" checked="@(_settings.Basis == CommissionBasis.Paid)" /> <span>@L["When the invoice is paid: each payment earns its share"]</span></label>
+                <label class="check"><input type="radio" name="basis" value="Invoiced" checked="@(_settings.Basis == CommissionBasis.Invoiced)" /> <span>@L["When it's invoiced, paid or not"]</span></label>
+            </fieldset>
+            <p class="hint">@L["Changing this leaves the runs you've made alone; the next run makes up the difference on every document."]</p>
+            <div class="actions"><button type="submit">@L["Save"]</button></div>
+        </PostForm>
+    </div>
+
+    <h2 id="rates">@L["Rates"]</h2>
+    @if (_rates.Count == 0)
+    {
+        <div class="card"><p class="muted">@L["No rates yet. Someone without a rate earns no commission."]</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Sales rep"]</th><th>@L["Item category"]</th><th class="num">@L["Rate"]</th><th>@L["Starts"]</th><th><span class="visually-hidden">@L["Actions"]</span></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _rates)
+                    {
+                        var name = _workers.FirstOrDefault(w => w.Id == r.WorkerId)?.Name ?? "?";
+                        <tr>
+                            <td>@name</td>
+                            <td>@(r.Category ?? L["Everything else"].Value)</td>
+                            <td class="num">@Labels.Percent(r.Percent)</td>
+                            <td>@(r.StartsOn is { } starts ? Labels.Date(starts) : "")</td>
+                            <td class="num">
+                                <PostForm Action="@($"/sales/commissions/rates/{r.Id}/delete")" data-enhance="false" class="inline">
+                                    <AntiforgeryToken />
+                                    <button type="submit" class="link" aria-label="@L["Delete the rate for {0}", name]">@L["Delete"]</button>
+                                </PostForm>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2>@L["Add a rate"]</h2>
+        <PostForm Action="/sales/commissions/rates" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="rep">@L["Sales rep"]</label>
+                    <select id="rep" name="workerId" required data-search>
+                        <option value="">@L["Choose a person…"]</option>
+                        @foreach (var w in _workers.Where(x => x.IsActive))
+                        {
+                            <option value="@w.Id">@w.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="percent">@L["Rate %"]</label>
+                    <input id="percent" name="percent" class="short" inputmode="decimal" required placeholder="5" />
+                </div>
+                <div class="field">
+                    <label for="category">@L["Item category"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="category" name="category" maxlength="50" list="categories" />
+                    <datalist id="categories">
+                        @foreach (var c in _categories)
+                        {
+                            <option value="@c"></option>
+                        }
+                    </datalist>
+                </div>
+                <div class="field">
+                    <label for="starts">@L["Starts"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="starts" name="startsOn" type="date" />
+                    <span class="hint">@L["For documents dated from then. Earlier ones keep the rate before it."]</span>
+                </div>
+            </div>
+            <div class="actions"><button type="submit" disabled="@(_workers.Count == 0)">@L["Add"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private CommissionSettings _settings = CommissionSettings.Create();
+    private IReadOnlyList<CommissionRate> _rates = [];
+    private IReadOnlyList<Worker> _workers = [];
+    private IReadOnlyList<string> _categories = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await Service.GetSettingsAsync();
+        _rates = await Service.ListRatesAsync();
+        _workers = await WorkerService.ListAsync(includeInactive: true);
+        _categories = await Service.CategoriesAsync();
+    }
+}

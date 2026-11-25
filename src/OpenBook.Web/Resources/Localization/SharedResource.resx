@@ -50,6 +50,9 @@
   <data name="(optional; defaults to the name)" xml:space="preserve">
     <value>(optional; defaults to the name)</value>
   </data>
+  <data name="(optional; the customer may see it)" xml:space="preserve">
+    <value>(optional; the customer may see it)</value>
+  </data>
   <data name="(set at setup; can't be changed)" xml:space="preserve">
     <value>(set at setup; can't be changed)</value>
   </data>
@@ -68,8 +71,14 @@
   <data name="+ Add “{0}”" xml:space="preserve">
     <value>+ Add “{0}”</value>
   </data>
+  <data name=", expires {0}" xml:space="preserve">
+    <value>, expires {0}</value>
+  </data>
   <data name="1 add-in" xml:space="preserve">
     <value>1 add-in</value>
+  </data>
+  <data name="1 bill made." xml:space="preserve">
+    <value>1 bill made.</value>
   </data>
   <data name="1 connection" xml:space="preserve">
     <value>1 connection</value>
@@ -79,6 +88,9 @@
   </data>
   <data name="1 item" xml:space="preserve">
     <value>1 item</value>
+  </data>
+  <data name="1 rate" xml:space="preserve">
+    <value>1 rate</value>
   </data>
   <data name="1 rule" xml:space="preserve">
     <value>1 rule</value>
@@ -107,14 +119,17 @@
   <data name="A CSV with an Item (or Request) column, and Owner, Due and Notes columns if it has them. Items already on the list are skipped." xml:space="preserve">
     <value>A CSV with an Item (or Request) column, and Owner, Due and Notes columns if it has them. Items already on the list are skipped.</value>
   </data>
-  <data name="A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be." xml:space="preserve">
-    <value>A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be.</value>
+  <data name="A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be. Gifts already there with the same donor, date, amount and reference are left out, so a file can be imported again." xml:space="preserve">
+    <value>A CSV with Donor, Date and Amount columns, and Description, Reference, In kind (Yes or No), Goods value and Goods description if it has them. Each donor must already be a customer with that name. Nothing is imported unless every row can be. Gifts already there with the same donor, date, amount and reference are left out, so a file can be imported again.</value>
   </data>
   <data name="A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick &quot;also sign out my other sessions&quot; so it can't start capturing again (this browser stays signed in)." xml:space="preserve">
     <value>A device whose access is removed clears everything it holds the next time it connects. If the device is lost, tick "also sign out my other sessions" so it can't start capturing again (this browser stays signed in).</value>
   </data>
   <data name="A drop-down per area listing its pages, so most pages are one click away" xml:space="preserve">
     <value>A drop-down per area listing its pages, so most pages are one click away</value>
+  </data>
+  <data name="A mailbox bills are forwarded to: what's attached goes in the document inbox by itself." xml:space="preserve">
+    <value>A mailbox bills are forwarded to: what's attached goes in the document inbox by itself.</value>
   </data>
   <data name="A note with your gift" xml:space="preserve">
     <value>A note with your gift</value>
@@ -206,6 +221,9 @@
   <data name="Add a customer" xml:space="preserve">
     <value>Add a customer</value>
   </data>
+  <data name="Add a passkey" xml:space="preserve">
+    <value>Add a passkey</value>
+  </data>
   <data name="Add a product or service" xml:space="preserve">
     <value>Add a product or service</value>
   </data>
@@ -239,6 +257,9 @@
   <data name="Add-ins" xml:space="preserve">
     <value>Add-ins</value>
   </data>
+  <data name="Added" xml:space="preserve">
+    <value>Added</value>
+  </data>
   <data name="Address" xml:space="preserve">
     <value>Address</value>
   </data>
@@ -265,6 +286,12 @@
   </data>
   <data name="Admins who can give you access:" xml:space="preserve">
     <value>Admins who can give you access:</value>
+  </data>
+  <data name="Agreed on {0}, in the customer portal. Their invoices are charged to it on the due date, unless one is ticked Don't charge automatically." xml:space="preserve">
+    <value>Agreed on {0}, in the customer portal. Their invoices are charged to it on the due date, unless one is ticked Don't charge automatically.</value>
+  </data>
+  <data name="Agreed on {0}, on a link you sent. Their invoices are charged to it on the due date, unless one is ticked Don't charge automatically." xml:space="preserve">
+    <value>Agreed on {0}, on a link you sent. Their invoices are charged to it on the due date, unless one is ticked Don't charge automatically.</value>
   </data>
   <data name="Alert" xml:space="preserve">
     <value>Alert</value>
@@ -305,17 +332,29 @@
   <data name="Already like this" xml:space="preserve">
     <value>Already like this</value>
   </data>
+  <data name="Already there: {0}." xml:space="preserve">
+    <value>Already there: {0}.</value>
+  </data>
   <data name="also sign out my other sessions" xml:space="preserve">
     <value>also sign out my other sessions</value>
   </data>
   <data name="Amount" xml:space="preserve">
     <value>Amount</value>
   </data>
+  <data name="Amount counted" xml:space="preserve">
+    <value>Amount counted</value>
+  </data>
   <data name="Amount of line {0}" xml:space="preserve">
     <value>Amount of line {0}</value>
   </data>
   <data name="an hour" xml:space="preserve">
     <value>an hour</value>
+  </data>
+  <data name="An open bill has this amount. Paying it needs standard access to purchases: ask an admin." xml:space="preserve">
+    <value>An open bill has this amount. Paying it needs standard access to purchases: ask an admin.</value>
+  </data>
+  <data name="An open invoice has this amount. Receiving the payment needs standard access to sales: ask an admin." xml:space="preserve">
+    <value>An open invoice has this amount. Receiving the payment needs standard access to sales: ask an admin.</value>
   </data>
   <data name="API keys" xml:space="preserve">
     <value>API keys</value>
@@ -359,6 +398,9 @@
   <data name="Ask for a code from an authenticator app as well as your password." xml:space="preserve">
     <value>Ask for a code from an authenticator app as well as your password.</value>
   </data>
+  <data name="Ask the customer for another card, or to pay another way" xml:space="preserve">
+    <value>Ask the customer for another card, or to pay another way</value>
+  </data>
   <data name="Ask them for a W-9 before the end of January" xml:space="preserve">
     <value>Ask them for a W-9 before the end of January</value>
   </data>
@@ -382,6 +424,9 @@
   </data>
   <data name="Automatic backups aren't working" xml:space="preserve">
     <value>Automatic backups aren't working</value>
+  </data>
+  <data name="Automatic payment" xml:space="preserve">
+    <value>Automatic payment</value>
   </data>
   <data name="Back" xml:space="preserve">
     <value>Back</value>
@@ -430,6 +475,9 @@
   </data>
   <data name="Backups" xml:space="preserve">
     <value>Backups</value>
+  </data>
+  <data name="Backups, exports and emails made or sent before now, and what other services you use keep. Delete the copies you don't have to keep." xml:space="preserve">
+    <value>Backups, exports and emails made or sent before now, and what other services you use keep. Delete the copies you don't have to keep.</value>
   </data>
   <data name="Bad debt write-off" xml:space="preserve">
     <value>Bad debt write-off</value>
@@ -517,6 +565,9 @@
   </data>
   <data name="Billed" xml:space="preserve">
     <value>Billed</value>
+  </data>
+  <data name="Bills by email" xml:space="preserve">
+    <value>Bills by email</value>
   </data>
   <data name="Bills due within a week" xml:space="preserve">
     <value>Bills due within a week</value>
@@ -638,6 +689,9 @@
   <data name="Changes" xml:space="preserve">
     <value>Changes</value>
   </data>
+  <data name="Changing this leaves the runs you've made alone; the next run makes up the difference on every document." xml:space="preserve">
+    <value>Changing this leaves the runs you've made alone; the next run makes up the difference on every document.</value>
+  </data>
   <data name="Channel" xml:space="preserve">
     <value>Channel</value>
   </data>
@@ -676,6 +730,9 @@
   </data>
   <data name="Choose" xml:space="preserve">
     <value>Choose</value>
+  </data>
+  <data name="Choose a person…" xml:space="preserve">
+    <value>Choose a person…</value>
   </data>
   <data name="Choose what the dashboard shows" xml:space="preserve">
     <value>Choose what the dashboard shows</value>
@@ -737,6 +794,15 @@
   <data name="Collections" xml:space="preserve">
     <value>Collections</value>
   </data>
+  <data name="Commission" xml:space="preserve">
+    <value>Commission</value>
+  </data>
+  <data name="Commission rates and settings" xml:space="preserve">
+    <value>Commission rates and settings</value>
+  </data>
+  <data name="Commission report" xml:space="preserve">
+    <value>Commission report</value>
+  </data>
   <data name="Company" xml:space="preserve">
     <value>Company</value>
   </data>
@@ -781,6 +847,9 @@
   </data>
   <data name="Copy the list" xml:space="preserve">
     <value>Copy the list</value>
+  </data>
+  <data name="Copy this link now: it won't be shown again." xml:space="preserve">
+    <value>Copy this link now: it won't be shown again.</value>
   </data>
   <data name="Cost" xml:space="preserve">
     <value>Cost</value>
@@ -905,6 +974,9 @@
   <data name="Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
+  <data name="Delete the rate for {0}" xml:space="preserve">
+    <value>Delete the rate for {0}</value>
+  </data>
   <data name="Delete this request?" xml:space="preserve">
     <value>Delete this request?</value>
   </data>
@@ -925,6 +997,9 @@
   </data>
   <data name="Dismiss" xml:space="preserve">
     <value>Dismiss</value>
+  </data>
+  <data name="Document" xml:space="preserve">
+    <value>Document</value>
   </data>
   <data name="Document inbox" xml:space="preserve">
     <value>Document inbox</value>
@@ -986,6 +1061,9 @@
   <data name="each with its price" xml:space="preserve">
     <value>each with its price</value>
   </data>
+  <data name="Earned through" xml:space="preserve">
+    <value>Earned through</value>
+  </data>
   <data name="Edit" xml:space="preserve">
     <value>Edit</value>
   </data>
@@ -1003,6 +1081,12 @@
   </data>
   <data name="Email messages" xml:space="preserve">
     <value>Email messages</value>
+  </data>
+  <data name="Email the link to {0}" xml:space="preserve">
+    <value>Email the link to {0}</value>
+  </data>
+  <data name="Emailed to {0}." xml:space="preserve">
+    <value>Emailed to {0}.</value>
   </data>
   <data name="Employer ID (EIN)" xml:space="preserve">
     <value>Employer ID (EIN)</value>
@@ -1061,6 +1145,12 @@
   <data name="Entry memo" xml:space="preserve">
     <value>Entry memo</value>
   </data>
+  <data name="Erase personal details" xml:space="preserve">
+    <value>Erase personal details</value>
+  </data>
+  <data name="Erase personal details…" xml:space="preserve">
+    <value>Erase personal details…</value>
+  </data>
   <data name="Estimate" xml:space="preserve">
     <value>Estimate</value>
   </data>
@@ -1106,6 +1196,9 @@
   <data name="Everyone pays the item's price" xml:space="preserve">
     <value>Everyone pays the item's price</value>
   </data>
+  <data name="Everything else" xml:space="preserve">
+    <value>Everything else</value>
+  </data>
   <data name="Everything is also available through the REST API under /api." xml:space="preserve">
     <value>Everything is also available through the REST API under /api.</value>
   </data>
@@ -1114,6 +1207,9 @@
   </data>
   <data name="Expect last year's takings again" xml:space="preserve">
     <value>Expect last year's takings again</value>
+  </data>
+  <data name="Expense account" xml:space="preserve">
+    <value>Expense account</value>
   </data>
   <data name="Expense claim" xml:space="preserve">
     <value>Expense claim</value>
@@ -1208,6 +1304,9 @@
   <data name="For businesses that don't keep exact counts. The count goes below zero and the extra units are costed at the item's purchase cost until stock comes in, which then corrects the cost. Each item can follow this or always or never allow it; items with lot or serial numbers never do." xml:space="preserve">
     <value>For businesses that don't keep exact counts. The count goes below zero and the extra units are costed at the item's purchase cost until stock comes in, which then corrects the cost. Each item can follow this or always or never allow it; items with lot or serial numbers never do.</value>
   </data>
+  <data name="For documents dated from then. Earlier ones keep the rate before it." xml:space="preserve">
+    <value>For documents dated from then. Earlier ones keep the rate before it.</value>
+  </data>
   <data name="For linking OpenBook to other programs." xml:space="preserve">
     <value>For linking OpenBook to other programs.</value>
   </data>
@@ -1216,6 +1315,12 @@
   </data>
   <data name="For payouts posted before a state's tax agency was set up (or before their orders came in): the tax each one put in the channel's tax account moves to the agency of the state it was shipped to, by an entry on the date chosen. The bank isn't touched; voiding a payout takes its move back too." xml:space="preserve">
     <value>For payouts posted before a state's tax agency was set up (or before their orders came in): the tax each one put in the channel's tax account moves to the agency of the state it was shipped to, by an entry on the date chosen. The bank isn't touched; voiding a payout takes its move back too.</value>
+  </data>
+  <data name="For someone who asks for their data to be erased, once you're done with them. It can't be undone: nobody can bring the details back, and the record can't be changed or used again." xml:space="preserve">
+    <value>For someone who asks for their data to be erased, once you're done with them. It can't be undone: nobody can bring the details back, and the record can't be changed or used again.</value>
+  </data>
+  <data name="For someone who asks for their data to be erased: takes away their name and contact details and keeps the documents the law makes you keep. Only for a record that's inactive and settled." xml:space="preserve">
+    <value>For someone who asks for their data to be erased: takes away their name and contact details and keeps the documents the law makes you keep. Only for a record that's inactive and settled.</value>
   </data>
   <data name="For something you keep in stock, use Items: it asks about stock and costs." xml:space="preserve">
     <value>For something you keep in stock, use Items: it asks about stock and costs.</value>
@@ -1291,6 +1396,9 @@
   </data>
   <data name="Give to {0}" xml:space="preserve">
     <value>Give to {0}</value>
+  </data>
+  <data name="Gives the money back to the customer's card or account through {0}, and records it: what's refunded comes off the invoices this payment paid, which are owed again, and is paid back to the customer. To keep an invoice settled as well, give the customer a credit memo for it." xml:space="preserve">
+    <value>Gives the money back to the customer's card or account through {0}, and records it: what's refunded comes off the invoices this payment paid, which are owed again, and is paid back to the customer. To keep an invoice settled as well, give the customer a credit memo for it.</value>
   </data>
   <data name="Go back" xml:space="preserve">
     <value>Go back</value>
@@ -1427,6 +1535,9 @@
   <data name="Import unpaid invoices and bills" xml:space="preserve">
     <value>Import unpaid invoices and bills</value>
   </data>
+  <data name="in the books" xml:space="preserve">
+    <value>in the books</value>
+  </data>
   <data name="Inactive" xml:space="preserve">
     <value>Inactive</value>
   </data>
@@ -1475,17 +1586,26 @@
   <data name="Invoice {0}" xml:space="preserve">
     <value>Invoice {0}</value>
   </data>
+  <data name="Invoices whose saved card keeps being declined" xml:space="preserve">
+    <value>Invoices whose saved card keeps being declined</value>
+  </data>
   <data name="Invoices, estimates, credit memos and sales receipts can go to customers as a text with a link to view them (and, for invoices, to pay online). OpenBook sends them through your company's own Twilio account: its details go here." xml:space="preserve">
     <value>Invoices, estimates, credit memos and sales receipts can go to customers as a text with a link to view them (and, for invoices, to pay online). OpenBook sends them through your company's own Twilio account: its details go here.</value>
   </data>
   <data name="It can't be sent yet:" xml:space="preserve">
     <value>It can't be sent yet:</value>
   </data>
+  <data name="It didn't go through" xml:space="preserve">
+    <value>It didn't go through</value>
+  </data>
   <data name="It only changes the menu, the home page and which reports come first; everything stays available." xml:space="preserve">
     <value>It only changes the menu, the home page and which reports come first; everything stays available.</value>
   </data>
   <data name="Item" xml:space="preserve">
     <value>Item</value>
+  </data>
+  <data name="Item category" xml:space="preserve">
+    <value>Item category</value>
   </data>
   <data name="Item Center" xml:space="preserve">
     <value>Item Center</value>
@@ -1498,6 +1618,9 @@
   </data>
   <data name="Items to reorder" xml:space="preserve">
     <value>Items to reorder</value>
+  </data>
+  <data name="Its bill is voided, so these are free for the next run." xml:space="preserve">
+    <value>Its bill is voided, so these are free for the next run.</value>
   </data>
   <data name="Join and sign in" xml:space="preserve">
     <value>Join and sign in</value>
@@ -1613,6 +1736,9 @@
   <data name="Link" xml:space="preserve">
     <value>Link</value>
   </data>
+  <data name="Link this person to a vendor record on People and rates to pay them here." xml:space="preserve">
+    <value>Link this person to a vendor record on People and rates to pay them here.</value>
+  </data>
   <data name="link your account" xml:space="preserve">
     <value>link your account</value>
   </data>
@@ -1651,6 +1777,12 @@
   </data>
   <data name="Make a deposit" xml:space="preserve">
     <value>Make a deposit</value>
+  </data>
+  <data name="Make a link to copy" xml:space="preserve">
+    <value>Make a link to copy</value>
+  </data>
+  <data name="Make bills" xml:space="preserve">
+    <value>Make bills</value>
   </data>
   <data name="Make Deposits" xml:space="preserve">
     <value>Make Deposits</value>
@@ -1856,6 +1988,9 @@
   <data name="No claims yet." xml:space="preserve">
     <value>No claims yet.</value>
   </data>
+  <data name="No commissions are waiting through {0}." xml:space="preserve">
+    <value>No commissions are waiting through {0}.</value>
+  </data>
   <data name="No custom fields" xml:space="preserve">
     <value>No custom fields</value>
   </data>
@@ -1868,6 +2003,12 @@
   <data name="No names match." xml:space="preserve">
     <value>No names match.</value>
   </data>
+  <data name="No passkey was made. Try again." xml:space="preserve">
+    <value>No passkey was made. Try again.</value>
+  </data>
+  <data name="No passkey was used. Try again, or sign in with your password." xml:space="preserve">
+    <value>No passkey was used. Try again, or sign in with your password.</value>
+  </data>
   <data name="No payouts yet." xml:space="preserve">
     <value>No payouts yet.</value>
   </data>
@@ -1876,6 +2017,12 @@
   </data>
   <data name="No products or services of this type." xml:space="preserve">
     <value>No products or services of this type.</value>
+  </data>
+  <data name="No rates" xml:space="preserve">
+    <value>No rates</value>
+  </data>
+  <data name="No rates yet. Someone without a rate earns no commission." xml:space="preserve">
+    <value>No rates yet. Someone without a rate earns no commission.</value>
   </data>
   <data name="No rates yet: time uses each person's bill rate, else the service's price." xml:space="preserve">
     <value>No rates yet: time uses each person's bill rate, else the service's price.</value>
@@ -1906,6 +2053,9 @@
   </data>
   <data name="No." xml:space="preserve">
     <value>No.</value>
+  </data>
+  <data name="Nobody" xml:space="preserve">
+    <value>Nobody</value>
   </data>
   <data name="Nobody (each person decides)" xml:space="preserve">
     <value>Nobody (each person decides)</value>
@@ -1958,6 +2108,9 @@
   <data name="Not needed" xml:space="preserve">
     <value>Not needed</value>
   </data>
+  <data name="Not refunded" xml:space="preserve">
+    <value>Not refunded</value>
+  </data>
   <data name="Not set up" xml:space="preserve">
     <value>Not set up</value>
   </data>
@@ -1966,6 +2119,12 @@
   </data>
   <data name="Not set up: no sales tax is charged" xml:space="preserve">
     <value>Not set up: no sales tax is charged</value>
+  </data>
+  <data name="Not yet" xml:space="preserve">
+    <value>Not yet</value>
+  </data>
+  <data name="Not yet. Settle these first:" xml:space="preserve">
+    <value>Not yet. Settle these first:</value>
   </data>
   <data name="Note" xml:space="preserve">
     <value>Note</value>
@@ -2015,6 +2174,9 @@
   <data name="of {0}" xml:space="preserve">
     <value>of {0}</value>
   </data>
+  <data name="Off" xml:space="preserve">
+    <value>Off</value>
+  </data>
   <data name="off, set it up" xml:space="preserve">
     <value>off, set it up</value>
   </data>
@@ -2053,6 +2215,18 @@
   </data>
   <data name="Online giving isn't open right now. Please get in touch with us to give another way." xml:space="preserve">
     <value>Online giving isn't open right now. Please get in touch with us to give another way.</value>
+  </data>
+  <data name="Online payments are switched off, so nothing is charged to it at the moment." xml:space="preserve">
+    <value>Online payments are switched off, so nothing is charged to it at the moment.</value>
+  </data>
+  <data name="Online refunds still waiting" xml:space="preserve">
+    <value>Online refunds still waiting</value>
+  </data>
+  <data name="Only administrators sign in with a password here." xml:space="preserve">
+    <value>Only administrators sign in with a password here.</value>
+  </data>
+  <data name="Only administrators sign in with a password or passkey here. Use single sign-on." xml:space="preserve">
+    <value>Only administrators sign in with a password or passkey here. Use single sign-on.</value>
   </data>
   <data name="Only invoices, estimates, credit memos and sales receipts can be sent by text." xml:space="preserve">
     <value>Only invoices, estimates, credit memos and sales receipts can be sent by text.</value>
@@ -2189,6 +2363,9 @@
   <data name="Paid for something for the business with your own money?" xml:space="preserve">
     <value>Paid for something for the business with your own money?</value>
   </data>
+  <data name="Paid from" xml:space="preserve">
+    <value>Paid from</value>
+  </data>
   <data name="Paid on" xml:space="preserve">
     <value>Paid on</value>
   </data>
@@ -2200,6 +2377,15 @@
   </data>
   <data name="Part" xml:space="preserve">
     <value>Part</value>
+  </data>
+  <data name="Passkey added. You can sign in with it from now on." xml:space="preserve">
+    <value>Passkey added. You can sign in with it from now on.</value>
+  </data>
+  <data name="Passkey removed. Remove it on the device too, or it will go on being offered." xml:space="preserve">
+    <value>Passkey removed. Remove it on the device too, or it will go on being offered.</value>
+  </data>
+  <data name="Passkeys" xml:space="preserve">
+    <value>Passkeys</value>
   </data>
   <data name="Password" xml:space="preserve">
     <value>Password</value>
@@ -2221,6 +2407,9 @@
   </data>
   <data name="Pay your bills" xml:space="preserve">
     <value>Pay your bills</value>
+  </data>
+  <data name="Pay {0}" xml:space="preserve">
+    <value>Pay {0}</value>
   </data>
   <data name="Payment" xml:space="preserve">
     <value>Payment</value>
@@ -2429,11 +2618,20 @@
   <data name="Rate" xml:space="preserve">
     <value>Rate</value>
   </data>
+  <data name="Rate %" xml:space="preserve">
+    <value>Rate %</value>
+  </data>
   <data name="Rate card" xml:space="preserve">
     <value>Rate card</value>
   </data>
   <data name="Rate per hour" xml:space="preserve">
     <value>Rate per hour</value>
+  </data>
+  <data name="Rates" xml:space="preserve">
+    <value>Rates</value>
+  </data>
+  <data name="Rates and settings" xml:space="preserve">
+    <value>Rates and settings</value>
   </data>
   <data name="Ratios" xml:space="preserve">
     <value>Ratios</value>
@@ -2443,6 +2641,9 @@
   </data>
   <data name="Read on this server" xml:space="preserve">
     <value>Read on this server</value>
+  </data>
+  <data name="Reading {0}" xml:space="preserve">
+    <value>Reading {0}</value>
   </data>
   <data name="Reason" xml:space="preserve">
     <value>Reason</value>
@@ -2546,11 +2747,26 @@
   <data name="Refund" xml:space="preserve">
     <value>Refund</value>
   </data>
+  <data name="Refund at {0}" xml:space="preserve">
+    <value>Refund at {0}</value>
+  </data>
+  <data name="Refund this at {0}? It can't be taken back." xml:space="preserve">
+    <value>Refund this at {0}? It can't be taken back.</value>
+  </data>
+  <data name="Refunded" xml:space="preserve">
+    <value>Refunded</value>
+  </data>
+  <data name="Refunded at {0} and recorded." xml:space="preserve">
+    <value>Refunded at {0} and recorded.</value>
+  </data>
   <data name="Refunds" xml:space="preserve">
     <value>Refunds</value>
   </data>
   <data name="Refunds and disputes made at your payment provider" xml:space="preserve">
     <value>Refunds and disputes made at your payment provider</value>
+  </data>
+  <data name="Refunds at {0}" xml:space="preserve">
+    <value>Refunds at {0}</value>
   </data>
   <data name="Region" xml:space="preserve">
     <value>Region</value>
@@ -2588,8 +2804,17 @@
   <data name="Remove access" xml:space="preserve">
     <value>Remove access</value>
   </data>
+  <data name="Remove the card" xml:space="preserve">
+    <value>Remove the card</value>
+  </data>
   <data name="Remove the saved auth token" xml:space="preserve">
     <value>Remove the saved auth token</value>
+  </data>
+  <data name="Remove this passkey? It can't be signed in with any more." xml:space="preserve">
+    <value>Remove this passkey? It can't be signed in with any more.</value>
+  </data>
+  <data name="Remove {0}" xml:space="preserve">
+    <value>Remove {0}</value>
   </data>
   <data name="Removed" xml:space="preserve">
     <value>Removed</value>
@@ -2684,6 +2909,15 @@
   <data name="Round to whole dollars" xml:space="preserve">
     <value>Round to whole dollars</value>
   </data>
+  <data name="Run" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="Run {0}" xml:space="preserve">
+    <value>Run {0}</value>
+  </data>
+  <data name="Runs" xml:space="preserve">
+    <value>Runs</value>
+  </data>
   <data name="Sales" xml:space="preserve">
     <value>Sales</value>
   </data>
@@ -2711,6 +2945,9 @@
   <data name="Sales Channels and Payouts" xml:space="preserve">
     <value>Sales Channels and Payouts</value>
   </data>
+  <data name="Sales commissions" xml:space="preserve">
+    <value>Sales commissions</value>
+  </data>
   <data name="Sales order" xml:space="preserve">
     <value>Sales order</value>
   </data>
@@ -2725,6 +2962,12 @@
   </data>
   <data name="Sales Receipts" xml:space="preserve">
     <value>Sales Receipts</value>
+  </data>
+  <data name="Sales rep" xml:space="preserve">
+    <value>Sales rep</value>
+  </data>
+  <data name="Sales reps are the people on People and rates. A new invoice, sales receipt or credit memo takes the customer's responsible person as its sales rep, and each one can be given another. Commission counts lines on income accounts, before tax and after discounts." xml:space="preserve">
+    <value>Sales reps are the people on People and rates. A new invoice, sales receipt or credit memo takes the customer's responsible person as its sales rep, and each one can be given another. Commission counts lines on income accounts, before tax and after discounts.</value>
   </data>
   <data name="Sales tax" xml:space="preserve">
     <value>Sales tax</value>
@@ -2924,6 +3167,12 @@
   <data name="Sign in" xml:space="preserve">
     <value>Sign in</value>
   </data>
+  <data name="Sign in with a passkey" xml:space="preserve">
+    <value>Sign in with a passkey</value>
+  </data>
+  <data name="Sign in with your fingerprint, face or PIN instead of your password. The key stays on your device or security key; OpenBook keeps only its public half. A passkey also counts as two-factor sign-in." xml:space="preserve">
+    <value>Sign in with your fingerprint, face or PIN instead of your password. The key stays on your device or security key; OpenBook keeps only its public half. A passkey also counts as two-factor sign-in.</value>
+  </data>
   <data name="Sign in with your {0} account to accept, using the email this invitation was sent to." xml:space="preserve">
     <value>Sign in with your {0} account to accept, using the email this invitation was sent to.</value>
   </data>
@@ -2956,6 +3205,12 @@
   </data>
   <data name="Single sign-on" xml:space="preserve">
     <value>Single sign-on</value>
+  </data>
+  <data name="Single sign-on isn't available: its client secret can't be read on this computer. An administrator can sign in with their password and enter it again under Settings, Sign-in." xml:space="preserve">
+    <value>Single sign-on isn't available: its client secret can't be read on this computer. An administrator can sign in with their password and enter it again under Settings, Sign-in.</value>
+  </data>
+  <data name="Single sign-on isn't available: its client secret can't be read on this computer. Ask an admin to enter it again under Settings, Sign-in." xml:space="preserve">
+    <value>Single sign-on isn't available: its client secret can't be read on this computer. Ask an admin to enter it again under Settings, Sign-in.</value>
   </data>
   <data name="Single sign-on only: everyone but admins must use it (admins keep their password, in case the provider is down)" xml:space="preserve">
     <value>Single sign-on only: everyone but admins must use it (admins keep their password, in case the provider is down)</value>
@@ -3047,6 +3302,9 @@
   <data name="Stock transfer" xml:space="preserve">
     <value>Stock transfer</value>
   </data>
+  <data name="Stop charging this card, and have it removed at {0}?" xml:space="preserve">
+    <value>Stop charging this card, and have it removed at {0}?</value>
+  </data>
   <data name="Store address" xml:space="preserve">
     <value>Store address</value>
   </data>
@@ -3113,17 +3371,32 @@
   <data name="Thank you" xml:space="preserve">
     <value>Thank you</value>
   </data>
+  <data name="Thank you for giving to {0}. Your gift is recorded once the payment is confirmed." xml:space="preserve">
+    <value>Thank you for giving to {0}. Your gift is recorded once the payment is confirmed.</value>
+  </data>
   <data name="That account already signs in as someone else." xml:space="preserve">
     <value>That account already signs in as someone else.</value>
   </data>
   <data name="That claim doesn't exist." xml:space="preserve">
     <value>That claim doesn't exist.</value>
   </data>
+  <data name="That device already has a passkey for you." xml:space="preserve">
+    <value>That device already has a passkey for you.</value>
+  </data>
+  <data name="That passkey can't sign in here. Sign in with your password; under Passkeys you can add it again." xml:space="preserve">
+    <value>That passkey can't sign in here. Sign in with your password; under Passkeys you can add it again.</value>
+  </data>
   <data name="That password or code isn't right." xml:space="preserve">
     <value>That password or code isn't right.</value>
   </data>
   <data name="That session is signed out." xml:space="preserve">
     <value>That session is signed out.</value>
+  </data>
+  <data name="That took too long. Try again." xml:space="preserve">
+    <value>That took too long. Try again.</value>
+  </data>
+  <data name="The 1099s recorded as filed, ACH files already made (encrypted), and what the person is called as someone whose time is entered." xml:space="preserve">
+    <value>The 1099s recorded as filed, ACH files already made (encrypted), and what the person is called as someone whose time is entered.</value>
   </data>
   <data name="the accounts every amount is filed under" xml:space="preserve">
     <value>the accounts every amount is filed under</value>
@@ -3133,6 +3406,9 @@
   </data>
   <data name="The agencies you pay, the rates they charge and the tax codes customers and invoices use." xml:space="preserve">
     <value>The agencies you pay, the rates they charge and the tax codes customers and invoices use.</value>
+  </data>
+  <data name="The audit log, and webhooks already sent from it, with what was written at the time: it can't be changed, so that nobody can rewrite history. This erasure is recorded there without the details." xml:space="preserve">
+    <value>The audit log, and webhooks already sent from it, with what was written at the time: it can't be changed, so that nobody can rewrite history. This erasure is recorded there without the details.</value>
   </data>
   <data name="The box holds its float, so there's nothing to replenish. You're done until money is spent from it." xml:space="preserve">
     <value>The box holds its float, so there's nothing to replenish. You're done until money is spent from it.</value>
@@ -3146,6 +3422,12 @@
   <data name="The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below." xml:space="preserve">
     <value>The capture page records time, mileage, expenses and receipt photos on a phone or laptop, even without a connection, and sends them here when it's back online. Each is entered by the same rules as the forms in OpenBook. Ones that couldn't be entered wait below.</value>
   </data>
+  <data name="The card belongs to the customer billed for this one." xml:space="preserve">
+    <value>The card belongs to the customer billed for this one.</value>
+  </data>
+  <data name="The card is removed: invoices aren't charged to it any more." xml:space="preserve">
+    <value>The card is removed: invoices aren't charged to it any more.</value>
+  </data>
   <data name="The check file some banks want before they'll cash your checks." xml:space="preserve">
     <value>The check file some banks want before they'll cash your checks.</value>
   </data>
@@ -3157,6 +3439,9 @@
   </data>
   <data name="The guide isn't installed with this copy of OpenBook. You can read it online:" xml:space="preserve">
     <value>The guide isn't installed with this copy of OpenBook. You can read it online:</value>
+  </data>
+  <data name="The journal entries, with the memos written when they were posted: posted entries never change." xml:space="preserve">
+    <value>The journal entries, with the memos written when they were posted: posted entries never change.</value>
   </data>
   <data name="The last good one was {0}" xml:space="preserve">
     <value>The last good one was {0}</value>
@@ -3170,8 +3455,20 @@
   <data name="The look of printed invoices, estimates, statements and purchase orders: logo, colors, fonts, columns and wording." xml:space="preserve">
     <value>The look of printed invoices, estimates, statements and purchase orders: logo, colors, fonts, columns and wording.</value>
   </data>
+  <data name="The name (lists and reports show a placeholder, such as Erased customer 4F2A91), company, email addresses, phone, mobile number and their agreement to texts, addresses and notes." xml:space="preserve">
+    <value>The name (lists and reports show a placeholder, such as Erased customer 4F2A91), company, email addresses, phone, mobile number and their agreement to texts, addresses and notes.</value>
+  </data>
+  <data name="The name (lists and reports show a placeholder, such as Erased vendor 4F2A91), company, email, phone, address, account number, notes, tax ID and bank account." xml:space="preserve">
+    <value>The name (lists and reports show a placeholder, such as Erased vendor 4F2A91), company, email, phone, address, account number, notes, tax ID and bank account.</value>
+  </data>
+  <data name="The notes, files and custom fields on the record itself." xml:space="preserve">
+    <value>The notes, files and custom fields on the record itself.</value>
+  </data>
   <data name="The per-mile rate for each year (the IRS business rates are filled in)." xml:space="preserve">
     <value>The per-mile rate for each year (the IRS business rates are filled in).</value>
+  </data>
+  <data name="The personal details were erased on {0}." xml:space="preserve">
+    <value>The personal details were erased on {0}.</value>
   </data>
   <data name="The photo kept here will be deleted. Have you saved it?" xml:space="preserve">
     <value>The photo kept here will be deleted. Have you saved it?</value>
@@ -3181,6 +3478,12 @@
   </data>
   <data name="The record was entered, but its photo couldn't be attached, usually because of the kind of file. Save the photo, convert it to JPEG, PNG or PDF, and attach it to the record." xml:space="preserve">
     <value>The record was entered, but its photo couldn't be attached, usually because of the kind of file. Save the photo, convert it to JPEG, PNG or PDF, and attach it to the record.</value>
+  </data>
+  <data name="The refund is still waiting: see why below." xml:space="preserve">
+    <value>The refund is still waiting: see why below.</value>
+  </data>
+  <data name="The sales tax exemption certificate's number, reason and dates, which show why sales weren't taxed. A copy of the certificate attached to the record is erased with its files: save it first." xml:space="preserve">
+    <value>The sales tax exemption certificate's number, reason and dates, which show why sales weren't taxed. A copy of the certificate attached to the record is erased with its files: save it first.</value>
   </data>
   <data name="The server's ({0})" xml:space="preserve">
     <value>The server's ({0})</value>
@@ -3206,8 +3509,17 @@
   <data name="Their code" xml:space="preserve">
     <value>Their code</value>
   </data>
+  <data name="Their documents, with their numbers, dates, amounts, lines, memos, files and the addresses printed on them, because tax law makes you keep them. Printed again, they show the placeholder as the name." xml:space="preserve">
+    <value>Their documents, with their numbers, dates, amounts, lines, memos, files and the addresses printed on them, because tax law makes you keep them. Printed again, they show the placeholder as the name.</value>
+  </data>
   <data name="Their invoices, estimates, credit memos and receipts can be texted here. Numbers from abroad start with + and the country code." xml:space="preserve">
     <value>Their invoices, estimates, credit memos and receipts can be texted here. Numbers from abroad start with + and the country code.</value>
+  </data>
+  <data name="Their place in a household, which is then named after a member who's still in it, and what they typed on the giving page." xml:space="preserve">
+    <value>Their place in a household, which is then named after a member who's still in it, and what they typed on the giving page.</value>
+  </data>
+  <data name="Their portal links and the links to documents sent to them, which stop working." xml:space="preserve">
+    <value>Their portal links and the links to documents sent to them, which stop working.</value>
   </data>
   <data name="Their product codes ({0})" xml:space="preserve">
     <value>Their product codes ({0})</value>
@@ -3226,6 +3538,12 @@
   </data>
   <data name="There's no one on People and rates to pay back yet. An accountant adds people there, with the vendor record their bills go to." xml:space="preserve">
     <value>There's no one on People and rates to pay back yet. An accountant adds people there, with the vendor record their bills go to.</value>
+  </data>
+  <data name="There's no such record." xml:space="preserve">
+    <value>There's no such record.</value>
+  </data>
+  <data name="There's nothing to pay yet: these come off what's earned next." xml:space="preserve">
+    <value>There's nothing to pay yet: these come off what's earned next.</value>
   </data>
   <data name="These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again." xml:space="preserve">
     <value>These lines stay as they are: they're recorded against where they came from. Void the invoice to bill them again.</value>
@@ -3247,6 +3565,9 @@
   </data>
   <data name="This browser" xml:space="preserve">
     <value>This browser</value>
+  </data>
+  <data name="This browser can't make passkeys here: they need a recent browser, and OpenBook opened at an https address (or on this computer)." xml:space="preserve">
+    <value>This browser can't make passkeys here: they need a recent browser, and OpenBook opened at an https address (or on this computer).</value>
   </data>
   <data name="This claim is approved and billed. Void its bill to change it." xml:space="preserve">
     <value>This claim is approved and billed. Void its bill to change it.</value>
@@ -3305,6 +3626,9 @@
   <data name="To bill someone else, void this invoice and enter a new one." xml:space="preserve">
     <value>To bill someone else, void this invoice and enter a new one.</value>
   </data>
+  <data name="To confirm, type the name: {0}" xml:space="preserve">
+    <value>To confirm, type the name: {0}</value>
+  </data>
   <data name="To do" xml:space="preserve">
     <value>To do</value>
   </data>
@@ -3313,6 +3637,9 @@
   </data>
   <data name="to {0}" xml:space="preserve">
     <value>to {0}</value>
+  </data>
+  <data name="Too many tries. Wait a while, then try again." xml:space="preserve">
+    <value>Too many tries. Wait a while, then try again.</value>
   </data>
   <data name="Total" xml:space="preserve">
     <value>Total</value>
@@ -3416,6 +3743,9 @@
   <data name="Unpaid bills" xml:space="preserve">
     <value>Unpaid bills</value>
   </data>
+  <data name="Up to {0}" xml:space="preserve">
+    <value>Up to {0}</value>
+  </data>
   <data name="Upload the mapping" xml:space="preserve">
     <value>Upload the mapping</value>
   </data>
@@ -3485,6 +3815,9 @@
   <data name="Voided" xml:space="preserve">
     <value>Voided</value>
   </data>
+  <data name="Waiting" xml:space="preserve">
+    <value>Waiting</value>
+  </data>
   <data name="Waiting for approval" xml:space="preserve">
     <value>Waiting for approval</value>
   </data>
@@ -3512,6 +3845,12 @@
   <data name="What do you sell it for?" xml:space="preserve">
     <value>What do you sell it for?</value>
   </data>
+  <data name="What is erased" xml:space="preserve">
+    <value>What is erased</value>
+  </data>
+  <data name="What is it on?" xml:space="preserve">
+    <value>What is it on?</value>
+  </data>
   <data name="What is it?" xml:space="preserve">
     <value>What is it?</value>
   </data>
@@ -3520,6 +3859,15 @@
   </data>
   <data name="What people paid for themselves and want paid back. Hand in a claim with the receipts; once it's approved, a bill to the person's vendor record pays them back like any bill." xml:space="preserve">
     <value>What people paid for themselves and want paid back. Hand in a claim with the receipts; once it's approved, a bill to the person's vendor record pays them back like any bill.</value>
+  </data>
+  <data name="What sales reps earn on what they sell, and whether it's earned when invoiced or when paid." xml:space="preserve">
+    <value>What sales reps earn on what they sell, and whether it's earned when invoiced or when paid.</value>
+  </data>
+  <data name="What sales reps have earned and isn't in a run yet. Making a run bills each rep's vendor record, and the bill is paid like any other. Returned payments and credit memos come off; someone left with less than nothing waits for the next run." xml:space="preserve">
+    <value>What sales reps have earned and isn't in a run yet. Making a run bills each rep's vendor record, and the bill is paid like any other. Returned payments and credit memos come off; someone left with less than nothing waits for the next run.</value>
+  </data>
+  <data name="What stays, and why" xml:space="preserve">
+    <value>What stays, and why</value>
   </data>
   <data name="What the box should hold once it's replenished." xml:space="preserve">
     <value>What the box should hold once it's replenished.</value>
@@ -3542,8 +3890,17 @@
   <data name="When" xml:space="preserve">
     <value>When</value>
   </data>
+  <data name="When commission is earned" xml:space="preserve">
+    <value>When commission is earned</value>
+  </data>
+  <data name="When it's invoiced, paid or not" xml:space="preserve">
+    <value>When it's invoiced, paid or not</value>
+  </data>
   <data name="When something goes wrong, download this file and send it with your bug report. It holds how OpenBook is set up, the background jobs, the recent warnings and errors and the last {0} days of log files. Email and network addresses, usernames, passwords, keys and tokens are taken out first. OpenBook doesn't send it anywhere: you choose where it goes." xml:space="preserve">
     <value>When something goes wrong, download this file and send it with your bug report. It holds how OpenBook is set up, the background jobs, the recent warnings and errors and the last {0} days of log files. Email and network addresses, usernames, passwords, keys and tokens are taken out first. OpenBook doesn't send it anywhere: you choose where it goes.</value>
+  </data>
+  <data name="When the invoice is paid: each payment earns its share" xml:space="preserve">
+    <value>When the invoice is paid: each payment earns its share</value>
   </data>
   <data name="Where the money is sorted" xml:space="preserve">
     <value>Where the money is sorted</value>
@@ -3575,6 +3932,9 @@
   <data name="Who can sign in and what each person may do; invite someone by email." xml:space="preserve">
     <value>Who can sign in and what each person may do; invite someone by email.</value>
   </data>
+  <data name="Who emails and texts about them and their documents went to, and what they said. That one was sent, when and by whom stays. Scheduled emails not sent yet are cancelled." xml:space="preserve">
+    <value>Who emails and texts about them and their documents went to, and what they said. That one was sent, when and by whom stays. Scheduled emails not sent yet are cancelled.</value>
+  </data>
   <data name="Who enters time, their cost and bill rates, roles and weekly hours." xml:space="preserve">
     <value>Who enters time, their cost and bill rates, roles and weekly hours.</value>
   </data>
@@ -3605,6 +3965,12 @@
   <data name="With two-factor sign-in, signing in takes your password and a code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others), so a stolen password isn't enough." xml:space="preserve">
     <value>With two-factor sign-in, signing in takes your password and a code from an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others), so a stolen password isn't enough.</value>
   </data>
+  <data name="Work laptop" xml:space="preserve">
+    <value>Work laptop</value>
+  </data>
+  <data name="Works at" xml:space="preserve">
+    <value>Works at</value>
+  </data>
   <data name="Write a check or expense" xml:space="preserve">
     <value>Write a check or expense</value>
   </data>
@@ -3628,6 +3994,9 @@
   </data>
   <data name="You have no keys" xml:space="preserve">
     <value>You have no keys</value>
+  </data>
+  <data name="You have no passkeys yet." xml:space="preserve">
+    <value>You have no passkeys yet.</value>
   </data>
   <data name="You have {0} keys" xml:space="preserve">
     <value>You have {0} keys</value>
@@ -3689,8 +4058,8 @@
   <data name="Your email" xml:space="preserve">
     <value>Your email</value>
   </data>
-  <data name="Your gift to {0} went through. A receipt comes by email once it's recorded." xml:space="preserve">
-    <value>Your gift to {0} went through. A receipt comes by email once it's recorded.</value>
+  <data name="Your gift to {0} went through." xml:space="preserve">
+    <value>Your gift to {0} went through.</value>
   </data>
   <data name="Your gift wasn't made. You can try again below." xml:space="preserve">
     <value>Your gift wasn't made. You can try again below.</value>
@@ -3713,17 +4082,29 @@
   <data name="Your password and sessions" xml:space="preserve">
     <value>Your password and sessions</value>
   </data>
+  <data name="Your payment provider gave no answer, or the books couldn't take them" xml:space="preserve">
+    <value>Your payment provider gave no answer, or the books couldn't take them</value>
+  </data>
   <data name="Your recovery codes" xml:space="preserve">
     <value>Your recovery codes</value>
   </data>
   <data name="Your two-factor sign-in" xml:space="preserve">
     <value>Your two-factor sign-in</value>
   </data>
+  <data name="{0} (made on first use)" xml:space="preserve">
+    <value>{0} (made on first use)</value>
+  </data>
   <data name="{0} add-ins" xml:space="preserve">
     <value>{0} add-ins</value>
   </data>
   <data name="{0} agencies · {1} tax codes" xml:space="preserve">
     <value>{0} agencies · {1} tax codes</value>
+  </data>
+  <data name="{0} bills made." xml:space="preserve">
+    <value>{0} bills made.</value>
+  </data>
+  <data name="{0} can agree to have their invoices charged to a card when they're due. They enter it on Stripe's own page, so no card number reaches OpenBook, and can stop it in their portal. The link below opens their portal at the page that says what they agree to; it lets whoever has it see their account." xml:space="preserve">
+    <value>{0} can agree to have their invoices charged to a card when they're due. They enter it on Stripe's own page, so no card number reaches OpenBook, and can stop it in their portal. The link below opens their portal at the page that says what they agree to; it lets whoever has it see their account.</value>
   </data>
   <data name="{0} changed" xml:space="preserve">
     <value>{0} changed</value>
@@ -3773,6 +4154,9 @@
   <data name="{0} items · {1} kept in stock" xml:space="preserve">
     <value>{0} items · {1} kept in stock</value>
   </data>
+  <data name="{0} never had the refund: nothing was refunded." xml:space="preserve">
+    <value>{0} never had the refund: nothing was refunded.</value>
+  </data>
   <data name="{0} of {1} done" xml:space="preserve">
     <value>{0} of {1} done</value>
   </data>
@@ -3796,6 +4180,9 @@
   </data>
   <data name="{0} price levels · {1} rules" xml:space="preserve">
     <value>{0} price levels · {1} rules</value>
+  </data>
+  <data name="{0} rates" xml:space="preserve">
+    <value>{0} rates</value>
   </data>
   <data name="{0} rules" xml:space="preserve">
     <value>{0} rules</value>

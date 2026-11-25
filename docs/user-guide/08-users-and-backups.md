@@ -17,6 +17,12 @@ Pages a role can't use are left out of its menu. On pages, buttons and forms it 
 
 From the Users page an administrator can change someone's role, **reset their password** or **make them inactive** when they leave. Changing a role or making someone inactive signs them out everywhere at once, and a form they still have open stops working: saving it tells them they've been signed out. People are never deleted, so their name stays on what they entered. There's always at least one active administrator, and you can't change your own role or deactivate yourself.
 
+## Passkeys
+
+A passkey signs you in with your fingerprint, face or PIN, without typing a password, and nobody can phish it: it only works at the address OpenBook was opened at when it was made. Select your username in the top bar, then **Passkeys**: say what it's on, enter your password and **Add a passkey**. From then on the sign-in page's **Sign in with a passkey** is enough; it counts as two-factor sign-in, so no code is asked for. Your password goes on working.
+
+Passkeys need a recent browser and OpenBook opened at an https address (or on the same computer, as `localhost`). Remove one you no longer use on the same page. When an administrator resets your password, or it's reset with `reset-password`, your passkeys are removed too.
+
 ## Two-factor sign-in
 
 Two-factor sign-in asks for a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy and others) after the password, so someone who learns your password still can't get in.
@@ -83,7 +89,7 @@ For Microsoft, the directory can be typed as its ID or its domain, and changing 
 
 OpenBook's own two-factor code isn't asked for after single sign-on: the provider does its own checks. Inactive users and users whose access has ended are refused as usual.
 
-**Single sign-on only**: tick it to make everyone but administrators use the provider; their passwords stop working here. Administrators keep their password (and two-factor) as a way in when the provider is down or set up wrongly.
+**Single sign-on only**: tick it to make everyone but administrators use the provider; their passwords stop working here. Administrators keep their password (and two-factor) as a way in when the provider is down or set up wrongly. The same goes when the client secret can't be read on this computer (a backup restored without its keys folder): the sign-in page says so, and an administrator enters the secret again under **Settings → Sign-in and two-factor**.
 
 ### Working at the same time
 

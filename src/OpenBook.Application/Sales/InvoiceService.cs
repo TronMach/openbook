@@ -16,6 +16,7 @@ namespace OpenBook.Application.Sales;
 /// <param name="BillableExpenseIds">Costs waiting to be billed to the customer, added as "Billable Expenses" lines.</param>
 /// <param name="TimeEntryIds">Billable time for the customer, added as lines for each entry's service.</param>
 /// <param name="MileageTripIds">Billable mileage for the customer, added as "Mileage" lines.</param>
+/// <param name="SalesRepId">Who sold it: null takes the customer's responsible person, <see cref="Guid.Empty"/> is nobody.</param>
 public sealed record CreateInvoiceCommand(
     Guid CustomerId,
     DateOnly Date,
@@ -31,7 +32,8 @@ public sealed record CreateInvoiceCommand(
     IReadOnlyList<Guid>? BillableExpenseIds = null,
     IReadOnlyList<Guid>? TimeEntryIds = null,
     IReadOnlyList<Guid>? MileageTripIds = null,
-    decimal? TaxAmount = null);
+    decimal? TaxAmount = null,
+    Guid? SalesRepId = null);
 
 /// <summary>A correction to a posted invoice (<see cref="InvoiceService.ChangeAsync"/>). The customer can't change.</summary>
 /// <param name="Lines">Every line the invoice should have, tax lines left out (they're recalculated).</param>
@@ -43,6 +45,7 @@ public sealed record CreateInvoiceCommand(
 /// <param name="WarehouseId">As for a new invoice: null is the default warehouse.</param>
 /// <param name="FromLines">For each of <paramref name="Lines"/>, the number of the line it continues (null for a new one), so
 /// its custom field values follow it; null takes the lines as continuing the old ones in order.</param>
+/// <param name="SalesRepId">Null keeps the invoice's sales rep; <see cref="Guid.Empty"/> is nobody.</param>
 public sealed record ChangeInvoiceCommand(
     DateOnly Date,
     IReadOnlyList<SalesLineDraft> Lines,
@@ -56,7 +59,8 @@ public sealed record ChangeInvoiceCommand(
     Guid? WarehouseId = null,
     IReadOnlyList<int?>? FromLines = null,
     decimal? TaxAmount = null,
-    bool WorkOutTax = false);
+    bool WorkOutTax = false,
+    Guid? SalesRepId = null);
 
 /// <summary>What part of a sales order or estimate an invoice bills, and whether that finishes it.</summary>
 /// <param name="RetainageRelease">Bills retainage held on the estimate's invoices: allowed once the estimate is closed, and leaves it as it is (C338).</param>
@@ -74,6 +78,7 @@ public sealed class InvoiceService(
     CustomFields.CustomFieldStamper customFields,
     ICompanyStore companies,
     ILedgerStore ledger,
+    SalesReps salesReps,
     IClock clock,
     ICurrentUser user)
 {
@@ -131,7 +136,7 @@ public sealed class InvoiceService(
             estimate = await store.GetEstimateAsync(estimateId, ct) ?? throw new EntityNotFoundException("estimate", estimateId);
             if (estimate.Status == EstimateStatus.Closed && source?.RetainageRelease != true)
                 throw new DomainException("estimate.closed", $"Estimate {estimate.Number} is already invoiced.");
-            if (estimate.Status == EstimateStatus.Declined)
+            if (estimate.Status == EstimateStatus.Declined && source?.RetainageRelease != true)
                 throw new DomainException("estimate.declined", $"Estimate {estimate.Number} was declined.");
             if (estimate.CustomerId != customer.Id)
                 throw new DomainException("estimate.wrong_customer", $"Estimate {estimate.Number} is for a different customer.");
@@ -179,24 +184,27 @@ public sealed class InvoiceService(
             throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
         await EnsureNotCreditMemoAsync(number, ct);
 
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
+        var built = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
+        var (lines, taxCodeId, exemption) = built;
         var receivables = await salesAccounts.GetOrCreateReceivablesAsync(ct);
         var warehouseId = await warehouses.CheckAsync(command.WarehouseId, ct);
+        var salesRepId = await salesReps.ForNewAsync(command.SalesRepId, customer.Id, ct);
         var stock = await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
 
         var id = Guid.CreateVersion7();
         var memo = $"Invoice {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(receivables.Id, lines, memo), .. stock.Postings], memo, Invoice.Source, id,
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(receivables.Id, lines, memo, built.PaidInFull), .. stock.Postings], memo, Invoice.Source, id,
                 LocationId: command.LocationId, TagIds: command.TagIds), ct);
         inventory.Apply(stock, InventorySources.Invoice, id);
 
         var terms = customer.Terms;
         var invoice = Invoice.Create(
             id, number, customer.Id, receivables.Id, command.Date, command.DueDate ?? terms.DueDate(command.Date),
-            lines, entry.Id, clock.UtcNow, command.Memo, terms, estimate?.Id, recurringInvoiceId, taxCodeId, exemption);
+            lines, entry.Id, clock.UtcNow, command.Memo, terms, estimate?.Id, recurringInvoiceId, taxCodeId, exemption, built.PaidInFull);
         invoice.SetLocation(command.LocationId);
         invoice.SetWarehouse(warehouseId);
+        invoice.SetSalesRep(salesRepId);
         if (lateFeeFor is { } overdue)
             invoice.MarkLateFeeFor(overdue, command.Date);
         if (source is not null)
@@ -267,21 +275,24 @@ public sealed class InvoiceService(
 
         var drafts = command.Lines.ToList();
         EnsureLockedLinesKept(invoice, drafts);
-        var (lines, taxCodeId, exemption) = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
+        var built = await lineBuilder.BuildCorrectionAsync(drafts, customer, command.TaxCodeId, command.Date,
             new TaxAsCharged(invoice.TaxCodeId, invoice.TaxExemption, invoice.CustomerId, invoice.Lines, command.FromLines), command.TaxAmount, command.WorkOutTax, ct);
+        var (lines, taxCodeId, exemption) = built;
         var dueDate = command.DueDate ?? command.Date.AddDays(invoice.DueDate.DayNumber - invoice.Date.DayNumber);
         if (lines.Sum(l => l.Amount) < invoice.AmountPaid)
             throw new DomainException("invoice.total_below_paid",
                 $"Invoice {invoice.Number} has {invoice.AmountPaid:N2} paid, credited or written off, so its total can't go below that.");
 
-        // Cash basis spreads each payment over the invoice's current income lines: changing them changes the periods paid in.
-        if (invoice.AmountPaid > 0m && !SameIncome(invoice.Lines, lines))
+        // Cash basis spreads each payment over the invoice's current income lines: changing them changes the periods paid in,
+        // even when the bank took the payment back since and nothing's paid now.
+        if (!SameIncome(invoice.Lines, lines))
         {
             var company = await companies.GetRequiredCompanyAsync(ct);
             foreach (var paidOn in (await SettlementDatesAsync(invoice, ct)).Distinct().Order())
                 engine.EnsureOpen(company, paidOn, $"changing the income lines of invoice {invoice.Number}, paid on {paidOn:yyyy-MM-dd}");
         }
 
+        var salesRepId = await salesReps.ForChangeAsync(command.SalesRepId, invoice.SalesRepId, ct);
         var warehouseId = command.WarehouseId == invoice.WarehouseId ? invoice.WarehouseId : await warehouses.CheckAsync(command.WarehouseId, ct);
         var tagIds = command.TagIds ?? (await ledger.GetEntryTagsAsync([invoice.JournalEntryId], ct)).Select(t => t.TagId).ToList();
         var before = Snapshot(invoice);
@@ -299,7 +310,7 @@ public sealed class InvoiceService(
         }
 
         var keptStock = back is null
-            ? await InventoryService.KeptStockAsync(ledger, invoice.JournalEntryId, SalesLine.Postings(invoice.ReceivableAccountId, invoice.Lines, null).Count, ct)
+            ? await InventoryService.KeptStockAsync(ledger, invoice.JournalEntryId, SalesLine.Postings(invoice.ReceivableAccountId, invoice.Lines, null, invoice.Total == 0m).Count, ct)
             : null;
         await engine.StageVoidAsync(invoice.JournalEntryId, $"Invoice changed: {command.Reason.Trim()}", fromDocument: true, ct);
         if (back is not null)
@@ -307,13 +318,14 @@ public sealed class InvoiceService(
         var stock = keptStock ?? await inventory.PlanSaleAsync(lines, command.Date, warehouseId, ct);
         var memo = $"Invoice {number} · {customer.DisplayName}";
         var entry = await engine.StageAsync(
-            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(invoice.ReceivableAccountId, lines, memo), .. stock.Postings], memo, Invoice.Source, invoice.Id,
+            new PostJournalEntryCommand(command.Date, [.. SalesLine.Postings(invoice.ReceivableAccountId, lines, memo, built.PaidInFull), .. stock.Postings], memo, Invoice.Source, invoice.Id,
                 LocationId: command.LocationId, TagIds: tagIds), ct);
         inventory.Apply(stock, InventorySources.Invoice, invoice.Id);
 
-        invoice.Change(number, command.Date, dueDate, lines, entry.Id, command.Memo, taxCodeId, exemption);
+        invoice.Change(number, command.Date, dueDate, lines, entry.Id, command.Memo, taxCodeId, exemption, built.PaidInFull);
         invoice.SetLocation(command.LocationId);
         invoice.SetWarehouse(warehouseId);
+        invoice.SetSalesRep(salesRepId);
 
         // Drafts become lines 1, 2, ... in order (tax lines after them); custom field values follow their line.
         await customFields.MoveLinesAsync(EntityType, invoice.Id, drafts.Count, command.FromLines, ct);
@@ -377,10 +389,11 @@ public sealed class InvoiceService(
         return Income(a).SequenceEqual(Income(b));
     }
 
-    /// <summary>The dates payments and retainers were applied to the invoice: what cash basis counts it on.</summary>
+    /// <summary>The dates payments came in (and back) and retainers were applied to the invoice: what cash basis counts it on.</summary>
     private async Task<IEnumerable<DateOnly>> SettlementDatesAsync(Invoice invoice, CancellationToken ct)
     {
-        var payments = (await store.ListPaymentsForInvoiceAsync(invoice.Id, ct)).Where(p => p.Status == DocumentStatus.Posted).Select(p => p.Date);
+        var posted = (await store.ListPaymentsForInvoiceAsync(invoice.Id, ct)).Where(p => p.Status == DocumentStatus.Posted).ToList();
+        var payments = posted.Select(p => p.Date).Concat(posted.Select(p => p.ReturnedOn).OfType<DateOnly>());
         var retainers = (await store.ListRetainersAsync(null, ct)).Where(r => r.Status == DocumentStatus.Posted)
             .SelectMany(r => r.Applications.Where(a => a.InvoiceId == invoice.Id && !a.IsVoided).Select(a => a.AppliedOn));
         return payments.Concat(retainers).ToList();
@@ -403,8 +416,10 @@ public sealed class InvoiceService(
         invoice.Void();
         store.Add(Audit(AuditAction.Voided, invoice, before));
 
-        // The estimate, sales order and billable expenses can be invoiced again.
-        if (invoice.EstimateId is { } estimateId && await store.GetEstimateAsync(estimateId, ct) is { Status: EstimateStatus.Closed } estimate)
+        // The estimate, sales order and billable expenses can be invoiced again. Billing retainage back billed none of the
+        // estimate, so voiding that leaves it closed.
+        if (invoice.EstimateId is { } estimateId && await store.GetEstimateAsync(estimateId, ct) is { Status: EstimateStatus.Closed } estimate
+            && (invoice.SourceLines.Count > 0 || estimate.InvoiceId == invoice.Id))
         {
             var estimateBefore = EstimateService.Snapshot(estimate);
             estimate.Reopen();
@@ -457,6 +472,7 @@ public sealed class InvoiceService(
         SourceLines = i.SourceLines.Select(l => new { l.LineNumber, l.Quantity }),
         i.TaxCodeId,
         i.TaxExemption,
+        i.SalesRepId,
         Lines = i.Lines.Select(l => new { Kind = l.Kind.ToString(), l.ItemId, l.Description, l.Quantity, l.Rate, l.Amount, l.Taxable, l.TaxRateId }),
     });
 }

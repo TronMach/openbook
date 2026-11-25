@@ -30,6 +30,9 @@ public enum EmailKind
 
     /// <summary>To a donor whose pledge has money due: what's due and the pledge statement (C337, 2026-11-14).</summary>
     PledgeReminder,
+
+    /// <summary>To a customer: the link where they agree to pay their invoices automatically with a saved card.</summary>
+    CardAgreement,
 }
 
 /// <summary>How a customer gets their documents by email.</summary>
@@ -89,6 +92,7 @@ public static partial class EmailTemplates
         EmailKind.Form1099Copy => "1099 copy",
         EmailKind.W9Request => "W-9 request",
         EmailKind.PledgeReminder => "Pledge reminder",
+        EmailKind.CardAgreement => "Automatic payment link",
         _ => kind.ToString(),
     };
 
@@ -104,6 +108,7 @@ public static partial class EmailTemplates
         EmailKind.Form1099Copy => "1099-copy",
         EmailKind.W9Request => "w9-request",
         EmailKind.PledgeReminder => "pledge-reminder",
+        EmailKind.CardAgreement => "automatic-payment",
         _ => kind.ToString().ToLowerInvariant(),
     };
 
@@ -141,6 +146,7 @@ public static partial class EmailTemplates
             new("due", "The due date", Sample(new DateOnly(2026, 3, 31))), new("days", "Days past the due date (0 before)", "5"),
             new("when", "\"is due on …\", \"is due today\" or \"was due on …, n days ago\"", $"was due on {Sample(new DateOnly(2026, 3, 31))}, 5 days ago"), Company,
         ],
+        EmailKind.CardAgreement => [Customer, new("link", "The link where they agree", "https://books.example.com/portal/obp_…/card"), Company],
         EmailKind.Form1099Copy or EmailKind.W9Request => [new("vendor", "The vendor's name", "Acme Supply"), new("year", "The tax year", "2026"), Company],
         EmailKind.PaymentReceipt =>
         [
@@ -196,6 +202,9 @@ public static partial class EmailTemplates
             "Hello,\n\nWe need a Form W-9 from you for our tax records, so we can report what we paid you. The form is at https://www.irs.gov/pub/irs-pdf/fw9.pdf\n\nPlease fill it in and send it back to us.\n\nThank you,\n{company}"),
         EmailKind.PaymentReceipt => ("Payment received: thank you from {company}",
             "Hello,\n\nThank you: we received your payment of {amount} on {date}.\nPaid {paid_by}.\n\n{applied}\n\n{credit}\nYour balance with us is now {balance}.\n\nThank you,\n{company}"),
+        EmailKind.CardAgreement => ("Pay {company} automatically",
+            "Hello,\n\nIf you'd like, we can charge your invoices to your card on the day they're due. You enter the card once, on our payment provider's own page, and you can stop it at any time.\n\n" +
+            "Read about it and agree here:\n{link}\n\nThe link opens your account with us, so please keep it to yourself. Nothing changes unless you agree.\n\nThank you,\n{company}"),
         EmailKind.Report => ("{report}",
             "{report}, as of {as_of}, is attached.\n\nSent by OpenBook on a schedule set up by {scheduled_by}."),
         EmailKind.Invitation => ("You're invited to {company} in OpenBook",

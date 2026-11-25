@@ -40,7 +40,17 @@ To keep a record of what you filed, use **Mark filed** beside the agency once yo
 
 **Reports → Sales tax liability** shows, for a period, each agency and rate: total sales, non-taxable, exempt and taxable amounts, and the tax. Use it to fill in your return. Credit memos are subtracted. **Selling into other states**: **Sales tax → Nexus thresholds** keeps each state's economic nexus threshold (the sales a year, and a number of transactions where the state has one) as you get them from the state or your adviser. **Reports → Sales by state** sets all your sales against them: invoices and receipts less credit memos, by the customer's shipping address (else billing), and sales channels by the state shipped to. A state past its threshold over the last twelve months with no tax agency set up for it shows on the home page's to-do list. OpenBook doesn't know the states' rules.
 
-If your state lets you report on the **cash basis** (tax when you're paid), choose **Cash** for the basis: each invoice counts in proportion to what was paid on it in the period, sales receipts count on their date, credit memos count as they're refunded, and what's owed is what you've collected less what you've paid.
+If your state lets you report on the **cash basis** (tax when you're paid), choose **Cash** for the basis: each invoice counts in proportion to what was paid on it in the period (a payment the bank took back comes off in the period it came back), sales receipts count on their date, credit memos count as they're refunded, and what's owed is what you've collected less what you've paid.
+
+## Use tax on things you buy
+
+When you buy something to use yourself and the seller charges no sales tax (an out-of-state website, say), most states want the tax from you instead: use tax. On a bill, an expense or a vendor credit, tick **We owe use tax on this** and choose the tax code under **Use tax at**. The one you used last comes first. OpenBook works the tax out on the expense and fixed asset lines at the code's rates on the document's date. Type another amount under **Use tax** if your state's figure differs.
+
+- The tax is added to those lines' accounts, in proportion, and owed to the code's agencies. What you owe the vendor, the check and the vendor's 1099 don't change.
+- Don't tick it for stock you bought to resell. Item lines received into stock are never taxed, and a bill with nothing else on it is refused.
+- On a vendor credit the tick is **Take back use tax we recorded on this**, for something returned.
+- It shows as **Use tax** under each agency on the **Sales tax liability** report, on the date you bought it, whether or not the bill is paid and whichever basis you choose. Paying the agency pays it along with the tax you collected.
+- Voiding or changing the document takes it along. Recurring bills and expenses, lines added from the bank feed and bills from purchase orders don't offer it: for those, change the bill or expense afterwards (not a bill from an order) and tick it there.
 
 ## Paying the tax
 

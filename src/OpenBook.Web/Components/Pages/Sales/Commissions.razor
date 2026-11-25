@@ -1,0 +1,189 @@
+@page "/sales/commissions"
+@inject CommissionService Service
+@inject AccountService AccountService
+@inject CustomerService CustomerService
+
+<PageTitle>@L["Sales commissions"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Sales commissions"]</h1>
+        <ActionLink Class="button secondary" Href="/reports/sales-commissions">@L["Commission report"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/sales/commissions/settings">@L["Rates and settings"]</ActionLink>
+    </div>
+    <p class="muted">@L["What sales reps have earned and isn't in a run yet. Making a run bills each rep's vendor record, and the bill is paid like any other. Returned payments and credit memos come off; someone left with less than nothing waits for the next run."]</p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Done is > 0)
+    {
+        <div class="alert notice" role="status">@(Done == 1 ? L["1 bill made."] : L["{0} bills made.", Done.Value])</div>
+    }
+
+    <form class="card filters" method="get" data-enhance="false">
+        <div class="row">
+            <div class="field">
+                <label for="show-through">@L["Earned through"]</label>
+                <input id="show-through" name="through" type="date" value="@_through.ToString("yyyy-MM-dd")" />
+            </div>
+        </div>
+        <div class="actions"><button type="submit" class="secondary">@L["Show"]</button></div>
+    </form>
+
+    @if (_pending.Count == 0)
+    {
+        <div class="card"><p>@L["No commissions are waiting through {0}.", Labels.Date(_through)]</p></div>
+    }
+    else
+    {
+        <PostForm Action="/sales/commissions/runs" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="through" value="@_through.ToString("yyyy-MM-dd")" />
+            @foreach (var rep in _pending)
+            {
+                <h2>@rep.Worker.Name</h2>
+                <label class="check">
+                    <input type="checkbox" name="rep" value="@rep.Worker.Id" checked="@rep.CanPay" disabled="@(!rep.CanPay)" />
+                    <span>@L["Pay {0}", Labels.Amount(rep.Total)]</span>
+                </label>
+                @if (rep.Worker.VendorId is null)
+                {
+                    <p class="hint">@L["Link this person to a vendor record on People and rates to pay them here."] <ActionLink Href="@($"/time/people?edit={rep.Worker.Id}")">@L["People and rates"]</ActionLink></p>
+                }
+                else if (!rep.CanPay)
+                {
+                    <p class="hint">@L["There's nothing to pay yet: these come off what's earned next."]</p>
+                }
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>@L["Date"]</th><th>@L["Document"]</th><th>@L["For"]</th><th>@L["Customer"]</th><th class="num">@L["Amount counted"]</th><th class="num">@L["Rate"]</th><th class="num">@L["Commission"]</th></tr></thead>
+                        <tbody>
+                            @foreach (var line in rep.Lines)
+                            {
+                                <tr>
+                                    <td>@Labels.Date(line.Date)</td>
+                                    <td><a href="@Href(line.Key.Source, line.Key.DocumentId)">@line.Document</a></td>
+                                    <td>@CommissionService.Label(line.Key.Kind)</td>
+                                    <td>@(line.CustomerId is { } customer ? _names.GetValueOrDefault(customer) : "")</td>
+                                    <td class="num">@Labels.Amount(line.Counted)</td>
+                                    <td class="num">@(line.Percent is { } percent ? Labels.Percent(percent) : "")</td>
+                                    <td class="num">@Labels.Amount(line.Commission)</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot><tr><th scope="row" colspan="6">@L["Total"]</th><td class="num">@Labels.Amount(rep.Total)</td></tr></tfoot>
+                    </table>
+                </div>
+            }
+            <div class="card" style="margin-top: 1.5rem">
+                <div class="row">
+                    <div class="field">
+                        <label for="bill-date">@L["Bill date"]</label>
+                        <input id="bill-date" name="billDate" type="date" required value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="field">
+                        <label for="account">@L["Expense account"]</label>
+                        <select id="account" name="accountId" data-search>
+                            @if (_account is null)
+                            {
+                                <option value="">@L["{0} (made on first use)", CommissionService.AccountName]</option>
+                            }
+                            @foreach (var a in _expenses)
+                            {
+                                <option value="@a.Id" selected="@(a.Id == _account)">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions"><button type="submit" disabled="@(!_pending.Any(p => p.CanPay))">@L["Make bills"]</button></div>
+            </div>
+        </PostForm>
+    }
+
+    @if (_runs.Count > 0)
+    {
+        <h2 id="runs">@L["Runs"]</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Run"]</th><th>@L["Sales rep"]</th><th>@L["Earned through"]</th><th>@L["Bill"]</th><th class="num">@L["Commission"]</th></tr></thead>
+                <tbody>
+                    @foreach (var view in _runs)
+                    {
+                        <tr>
+                            <td><a href="/sales/commissions?run=@view.Run.Id#run">@view.Run.Number</a></td>
+                            <td>@view.Worker?.Name</td>
+                            <td>@Labels.Date(view.Run.Through)</td>
+                            <td><ActionLink Href="@($"/purchases/bills/{view.Run.BillId}")">@(view.Bill?.Reference ?? L["Bill"].Value)</ActionLink>@(view.Stands ? "" : $" ({L["Voided"]})")</td>
+                            <td class="num">@Labels.Amount(view.Run.Total)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_shown is not null)
+    {
+        <h2 id="run">@L["Run {0}", _shown.Run.Number]</h2>
+        @if (!_shown.Stands)
+        {
+            <p class="muted">@L["Its bill is voided, so these are free for the next run."]</p>
+        }
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Date"]</th><th>@L["Document"]</th><th>@L["For"]</th><th class="num">@L["Amount counted"]</th><th class="num">@L["Rate"]</th><th class="num">@L["Commission"]</th></tr></thead>
+                <tbody>
+                    @foreach (var line in _shown.Run.Lines)
+                    {
+                        <tr>
+                            <td>@Labels.Date(line.Date)</td>
+                            <td><a href="@Href(line.Source, line.DocumentId)">@line.Document</a></td>
+                            <td>@CommissionService.Label(line.Kind)</td>
+                            <td class="num">@Labels.Amount(line.Counted)</td>
+                            <td class="num">@(line.Percent is { } percent ? Labels.Percent(percent) : "")</td>
+                            <td class="num">@Labels.Amount(line.Commission)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot><tr><th scope="row" colspan="5">@L["Total"]</th><td class="num">@Labels.Amount(_shown.Run.Total)</td></tr></tfoot>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<RepCommission> _pending = [];
+    private IReadOnlyList<CommissionRunView> _runs = [];
+    private CommissionRunView? _shown;
+    private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _expenses = [];
+    private Guid? _account;
+    private DateOnly _through = CompanyTime.Today;
+
+    [SupplyParameterFromQuery] private DateOnly? Through { get; set; }
+    [SupplyParameterFromQuery] private Guid? Run { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private int? Done { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Runs are usually for a month that's over.
+        _through = Through ?? new DateOnly(CompanyTime.Today.Year, CompanyTime.Today.Month, 1).AddDays(-1);
+        _pending = await Service.PendingAsync(_through);
+        _runs = await Service.ListRunsAsync();
+        _shown = _runs.FirstOrDefault(r => r.Run.Id == Run);
+        _names = await CustomerService.FullNamesAsync();
+        _chart = await AccountService.GetChartAsync();
+        _expenses = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(CommissionService.IsExpense).ToList();
+        var last = (await Service.GetSettingsAsync()).ExpenseAccountId;
+        _account = _expenses.FirstOrDefault(a => a.Id == last)?.Id
+            ?? _expenses.FirstOrDefault(a => a.Type == AccountType.Expense && string.Equals(a.Name, CommissionService.AccountName, StringComparison.OrdinalIgnoreCase))?.Id;
+    }
+
+    private static string? Href(CommissionSource source, Guid id) => Links.ForAuditEntity(CommissionService.EntityTypeOf(source), id);
+}

@@ -186,7 +186,7 @@
                         <td>@(t.ItemId is { } i ? _itemNames.GetValueOrDefault(i) : "")</td>
                         <td>@t.Notes</td>
                         <td class="num">@(t.IsRunning ? "running" : Labels.Quantity(t.Hours))</td>
-                        <td class="num" title="@(t.Billable ? $"{Labels.Price(t.BillRate)} an hour: {t.RateSource ?? "rate"}" : null)">@(t.Billable ? Labels.Amount(t.Amount) : "")</td>
+                        <td class="num" title="@(t.Billable ? $"{Labels.Price(t.BillRate)} an hour: {t.RateSource ?? "rate"}" : null)">@(t.Billable ? Labels.Amount(t.Amount) : "")@if (t.Billable && t.BilledAmount is not null) {<div class="muted">@(t.WrittenOff ? "written off" : $"worked {Labels.Amount(t.Worked)}")</div>}</td>
                         <td>
                             @if (t.InvoiceId is { } invoiceId)
                             {

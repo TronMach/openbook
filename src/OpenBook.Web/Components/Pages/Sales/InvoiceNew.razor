@@ -90,9 +90,10 @@
                 </fieldset>
             }
 
-            <MoreOptions HasContent="@(_segments.Locations.Count > 0 || _warehouses.Count > 1)" Open="@(_locationId is not null || _warehouseId is not null)">
+            <MoreOptions HasContent="@(_segments.Locations.Count > 0 || _warehouses.Count > 1 || _reps.Count > 0)" Open="@(_locationId is not null || _warehouseId is not null || _salesRepId != _defaultRepId)">
                 <LocationField Options="_segments" @bind-Value="_locationId" />
                 <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+                <SalesRepField People="_reps" @bind-Value="_salesRepId" />
             </MoreOptions>
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">@L["Message to customer"] <span class="muted">@L["(optional, printed on the invoice)"]</span></label>
@@ -115,22 +116,24 @@
     private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
     // What's typed so far, kept in the tab in case the connection goes.
     internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, DateOnly DueDate, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId,
-        List<SalesLineModel> Lines, List<Guid> Billable, List<Guid> Time, List<Guid> Trips);
+        List<SalesLineModel> Lines, List<Guid> Billable, List<Guid> Time, List<Guid> Trips, Guid? SalesRepId = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => _customerId is null && _lines.All(l => l.IsBlank) ? null
-        : new Draft(_customerId, _number, _date, _dueDate, _memo, _taxCodeId, _locationId, _warehouseId, _lines, [.. _chosenBillable], [.. _chosenTime], [.. _chosenTrips]);
+        : new Draft(_customerId, _number, _date, _dueDate, _memo, _taxCodeId, _locationId, _warehouseId, _lines, [.. _chosenBillable], [.. _chosenTime], [.. _chosenTrips], _salesRepId);
 
     private async Task RestoreAsync(Draft draft)
     {
         await SetCustomerAsync(_customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null);
         (_number, _date, _dueDate, _memo, _locationId, _warehouseId) = (draft.Number, draft.Date, draft.DueDate, draft.Memo, draft.LocationId, draft.WarehouseId);
         _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
+        _salesRepId = _reps.Any(w => w.Id == draft.SalesRepId) ? draft.SalesRepId : null;
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
         _chosenBillable.UnionWith(draft.Billable.Where(id => _billable.Any(b => b.Id == id)));
         _chosenTime.UnionWith(draft.Time.Where(id => _time.Any(t => t.Id == id)));
         _chosenTrips.UnionWith(draft.Trips.Where(id => _trips.Any(t => t.Id == id)));
+        await DateChangedAsync();
     }
 
     private IReadOnlyList<Customer> _customers = [];
@@ -161,8 +164,20 @@
     private void DefaultTaxCode() =>
         _taxCodeId = TaxCustomer?.TaxCodeId is { } code && _taxCodes.Any(c => c.Code.Id == code) ? code : null;
 
-    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync() =>
-        Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync());
+    /// <summary>The codes at their rates on the document's date, which is what the save charges.</summary>
+    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync()
+    {
+        var on = _date;
+        return Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesAsync(on));
+    }
+
+    private async Task DateChangedAsync()
+    {
+        var on = _date;
+        var codes = await LoadTaxCodesAsync();
+        if (on == _date)
+            _taxCodes = codes;
+    }
 
     [SupplyParameterFromQuery(Name = "customer")]
     private Guid? PresetCustomer { get; set; }
@@ -175,7 +190,7 @@
     [SupplyParameterFromQuery(Name = "copy")]
     private Guid? Copy { get; set; }
 
-    private bool CanSave => _customer is not null && SalesLineModel.Total(_lines) + BillableTotal + ProjectTotal > 0m && !string.IsNullOrWhiteSpace(_number);
+    private bool CanSave => _customer is not null && SalesLineModel.MakesSale(_lines, BillableTotal + ProjectTotal) && !string.IsNullOrWhiteSpace(_number);
 
     private IReadOnlyList<BillableExpense> _billable = [];
     private readonly HashSet<Guid> _chosenBillable = [];
@@ -220,12 +235,26 @@
 
     private Guid? _locationId;
 
+    // Who the sale is credited to: the customer's responsible person, unless changed.
+    private IReadOnlyList<Worker> _reps = [];
+    private Guid? _salesRepId;
+    private Guid? _defaultRepId;
+
+    private async Task DefaultSalesRepAsync()
+    {
+        var customer = _customerId;
+        var rep = await Ops.RunAsync<SalesReps, Guid?>(s => s.DefaultAsync(customer));
+        if (customer == _customerId)
+            _salesRepId = _defaultRepId = rep;
+    }
+
 
     protected override async Task OnInitializedAsync()
     {
 
         _segments = await Ops.RunAsync(SegmentOptions.LoadAsync);
         _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
+        _reps = await Ops.RunAsync<SalesReps, IReadOnlyList<Worker>>(s => s.ListAsync());
         _taxCodes = await LoadTaxCodesAsync();
         (_customers, _items, _number) = await Ops.RunAsync(async sp => (
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(s => s.Customer).ToList(),
@@ -264,6 +293,7 @@
         if (_customer is not null)
             _dueDate = _customer.DueDateFor(_date);
         DefaultTaxCode();
+        await DefaultSalesRepAsync();
         _chosenBillable.Clear();
         _billable = id is { } customerId
             ? await Ops.RunAsync(sp => sp.GetRequiredService<BillableExpenseService>().OpenAsync(customerId))
@@ -283,12 +313,13 @@
         }
     }
 
-    private void ChangeDate(ChangeEventArgs e)
+    private async Task ChangeDate(ChangeEventArgs e)
     {
         if (!DateOnly.TryParse(e.Value as string, System.Globalization.CultureInfo.InvariantCulture, out var date))
             return;
         _date = date;
         _dueDate = _customer?.DueDateFor(date) ?? (_dueDate < date ? date : _dueDate);
+        await DateChangedAsync();
     }
 
     private async Task SaveAsync()
@@ -300,7 +331,7 @@
         try
         {
             var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo, TaxCodeId: _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId,
-                BillableExpenseIds: [.. _chosenBillable], TimeEntryIds: [.. _chosenTime], MileageTripIds: [.. _chosenTrips], TaxAmount: TypedTaxAmount);
+                BillableExpenseIds: [.. _chosenBillable], TimeEntryIds: [.. _chosenTime], MileageTripIds: [.. _chosenTrips], TaxAmount: TypedTaxAmount, SalesRepId: _salesRepId ?? Guid.Empty);
             var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command), _closingPassword);
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");

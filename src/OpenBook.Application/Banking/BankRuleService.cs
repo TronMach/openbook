@@ -35,6 +35,8 @@ public sealed class BankRuleService(IBankingStore bank, IPurchasesStore purchase
         ArgumentNullException.ThrowIfNull(details);
         var rule = await bank.GetRuleAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         await CheckAsync(details, ct);
+        if (rule.Splits.Any(s => s.AccountId == details.AccountId))
+            throw new DomainException("rule.category_self", "The rule splits lines to that same account. Change its split first.");
         var before = Snapshot(rule);
         rule.Update(details);
         bank.Add(Audit(AuditAction.Updated, rule, before));
@@ -55,7 +57,6 @@ public sealed class BankRuleService(IBankingStore bank, IPurchasesStore purchase
         return rule;
     }
 
-    /// <summary>The category must be one a bank transaction can post to; the account a bank or card.</summary>
     /// <summary>Sets how the rule splits a line, by percent (empty: the one category).</summary>
     public async Task<BankRule> SetSplitsAsync(Guid id, IReadOnlyList<(Guid AccountId, decimal Percent, Guid? ClassId)> splits, CancellationToken ct = default)
     {
@@ -80,6 +81,7 @@ public sealed class BankRuleService(IBankingStore bank, IPurchasesStore purchase
         return rule;
     }
 
+    /// <summary>The category must be one a bank transaction can post to; the account a bank or card.</summary>
     private async Task CheckAsync(BankRuleDetails details, CancellationToken ct)
     {
         var chart = await accounts.GetChartAsync(ct);

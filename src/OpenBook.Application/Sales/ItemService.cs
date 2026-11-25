@@ -180,6 +180,48 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
         return item;
     }
 
+    public const string RetainageItemName = "Retainage";
+
+    /// <summary>
+    /// The item progress invoices hold retainage with (C338): the one marked (active again if it was deactivated), else an
+    /// active service named "Retainage" on an other current asset account, else a new one. An item of that name that
+    /// posts somewhere else is left alone: money held with it would come off income.
+    /// </summary>
+    internal async Task<Item> GetOrCreateRetainageAsync(Func<CancellationToken, Task<Account>> account, CancellationToken ct)
+    {
+        var all = await store.ListItemsAsync(ct);
+        var item = all.Where(i => i.IsRetainage).OrderByDescending(i => i.IsActive).ThenBy(i => i.Id).FirstOrDefault();
+        if (item is { IsActive: true })
+            return item;
+        if (item is not null)
+            return await SetActiveAsync(item.Id, true, ct);
+
+        var chart = await accounts.GetChartAsync(ct);
+        if (all.FirstOrDefault(i => i.IsActive && i.Type == ItemType.Service && string.Equals(i.Name, RetainageItemName, StringComparison.OrdinalIgnoreCase)) is { } named
+            && chart.Find(named.IncomeAccountId) is { Type: AccountType.OtherCurrentAsset } held)
+        {
+            var before = Snapshot(named);
+            named.MarkRetainage(held);
+            store.Add(Audit(AuditAction.Updated, named, before));
+            await store.SaveChangesAsync(ct);
+            return named;
+        }
+
+        bool Taken(string name) => all.Any(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
+        var name = RetainageItemName;
+        for (var n = 1; Taken(name); n++)
+            name = n == 1 ? "Retainage held" : $"Retainage held ({n})";
+        var posting = await account(ct);
+        var details = new ItemDetails(name, ItemType.Service, posting.Id, 0m, "Retainage held back on progress invoices, and released when it's billed.", Taxable: false);
+        await ValidateAsync(details, except: null, ct);
+        var created = Item.Create(details);
+        created.MarkRetainage(posting);
+        store.Add(created);
+        store.Add(Audit(AuditAction.Created, created, before: null));
+        await store.SaveChangesAsync(ct);
+        return created;
+    }
+
     public async Task<Item> SetActiveAsync(Guid id, bool active, CancellationToken ct = default)
     {
         var item = await GetAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
@@ -305,6 +347,7 @@ public sealed class ItemService(ISalesStore store, Purchases.IPurchasesStore pur
         i.PackSize,
         i.VariantOfId,
         i.VariantOptions,
+        i.IsRetainage,
         Components = i.Components.Select(c => new { c.ComponentItemId, c.Quantity }).ToList(),
         QuantityBreaks = i.QuantityBreaks.Select(b => new { b.FromQuantity, Kind = b.Kind.ToString(), b.Value }).ToList(),
     });

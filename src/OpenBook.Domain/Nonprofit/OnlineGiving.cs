@@ -1,4 +1,5 @@
 using OpenBook.Domain.Common;
+using OpenBook.Domain.Sales;
 
 namespace OpenBook.Domain.Nonprofit;
 
@@ -28,6 +29,12 @@ public sealed class DonationCheckout
 
     public Guid Id { get; private set; }
     public string SessionId { get; private set; }
+    /// <summary>Whose checkout it is; null on those from before this was kept (the provider then set).</summary>
+    public PaymentProvider? Provider { get; private set; }
+
+    /// <summary>The provider's id for the link itself, where it differs from the checkout's (Square: deleting it cancels the order).</summary>
+    public string? ProviderLinkId { get; private set; }
+
     public string Url { get; private set; }
     public decimal Amount { get; private set; }
     public string Name { get; private set; }
@@ -52,12 +59,15 @@ public sealed class DonationCheckout
         return (cleanName, cleanEmail, Text.Optional(note, MaxNoteLength, "giving.note_too_long", "Your note"));
     }
 
-    public static DonationCheckout Create(Guid id, string sessionId, string url, decimal amount, string? name, string? email, string? note, DateTimeOffset createdAt)
+    public static DonationCheckout Create(Guid id, PaymentProvider provider, string sessionId, string url, decimal amount, string? name, string? email, string? note,
+        DateTimeOffset createdAt, string? providerLinkId = null)
     {
         var (cleanName, cleanEmail, cleanNote) = Check(name, email, amount, note);
         return new DonationCheckout
         {
             Id = id,
+            Provider = provider,
+            ProviderLinkId = providerLinkId,
             SessionId = string.IsNullOrWhiteSpace(sessionId) ? throw new DomainException("giving.session", "The processor didn't start a checkout.") : sessionId,
             Url = url,
             Amount = amount,
@@ -69,13 +79,15 @@ public sealed class DonationCheckout
         };
     }
 
-    public void MarkPaid(Guid donationId)
+    /// <summary>Marked before its gift is saved, so a second report of the same payment is refused by then.</summary>
+    public void MarkPaid()
     {
         if (Status == DonationCheckoutStatus.Paid)
             throw new DomainException("giving.already_recorded", "This gift is recorded already.");
         Status = DonationCheckoutStatus.Paid;
-        DonationId = donationId;
     }
+
+    public void RecordGift(Guid donationId) => DonationId = donationId;
 
     public void Expire()
     {

@@ -324,6 +324,12 @@ public sealed class ReportBuilder(
             Vendor(BillPayment.Source, p.Id, p.VendorId);
         foreach (var r in await purchases.ListVendorRefundsAsync(null, ct))
             Vendor(VendorRefund.Source, r.Id, r.VendorId);
+        foreach (var d in await purchases.ListVendorDepositsAsync(null, ct))
+        {
+            Vendor(VendorDeposit.Source, d.Id, d.VendorId);
+            Vendor(VendorDeposit.RefundSource, d.Id, d.VendorId);
+        }
+
         foreach (var e in await purchases.ListExpensesAsync(null, ct))
         {
             if (e.VendorId is not null)

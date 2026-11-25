@@ -92,7 +92,8 @@ public sealed class ReportSubscriptionService(
         var saved = await store.GetSavedReportAsync(subscription.SavedReportId, ct);
         var reportName = saved?.Name ?? "(deleted report)";
         string? error = null;
-        var recipients = subscription.RecipientsDue;
+        var now = clock.UtcNow;
+        var recipients = subscription.RecipientsDue(now, CompanyTime.Zone);
         var notReached = new List<string>();
         try
         {
@@ -124,7 +125,7 @@ public sealed class ReportSubscriptionService(
             error = ex.Message;
         }
 
-        subscription.RecordRun(clock.UtcNow, error, notReached);
+        subscription.RecordRun(now, error, notReached, CompanyTime.Zone);
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Emailed, EntityType, subscription.Id, null,
             JsonSerializer.Serialize(new { To = string.Join(", ", recipients.Except(notReached)), NotReached = notReached, Report = reportName, Error = error })));
         await store.SaveChangesAsync(ct);

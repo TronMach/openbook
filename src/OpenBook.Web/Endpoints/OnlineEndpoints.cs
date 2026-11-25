@@ -124,6 +124,72 @@ public static class OnlineEndpoints
             }
         }).AllowAnonymous();
 
+        // Automatic payment: the customer agrees (a tick on the page that says what to), and goes to the provider to enter the card.
+        app.MapPost("/portal/{token}/card/agree", async (string token, IFormCollection form, CustomerPortalService portal, OnlinePaymentActor actor, CancellationToken ct) =>
+        {
+            actor.Use();
+            var page = $"/portal/{Uri.EscapeDataString(token)}/card";
+            var via = form["via"] == "link" ? OpenBook.Domain.Sales.CardAgreement.Link : OpenBook.Domain.Sales.CardAgreement.Portal;
+            try
+            {
+                if (form["agree"] != "true")
+                    throw new DomainException("card.not_agreed", "Tick the box to agree first.");
+                return await portal.AgreeToCardAsync(token, via, ct) is { } url ? Results.Redirect(url) : Results.NotFound();
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}{(via == OpenBook.Domain.Sales.CardAgreement.Link ? "&via=link" : "")}");
+            }
+        }).AllowAnonymous();
+
+        app.MapPost("/portal/{token}/card/stop", async (IFormCollection _, string token, CustomerPortalService portal, OnlinePaymentActor actor, CancellationToken ct) =>
+        {
+            actor.Use();
+            var page = $"/portal/{Uri.EscapeDataString(token)}";
+            try
+            {
+                return await portal.StopCardAsync(token, ct)
+                    ? Results.Redirect($"{page}?done={Uri.EscapeDataString("Automatic payment is stopped, and your card has been removed.")}#card")
+                    : Results.NotFound();
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{page}?error={Uri.EscapeDataString(ex.Message)}#card");
+            }
+        }).AllowAnonymous();
+
+        app.MapPost("/customers/{id:guid}/card/remove", async (IFormCollection _, Guid id, OnlinePaymentService online, CancellationToken ct) =>
+        {
+            try
+            {
+                await online.RemoveCardAsync(id, "Removed by the business.", ct: ct);
+                return Results.Redirect($"/customers/{id}?cardDone=removed#card");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/customers/{id}?cardError={Uri.EscapeDataString(ex.Message)}#card");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/sales/invoices/{id:guid}/charge-card", async (IFormCollection _, Guid id, OnlinePaymentService online, CancellationToken ct) =>
+            await InvoicePanel(id, async () => $"cardDone={(await online.ChargeCardAsync(id, ct)).Status}")).RequireAuthorization();
+
+        // Field: hold ("true" leaves the invoice out of automatic charges).
+        app.MapPost("/sales/invoices/{id:guid}/auto-charge", async (Guid id, IFormCollection form, OnlinePaymentService online, CancellationToken ct) =>
+            await InvoicePanel(id, async () => $"cardDone={((await online.HoldAutoChargeAsync(id, form["hold"] == "true", ct)).HoldAutoCharge ? "held" : "released")}")).RequireAuthorization();
+
+        // Fields: amount, accountId, date, reason.
+        app.MapPost("/sales/payments/{id:guid}/online-refund", async (Guid id, IFormCollection form, OnlineRefundService refunds, ClosedPeriodOverride closing, CancellationToken ct) =>
+            await RefundPanel(id, form, closing, async () => await refunds.RefundAsync(id, new OnlineRefundCommand(
+                FormNumbers.Amount(form["amount"]) ?? throw new DomainException("refund.amount_required", "Enter the amount to refund."),
+                Guid.TryParse(form["accountId"], out var account) && account != Guid.Empty ? account : null,
+                DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null,
+                form["reason"].ToString() is { Length: > 0 } reason ? reason : null), ct))).RequireAuthorization();
+
+        app.MapPost("/sales/payments/{id:guid}/online-refunds/{refundId:guid}/{step:regex(^(retry|abandon)$)}",
+            async (Guid id, Guid refundId, string step, IFormCollection form, OnlineRefundService refunds, ClosedPeriodOverride closing, CancellationToken ct) =>
+                await RefundPanel(id, form, closing, () => step == "retry" ? refunds.RetryAsync(refundId, ct) : refunds.AbandonAsync(refundId, ct))).RequireAuthorization();
+
         app.MapPost("/sales/invoices/{id:guid}/payment-link", async (IFormCollection _, Guid id, OnlinePaymentService online, CancellationToken ct) =>
             await Back($"/sales/invoices/{id}", "#online", async () =>
             {
@@ -140,6 +206,10 @@ public static class OnlineEndpoints
                 return $"done=checked&status={link.Status}";
             });
         }).RequireAuthorization();
+
+        // A gift started on the giving page that no webhook or return reported.
+        app.MapPost("/nonprofit/gifts/online/{id:guid}/check", async (IFormCollection _, Guid id, OpenBook.Application.Nonprofit.OnlineGivingService giving, CancellationToken ct) =>
+            await Back("/nonprofit/gifts", "#online", async () => $"checked={await giving.CheckAsync(id, ct)}")).RequireAuthorization();
 
         app.MapPost("/sales/online-notices/{id:guid}/resolve", async (Guid id, IFormCollection form, OnlinePaymentService online, CancellationToken ct) =>
         {
@@ -171,6 +241,7 @@ public static class OnlineEndpoints
                     Enabled = form["enabled"] == "true",
                     DepositAccountId = Guid.TryParse(form["depositAccountId"], out var account) ? account : null,
                     PublicUrl = form["publicUrl"],
+                    LeaveLinks = form["leaveLinks"] == "true",
                 }, ct);
                 return "done=saved";
             })).RequireAuthorization();
@@ -261,6 +332,32 @@ public static class OnlineEndpoints
             // Money may have moved: the System page should show it wasn't recorded.
             HookRefused(logs.CreateLogger("OpenBook.OnlinePayments"), provider, ex.Code, ex.Message, null);
             return Results.BadRequest(new { code = ex.Code, message = ex.Message });
+        }
+    }
+
+    private static async Task<IResult> InvoicePanel(Guid invoiceId, Func<Task<string>> change)
+    {
+        try
+        {
+            return Results.Redirect($"/sales/invoices/{invoiceId}?{await change()}#online");
+        }
+        catch (DomainException ex)
+        {
+            return Results.Redirect($"/sales/invoices/{invoiceId}?cardError={Uri.EscapeDataString(ex.Message)}#online");
+        }
+    }
+
+    private static async Task<IResult> RefundPanel(Guid paymentId, IFormCollection form, ClosedPeriodOverride closing, Func<Task<OpenBook.Domain.Sales.OnlineRefund>> change)
+    {
+        closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } password ? password : null;
+        var page = $"/sales/payments/{paymentId}";
+        try
+        {
+            return Results.Redirect($"{page}?refund={(await change()).Status}#refunds");
+        }
+        catch (DomainException ex)
+        {
+            return Results.Redirect($"{page}?refundError={Uri.EscapeDataString(ex.Message)}{(ClosedPeriod.NeedsPassword(ex) ? "&refundPassword=true" : "")}#refunds");
         }
     }
 

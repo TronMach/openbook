@@ -82,6 +82,12 @@ public sealed class CreditMemo
     public Guid? WarehouseId { get; private set; }
 
     public void SetWarehouse(Guid? warehouseId) => WarehouseId = warehouseId == Guid.Empty ? null : warehouseId;
+
+    /// <summary>The person (Domain.Projects.Worker) the sale is credited to, for commissions; null for none.</summary>
+    public Guid? SalesRepId { get; private set; }
+
+    public void SetSalesRep(Guid? workerId) => SalesRepId = workerId == Guid.Empty ? null : workerId;
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public IReadOnlyList<SalesLine> Lines => _lines;

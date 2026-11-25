@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OpenBook.Application.Accounts;
 using OpenBook.Application.Sales;
 using OpenBook.Domain.Auditing;
 using OpenBook.Domain.Common;
@@ -23,7 +24,7 @@ public sealed record SalesByState(DateOnly From, DateOnly To, IReadOnlyList<Stat
 /// the state shipped to) against thresholds the business keeps, so it can see where it may have to register. A guide,
 /// not a ruling: states count different things.
 /// </summary>
-public sealed class NexusService(ISalesTaxStore store, ISalesStore sales, Channels.IChannelStore channels, IClock clock, ICurrentUser user)
+public sealed class NexusService(ISalesTaxStore store, ISalesStore sales, Channels.IChannelStore channels, AccountService accounts, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "nexus_threshold";
 
@@ -74,6 +75,7 @@ public sealed class NexusService(ISalesTaxStore store, ISalesStore sales, Channe
             ? AddressParts.Parse(c.ShippingAddress).State is { Length: > 0 } ship ? ship : AddressParts.Parse(c.BillingAddress).State is { Length: > 0 } bill ? bill : null
             : null;
 
+        var holding = await SalesFigures.HoldingAccountsAsync(accounts, ct);
         var totals = new Dictionary<string, (decimal Sales, int Count)>(StringComparer.OrdinalIgnoreCase);
         var unknown = 0m;
         void Add(string? state, decimal amount, int count)
@@ -89,11 +91,11 @@ public sealed class NexusService(ISalesTaxStore store, ISalesStore sales, Channe
         }
 
         foreach (var i in (await sales.ListInvoicesDatedAsync(from, to, ct)).Where(i => i.Status == DocumentStatus.Posted))
-            Add(StateOf(i.CustomerId), TaxCalculator.SalesAmount(i.Lines), 1);
+            Add(StateOf(i.CustomerId), SalesFigures.Amount(i.Lines, holding), 1);
         foreach (var r in (await sales.ListReceiptsDatedAsync(from, to, ct)).Where(r => r.Status == DocumentStatus.Posted))
-            Add(StateOf(r.CustomerId), TaxCalculator.SalesAmount(r.Lines), 1);
+            Add(StateOf(r.CustomerId), SalesFigures.Amount(r.Lines, holding), 1);
         foreach (var c in (await sales.ListCreditMemosDatedAsync(from, to, ct)).Where(c => c.Status == DocumentStatus.Posted))
-            Add(StateOf(c.CustomerId), -TaxCalculator.SalesAmount(c.Lines), 0);
+            Add(StateOf(c.CustomerId), -SalesFigures.Amount(c.Lines, holding), 0);
         foreach (var line in (await channels.ListPayoutsAsync(null, ct)).Where(p => p.Status == Domain.Channels.PayoutStatus.Posted && InRange(p.Date)).SelectMany(p => p.Lines)
                      .Where(l => l.Type is Domain.Channels.ChannelLineType.Sale or Domain.Channels.ChannelLineType.Shipping or Domain.Channels.ChannelLineType.Refund))
             Add(line.Region is { Length: > 0 } region ? region : null, line.Amount, line.Type == Domain.Channels.ChannelLineType.Sale && line.Amount > 0m ? 1 : 0);

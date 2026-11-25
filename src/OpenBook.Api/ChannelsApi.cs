@@ -43,11 +43,13 @@ public sealed record SkuMapRequest(string Sku, Guid? ItemId);
 public sealed record ChannelResponse(
     Guid Id, string Name, ChannelKind Kind, Guid DepositAccountId, Guid SalesAccountId, Guid ShippingAccountId, Guid RefundsAccountId, Guid FeesAccountId,
     Guid TaxAccountId, Guid AdjustmentsAccountId, Guid? ClearingAccountId, bool IsActive, bool IsConnected, string? ShopDomain, DateTimeOffset? LastSyncAt,
-    bool LastSyncFailed, string? LastError, DateOnly? SyncedThrough)
+    bool LastSyncFailed, string? LastError, DateOnly? SyncedThrough, Guid? ClassId, Guid? LocationId, Guid? WarehouseId, Guid? MarketplaceWarehouseId,
+    bool MarketplaceCollectsTax)
 {
     public static ChannelResponse From(SalesChannel c) => new(
         c.Id, c.Name, c.Kind, c.DepositAccountId, c.SalesAccountId, c.ShippingAccountId, c.RefundsAccountId, c.FeesAccountId, c.TaxAccountId,
-        c.AdjustmentsAccountId, c.ClearingAccountId, c.IsActive, c.IsConnected, c.ShopDomain, c.LastSyncAt, c.LastSyncFailed, c.LastError, c.SyncedThrough);
+        c.AdjustmentsAccountId, c.ClearingAccountId, c.IsActive, c.IsConnected, c.ShopDomain, c.LastSyncAt, c.LastSyncFailed, c.LastError, c.SyncedThrough,
+        c.ClassId, c.LocationId, c.WarehouseId, c.MarketplaceWarehouseId, c.MarketplaceCollectsTax);
 }
 
 public static class ChannelsApi
@@ -65,7 +67,8 @@ public static class ChannelsApi
             await s.GetAsync(id, ct) is { } c ? Results.Ok(c.Rules.Select(r => new ChannelRuleDraft(r.Text, r.Type, r.AccountId))) : Results.NotFound());
         channels.MapPut("/{id:guid}/rules", async (Guid id, IReadOnlyList<ChannelRuleDraft> rules, ChannelService s, CancellationToken ct) =>
             (await s.SetRulesAsync(id, rules, ct)).Rules.Select(r => new ChannelRuleDraft(r.Text, r.Type, r.AccountId)));
-        channels.MapPut("/{id:guid}", async (Guid id, ChannelRequest r, ChannelService s, CancellationToken ct) => ChannelResponse.From(await s.UpdateAsync(id, r.ToDetails(), ct)));
+        channels.MapPut("/{id:guid}", async (Guid id, ChannelRequest r, ChannelService s, CancellationToken ct) =>
+            ChannelResponse.From(await s.UpdateAsync(id, Kept(r.ToDetails(), await s.GetAsync(id, ct)), ct)));
         channels.MapGet("/{id:guid}/payouts", async (Guid id, ChannelService s, CancellationToken ct) =>
             (await s.PayoutsAsync(id, ct)).Select(p => PayoutResponse.From(p)));
 
@@ -148,6 +151,16 @@ public static class ChannelsApi
         channels.MapPost("/payouts/{id:guid}/dismiss", async (Guid id, ChannelService s, CancellationToken ct) => PayoutResponse.From(await s.SetDismissedAsync(id, true, ct)));
         channels.MapPost("/payouts/{id:guid}/restore", async (Guid id, ChannelService s, CancellationToken ct) => PayoutResponse.From(await s.SetDismissedAsync(id, false, ct)));
     }
+
+    private static ChannelDetails Kept(ChannelDetails d, SalesChannel? c) => c is null ? d : d with
+    {
+        ClassId = ApiKeep.Id(d.ClassId, c.ClassId),
+        LocationId = ApiKeep.Id(d.LocationId, c.LocationId),
+        WarehouseId = ApiKeep.Id(d.WarehouseId, c.WarehouseId),
+        MarketplaceWarehouseId = ApiKeep.Id(d.MarketplaceWarehouseId, c.MarketplaceWarehouseId),
+        // A kind that changes takes the new kind's usual answer, unless told.
+        MarketplaceCollectsTax = d.MarketplaceCollectsTax ?? (d.Kind == c.Kind ? c.MarketplaceCollectsTax : null),
+    };
 
     private static object ReturnResponse(OpenBook.Domain.Channels.ChannelReturn r) => new
     {

@@ -199,14 +199,16 @@ public sealed class SalesLine
     /// total; each income account is credited with its lines' sum (debited if a discount makes it negative),
     /// one line per account and class.
     /// </summary>
-    public static IReadOnlyList<JournalLineDraft> Postings(Guid debitAccountId, IReadOnlyCollection<SalesLine> lines, string? memo)
+    /// <param name="paidInFull">A gift card redeemed on the lines pays for all of it: a total of zero is allowed, and nothing is owed or received.</param>
+    public static IReadOnlyList<JournalLineDraft> Postings(Guid debitAccountId, IReadOnlyCollection<SalesLine> lines, string? memo, bool paidInFull = false)
     {
         ArgumentNullException.ThrowIfNull(lines);
         var total = lines.Sum(l => l.Amount);
-        if (total <= 0m)
-            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
+        EnsureTotal(total, paidInFull);
 
-        var drafts = new List<JournalLineDraft> { JournalLineDraft.Dr(debitAccountId, total, memo) };
+        var drafts = new List<JournalLineDraft>();
+        if (total > 0m)
+            drafts.Add(JournalLineDraft.Dr(debitAccountId, total, memo));
         foreach (var group in lines.Where(l => l.IncomeAccountId is not null).GroupBy(l => (Account: l.IncomeAccountId!.Value, l.ClassId)))
         {
             var sum = group.Sum(l => l.Amount);
@@ -217,6 +219,13 @@ public sealed class SalesLine
         }
 
         return drafts;
+    }
+
+    /// <summary>A sale comes to more than zero, or exactly to it when a gift card redeemed on it pays for all of it.</summary>
+    internal static void EnsureTotal(decimal total, bool paidInFull)
+    {
+        if (total < 0m || (total == 0m && !paidInFull))
+            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
     }
 
     /// <summary>Validates drafts against their items and numbers the lines.</summary>

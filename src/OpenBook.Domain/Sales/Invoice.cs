@@ -111,7 +111,18 @@ public sealed class Invoice
     public Guid? WarehouseId { get; private set; }
 
     public void SetWarehouse(Guid? warehouseId) => WarehouseId = warehouseId == Guid.Empty ? null : warehouseId;
+
+    /// <summary>The person (Domain.Projects.Worker) the sale is credited to, for commissions; null for none.</summary>
+    public Guid? SalesRepId { get; private set; }
+
+    public void SetSalesRep(Guid? workerId) => SalesRepId = workerId == Guid.Empty ? null : workerId;
+
     public DateTimeOffset CreatedAt { get; private set; }
+
+    /// <summary>"Don't charge automatically": left out of the charges to the customer's saved card.</summary>
+    public bool HoldAutoCharge { get; private set; }
+
+    public void SetHoldAutoCharge(bool hold) => HoldAutoCharge = hold;
 
     public IReadOnlyList<SalesLine> Lines => _lines;
 
@@ -146,7 +157,8 @@ public sealed class Invoice
         Guid? estimateId = null,
         Guid? recurringInvoiceId = null,
         Guid? taxCodeId = null,
-        string? taxExemption = null)
+        string? taxExemption = null,
+        bool paidInFull = false)
     {
         if (dueDate < date)
             throw new DomainException("invoice.due_before_date", "The due date can't be before the invoice date.");
@@ -172,8 +184,7 @@ public sealed class Invoice
         };
         invoice._lines.AddRange(lines);
         invoice.Total = invoice._lines.Sum(l => l.Amount);
-        if (invoice.Total <= 0m)
-            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
+        SalesLine.EnsureTotal(invoice.Total, paidInFull);
         return invoice;
     }
 
@@ -226,7 +237,8 @@ public sealed class Invoice
     /// fall below what's settled. An early payment discount date keeps its distance from the invoice date.
     /// </summary>
     public void Change(
-        string number, DateOnly date, DateOnly dueDate, IReadOnlyList<SalesLine> lines, Guid journalEntryId, string? memo, Guid? taxCodeId, string? taxExemption)
+        string number, DateOnly date, DateOnly dueDate, IReadOnlyList<SalesLine> lines, Guid journalEntryId, string? memo, Guid? taxCodeId, string? taxExemption,
+        bool paidInFull = false)
     {
         ArgumentNullException.ThrowIfNull(lines);
         if (Status == DocumentStatus.Voided)
@@ -234,8 +246,7 @@ public sealed class Invoice
         if (dueDate < date)
             throw new DomainException("invoice.due_before_date", "The due date can't be before the invoice date.");
         var total = lines.Sum(l => l.Amount);
-        if (total <= 0m)
-            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
+        SalesLine.EnsureTotal(total, paidInFull);
         if (total < AmountPaid)
             throw new DomainException("invoice.total_below_paid",
                 $"Invoice {Number} has {AmountPaid:N2} paid, credited or written off, so its total can't go below that.");

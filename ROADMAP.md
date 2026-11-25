@@ -256,6 +256,10 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | L13 | Desktop and Server editions | One codebase, two installs. **Desktop**: self-contained Windows/macOS installer, SQLite in the user's Documents, listens on localhost only, scheduled folder backups on by default, no database or port settings shown. **Server**: the Docker image and compose stack with PostgreSQL, admin docs for HTTPS behind a reverse proxy, Data Protection keys and pg_dump backups. **Upgrade path**: a command that copies a SQLite company file into PostgreSQL (ledger protections kept, balance and audit checked afterwards) so a business can move from Desktop to Server. Screens adapt to the edition (e.g. pg_dump guidance instead of SQLite backup buttons) |
 | L14 | Simple view | A QuickBooks Desktop-like way to use the same books for one-person businesses: a workflow home page, customer/vendor/item centers, a task menu bar, forms with accounting choices tucked away, plain error messages. A per-user setting; nothing removed or refused. Plan below the table notes (in Phase 2's notes, after L13) |
 
+### Second audit and what it led to (2026-11-24)
+
+A review of everything written since the November 3–4 audit (about 42,000 lines): 121 findings in six areas (sales and payments, purchases and banking, nonprofit, inventory and imports, projects and reports, platform and security), all fixed or answered, each with its tests (`SecondAudit*Tests`). Built alongside, from the gaps found: Microsoft's sign-in for sending email, bills by email, passkeys, refunds from inside OpenBook, saved cards and automatic payment (Stripe only: Square and PayPal need more than their checkout pages), use tax, backup withholding (not Form 945), sales rep commissions (no margin-based commission), and erasing a person's details (documents, the audit log and earlier backups keep what the law or their own design makes them keep). CI gained Linux tests and the Docker image.
+
 ### Backlog (from L4)
 
 | Item | Why it waits |

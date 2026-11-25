@@ -27,10 +27,11 @@ public static class ExpenseClaimEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/time/claims/{id:guid}", async (Guid id, IFormCollection form, ExpenseClaimService claims, CancellationToken ct) =>
+        app.MapPost("/time/claims/{id:guid}", async (Guid id, IFormCollection form, ExpenseClaimService claims, IRecordVersions versions, CancellationToken ct) =>
         {
             try
             {
+                await versions.EnsureUnchangedAsync<ExpenseClaim>(id, Version(form), ct);
                 await claims.ChangeAsync(id, Text(form["memo"]), Lines(form), ct);
                 return Results.Redirect($"/time/claims/{id}?submitted=true");
             }
@@ -40,12 +41,13 @@ public static class ExpenseClaimEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/time/review/claims/{id:guid}/approve", async (Guid id, IFormCollection form, ExpenseClaimService claims,
+        app.MapPost("/time/review/claims/{id:guid}/approve", async (Guid id, IFormCollection form, ExpenseClaimService claims, IRecordVersions versions,
             OpenBook.Application.Ledger.ClosedPeriodOverride closing, CancellationToken ct) =>
         {
             closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
             try
             {
+                await versions.EnsureUnchangedAsync<ExpenseClaim>(id, Version(form), ct);
                 var bill = await claims.ApproveAsync(id, Date(form["billDate"]) ?? CompanyTime.Today, Text(form["note"]), ct);
                 return Results.Redirect($"/purchases/bills/{bill.Id}");
             }
@@ -56,10 +58,11 @@ public static class ExpenseClaimEndpoints
             }
         }).RequireAuthorization();
 
-        app.MapPost("/time/review/claims/{id:guid}/return", async (Guid id, IFormCollection form, ExpenseClaimService claims, CancellationToken ct) =>
+        app.MapPost("/time/review/claims/{id:guid}/return", async (Guid id, IFormCollection form, ExpenseClaimService claims, IRecordVersions versions, CancellationToken ct) =>
         {
             try
             {
+                await versions.EnsureUnchangedAsync<ExpenseClaim>(id, Version(form), ct);
                 await claims.ReturnAsync(id, form["note"].ToString(), ct);
                 return Results.Redirect($"/time/claims/{id}");
             }
@@ -93,6 +96,10 @@ public static class ExpenseClaimEndpoints
 
         return lines;
     }
+
+    /// <summary>The claim's version when the page was opened.</summary>
+    private static int? Version(IFormCollection form) =>
+        int.TryParse(form["version"], NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : null;
 
     private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

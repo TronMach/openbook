@@ -48,7 +48,11 @@
     {
         <div class="alert error" role="alert">@_error</div>
     }
-    @if (_customer is { IsActive: false })
+    @if (_customer?.ErasedAt is { } erasedAt)
+    {
+        <div class="alert notice" role="status">This customer's personal details were erased on @erasedAt.InCompanyTime().ToString("d"). The record stays for its documents, and can't be changed or used again.</div>
+    }
+    else if (_customer is { IsActive: false })
     {
         <div class="alert notice" role="status">This customer is inactive and can't be used on new sales.</div>
     }
@@ -121,6 +125,8 @@
         </table>
     }
 
+    @if (_customer?.ErasedAt is null)
+    {
     <div class="card" style="margin-top: 1.5rem">
         <h2>Details</h2>
         <EditForm Model="Input" FormName="customer" OnValidSubmit="SaveAsync" method="post">
@@ -302,8 +308,9 @@
             </FormAccess>
         </EditForm>
     </div>
+    }
 
-    @if (_customer is not null)
+    @if (_customer is { ErasedAt: null })
     {
         <form method="post" @formname="toggle-active" @onsubmit="ToggleActiveAsync" class="no-print">
             <AntiforgeryToken />
@@ -313,6 +320,7 @@
         </form>
 
         <PortalLinks CustomerId="_customer.Id" CustomerName="@_customer.DisplayName" />
+        <SavedCardPanel CustomerId="_customer.Id" CustomerName="@_customer.DisplayName" Email="@_customer.Email" />
 
         <Attachments EntityType="customer" EntityId="_customer.Id" />
 
@@ -341,7 +349,10 @@
         <ResponsibleCard CustomerId="_customer.Id" />
         <CustomerEmailCard Customer="_customer" Error="@EmailError" />
         <CustomerTextCard Customer="_customer" Error="@TextError" />
+    }
 
+    @if (_customer is not null)
+    {
         @if (_giving is { } giving && (giving.Any || _household is not null))
         {
             <section class="card">
@@ -415,13 +426,20 @@
             </section>
         }
 
-        <CustomFieldPanel EntityType="customer" EntityId="_customer.Id" />
+        @if (_customer.ErasedAt is null)
+        {
+            <CustomFieldPanel EntityType="customer" EntityId="_customer.Id" />
+        }
 
         <EmailHistory EntityType="customer" EntityId="_customer.Id" />
 
-        <Notes EntityType="customer" EntityId="_customer.Id" />
-        <OpenBook.Web.Components.Documents.LearnedCodes PartyId="_customer.Id" Back="@($"/customers/{_customer.Id}")" />
-        <MergeCard Kind="customers" Id="_customer.Id" Name="@_customer.DisplayName" />
+        @if (_customer.ErasedAt is null)
+        {
+            <Notes EntityType="customer" EntityId="_customer.Id" />
+            <OpenBook.Web.Components.Documents.LearnedCodes PartyId="_customer.Id" Back="@($"/customers/{_customer.Id}")" />
+            <MergeCard Kind="customers" Id="_customer.Id" Name="@_customer.DisplayName" />
+            <EraseCard Kind="customers" Id="_customer.Id" />
+        }
     }
 </div>
 

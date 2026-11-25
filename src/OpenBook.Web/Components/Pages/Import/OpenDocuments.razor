@@ -155,6 +155,8 @@
     private async Task PreviewAsync()
     {
         _preview = null;
+        // What was checked was the last file's.
+        _acceptUnexplained = false;
         if (_csv is null)
             return;
         try

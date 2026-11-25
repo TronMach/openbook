@@ -190,6 +190,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Sales and customers", ReportInputs.Period),
         new("sales-by-style", "Sales by style", "Sales of products added up with their variants (sizes, colours).",
             "Sales and customers", ReportInputs.Period),
+        new("sales-commissions", "Sales commissions", "What each sales rep earned in a period: the documents, the amount counted, the rate and the commission.",
+            "Sales and customers", ReportInputs.Period | ReportInputs.Person, DatePreset.ThisMonth),
         new("gift-card-balances", "Gift card balances", "Each gift card's sales, redemptions and what's left on it.",
             "Sales and customers", ReportInputs.AsOf | ReportInputs.Detail),
         new("open-invoices", "Open invoices", "Every unpaid invoice on a date, by customer, with what's still owed.",
@@ -238,7 +240,9 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Taxes", ReportInputs.Year | ReportInputs.Threshold),
         new("1099-detail", "1099 detail", "Each payment behind the 1099 summary, by vendor.",
             "Taxes", ReportInputs.Year),
-        new("sales-tax", "Sales tax liability", "Taxable, non-taxable and exempt sales and the tax charged, by agency and rate, with what you owe.",
+        new("backup-withholding", "Backup withholding", "Federal tax held back from vendors in a year and paid over to the IRS, by month, for Form 945.",
+            "Taxes", ReportInputs.Year),
+        new("sales-tax", "Sales tax liability", "Taxable, non-taxable and exempt sales and the tax charged, by agency and rate, with use tax and what you owe.",
             "Taxes", ReportInputs.Period | ReportInputs.Basis, DatePreset.LastQuarter),
         new("estimated-tax", "Estimated tax worksheet", "The year's four estimated tax periods: net profit in each, a set-aside at a percentage, and what was paid.",
             "Taxes", ReportInputs.Year),
@@ -356,6 +360,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "sales-by-item" => await Get<ActivityReports>().SalesByItemAsync(from, range.To, ct),
             "sales-by-category" => await Get<ActivityReports>().SalesByCategoryAsync(from, range.To, ct),
             "sales-by-style" => await Get<ActivityReports>().SalesByStyleAsync(from, range.To, ct),
+            "sales-commissions" => await Get<CommissionService>().ReportAsync(from, range.To, p.GetId("workerId"), ct),
             "gift-card-balances" => await Get<ActivityReports>().GiftCardBalancesAsync(p.GetDate("asOf") ?? today, p.GetFlag("detail"), ct),
             "price-list" => await Get<PricingReports>().PriceListAsync(p.GetId("customerId"), p.GetId("levelId"), asOf, ct),
             "discounts-given" => await Get<PricingReports>().DiscountsGivenAsync(from, range.To, p.GetFlag("detail"), ct),
@@ -383,6 +388,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "physical-inventory-worksheet" => await Get<InventoryReports>().CountSheetAsync(p.GetId("warehouseId"), ct),
             "1099" => Summary1099(company, await Get<PayablesService>().Report1099Async(p.GetYear("year") ?? today.Year - 1, p.GetAmount("threshold"), ct)),
             "1099-detail" => await Get<ActivityReports>().Detail1099Async(p.GetYear("year") ?? today.Year - 1, ct),
+            "backup-withholding" => await Get<BackupWithholdingService>().TableAsync(p.GetYear("year") ?? today.Year, ct),
             "sales-tax" => SalesTax(company, await Get<SalesTaxReports>().LiabilityAsync(from, range.To, basis, ct)),
             "sales-by-state" => StatesTable(company, await Get<NexusService>().SalesByStateAsync(from, range.To, ct)),
             "estimated-tax" => await Get<StatementReports>().EstimatedTaxAsync(p.GetYear("year") ?? today.Year,
@@ -612,10 +618,12 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             rows);
     }
 
+    private static ReportCell Withheld(Report1099 report) => report.Vendors.Sum(v => v.Withheld) is var total and not 0m ? new ReportCell(total) : ReportCell.Empty;
+
     private static ReportTable Summary1099(Company company, Report1099 report) => new(
         $"1099 summary for {report.Year}",
         [company.Name, $"Vendors tracked for 1099s · threshold {report.Threshold:N2}"],
-        [new("Vendor"), new("Tax ID"), new("Form and box"), new("Paid by cash, check or bank", ColumnFormat.Money), new("Paid by card (1099-K)", ColumnFormat.Money), new("Refunds received", ColumnFormat.Money), new("File a 1099?"), new("Not reportable (accounts marked)", ColumnFormat.Money)],
+        [new("Vendor"), new("Tax ID"), new("Form and box"), new("Paid by cash, check or bank", ColumnFormat.Money), new("Paid by card (1099-K)", ColumnFormat.Money), new("Refunds received", ColumnFormat.Money), new("File a 1099?"), new("Not reportable (accounts marked)", ColumnFormat.Money), new("Federal tax withheld (box 4)", ColumnFormat.Money)],
         [
             .. report.Vendors.Select(v => new ReportTableRow(
             [
@@ -627,10 +635,11 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
                 new ReportCell(v.Refunds == 0m ? null : v.Refunds),
                 v.MeetsThreshold ? v.Vendor.TaxId is null ? "Yes, tax ID needed" : "Yes" : "Below threshold",
                 new ReportCell(v.NotReportable == 0m ? null : v.NotReportable),
+                new ReportCell(v.Withheld == 0m ? null : v.Withheld),
             ])),
-            new ReportTableRow(["Total reportable", null, null, report.Vendors.Where(v => v.MeetsThreshold).Sum(v => v.Total), null, null, null, null], 0, ReportRowStyle.Total),
+            new ReportTableRow(["Total reportable", null, null, report.Vendors.Where(v => v.MeetsThreshold).Sum(v => v.Total), null, null, null, null, Withheld(report)], 0, ReportRowStyle.Total),
         ],
-        Note: "Counts bill payments and expenses dated in the year. Card payments are left out (Form 1099-K), and so is what's paid for accounts marked not reportable on 1099s (materials, merchandise). "
+        Note: "Counts bill payments, deposits paid to vendors (by the day they were paid, so not again as they're used on bills) and expenses dated in the year. Card payments are left out (Form 1099-K), and so is what's paid for accounts marked not reportable on 1099s (materials, merchandise). "
             + (report.RefundsNetted ? "Refunds are taken off, as chosen in the purchasing settings." : "Refunds are shown but not taken off; the purchasing settings can change that."));
 
     private static ReportTable StatesTable(Company company, SalesByState report) => new(
@@ -658,9 +667,10 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         foreach (var agency in report.Agencies)
         {
             rows.Add(new ReportTableRow([new ReportCell(agency.Agency.Name, new ReportLink("tax_agency", agency.Agency.Id)), .. Enumerable.Repeat(ReportCell.Empty, 6)], 0, ReportRowStyle.Section));
-            rows.AddRange(agency.Rates.Select(r => new ReportTableRow(
-                [r.RateName, r.TotalSales, r.NonTaxable, r.Exempt, r.Taxable, r.TaxRateId == Guid.Empty ? ReportCell.Empty : new ReportCell(r.Percent), r.Tax], 1)));
-            rows.Add(new ReportTableRow(["Tax charged", null, null, null, null, null, agency.Tax], 0, ReportRowStyle.Subtotal));
+            rows.AddRange(agency.Rates.Select(r => r.IsUseTax
+                ? new ReportTableRow([$"{r.RateName} (on purchases)", null, null, null, r.Taxable, null, r.Tax], 1)
+                : new ReportTableRow([r.RateName, r.TotalSales, r.NonTaxable, r.Exempt, r.Taxable, r.TaxRateId == Guid.Empty ? ReportCell.Empty : new ReportCell(r.Percent), r.Tax], 1)));
+            rows.Add(new ReportTableRow([agency.Rates.Any(r => r.IsUseTax) ? "Tax charged and use tax" : "Tax charged", null, null, null, null, null, agency.Tax], 0, ReportRowStyle.Subtotal));
             rows.Add(new ReportTableRow(["Owed at the start of the period", null, null, null, null, null, agency.OwedAtStart], 1));
             rows.Add(new ReportTableRow(["Paid in the period (incl. adjustments)", null, null, null, null, null, -agency.Paid], 1));
             rows.Add(new ReportTableRow(
@@ -678,7 +688,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
              new("Taxable", ColumnFormat.Money), new("Rate", ColumnFormat.Percent), new("Tax", ColumnFormat.Money)],
             rows,
             ReportBasis.Accrual,
-            "From invoices, sales receipts and credit memos (subtracted) dated in the period. Check the figures against your return before filing.");
+            "From invoices, sales receipts and credit memos (subtracted) dated in the period. Use tax is from bills, expenses and vendor credits (subtracted), on their date whatever the basis. Check the figures against your return before filing.");
     }
 
     /// <summary>"Invoice", "Bill payment", ... or "Journal entry".</summary>
@@ -694,8 +704,10 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Purchases.BillPayment.Source => "Bill payment",
         Domain.Purchases.VendorCredit.Source => "Vendor credit",
         Domain.Purchases.VendorRefund.Source => "Vendor refund",
+        Domain.Purchases.VendorDeposit.Source => "Vendor deposit",
+        Domain.Purchases.VendorDeposit.RefundSource => "Vendor deposit refund",
         Domain.SalesTax.SalesTaxPayment.Source => "Sales tax payment",
-        Domain.Inventory.InventoryAdjustment.Source => "Inventory adjustment",
+        Domain.Inventory.InventoryAdjustment.Source or Domain.Inventory.InventoryAdjustment.AlreadyHeldSource => "Inventory adjustment",
         Domain.Banking.BankTransaction.SpendSource => "Expense",
         Domain.Banking.BankTransaction.ReceiveSource => "Deposit",
         Domain.Banking.BankTransaction.TransferSource => "Transfer",
@@ -717,6 +729,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Nonprofit.Grant.RecognitionSource => "Grant income earned",
         Domain.Nonprofit.Grant.AdjustmentSource => "Grant adjustment",
         Domain.Channels.ChannelPayout.Source => "Channel payout",
+        Domain.Channels.ChannelPayout.TaxMoveSource => "Channel payout tax move",
         Domain.Channels.ChannelOrderBatch.Source => "Channel orders",
         Domain.Channels.ChannelReturn.Source => "Channel return",
         Domain.Assets.FixedAsset.DisposalSource => "Asset disposal",

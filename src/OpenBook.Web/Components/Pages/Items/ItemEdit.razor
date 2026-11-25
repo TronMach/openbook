@@ -493,6 +493,10 @@ else if (_item is not null && !Item.HasComponents(_item.Type))
     private ChartOfAccounts _chart = new([]);
     private List<Account> _incomeAccounts = [];
     private List<Account> _liabilities = [];
+
+    /// <summary>The item's account when neither list has it (the one retainage is held in, or one made inactive): missing from the choices, it would be lost on any save.</summary>
+    private Account? _ownAccount;
+
     private IReadOnlyList<string> _categories = [];
     private IReadOnlyList<Item> _variants = [];
     private Item? _style;
@@ -548,6 +552,10 @@ else if (_item is not null && !Item.HasComponents(_item.Type))
         <label for="account">Income account</label>
         <InputSelect id="account" @bind-Value="Input.IncomeAccountId" data-search>
             <option value="">Choose…</option>
+            @if (_ownAccount is { } own)
+            {
+                <option value="@own.Id">@_chart.FullName(own.Id)</option>
+            }
             @foreach (var account in _incomeAccounts)
             {
                 <option value="@account.Id">@_chart.FullName(account.Id)</option>
@@ -650,6 +658,7 @@ else if (_item is not null && !Item.HasComponents(_item.Type))
         _assetAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type == AccountType.OtherCurrentAsset).ToList();
         _costAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type.ClassOf() == AccountClass.Expense).ToList();
         _item = Id is { } id ? await ItemService.GetAsync(id) : null;
+        _ownAccount = _item is not null && _incomeAccounts.Concat(_liabilities).All(a => a.Id != _item.IncomeAccountId) ? _chart.Find(_item.IncomeAccountId) : null;
         _variants = _item is null ? [] : [.. everyItem.Where(i => i.VariantOfId == _item.Id).OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)];
         _style = _item?.VariantOfId is { } styleId ? everyItem.FirstOrDefault(i => i.Id == styleId) : null;
         if (_item is not null && Item.HasComponents(_item.Type))

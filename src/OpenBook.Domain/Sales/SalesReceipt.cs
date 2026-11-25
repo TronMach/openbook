@@ -65,6 +65,12 @@ public sealed class SalesReceipt
     public Guid? WarehouseId { get; private set; }
 
     public void SetWarehouse(Guid? warehouseId) => WarehouseId = warehouseId == Guid.Empty ? null : warehouseId;
+
+    /// <summary>The person (Domain.Projects.Worker) the sale is credited to, for commissions; null for none.</summary>
+    public Guid? SalesRepId { get; private set; }
+
+    public void SetSalesRep(Guid? workerId) => SalesRepId = workerId == Guid.Empty ? null : workerId;
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>The bank deposit that moved it out of undeposited funds.</summary>
@@ -86,7 +92,8 @@ public sealed class SalesReceipt
         string? reference = null,
         string? memo = null,
         Guid? taxCodeId = null,
-        string? taxExemption = null)
+        string? taxExemption = null,
+        bool paidInFull = false)
     {
         var receipt = new SalesReceipt
         {
@@ -106,8 +113,7 @@ public sealed class SalesReceipt
         };
         receipt._lines.AddRange(lines);
         receipt.Total = receipt._lines.Sum(l => l.Amount);
-        if (receipt.Total <= 0m)
-            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
+        SalesLine.EnsureTotal(receipt.Total, paidInFull);
         return receipt;
     }
 
@@ -117,14 +123,13 @@ public sealed class SalesReceipt
     /// </summary>
     public void Change(
         string number, Guid? customerId, DateOnly date, Guid depositAccountId, IReadOnlyList<SalesLine> lines, Guid journalEntryId,
-        string? reference, string? memo, Guid? taxCodeId, string? taxExemption)
+        string? reference, string? memo, Guid? taxCodeId, string? taxExemption, bool paidInFull = false)
     {
         ArgumentNullException.ThrowIfNull(lines);
         if (Status == DocumentStatus.Voided)
             throw new DomainException("receipt.voided", $"Sales receipt {Number} is voided, so it can't be changed.");
         var total = lines.Sum(l => l.Amount);
-        if (total <= 0m)
-            throw new DomainException("sales.total_not_positive", "The total must be more than zero.");
+        SalesLine.EnsureTotal(total, paidInFull);
         if (DepositId is not null && (total != Total || depositAccountId != DepositAccountId))
             throw new DomainException("receipt.deposited",
                 $"Sales receipt {Number} is in a bank deposit, so its total and deposit account can't change. Void the deposit first.");

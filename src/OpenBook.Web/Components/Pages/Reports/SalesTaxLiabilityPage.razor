@@ -44,7 +44,19 @@
             {
                 <tbody>
                     <tr class="section-heading"><td colspan="7"><a href="/sales-tax/agencies/@agency.Agency.Id">@agency.Agency.Name</a></td></tr>
-                    @foreach (var row in agency.Rates)
+                    @foreach (var row in agency.Rates.Where(r => r.IsUseTax))
+                    {
+                        <tr>
+                            <td class="indent-1">@row.RateName (on purchases)</td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td class="num">@Labels.Amount(row.Taxable)</td>
+                            <td></td>
+                            <td class="num">@Labels.Amount(row.Tax)</td>
+                        </tr>
+                    }
+                    @foreach (var row in agency.Rates.Where(r => !r.IsUseTax))
                     {
                         <tr>
                             <td class="indent-1">@row.RateName</td>
@@ -60,7 +72,7 @@
                     {
                         <tr><td class="indent-1 muted" colspan="7">No sales taxed in this period.</td></tr>
                     }
-                    <tr class="subtotal"><td colspan="6">Tax charged</td><td class="num">@Labels.Amount(agency.Tax)</td></tr>
+                    <tr class="subtotal"><td colspan="6">@(agency.Rates.Any(r => r.IsUseTax) ? "Tax charged and use tax" : "Tax charged")</td><td class="num">@Labels.Amount(agency.Tax)</td></tr>
                     <tr><td colspan="6" class="indent-1">Owed at the start of the period</td><td class="num">@Labels.Amount(agency.OwedAtStart)</td></tr>
                     <tr><td colspan="6" class="indent-1">Paid in the period (incl. adjustments)</td><td class="num">@Labels.Amount(-agency.Paid)</td></tr>
                     <tr class="grand-total">
@@ -82,7 +94,8 @@
         }
         <p class="hint">
             From invoices, sales receipts and credit memos (subtracted) dated in the period; sales are before tax and after discounts,
-            and each sale counts on every rate of its tax code. Owed figures are the agency's account in the books, so they include any
+            and each sale counts on every rate of its tax code. Use tax is from bills, expenses and vendor credits (subtracted), on their own date
+            whichever basis is chosen. Owed figures are the agency's account in the books, so they include any
             journal entries to it. Check the figures against your return before filing.
         </p>
     }

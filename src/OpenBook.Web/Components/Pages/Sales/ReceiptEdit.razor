@@ -42,7 +42,7 @@
             <div class="row">
                 <div class="field">
                     <label for="date">Date</label>
-                    <input id="date" type="date" @bind="_date" />
+                    <input id="date" type="date" @bind="_date" @bind:after="DateChangedAsync" />
                 </div>
                 <div class="field">
                     <label for="deposit">Deposit to</label>
@@ -66,6 +66,9 @@
 
             <LocationField Options="_segments" @bind-Value="_locationId" />
             <WarehouseField Warehouses="_warehouses" @bind-Value="_warehouseId" />
+            <MoreOptions HasContent="@(_reps.Count > 0)" Open="@(_salesRepId is not null)">
+                <SalesRepField People="_reps" @bind-Value="_salesRepId" />
+            </MoreOptions>
             <div class="field" style="margin-top: 1rem">
                 <label for="memo">Memo <span class="muted">(optional)</span></label>
                 <input id="memo" @bind="_memo" maxlength="1000" />
@@ -120,6 +123,8 @@
     private IReadOnlyList<Warehouse> _warehouses = [];
     private Guid? _warehouseId;
     private Guid? _locationId;
+    private IReadOnlyList<Worker> _reps = [];
+    private Guid? _salesRepId;
 
     private TaxCodeChoice? SelectedTax => _taxCodes.FirstOrDefault(c => c.Code.Id == _taxCodeId);
     private Customer? TaxCustomer => _customers.FirstOrDefault(c => c.Id == _customerId);
@@ -128,8 +133,23 @@
     private Func<TaxComponent, bool> ExemptFrom => KeepsTax && _receipt is { } kept ? TaxCalculator.KeptExemption(kept.Lines, kept.TaxExemption) : SalesLineModel.ExemptFrom(CustomerTree.ExemptionHolder(TaxCustomer, _date, _customers));
     private bool TaxExemptionExpired => SelectedTax is not null && !KeepsTax && TaxCustomer?.ExemptionCertificate is not null && TaxExemption is null;
 
-    private bool CanSave => SalesLineModel.Total(_lines) > 0m && _depositAccountId != Guid.Empty
+    private bool CanSave => SalesLineModel.MakesSale(_lines) && _depositAccountId != Guid.Empty
         && !string.IsNullOrWhiteSpace(_number) && !string.IsNullOrWhiteSpace(_reason);
+
+    /// <summary>Other codes at their rates on the document's date, which is what changing to one charges.</summary>
+    private Task<IReadOnlyList<TaxCodeChoice>> LoadTaxCodesAsync()
+    {
+        var (document, on) = (_receipt!, _date);
+        return Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(document.TaxCodeId, document.Lines, on));
+    }
+
+    private async Task DateChangedAsync()
+    {
+        var on = _date;
+        var codes = await LoadTaxCodesAsync();
+        if (on == _date)
+            _taxCodes = codes;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -140,7 +160,9 @@
             _taxAmount = TaxCalculator.TypedTax(_receipt.Lines, _receipt.TaxExemption);
             _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, [_receipt.LocationId, .. _receipt.Lines.Select(l => l.ClassId)]));
             _warehouses = await Ops.RunAsync(sp => sp.GetRequiredService<OpenBook.Application.Inventory.WarehouseService>().ListAsync());
-            _taxCodes = await Ops.RunAsync(sp => sp.GetRequiredService<SalesTaxService>().ListChoicesForDocumentAsync(_receipt.TaxCodeId, _receipt.Lines));
+            _reps = await Ops.RunAsync<SalesReps, IReadOnlyList<Worker>>(s => s.ListAsync(_receipt.SalesRepId));
+            _date = _receipt.Date;
+            _taxCodes = await LoadTaxCodesAsync();
             (_customers, _items, _chart) = await Ops.RunAsync(async sp => (
                 (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(s => s.Customer)
                     .Where(c => c.IsActive || c.Id == _receipt.CustomerId).ToList(),
@@ -154,12 +176,12 @@
             _customerId = _receipt.CustomerId;
             _depositAccountId = _receipt.DepositAccountId;
             _number = _receipt.Number;
-            _date = _receipt.Date;
             _reference = _receipt.Reference;
             _method = _receipt.Method;
             _memo = _receipt.Memo;
             _taxCodeId = _receipt.TaxCodeId;
             _locationId = _receipt.LocationId;
+            _salesRepId = _receipt.SalesRepId;
             _warehouseId = _receipt.WarehouseId;
             _lines = _receipt.Lines.Where(l => l.Kind != SalesLineKind.Tax).OrderBy(l => l.LineNumber).Select(l =>
             {
@@ -183,7 +205,7 @@
             var lines = _lines.Where(l => !l.IsBlank).ToList();
             var command = new ChangeSalesReceiptCommand(_date, SalesLineModel.Drafts(lines), _reason!, _customerId, _depositAccountId, _number,
                 _reference ?? "", _memo, _taxCodeId ?? Guid.Empty, _locationId, WarehouseId: _warehouseId, FromLines: lines.Select(l => l.OriginalLine).ToList(), Method: _method,
-                TaxAmount: TypedTaxAmount, WorkOutTax: _taxAmount is null);
+                TaxAmount: TypedTaxAmount, WorkOutTax: _taxAmount is null, SalesRepId: _salesRepId ?? Guid.Empty);
             await Ops.ChangeAsync<SalesReceipt, SalesReceiptService, SalesReceipt>(Id, _version, s => s.ChangeAsync(Id, command), _closingPassword);
             Navigation.NavigateTo($"/sales/receipts/{Id}");
         }

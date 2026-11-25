@@ -30,7 +30,8 @@ public sealed record AccountLine(
 }
 
 /// <summary>What tells one feed line of an account from another.</summary>
-public sealed record FeedIdentity(string Key, DateOnly Date, decimal Amount);
+/// <param name="PossibleDuplicate">It came in as another line over again (<see cref="BankFeedItem.PossibleDuplicate"/>).</param>
+public sealed record FeedIdentity(string Key, DateOnly Date, decimal Amount, bool PossibleDuplicate = false);
 
 public interface IBankingStore
 {

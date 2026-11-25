@@ -95,8 +95,12 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
                 .Select(t => t.Reference!)
                 .ToListAsync(ct),
             .. await db.BillPayments
-                .Where(p => p.PaymentAccountId == accountId && p.Reference != null)
+                .Where(p => p.PaymentAccountId == accountId && p.Reference != null && p.ImportBatchId == null)
                 .Select(p => p.Reference!)
+                .ToListAsync(ct),
+            .. await db.VendorDeposits
+                .Where(d => d.PaidFromAccountId == accountId && d.Reference != null)
+                .Select(d => d.Reference!)
                 .ToListAsync(ct),
             .. await db.CustomerRefunds
                 .Where(r => r.PaymentAccountId == accountId && r.Reference != null)
@@ -133,7 +137,7 @@ internal sealed class EfBankingStore(OpenBookDbContext db) : IBankingStore
     public void Add(BankRule rule) => db.BankRules.Add(rule);
 
     public async Task<IReadOnlyList<FeedIdentity>> ListFeedIdentitiesAsync(Guid accountId, CancellationToken ct) =>
-        await db.BankFeedItems.AsNoTracking().Where(i => i.AccountId == accountId).Select(i => new FeedIdentity(i.DedupeKey, i.Date, i.Amount)).ToListAsync(ct);
+        await db.BankFeedItems.AsNoTracking().Where(i => i.AccountId == accountId).Select(i => new FeedIdentity(i.DedupeKey, i.Date, i.Amount, i.PossibleDuplicate)).ToListAsync(ct);
 
     public async Task<IReadOnlyList<BankTransaction>> ListCheckSpendsAsync(CancellationToken ct) =>
         await db.BankTransactions.AsNoTracking()

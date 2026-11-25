@@ -1,0 +1,13 @@
+@* "Erase personal details" at the bottom of a customer's or vendor's page: leads to the page that says what goes and what
+   stays (admins; greyed out for everyone else). *@
+<section class="card no-print" id="erase">
+    <h2>@L["Erase personal details"]</h2>
+    <p class="muted">@L["For someone who asks for their data to be erased: takes away their name and contact details and keeps the documents the law makes you keep. Only for a record that's inactive and settled."]</p>
+    <ActionLink Class="button secondary" Href="@($"/erase/{Kind}/{Id}")">@L["Erase personal details…"]</ActionLink>
+</section>
+
+@code {
+    /// <summary>"customers" or "vendors".</summary>
+    [Parameter, EditorRequired] public string Kind { get; set; } = "";
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+}

@@ -97,7 +97,11 @@
                 </div>
             </div>
             <label class="check"><input type="checkbox" name="send" value="true" /> <span>Email each invoice to its customer</span></label>
-            <div class="actions"><button type="submit" data-confirm="Post the ticked drafts as invoices?">Post ticked drafts</button></div>
+            <div class="actions"><button type="submit" disabled="@(_needs is not null)" title="@_needs" data-confirm="Post the ticked drafts as invoices?">Post ticked drafts</button></div>
+            @if (_needs is not null)
+            {
+                <p class="hint">@_needs</p>
+            }
         </PostForm>
     }
 </div>
@@ -107,6 +111,11 @@
     private IReadOnlyList<BillingRow> _rows = [];
     private IReadOnlyList<PreBill> _drafts = [];
     private IReadOnlyDictionary<Guid, string> _names = new Dictionary<Guid, string>();
+
+    /// <summary>What posting needs when the person hasn't got it: an invoice is a sales record.</summary>
+    private string? _needs;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     [SupplyParameterFromQuery(Name = "through")] private string? ThroughText { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -118,5 +127,7 @@
         _rows = await Billing.WorksheetAsync(_through);
         _drafts = await Billing.DraftsAsync();
         _names = await Customers.FullNamesAsync();
+        if (AuthState is not null && (await AuthState).User is var user && !user.CanPost("/sales/invoices"))
+            _needs = AccessRules.NeedsText(user, "/sales/invoices", HttpMethods.Post);
     }
 }

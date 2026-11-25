@@ -23,7 +23,7 @@ public sealed record MarkBillableCommand(BillableSource Kind, Guid DocumentId, i
 /// invoices as "Billable Expenses" lines (a service item with income "Billable Expense Income", created on first use).
 /// </summary>
 public sealed class BillableExpenseService(
-    ISalesStore store, IPurchasesStore purchases, IBankingStore bank, ILedgerStore ledger, ItemService items, AccountService accounts, IClock clock, ICurrentUser user)
+    ISalesStore store, IPurchasesStore purchases, IBankingStore bank, ILedgerStore ledger, SalesTax.ISalesTaxStore taxes, ItemService items, AccountService accounts, IClock clock, ICurrentUser user)
 {
     public const string EntityType = "billable_expense";
     public const string ItemName = "Billable Expenses";
@@ -180,8 +180,10 @@ public sealed class BillableExpenseService(
         if (spend.Kind != BankTransactionKind.Spend || spend.Status != BankTransactionStatus.Posted)
             throw new DomainException("billable.document_invalid", "Only posted expenses can be billed on.");
         var entry = await ledger.GetEntryAsync(spend.JournalEntryId, ct) ?? throw new EntityNotFoundException("journal_entry", spend.JournalEntryId);
+        // Use tax is owed to the state, not part of what the customer is billed.
+        var useTax = await taxes.GetUseTaxAsync(spend.Id, ct);
         return (spend.Date, spend.Payee ?? "Expense",
-            entry.Lines.Where(l => l.AccountId != spend.AccountId && l.Amount > 0m)
+            entry.Lines.Where(l => l.AccountId != spend.AccountId && l.Amount > 0m && useTax?.Covers(entry.Id, l.LineNumber) != true)
                 .Select(l => new BillableLine(l.LineNumber, l.AccountId, l.Memo ?? spend.Memo ?? chart.Get(l.AccountId).Name, l.Amount, null)).ToList());
     }
 

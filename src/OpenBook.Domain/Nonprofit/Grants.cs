@@ -96,8 +96,8 @@ public sealed class Grant
     /// <summary>What's been asked of the funder (reimbursement requests).</summary>
     public IReadOnlyList<GrantRequest> Requests => _requests;
 
-    /// <summary>What's been asked for and not taken back.</summary>
-    public decimal Requested => _requests.Where(r => !r.IsVoided).Sum(r => r.Amount);
+    /// <summary>What's been paid (less advances paid back) or asked for and not paid yet.</summary>
+    public decimal PaidOrAsked => Received - Returned + _requests.Where(r => !r.IsVoided && r.ReceiptLine is null).Sum(r => r.Amount);
 
     public GrantRequest AddRequest(DateOnly date, DateOnly from, DateOnly to, decimal amount)
     {
@@ -107,7 +107,7 @@ public sealed class Grant
             throw new Common.DomainException("grant.request_amount", "A request is for more than zero.");
         if (to < from)
             throw new Common.DomainException("grant.request_dates", "The period ends before it starts.");
-        if (Received + _requests.Where(r => !r.IsVoided && r.ReceiptLine is null).Sum(r => r.Amount) + amount > Amount)
+        if (PaidOrAsked + amount > NetAward)
             throw new Common.DomainException("grant.request_over_award", "That's more than is left of the award.");
         var request = new GrantRequest(_requests.Count + 1, date, from, to, amount);
         _requests.Add(request);
@@ -153,12 +153,19 @@ public sealed class Grant
     /// <summary>The award less reductions: what the grant is now worth.</summary>
     public decimal NetAward => Amount - Reduced + Increased;
 
+    /// <summary>The award as it stood on the date.</summary>
+    public decimal NetAwardBy(DateOnly date) => Amount - ReducedBy(date) + IncreasedBy(date);
+
     /// <summary>What the funder had paid by the date.</summary>
     public decimal ReceivedBy(DateOnly date) => _receipts.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount);
 
     /// <summary>Income so far on the date.</summary>
     public decimal RecognizedBy(DateOnly date) =>
-        Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount) : Amount - ReducedBy(date) + IncreasedBy(date);
+        Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided && r.Date <= date).Sum(r => r.Amount) : NetAwardBy(date);
+
+    /// <summary>What the funder owed on the date for income so far; negative when they'd paid ahead.</summary>
+    public decimal DueBy(DateOnly date) =>
+        RecognizedBy(date) - ReceivedBy(date) + _adjustments.Where(a => !a.IsVoided && a.Kind == GrantAdjustmentKind.AdvanceReturn && a.Date <= date).Sum(a => a.Amount);
 
     /// <summary>Income so far: the award (unconditional) or what's been recognized (conditional).</summary>
     public decimal Recognized => Status == GrantStatus.Voided ? 0m : Conditional ? _recognitions.Where(r => !r.IsVoided).Sum(r => r.Amount) : NetAward;
@@ -187,6 +194,12 @@ public sealed class Grant
     /// cash-only entry. False on grants entered before this, whose posted entries count on both bases and stay as they are.
     /// </summary>
     public bool CashOnReceipt { get; private set; }
+
+    /// <summary>An unconditional grant carried over in the opening balances (C080): its award was posted there, on both bases.</summary>
+    public bool CarriedOver => !Conditional && AwardEntryId is null;
+
+    /// <summary>Whether receipts add the cash-basis income; not on a grant carried over, whose receivable the cash basis has too.</summary>
+    public bool EarnsCashOnReceipt => CashOnReceipt && !CarriedOver;
 
     /// <summary>
     /// The funder's share of the spending on a matching grant, in percent (100 = all of it): recognition counts only this
