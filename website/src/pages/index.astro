@@ -1,5 +1,6 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import DownloadCheck from '../components/DownloadCheck.astro';
 import Screen from '../components/Screen.astro';
 import { inRepo, latestRelease, local, repo } from '../lib/links';
 
@@ -139,8 +140,8 @@ const areas = [
 					</ul>
 					<p><a class="home-button" href={latestRelease}>Download for Windows</a></p>
 					<p class="home-small">
-						The installer isn't code-signed yet, so Windows may warn before it runs: choose <b>More info</b>, then{' '}
-						<b>Run anyway</b>.
+						The installer isn't code-signed yet, so Windows may warn before it runs.{' '}
+						<a href="#download-check">Is the download safe?</a>
 					</p>
 				</div>
 				<div class="install">
@@ -160,6 +161,8 @@ const areas = [
 				</div>
 			</div>
 		</section>
+
+		<DownloadCheck />
 
 		<section class="home-section home-pair" aria-label="Moving in, and taking part">
 			<div>

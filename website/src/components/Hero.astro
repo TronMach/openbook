@@ -29,6 +29,10 @@ const home = Astro.url.pathname.replace(/\/$/, '') === local('');
 					Free software under the <a href={`${repo}/blob/master/LICENSE`}>GNU AGPL</a>. Several people?{' '}
 					<a href="#install">Run it on a server</a> with Docker.
 				</p>
+				<p class="home-small">
+					The Windows installer isn't code-signed yet, so Windows may warn before it runs:{' '}
+					<a href="#download-check">why, and how to check it</a>.
+				</p>
 			</div>
 			<figure class="home-hero-shot">
 				<Screen

@@ -12,6 +12,22 @@ OpenBook runs as a small web server. You start it on a computer (your own, or a 
 
 You can start with the single file and move to a server later.
 
+### OpenBook Desktop on Windows
+
+Download `OpenBook-Setup-<version>.exe` from the [releases page](https://github.com/TronMach/openbook/releases) and run it. It installs for your Windows user and needs no administrator rights.
+
+OpenBook doesn't have a code signing certificate yet, so Windows can't tell who made the installer and may show **Windows protected your PC** with an unknown publisher. Check the file first:
+
+1. **Get it only from the releases page**, not from a copy on another site.
+2. **Read its virus scan.** Releases link a report from [VirusTotal](https://www.virustotal.com), which checks the installer with about 70 antivirus engines, in their notes. A scan finds known threats; it can't prove that any program is safe. New installers without a certificate are sometimes flagged by mistake, so if an engine flagged it, read the report before deciding. If the notes have no scan, you can send the file to VirusTotal yourself.
+3. **Compare its SHA-256.** Open PowerShell and run the line below with your file's name. Capitals aside, the hash it prints should match the one beside the file under **Assets** on the releases page.
+
+```powershell
+Get-FileHash "$HOME\Downloads\OpenBook-Setup-<version>.exe"
+```
+
+When it all agrees, run the installer and choose **More info**, then **Run anyway**. Updates that OpenBook downloads itself don't show this warning.
+
 ### On your own computer (from source)
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download). In the OpenBook folder, run:

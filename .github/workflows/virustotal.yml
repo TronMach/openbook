@@ -1,0 +1,79 @@
+# Scans a release's Windows installer with VirusTotal and says the result on the release (a line in its notes, and
+# virustotal.json, which the website reads), then publishes the website again so it shows the newest release. The release
+# workflow runs it after publishing; run it by hand to scan an older release, or again later (an engine that flagged the
+# installer by mistake may have been put right). Needs the VIRUSTOTAL_API_KEY secret; without it only the website is
+# published again. See docs/admin/releasing.md, "Virus scan".
+name: Virus scan
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+    secrets:
+      VIRUSTOTAL_API_KEY:
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release to scan (v1.2.0; empty for the latest)'
+        type: string
+        default: ''
+
+permissions: {}
+
+jobs:
+  scan:
+    name: Scan the installer
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    concurrency: virustotal
+    permissions:
+      contents: write
+      # To start the website workflow.
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Scan
+        shell: bash
+        # Through the environment, so a tag's name is only ever text.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$VIRUSTOTAL_API_KEY" ]; then
+            echo "::notice::Not scanned: the repository has no VIRUSTOTAL_API_KEY secret."
+            exit 0
+          fi
+          tag="${TAG:-$(gh release view --json tagName --jq .tagName)}"
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Releases are named like v1.2.0."
+            exit 1
+          fi
+          work="$(mktemp -d)"
+          setup="OpenBook-Setup-${tag#v}.exe"
+          gh release download "$tag" --pattern "$setup" --dir "$work"
+          gh release view "$tag" --json body --jq .body > "$work/notes.md"
+          node tools/virustotal.mjs --file "$work/$setup" --out "$work/virustotal.json" --notes "$work/notes.md"
+          gh release upload "$tag" "$work/virustotal.json" --clobber
+          gh release edit "$tag" --notes-file "$work/notes.md"
+
+      # Scanned or not, the website shows the newest release's version and SHA-256.
+      - name: Publish the website again
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run website.yml --ref master

@@ -1,6 +1,7 @@
 # Builds the website (website/, Astro and Starlight) with the user guide from docs/user-guide, checks its links and
 # its packages' licences, and on master publishes it to GitHub Pages (https://tronmach.github.io/openbook/).
-# Pull requests build and check only. Pages must be set to "GitHub Actions" in the repository's settings once.
+# The Virus scan workflow runs it after each release, so the homepage shows that release. Pull requests build and check
+# only. Pages must be set to "GitHub Actions" in the repository's settings once.
 name: Website
 
 on:
@@ -41,7 +42,10 @@ jobs:
       - name: Package licences
         run: npm run check-licences
 
+      # The homepage shows the newest release's SHA-256 and virus scan, read from GitHub as it's built.
       - name: Build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
       - name: Links
