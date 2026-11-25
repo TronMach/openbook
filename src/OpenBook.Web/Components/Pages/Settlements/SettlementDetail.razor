@@ -20,6 +20,10 @@
             {
                 <ActionLink Class="button secondary" Href="@($"/settlements/{_settlement.Id}/edit")">@L["Change"]</ActionLink>
             }
+            @if (_settlement.Status == SettlementStatus.Posted)
+            {
+                <ActionLink Class="button secondary" Href="@StatementUrl(_settlement)">@L["Operating statement"]</ActionLink>
+            }
             <ActionLink Class="button secondary" Href="/settlements">@L["All settlements"]</ActionLink>
             <ActionLink Class="button secondary" Href="@($"/audit?entityId={_settlement.Id}")">@L["History"]</ActionLink>
         </div>
@@ -242,6 +246,10 @@
             _deposits = await SettlementService.PossibleDepositsAsync(_settlement);
         }
     }
+
+    // The week it paid for: its entry is dated the day it was paid.
+    private static string StatementUrl(Settlement s) =>
+        $"/reports/operating-statement?preset=Custom&from={(s.PeriodStart is { } from && from < s.Date ? from : s.Date.AddDays(-6)):yyyy-MM-dd}&to={s.Date:yyyy-MM-dd}";
 
     private string Account(Guid id) => _chart.Find(id) is null ? "" : _chart.FullName(id);
 

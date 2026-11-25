@@ -420,6 +420,8 @@ public sealed class AccountantPackageService(
         ("inventory-valuation", "24 Inventory valuation"),
         ("channel-sales", "25 Sales by channel"),
         ("channel-sales-tax", "26 Channel sales tax by state"),
+        ("settlement-codes", "27 Settlement codes"),
+        ("settlement-balances", "28 Reserves and advances"),
     ];
 
     /// <summary>A nonprofit's statements, added to its package.</summary>
@@ -478,7 +480,7 @@ public sealed class AccountantPackageService(
             {
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(
                     $"{company.Name}: accountant's package for {from:MMM d, yyyy} to {to:MMM d, yyyy}, made {clock.UtcNow.InCompanyTime():g} by {user.Actor}.\r\n\r\n"
-                    + $"Statements are on the {(used == Domain.Ledger.ReportBasis.Cash ? "cash" : "accrual")} basis. Mileage, sales tax, inventory and channel reports are included when the company has any. "
+                    + $"Statements are on the {(used == Domain.Ledger.ReportBasis.Cash ? "cash" : "accrual")} basis. Mileage, sales tax, inventory, channel and settlement reports are included when the company has any. "
                     + "The 1099 filing data has full taxpayer IDs: keep it private.\r\n" + trail), ct);
             }
         }

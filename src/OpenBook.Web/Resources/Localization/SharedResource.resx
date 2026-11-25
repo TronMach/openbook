@@ -1940,6 +1940,9 @@
   <data name="Loaded miles" xml:space="preserve">
     <value>Loaded miles</value>
   </data>
+  <data name="Loads" xml:space="preserve">
+    <value>Loads</value>
+  </data>
   <data name="Loans" xml:space="preserve">
     <value>Loans</value>
   </data>
@@ -2500,6 +2503,9 @@
   </data>
   <data name="Opening balances" xml:space="preserve">
     <value>Opening balances</value>
+  </data>
+  <data name="Operating statement" xml:space="preserve">
+    <value>Operating statement</value>
   </data>
   <data name="Optional. From this day they can't sign in and are made inactive. Leave empty for no end." xml:space="preserve">
     <value>Optional. From this day they can't sign in and are made inactive. Leave empty for no end.</value>
@@ -3103,6 +3109,9 @@
   </data>
   <data name="Reserve or balance {0}" xml:space="preserve">
     <value>Reserve or balance {0}</value>
+  </data>
+  <data name="Reserves and advances" xml:space="preserve">
+    <value>Reserves and advances</value>
   </data>
   <data name="Reserves and balances" xml:space="preserve">
     <value>Reserves and balances</value>

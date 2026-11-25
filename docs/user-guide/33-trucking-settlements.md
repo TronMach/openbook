@@ -70,6 +70,15 @@ To change a posted settlement, **Void the entry**; it goes back to waiting, wher
 
 Notes and files (the statement itself, say) can be kept with each settlement, at the bottom of its page. Statements often show other people's pay, so attach only what you need.
 
+## Reports
+
+Under **Reports → Trucking**:
+
+- **Operating statement**: income and expenses for a period, the year to date and all dates, each with its amount **per mile**, and the loaded and empty miles. Filter by class for one truck. A posted settlement's page opens it for that week. Expenses you enter elsewhere, such as fuel on your own card, are in it too. Per mile counts from your first settlement, so books from before then don't distort it.
+- **Loads**: each load's miles, pay and own charges (its fuel, its fuel tax), and what was left, per mile. Rent, insurance and reserves belong to no one load and are on a line of their own.
+- **Settlement codes**: what each code came to and where it went. Over a year, compare its revenue with the carrier's 1099.
+- **Reserves and advances**: what went into and out of each, and the balance the statement gave.
+
 ## What it doesn't do
 
 It isn't payroll: a second driver's wages and taxes on the statement go to the accounts you choose, and no pay stubs or W-2s are made. Fuel tax (IFTA) returns aren't prepared, though the gallons are kept.

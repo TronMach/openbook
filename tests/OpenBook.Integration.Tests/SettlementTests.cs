@@ -380,6 +380,89 @@ public sealed class SettlementTests : IAsyncLifetime
         Assert.Equal("LN", Assert.Single((await In<SettlementService, SettlementReview>(s => s.ReviewAsync(settlement))).Notes).Code);
     }
 
+    private Task<ReportTable> Table(string key, string query) => In<ReportCatalog, ReportTable>(s => s.RunAsync(key, ReportParameters.Parse(query)));
+
+    private static object?[] RowOf(ReportTable table, string label) => [.. table.Rows.Single(r => r.Cells[0].Value as string == label).Cells.Skip(1).Select(c => c.Value)];
+
+    [Fact]
+    public async Task The_operating_statement_shows_the_week_the_year_and_everything_per_mile()
+    {
+        // Books from before settlements: they're in all dates, but not divided by miles that weren't kept yet.
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Receive, _checking.Id, new DateOnly(2025, 6, 1), [new BankSplit(Account("Freight Revenue"), 5000m)])));
+        await In<BankingService, BankTransaction>(s => s.RecordAsync(new RecordBankTransactionCommand(BankTransactionKind.Spend, _checking.Id, new DateOnly(2026, 1, 5), [new BankSplit(Account("Fuel"), 90m)])));
+        var early = await Enter(Details("022726", new DateOnly(2026, 2, 27)));
+        await AssignAsync(early);
+        await Post(early.Id);
+        await Post((await Enter()).Id);
+
+        var table = await Table("operating-statement", "preset=Custom&from=2026-03-07&to=2026-03-13");
+        Assert.Equal(["", "Mar 7, 2026 – Mar 13, 2026", "Per mile", "Year to date", "Per mile", "All dates", "Per mile"], table.Columns.Select(c => c.Header));
+        Assert.Equal(["1,050", null, "2,100", null, "2,100", null], RowOf(table, "Total miles"));
+        // 2160 / 1050 = 2.057; the year has both weeks; all dates adds the 5,000 from before but doesn't divide it.
+        Assert.Equal([2160m, 2.057m, 4320m, 2.057m, 9320m, 2.057m], RowOf(table, "Freight Revenue"));
+        // Fuel in January came before the miles: it's in the year's amount and not in its per mile.
+        Assert.Equal([710m, 0.676m, 1510m, 0.676m, 1510m, 0.676m], RowOf(table, "Fuel"));
+        Assert.Equal([361.25m, 0.344m], RowOf(table, "Net income")[..2]);
+
+        // Its exports are the same table.
+        Assert.Contains("Per mile", System.Text.Encoding.UTF8.GetString(ReportCsv.Write(table)), StringComparison.Ordinal);
+        Assert.NotEmpty(await _db.InScope(sp => Task.FromResult(sp.GetRequiredService<IReportExporter>().ToXlsx(table))));
+        Assert.NotEmpty(await _db.InScope(sp => Task.FromResult(sp.GetRequiredService<IReportExporter>().ToPdf(table))));
+
+        // A period that is the year has no second column of it, and all dates is one column.
+        Assert.Equal(5, (await Table("operating-statement", "preset=Custom&from=2026-01-01&to=2026-03-31")).Columns.Count);
+        Assert.Equal(3, (await Table("operating-statement", "preset=AllDates")).Columns.Count);
+        // Without miles nothing is divided.
+        var none = await Table("operating-statement", "preset=Custom&from=2025-06-01&to=2025-06-30");
+        Assert.Null(RowOf(none, "Freight Revenue")[1]);
+    }
+
+    [Fact]
+    public async Task The_operating_statement_of_a_truck_counts_its_own_miles()
+    {
+        var (one, two) = (await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Truck 1")), await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Truck 2")));
+        var settlement = await Enter(Details(net: 1000m, lines:
+        [
+            Line(Revenue, "RV", 600m, "TRIP REVENUE", "L1", 300m) with { ClassId = one.Id }, Line(Revenue, "RV", 400m, "TRIP REVENUE", "L2", 100m, 100m) with { ClassId = two.Id },
+        ]));
+        await AssignAsync(settlement);
+        await Post(settlement.Id);
+        Assert.Equal([600m, 2m], RowOf(await Table("operating-statement", $"preset=Custom&from=2026-03-07&to=2026-03-13&classId={one.Id}"), "Freight Revenue")[..2]);
+        Assert.Equal([400m, 2m], RowOf(await Table("operating-statement", $"preset=Custom&from=2026-03-07&to=2026-03-13&classId={two.Id}"), "Freight Revenue")[..2]);
+        Assert.Equal([1000m, 2m], RowOf(await Table("operating-statement", "preset=Custom&from=2026-03-07&to=2026-03-13"), "Freight Revenue")[..2]);
+    }
+
+    [Fact]
+    public async Task Loads_codes_and_reserves_have_reports()
+    {
+        var settlement = await Enter(Details() with { StatedBalances = [new(Account("Emergency Fund"), 150m)] });
+        await AssignAsync(settlement);
+        const string march = "preset=Custom&from=2026-03-01&to=2026-03-31";
+        Assert.Equal(0m, RowOf(await Table("settlement-codes", march), "Total")[^1]);
+        await Post(settlement.Id);
+
+        var loads = await Table("settlement-loads", march);
+        // L100: 1440 + 400 + 12.50 of pay over 700 miles, less 500 of fuel and 20 of fuel tax.
+        Assert.Equal([600m, 100m, 1852.50m, 2.646m, -520m, 1332.50m, 1.904m], RowOf(loads, "L100")[2..]);
+        Assert.Equal([900m, 150m, 2892.50m, 2.755m, -2232.50m, 660m, 0.629m], RowOf(loads, "Total")[2..]);
+
+        var codes = await Table("settlement-codes", march);
+        Assert.Equal(660m, RowOf(codes, "Net paid and carried forward")[^1]);
+        Assert.Equal(-2570m, RowOf(codes, "Total deductions")[^1]);
+
+        var balances = await Table("settlement-balances", march);
+        Assert.Equal([0m, 26.25m, -250m, 0m, -223.75m, null, null], RowOf(balances, "Tire Reserve"));
+        Assert.Equal([0m, 150m, 0m, 0m, 150m, 150m, Friday], RowOf(balances, "Emergency Fund"));
+        Assert.Equal([0m, 300m, -50m, 0m, 250m, null, null], RowOf(balances, "Carrier Advances"));
+
+        Assert.Equal((-48.75m, 250m), (RowOf(balances, "Held by carriers")[4], RowOf(balances, "Owed to carriers")[4]));
+
+        // What's carried forward counts in the account it's kept in.
+        var owing = await Enter(Details("owe", Friday.AddDays(7), 0m, [Line(Revenue, "RV", 700m, "TRIP REVENUE", "L3", 500m), Line(Deduction, "NP", 900m, "TRUCK PAYMENT")], carried: -200m));
+        await Post(owing.Id);
+        Assert.Equal([0m, 200m, 0m, 0m, 200m], RowOf(await Table("settlement-balances", march), "Due to Carrier")[..5]);
+    }
+
     [Fact]
     public async Task Reports_search_and_lists_know_settlements()
     {

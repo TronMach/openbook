@@ -78,6 +78,7 @@ public static class Editions
         Edition.ProfessionalServices => ["Projects and time", "Sales and customers"],
         Edition.ECommerce => ["Sales and customers", "Inventory", "Taxes"],
         Edition.Nonprofit => ["Nonprofit", "Financial statements"],
+        Edition.Trucking => ["Trucking", "Financial statements"],
         _ => [],
     };
 
@@ -118,7 +119,8 @@ public static class Editions
             new("/settlements/new", "Enter a settlement", "Type or paste a statement's lines"),
             new("/purchases/receipts", "Receipts", "Fuel, scales and repairs you paid for yourself"),
             new("/banking", "Banking", "Registers, deposits to match and reconciling"),
-            new("/reports/profit-and-loss", "Profit and loss", "What the truck earned and cost"),
+            new("/reports/operating-statement", "Operating statement", "What the truck earned and cost, per mile"),
+            new("/reports/settlement-loads", "Loads", "Each load's miles, pay and own charges"),
         ],
         _ => [],
     };
