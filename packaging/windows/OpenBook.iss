@@ -120,6 +120,7 @@ Type: files; Name: "{commonprograms}\OpenBook Server.url"; Check: IsAdminInstall
 var
   DesktopPage: TInputOptionWizardPage;
   Address: String;
+  ServerFailed: Boolean;
 
 function ProgramFolder(Param: String): String;
 begin
@@ -249,7 +250,10 @@ begin
   while not RunCommand('bring-desktop-company --from "' + DesktopCompany + '" --keys "' + DesktopKeys + '"', Answer) do
     if SuppressibleMsgBox('Your company couldn''t be brought from OpenBook Desktop. ' + Answer + #13#10#13#10
       + 'Cancel goes on without it: the server starts with no company.', mbError, MB_RETRYCANCEL, IDCANCEL) <> IDRETRY then
+    begin
+      ServerFailed := True;
       exit;
+    end;
 end;
 
 procedure SetUpServer;
@@ -267,6 +271,7 @@ begin
   begin
     if not RunCommand('install-service --no-start' + Port, Answer) then
     begin
+      ServerFailed := True;
       SuppressibleMsgBox('OpenBook Server couldn''t be set up. ' + Answer, mbCriticalError, MB_OK, IDOK);
       exit;
     end;
@@ -282,7 +287,19 @@ begin
     SetIniString('InternetShortcut', 'IconIndex', '0', ExpandConstant('{commonprograms}\OpenBook Server.url'));
   end
   else
+  begin
+    ServerFailed := True;
     SuppressibleMsgBox('OpenBook Server couldn''t be set up. ' + Answer, mbCriticalError, MB_OK, IDOK);
+  end;
+end;
+
+{ The files are in place but the server isn't as asked: an unattended install must see that. }
+function GetCustomSetupExitCode: Integer;
+begin
+  if ServerFailed then
+    Result := 20
+  else
+    Result := 0;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

@@ -34,7 +34,7 @@ Only administrators, Windows itself and the service can open `C:\ProgramData\Ope
 
 The port is 5190, or the next free one when something else already uses it on a first install.
 
-Unattended: `OpenBook-Setup-<version>.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS`, with `/PORT=5200` for another port and `/BRINGDESKTOP=1` to bring in the person's Desktop company (both on a first install only). Without `/ALLUSERS` it installs OpenBook Desktop. The setup code is then in `C:\ProgramData\OpenBook\setup-code.txt`, until the company is set up.
+Unattended: `OpenBook-Setup-<version>.exe /VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS`, with `/PORT=5200` for another port and `/BRINGDESKTOP=1` to bring in the person's Desktop company (both on a first install only). Without `/ALLUSERS` it installs OpenBook Desktop. Exit code 20 means the program is in place but the server couldn't be set up as asked (`/LOG=<file>` says why). The setup code is then in `C:\ProgramData\OpenBook\setup-code.txt`, until the company is set up.
 
 ## How many people
 

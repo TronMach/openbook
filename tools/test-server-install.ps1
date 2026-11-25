@@ -34,20 +34,26 @@ function Assert([bool]$condition, [string]$what) {
 
 function Get-Page([string]$path) { (Invoke-WebRequest "$base$path" -UseBasicParsing -TimeoutSec 60).Content }
 
-function Invoke-Setup([string]$name, [string[]]$more) {
+function Invoke-Setup([string]$name, [string[]]$more = @(), [int]$exit = 0) {
     $log = Join-Path $Logs "$name.log"
-    $p = Start-Process $Installer -ArgumentList (@('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS', "/LOG=`"$log`"") + $more) -PassThru
+    $p = Start-Process $Installer -ArgumentList (@('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS', "/LOG=`"$log`"") + @($more | Where-Object { $_ })) -PassThru
+    # Windows PowerShell forgets the exit code unless the handle was asked for while it ran.
+    $null = $p.Handle
     if (-not $p.WaitForExit(900000)) { $p.Kill(); throw "FAILED: the installer ($name) didn't finish in 15 minutes. $log" }
-    if ($p.ExitCode -ne 0) { Get-Content $log -Tail 40 | Write-Host }
-    Assert ($p.ExitCode -eq 0) "$name finished"
+    if ($p.ExitCode -ne $exit) { Get-Content $log -Tail 40 | Write-Host }
+    Assert ($p.ExitCode -eq $exit) "$name ended with code $exit"
     Select-String -Path $log -Pattern '(install|stop)-service|bring-desktop-company' | ForEach-Object { Write-Host "   $($_.Line)" }
 }
 
-function Invoke-Uninstall {
+function Remove-Program {
     $p = Start-Process (Join-Path $program 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -PassThru
     # The uninstaller goes on in a copy of itself.
     $null = $p.WaitForExit(300000)
     for ($i = 0; $i -lt 60 -and (Test-Path $program); $i++) { Start-Sleep 2 }
+}
+
+function Invoke-Uninstall {
+    Remove-Program
     Assert (-not (Get-Service OpenBook -ErrorAction SilentlyContinue)) 'uninstalling takes the service away'
     Assert (-not (Get-NetFirewallRule -DisplayName 'OpenBook Server' -ErrorAction SilentlyContinue)) 'and the firewall rule'
     Assert (-not (Test-Path $program)) 'and the program'
@@ -69,8 +75,9 @@ $acl = Get-Acl $data
 $acl.SetOwner([Security.Principal.SecurityIdentifier]'S-1-5-32-545')
 try { Set-Acl $data $acl; $planted = $true } catch { $planted = $false }
 if ($planted) {
-    $p = Start-Process $Installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS', "/LOG=`"$(Join-Path $Logs 'planted.log')`"" -PassThru -Wait
+    Invoke-Setup 'planted' -exit 20
     Assert (-not (Get-Service OpenBook -ErrorAction SilentlyContinue)) 'a folder another person made is refused'
+    Remove-Program
 }
 Remove-Item $data -Recurse -Force
 
