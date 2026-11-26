@@ -229,9 +229,19 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
         var failed = new List<string>();
         foreach (var path in posts)
         {
-            var response = await browser.PostAsync(path, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
-            if ((int)response.StatusCode >= 500)
-                failed.Add($"{path} ({(int)response.StatusCode})");
+            // Each post on its own clock (2026-11-26: one on PostgreSQL in CI never finished answering, and the client's
+            // own 100 s timeout failed the test without saying which), so one that hangs names itself and the rest still run.
+            using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            try
+            {
+                var response = await browser.PostAsync(path, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }), limit.Token);
+                if ((int)response.StatusCode >= 500)
+                    failed.Add($"{path} ({(int)response.StatusCode})");
+            }
+            catch (OperationCanceledException) when (limit.IsCancellationRequested)
+            {
+                failed.Add($"{path} (no answer in 30 s)");
+            }
         }
 
         Assert.Empty(failed);
