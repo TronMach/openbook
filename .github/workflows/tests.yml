@@ -7,6 +7,9 @@
 # run), and the Docker image is built and started on SQLite and on PostgreSQL until its health check answers.
 # The SQLite job also checks every package's licence (tools/check-licences.ps1), so a Dependabot update can't bring in
 # one OpenBook can't use.
+# The four test jobs are required checks on master, so every pull request must report them: a pull request runs this
+# workflow whatever it changes, and the jobs skip (which counts as passing) when it changes only the files below, the
+# same ones pushes to master ignore. If the check of the changed files fails, the jobs run.
 name: Tests
 
 on:
@@ -14,7 +17,6 @@ on:
     branches: [master]
     paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'PRIVACY.md', 'docs/dev/**', 'docs/admin/**', 'website/**', '.github/workflows/website.yml', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
   pull_request:
-    paths-ignore: ['CLAUDE.md', 'README.md', 'ROADMAP.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CODE_OF_CONDUCT.md', 'PRIVACY.md', 'docs/dev/**', 'docs/admin/**', 'website/**', '.github/workflows/website.yml', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
   workflow_dispatch:
 
 permissions:
@@ -26,8 +28,45 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.check.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2
+
+      # A pull request is checked out as its merge with the base, so HEAD^1 is the base and the diff is what it changes.
+      # Keep this list in step with paths-ignore above.
+      - name: Only text that needs no tests?
+        id: check
+        run: |
+          docs_only=false
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files=$(git diff --name-only HEAD^1 HEAD)
+            if [ -n "$files" ]; then
+              docs_only=true
+              while IFS= read -r f; do
+                case "$f" in
+                  CLAUDE.md|README.md|ROADMAP.md|CONTRIBUTING.md|SECURITY.md|CODE_OF_CONDUCT.md|PRIVACY.md) ;;
+                  docs/dev/*|docs/admin/*|website/*|.github/ISSUE_TEMPLATE/*) ;;
+                  .github/workflows/website.yml|.github/pull_request_template.md) ;;
+                  *) docs_only=false; echo "Needs the tests: $f"; break ;;
+                esac
+              done <<< "$files"
+            fi
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "Only text that needs no tests: $docs_only"
+
   sqlite:
     name: SQLite (all tests, Release build)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -60,6 +99,8 @@ jobs:
 
   linux:
     name: Linux (SQLite tests)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -95,6 +136,8 @@ jobs:
 
   container:
     name: Docker image
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -118,6 +161,8 @@ jobs:
 
   postgres:
     name: PostgreSQL (integration tests)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
