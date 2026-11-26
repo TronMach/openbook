@@ -15,7 +15,7 @@
         <ActionLink Class="button secondary" Href="/dispatch/trucks">@L["Trucks"]</ActionLink>
         <ActionLink Class="button secondary" Href="/dispatch/charges">@L["Charges and advances"]</ActionLink>
     </div>
-    <p class="muted">@L["The owner-operators you pay by settlement. Each is a vendor: their settlements are billed to it, and their 1099 counted under it."]</p>
+    <p class="muted">@L["The owner-operators you pay by settlement. Each is a vendor: their settlements are billed to it, and their 1099 counted under it if you send one."]</p>
     @if (Error is not null)
     {
         <div class="alert error" role="alert">@Error</div>
@@ -59,7 +59,7 @@
                             <option value="@v.Id">@v.DisplayName</option>
                         }
                     </select>
-                    <span class="hint">@L["Add the vendor first, with their tax ID and 1099 box, on Vendors."]</span>
+                    <span class="hint">@L["Add the vendor first, with their tax ID, on Vendors. Pay for hauling freight usually needs no 1099: tick Track for 1099 there only if you send one."]</span>
                 </div>
             </div>
             <OwnerAccountFields Chart="_chart" />

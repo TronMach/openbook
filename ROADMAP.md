@@ -259,10 +259,10 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 A real owner-operator's settlement statement was compared with OpenBook: its money posts to the cent, but nothing held the statement, its codes or its miles.
 
 - **L15, the owner-operator** (a carrier pays us): A1 carriers, codes, settlements, posting, the trucking edition and an on/off setting for any other edition; A2 CSV import; A3 review against last week and the statement's balances; A4 operating statement (period, year to date, all dates, each per mile), loads, codes and reserves reports; A5 reading PDFs with Claude, chosen pages only; A6 local OCR as a backup, with warnings and checks; A7 load check and the guide.
-- **L16, the carrier** (we pay owner-operators), after L15: B1 owners, trucks, open charges, advances, reserves; B2 the weekly run (bills, zero net, void rules, 1099 on gross, backup withholding, approval); B3 recurring deductions and interest; B4 loads and a simple load board; B5 invoicing loads, detention, pay rules; B6 fuel and toll imports; B7 statement PDF and email, PPD. An accountant should confirm the 1099 treatment before B2 is released.
+- **L16, the carrier** (we pay owner-operators), after L15: B1 owners, trucks, open charges, advances, reserves; B2 the weekly run (bills, zero net, void rules, 1099 on gross, backup withholding, approval); B3 recurring deductions and interest; B4 loads and a simple load board; B5 invoicing loads, detention, pay rules; B6 fuel and toll imports; B7 statement PDF and email, PPD. The 1099 treatment was checked against IRS sources on 2026-11-26 (`docs/dev/settlements.md`, The 1099).
 - Not planned: payroll, IFTA returns, ELD or GPS links, EDI, factoring.
 
-**L15, A1 to A7 (2026-11-25): complete.** L16 started 2026-11-26 (the user asked for it before PR 26 was merged): B1 to B7 done; an accountant should confirm the 1099 treatment before release. Details in `docs/dev/settlements.md`.
+**L15, A1 to A7 (2026-11-25): complete.** L16 started 2026-11-26 (the user asked for it before PR 26 was merged): B1 to B7 done; the 1099 treatment was checked against IRS sources on 2026-11-26: hauling pay usually needs no 1099, and the guide says so. Details in `docs/dev/settlements.md`.
 
 ### Second audit and what it led to (2026-11-24)
 

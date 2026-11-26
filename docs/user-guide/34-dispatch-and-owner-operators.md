@@ -8,7 +8,7 @@ Tick **We pay owner-operators and dispatch loads** under **Trucking** in **Setti
 
 ## Owner-operators
 
-Each owner-operator is a **vendor** first: add them on **Vendors**, with their tax ID, and tick **Track for 1099** there. Then, on **Dispatch → Owner-operators** (accountant role), **Add an owner-operator** and choose the vendor record.
+Each owner-operator is a **vendor** first: add them on **Vendors**, with their tax ID. Tick **Track for 1099** there only if you send them a 1099: pay for hauling freight usually doesn't need one (see [The 1099](#the-1099)). Then, on **Dispatch → Owner-operators** (accountant role), **Add an owner-operator** and choose the vendor record.
 
 Three accounts decide where their settlements go. Leave them as they are and OpenBook makes them the first time:
 
@@ -104,7 +104,7 @@ Settlements take charges back oldest first, as far as each week's pay allows. A 
 **Dispatch → Pay owner-operators** (standard role).
 
 1. Choose the period: **Through** is its last day (charges dated after it wait for the next run) and **Bill date** the day the bills are dated.
-2. For each owner-operator, enter what they **earned** (a line per load, with its load number, truck and miles if you like) and any **reimbursement** (tolls or scales they paid that you give back). Earnings count on their 1099; reimbursements don't. To pay money out of a reserve, type how much beside it. Tick **Hold** to leave someone out this time.
+2. For each owner-operator, enter what they **earned** (a line per load, with its load number, truck and miles if you like) and any **reimbursement** (tolls or scales they paid that you give back). Earnings count on their 1099 when you send one; reimbursements don't, so keep the receipts they give you for them. To pay money out of a reserve, type how much beside it. Tick **Hold** to leave someone out this time.
 3. **Preview** shows each settlement as it will be made: the pay, then what's taken out.
 4. **Make the settlements**: each owner-operator gets one bill, numbered **Settlement 1**, **Settlement 2** and so on, to pay on **Pay bills** by check or ACH like any other.
 
@@ -112,7 +112,7 @@ What's taken out, in this order and only as far as the pay goes:
 
 Their pay is what their loads earned by their pay rule (see Pay for loads), plus what you type. What's taken out, in order:
 
-1. **Backup withholding**, when it's turned on for their vendor record (24% of what counts on the 1099).
+1. **Backup withholding**, when it's turned on for their vendor record (24% of what counts on the 1099). It applies only to pay that has to go on a 1099, so pay for hauling freight usually has none: turn it on only when it does.
 2. **Regular deductions**, in their order.
 3. **Charges and advances**, oldest first.
 4. **Reserves**, by their own rule, up to their target.
@@ -133,9 +133,11 @@ A settlement's bill can't be changed or voided on its own. Open the settlement (
 
 ### The 1099
 
-An owner-operator's 1099 counts their **gross** earnings, not what you paid after deductions: OpenBook adds what each settlement took out of the gross (deductions, charges, reserves and withholding) on the settlement's date, and the bill's payment counts the rest when it's paid. Reimbursements and money paid out of a reserve don't count. A charge marked **already counted on the owner's 1099** isn't counted again when it's taken back. Backup withholding shows in box 4 and on the **Backup withholding** report.
+**Do you need to send one?** Usually not, for hauling. IRS rules leave payments for freight off Forms 1099-NEC and 1099-MISC (Treasury Regulation § 1.6041-3), and the IRS has said this covers paying independent truckers to haul goods (Information Letter 2001-0101). Many carriers send owner-operators a 1099 anyway, as a record that they're contractors, not employees. Pay for other work, such as unloading, installing or final-mile service, may need one. Neither the rule nor the IRS letter gives a test for that.
 
-**Have your accountant confirm this treatment before you file.** OpenBook doesn't check settlements against federal leasing rules.
+OpenBook counts an owner-operator's 1099 only when **Track for 1099** is ticked on their vendor record. When it is, the 1099 counts their **gross** earnings, not what you paid after deductions: OpenBook adds what each settlement took out of the gross (deductions, charges, reserves and withholding) on the settlement's date, and the bill's payment counts the rest when it's paid. Reimbursements and money paid out of a reserve don't count. A charge marked **already counted on the owner's 1099** isn't counted again when it's taken back. Backup withholding shows in box 4 and on the **Backup withholding** report.
+
+Reserves count in the year they're held back from the pay, since that money is the owner's; paying it out later doesn't count again. Interest on reserves goes on a 1099-INT (see Reserves above). If you're unsure about either, or whether your work is all hauling, ask your accountant before you file. OpenBook doesn't check settlements against federal leasing rules.
 
 ## The books check
 
