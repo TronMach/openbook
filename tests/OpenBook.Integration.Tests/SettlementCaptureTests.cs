@@ -166,6 +166,46 @@ public sealed class SettlementCaptureTests : IAsyncLifetime
         Assert.Equal([(Revenue, 1000m), (Deduction, -90m)], read.StatedTotals!.Select(t => (t.Section, t.Amount)));
         Assert.Throws<DocumentReadException>(() => ClaudeSettlementReader.Parse("[]"));
         Assert.Throws<DocumentReadException>(() => ClaudeSettlementReader.Parse("{"));
+
+        var missing = ClaudeSettlementReader.Parse("""{"totals":{},"lines":[{"section":"revenue","amount":12.50},{"section":"deduction"}]}""");
+        Assert.Equal([12.50m], missing.Lines.Select(l => l.Amount));
+        Assert.Null(missing.NetPaid);
+    }
+
+    // Anthropic refuses a schema with more than 16 nullable (union) fields or 24 optional ones; a live read found the first.
+    [Fact]
+    public void The_schemas_sent_to_Claude_stay_within_its_limits()
+    {
+        foreach (var schema in new[] { ClaudeSettlementReader.Schema(), ClaudeDocumentReader.Schema() })
+        {
+            var root = System.Text.Json.JsonSerializer.SerializeToElement(schema);
+            var (unions, optional) = Count(root);
+            Assert.True(unions <= 16, $"{unions} union fields");
+            Assert.True(optional <= 24, $"{optional} optional fields");
+        }
+
+        static (int Unions, int Optional) Count(System.Text.Json.JsonElement e)
+        {
+            var (unions, optional) = (0, 0);
+            if (e.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (e.TryGetProperty("type", out var type) && type.ValueKind == System.Text.Json.JsonValueKind.Array || e.TryGetProperty("anyOf", out _))
+                    unions++;
+                if (e.TryGetProperty("properties", out var properties))
+                {
+                    var required = e.TryGetProperty("required", out var r) ? r.EnumerateArray().Select(x => x.GetString()).ToHashSet() : [];
+                    optional += properties.EnumerateObject().Count(p => !required.Contains(p.Name));
+                }
+
+                foreach (var p in e.EnumerateObject())
+                {
+                    var (u, o) = Count(p.Value);
+                    (unions, optional) = (unions + u, optional + o);
+                }
+            }
+
+            return (unions, optional);
+        }
     }
 
     [Fact]

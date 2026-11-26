@@ -59,7 +59,7 @@ public sealed class ClaudeDocumentReader : IClaudeDocumentReader
 
     private static readonly string[] Required = ["party", "number", "date", "due_date", "order_reference", "subtotal", "tax", "shipping", "total", "lines"];
 
-    private static Dictionary<string, JsonElement> Schema()
+    public static Dictionary<string, JsonElement> Schema()
     {
         static object Nullable(string type) => new { type = new[] { type, "null" } };
         var line = new
