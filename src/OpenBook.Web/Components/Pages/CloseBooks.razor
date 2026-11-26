@@ -3,6 +3,7 @@
 @inject CloseBooksService Closing
 @inject OpenBook.Application.Channels.ChannelOrderService Orders
 @inject OpenBook.Application.Channels.ChannelService Payouts
+@inject OpenBook.Application.Settlements.SettlementService Settlements
 @inject ClosedPeriodOverride ClosingOverride
 @inject NavigationManager Navigation
 
@@ -34,6 +35,14 @@
         <div class="alert notice" role="status">
             @_waitingChannel channel order batches or payouts are still waiting to be posted, the oldest dated @Labels.Date(_oldestWaiting!.Value).
             Post them (<a href="/sales/channels">Sales channels</a>) before closing a period they fall in, or their sales, stock and fees stay out of it.
+        </div>
+    }
+
+    @if (_waitingSettlements > 0)
+    {
+        <div class="alert notice" role="status">
+            @(_waitingSettlements == 1 ? "A carrier settlement is" : $"{_waitingSettlements} carrier settlements are") still waiting to be posted, the oldest dated @Labels.Date(_oldestSettlement!.Value).
+            Post them (<a href="/settlements">Settlements</a>) before closing a period they fall in, or their pay and charges stay out of it.
         </div>
     }
 
@@ -151,6 +160,8 @@
 
     private int _waitingChannel;
     private DateOnly? _oldestWaiting;
+    private int _waitingSettlements;
+    private DateOnly? _oldestSettlement;
 
     protected override async Task OnInitializedAsync()
     {
@@ -158,6 +169,8 @@
         var payouts = (await Payouts.PayoutsAsync()).Where(p => p.Status == OpenBook.Domain.Channels.PayoutStatus.Pending).Select(p => p.Date);
         var waiting = batches.Concat(payouts).ToList();
         (_waitingChannel, _oldestWaiting) = (waiting.Count, waiting.Count > 0 ? waiting.Min() : null);
+        var settlements = (await Settlements.ListAsync()).Where(s => s.Status == OpenBook.Domain.Settlements.SettlementStatus.Waiting).Select(s => s.Date).ToList();
+        (_waitingSettlements, _oldestSettlement) = (settlements.Count, settlements.Count > 0 ? settlements.Min() : null);
         await LoadAsync();
         Input ??= new() { ClosingDate = _status.ClosingDate };
         _message ??= Saved switch

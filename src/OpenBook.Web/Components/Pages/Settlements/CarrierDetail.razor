@@ -1,0 +1,146 @@
+@page "/settlements/carriers/{Id:guid}"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Settlements
+@inject SettlementService SettlementService
+@inject AccountService AccountService
+
+<PageTitle>@(_carrier?.Name ?? "Carrier") · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_carrier is null)
+    {
+        <div class="card"><p>@L["That carrier doesn't exist."] <a href="/settlements/carriers">@L["Carriers and codes"]</a></p></div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@_carrier.Name</h1>
+            <ActionLink Class="button" Href="@($"/settlements/new?carrier={_carrier.Id}")">@L["Enter a settlement"]</ActionLink>
+            <ActionLink Class="button secondary" Href="/settlements/carriers">@L["Carriers and codes"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_carrier.Id}")">@L["History"]</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <div class="card">
+            <PostForm Action="@($"/settlements/carriers/{_carrier.Id}")" data-enhance="false">
+                <AntiforgeryToken />
+                <SettingsVersion TRecord="Carrier" Id="_carrier.Id" />
+                <CarrierForm Carrier="_carrier" Chart="_chart" />
+                <label class="check">
+                    <input type="checkbox" name="active" value="true" checked="@_carrier.IsActive" />
+                    <span>@L["Active: new settlements can be entered"]</span>
+                </label>
+                <p class="hint">@L["Changes apply to settlements posted from now on; posted ones keep their entries."]</p>
+                <div class="actions"><button type="submit">@L["Save"]</button></div>
+            </PostForm>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2 id="shares">@L["Your share of each charge"]</h2>
+            <p class="muted">@L["From your contract, in percent. When you enter what a load's customer was billed, the settlement's page says what you should have been paid and what's short. Leave blank what you don't want checked."]</p>
+            <PostForm Action="@($"/settlements/carriers/{_carrier.Id}/shares")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    @foreach (var charge in Enum.GetValues<LoadCharge>())
+                    {
+                        <div class="field">
+                            <label for="share-@charge">@LoadCharges.Label(charge) %</label>
+                            <input id="share-@charge" name="share:@charge" inputmode="decimal" value="@(_carrier.ShareOf(charge)?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" />
+                        </div>
+                    }
+                </div>
+                <div class="actions"><button type="submit" class="secondary">@L["Save the shares"]</button></div>
+            </PostForm>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2 id="codes">@L["What its codes stand for"]</h2>
+            <p class="muted">@L["Each code on the statements goes to the account chosen here. Codes are added as they turn up on a settlement; the same code can mean different things in different parts of the statement."]</p>
+            @if (_carrier.Codes.Count == 0)
+            {
+                <p>@L["No codes yet."]</p>
+            }
+            else
+            {
+                <PostForm Action="@($"/settlements/carriers/{_carrier.Id}/codes")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="table-wrap">
+                        <table class="data entry">
+                            <thead>
+                                <tr>
+                                    <th>@L["Part"]</th><th>@L["Code"]</th><th>@L["Description"]</th><th>@L["Account"]</th><th>@L["Pays a load's"]</th>
+                                    @if (_classes.Count > 0)
+                                    {
+                                        <th>@L["Class"]</th>
+                                    }
+                                    <th>@L["Forget"]</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{ var i = 0; }
+                                @foreach (var known in _carrier.Codes)
+                                {
+                                    var n = i++;
+                                    <tr>
+                                        <td>@SettlementSections.Label(known.Section)<input type="hidden" name="section:@n" value="@known.Section" /></td>
+                                        <td>@known.Code<input type="hidden" name="code:@n" value="@known.Code" /></td>
+                                        <td>@known.Name<input type="hidden" name="name:@n" value="@known.Name" /></td>
+                                        <td><SettlementAccountSelect Name="@($"account:{n}")" Label="@L["Account for {0}", known.Code]" Chart="_chart" Value="known.AccountId" /></td>
+                                        <td>
+                                            <select name="charge:@n" aria-label="@L["Charge {0} pays", known.Code]">
+                                                <option value="">@L["(not a load charge)"]</option>
+                                                @foreach (var charge in Enum.GetValues<LoadCharge>())
+                                                {
+                                                    <option value="@charge" selected="@(charge == known.Charge)">@LoadCharges.Label(charge)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        @if (_classes.Count > 0)
+                                        {
+                                            <td>
+                                                <select name="class:@n" aria-label="@L["Class for {0}", known.Code]">
+                                                    <option value="">@L["The carrier's"]</option>
+                                                    @foreach (var c in _classes)
+                                                    {
+                                                        <option value="@c.Segment.Id" selected="@(c.Segment.Id == known.ClassId)">@c.FullName</option>
+                                                    }
+                                                </select>
+                                            </td>
+                                        }
+                                        <td><input type="checkbox" name="forget:@n" value="true" aria-label="@L["Forget {0}", known.Code]" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="actions"><button type="submit">@L["Save the codes"]</button></div>
+                </PostForm>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private Carrier? _carrier;
+    private ChartOfAccounts _chart = new([]);
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    [Inject] private OpenBook.Application.Segments.SegmentService Segments { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _carrier = await SettlementService.GetCarrierAsync(Id);
+        if (_carrier is null)
+            return;
+        _chart = await AccountService.GetChartAsync();
+        var used = _carrier.Codes.Select(c => c.ClassId).ToHashSet();
+        _classes = [.. (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class)).Where(c => c.Segment.IsActive || used.Contains(c.Segment.Id))];
+    }
+}

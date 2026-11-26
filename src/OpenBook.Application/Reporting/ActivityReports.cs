@@ -20,6 +20,7 @@ public sealed class ActivityReports(
     ICompanyStore companies,
     ISalesStore sales,
     IPurchasesStore purchases,
+    Settlements.ISettlementStore settlements,
     ReceivablesService receivables,
     PayablesService payables,
     Channels.ChannelOrderService channelOrders,
@@ -339,6 +340,9 @@ public sealed class ActivityReports(
             owners[(VendorRefund.Source, r.Id)] = r.VendorId;
         foreach (var e in await purchases.ListExpensesAsync(null, ct))
             owners[(BankTransaction.SpendSource, e.Id)] = e.VendorId;
+        var carriers = (await settlements.ListCarriersAsync(ct)).ToDictionary(c => c.Id, c => c.VendorId);
+        foreach (var s in await settlements.ListSettlementsAsync(null, ct))
+            owners[(Domain.Settlements.Settlement.Source, s.Id)] = carriers.GetValueOrDefault(s.CarrierId);
 
         var vendors = (await purchases.ListVendorsAsync(ct)).ToDictionary(v => v.Id);
         var byVendor = new Dictionary<Guid, decimal>();

@@ -13,11 +13,11 @@
                 @* The simple view's menus are in the bar below; here the nav only keeps the space. *@
                 @if (!_simple && _menu == MenuStyle.DropDowns)
                 {
-                    <FullMenu User="context.User" Edition="_edition" Icons="_icons" />
+                    <FullMenu User="context.User" Edition="_edition" Settlements="_settlements" Icons="_icons" />
                 }
                 else if (!_simple)
                 {
-                    @foreach (var href in Editions.Menu(_edition).Where(context.User.CanReach))
+                    @foreach (var href in Editions.Menu(_edition, _settlements).Where(context.User.CanReach))
                     {
                         @MenuLink(href)
                     }
@@ -97,7 +97,7 @@
         </header>
         @if (_simple)
         {
-            <SimpleNav User="context.User" Edition="_edition" ReturnUrl="@ReturnUrl" />
+            <SimpleNav User="context.User" Edition="_edition" Settlements="_settlements" ReturnUrl="@ReturnUrl" />
         }
     </Authorized>
 </AuthorizeView>
@@ -106,7 +106,7 @@
 {
     <div class="simple-shell">
         <AuthorizeView>
-            <SimpleShortcuts User="context.User" Edition="_edition" Icons="_icons" />
+            <SimpleShortcuts User="context.User" Edition="_edition" Settlements="_settlements" Icons="_icons" />
         </AuthorizeView>
         <main class="page" id="main" tabindex="-1">
             <ClosingPasswordBox />
@@ -130,6 +130,7 @@ else
 
 @code {
     private Edition _edition;
+    private bool _settlements;
     private bool _simple;
     private MenuStyle _menu;
     private bool _icons = true;
@@ -150,6 +151,7 @@ else
             return;
         var view = await Views.CurrentAsync(HttpContext.RequestAborted);
         _edition = view.Edition;
+        _settlements = view.Settlements;
         _simple = view.Mode == ViewMode.Simple;
         _menu = view.Menu;
         _icons = view.Icons;
@@ -167,6 +169,7 @@ else
         "/projects" => Area("/projects", L["Projects"]),
         "/time" => Area("/time", L["Time"]),
         "/nonprofit" => Area("/nonprofit", L["Nonprofit"]),
+        "/settlements" => Area("/settlements", L["Settlements"]),
         "/customers" => _edition switch
         {
             Edition.Nonprofit => Area("/customers", L["Donors"]),

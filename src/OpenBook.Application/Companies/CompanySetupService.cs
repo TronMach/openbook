@@ -44,6 +44,7 @@ public sealed class CompanySetupService(ICompanyStore store, Forms.IFormDesignSt
             command.Phone,
             command.Address);
         company.SetEdition(command.Edition);
+        company.SetUsesSettlements(command.Edition == Edition.Trucking);
         company.SetDefaultViewMode(command.DefaultViewMode);
         company.SetDefaultReportBasis(command.DefaultReportBasis);
         if (command.Region is { Length: > 0 } region)

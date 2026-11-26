@@ -52,6 +52,8 @@ public static class ApiVersions
         ("/api/assets/loans", typeof(Domain.Assets.Loan)),
         ("/api/channels/payouts", typeof(Domain.Channels.ChannelPayout)),
         ("/api/channels/orders", typeof(Domain.Channels.ChannelOrderBatch)),
+        ("/api/settlements", typeof(Domain.Settlements.Settlement)),
+        ("/api/settlements/carriers", typeof(Domain.Settlements.Carrier)),
     ];
 
     public static string Tag(int version) => $"\"v{version}\"";

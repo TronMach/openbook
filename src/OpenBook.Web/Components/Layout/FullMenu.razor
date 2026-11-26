@@ -6,7 +6,7 @@
    pages, so pages two clicks deep on the bar are one click here. Links the person can't reach are left out, like the
    bar; a menu with nothing reachable isn't shown. Every label is written out so the string catalog finds it. *@
 <nav class="full-menu" aria-label="@L["Menu"]">
-    @foreach (var href in Editions.Menu(Edition))
+    @foreach (var href in Editions.Menu(Edition, Settlements))
     {
         @Group(href)
     }
@@ -18,6 +18,10 @@
 
     [Parameter]
     public Edition Edition { get; set; }
+
+    /// <summary>Whether the company is paid by carrier settlements.</summary>
+    [Parameter]
+    public bool Settlements { get; set; }
 
     /// <summary>Whether each area's picture is drawn beside its name (the person's choice).</summary>
     [Parameter]
@@ -61,6 +65,15 @@
             null,
             ("/pricing", L["Pricing"]),
             ("/sales-tax", L["Sales tax"])),
+        "/settlements" => Menu(AreaIcons.Truck, L["Settlements"],
+            ("/settlements", L["All settlements"]),
+            ("/settlements/new", L["Enter a settlement"]),
+            ("/settlements/new/statement", L["Read a statement"]),
+            ("/settlements/carriers", L["Carriers and codes"]),
+            null,
+            ("/reports/operating-statement", L["Operating statement"]),
+            ("/reports/settlement-loads", L["Loads"]),
+            ("/reports/settlement-balances", L["Reserves and advances"])),
         "/purchases" => Menu(AreaIcons.Store, L["Purchases"],
             ("/vendors", L["Vendors"]),
             ("/purchases", L["Purchases overview"]),

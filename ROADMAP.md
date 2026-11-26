@@ -251,10 +251,20 @@ Sales tax must land before inventory, since both change how invoice lines post. 
 | L8 | Migration | QBO API / QBXML, GnuCash, Xero/Wave/FreshBooks, scheduled cloud backups |
 | L9 | Platform | Plugin system, PWA, offline capture (drafts that sync), CLI, localization. Plan and offline design below the table notes |
 | L10 | Payroll — **on hold indefinitely (decided 2026-10-25)** | Not planned; don’t start without a new decision. If revived: recommend the **"payroll journal import"** option first (import totals from Gusto/ADP). Full payroll needs yearly tax-table maintenance indefinitely |
-| L11 | Industry editions | Professional services, then e-commerce, then nonprofit (decided 2026-10-29; the others not planned). Plan below the table notes |
+| L11 | Industry editions | Professional services, then e-commerce, then nonprofit (decided 2026-10-29), and trucking (decided 2026-11-25: L15, L16); the others not planned. Plan below the table notes |
 | L12 | Advanced pricing | Price levels per customer (fixed percentage or per-item prices) as the baseline; price rules for promotions and exceptions (items, customers or levels, quantity range, date range, percent/amount/set price, priority, exclusive); quantity breaks per item; rounding; a defined order of application; list price and pricing source kept on every line; last price sold; price list and discounts-given reports. Researched from QuickBooks Enterprise Advanced Pricing, fixing its gaps (undocumented precedence, quantity breaks ignoring split lines) |
 | L13 | Desktop and Server editions | One codebase, two installs. **Desktop**: self-contained Windows/macOS installer, SQLite in the user's Documents, listens on localhost only, scheduled folder backups on by default, no database or port settings shown. **Server**: the Docker image and compose stack with PostgreSQL, admin docs for HTTPS behind a reverse proxy, Data Protection keys and pg_dump backups. **Upgrade path**: a command that copies a SQLite company file into PostgreSQL (ledger protections kept, balance and audit checked afterwards) so a business can move from Desktop to Server. Screens adapt to the edition (e.g. pg_dump guidance instead of SQLite backup buttons) |
 | L14 | Simple view | A QuickBooks Desktop-like way to use the same books for one-person businesses: a workflow home page, customer/vendor/item centers, a task menu bar, forms with accounting choices tucked away, plain error messages. A per-user setting; nothing removed or refused. Plan below the table notes (in Phase 2's notes, after L13) |
+
+### Trucking (L15 and L16, decided 2026-11-25)
+
+A real owner-operator's settlement statement was compared with OpenBook: its money posts to the cent, but nothing held the statement, its codes or its miles.
+
+- **L15, the owner-operator** (a carrier pays us): A1 carriers, codes, settlements, posting, the trucking edition and an on/off setting for any other edition; A2 CSV import; A3 review against last week and the statement's balances; A4 operating statement (period, year to date, all dates, each per mile), loads, codes and reserves reports; A5 reading PDFs with Claude, chosen pages only; A6 local OCR as a backup, with warnings and checks; A7 load check and the guide.
+- **L16, the carrier** (we pay owner-operators), after L15: B1 owners, trucks, open charges, advances, reserves; B2 the weekly run (bills, zero net, void rules, 1099 on gross, backup withholding, approval); B3 recurring deductions and interest; B4 loads and a simple load board; B5 invoicing loads, detention, pay rules; B6 fuel and toll imports; B7 statement PDF and email, PPD. An accountant should confirm the 1099 treatment before B2 is released.
+- Not planned: payroll, IFTA returns, ELD or GPS links, EDI, factoring.
+
+**L15, A1 to A7 (2026-11-25): complete.** L16 not started. Details in `docs/dev/settlements.md`.
 
 ### Second audit and what it led to (2026-11-24)
 

@@ -70,6 +70,7 @@ public static class OpenBookApi
         api.MapProjectsApi();
         api.MapAssetsApi();
         api.MapChannelsApi();
+        api.MapSettlementsApi();
         api.MapNonprofitApi();
         api.MapCaptureApi();
         api.MapDocumentsApi();
@@ -81,7 +82,7 @@ public static class OpenBookApi
 
         api.MapPut("/company", async (CompanySettingsRequest r, CompanySettingsService settings, CancellationToken ct) =>
             CompanyResponse.From(await settings.UpdateAsync(new UpdateCompanySettingsCommand(
-                r.Name, r.BusinessType, r.LegalName, r.Email, r.Phone, r.Address, r.FiscalYearStartMonth, r.UseAccountNumbers, r.DefaultReportBasis, r.Edition, r.TimeZoneId, r.DefaultViewMode, r.AllowSellingShort, r.Region), ct)));
+                r.Name, r.BusinessType, r.LegalName, r.Email, r.Phone, r.Address, r.FiscalYearStartMonth, r.UseAccountNumbers, r.DefaultReportBasis, r.Edition, r.TimeZoneId, r.DefaultViewMode, r.AllowSellingShort, r.Region, UsesSettlements: r.UsesSettlements), ct)));
 
         api.MapGet("/accounts", async (AccountService accounts, CancellationToken ct) =>
         {

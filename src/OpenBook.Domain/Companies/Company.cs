@@ -14,6 +14,7 @@ public enum Edition
     ProfessionalServices,
     ECommerce,
     Nonprofit,
+    Trucking,
 }
 
 public enum BusinessType
@@ -194,6 +195,14 @@ public sealed class Company
 
     public void SetEdition(Edition edition) =>
         Edition = Enum.IsDefined(edition) ? edition : throw new DomainException("company.edition_invalid", $"Unknown edition {edition}.");
+
+    /// <summary>
+    /// Whether a trucking carrier pays the company by settlement statement: settlements are in the menus, whatever the
+    /// edition. Only what's shown: the pages work either way.
+    /// </summary>
+    public bool UsesSettlements { get; private set; }
+
+    public void SetUsesSettlements(bool uses) => UsesSettlements = uses;
 
     /// <summary>
     /// Whether sales may take more stock than is on hand, for items that follow the company (<see cref="Sales.Item.SellShort"/>):

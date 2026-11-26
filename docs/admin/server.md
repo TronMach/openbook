@@ -162,7 +162,7 @@ Set these as environment variables, with `__` in place of `:`.
 |---|---|
 | `AllowedHosts` | The names OpenBook answers to, separated by `;` (for example `books.example.com`). The default `*` answers any name; setting it refuses requests for other names, which stops a web page reaching the server under a name of its own (DNS rebinding). Desktop always answers only `localhost`, `127.0.0.1` and `[::1]`. |
 | `OpenBook:SetupCode` | The code the setup page asks for until a company exists. Without it, OpenBook makes one when it starts without a company and writes it to the log. |
-| `OpenBook:Ocr:TesseractPath` | The Tesseract program, for reading photos and scans of documents and receipts. The image doesn't include it; without it, photos are kept but not read. |
+| `OpenBook:Ocr:TesseractPath` | The Tesseract program, for reading photos and scans of documents and receipts, and scanned settlement statements. The image doesn't include it; without it, photos are kept but not read. |
 | `OpenBook:EncryptionKey` | The key of an encrypted SQLite company file (below). |
 | `OpenBook:Plugins:Path` | Where add-ins live. It defaults to `plugins` in the working directory, which in a container is outside `/data`: point it into the volume. |
 | `OpenBook:Plugins:SafeMode` | `true` starts without any add-ins. |
