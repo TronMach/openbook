@@ -195,6 +195,12 @@ internal static class EveryRecordKind
         await Do<OwnerService>(s => s.CreateChargeAsync(new OwnerChargeDetails(owner.Id, d, OwnerChargeKind.Fuel, 120m, checking, "Fuel", TruckId: truck.Id)));
         await Do<OwnerSettlementService>(s => s.RunAsync(new OwnerRunCommand(d, [new OwnerRunEntry(owner.Id, [new OwnerPayDraft(OwnerLineKind.Earning, "Load 7", 1400m, "7", truck.Id, 600m, 40m)])], d)));
         await Do<OwnerService>(s => s.PostInterestAsync(new DateOnly(d.Year, d.Month, 1).AddMonths(1).AddDays(-1)));
+        var shipper = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Kind Grain Co")));
+        var at = new DateTimeOffset(d.ToDateTime(new TimeOnly(15, 0)), TimeSpan.Zero);
+        var load = await In<LoadService, Load>(s => s.CreateAsync(new LoadDetails(shipper.Id, "PO-1",
+            [new(StopKind.Pickup, "Elevator", at), new(StopKind.Delivery, "Mill", at.AddDays(1))], [new(LoadCharge.Linehaul, 500m, 2m, "Linehaul")], [new(truck.Id, "Pat", 500m, 30m)], 500m)));
+        await Do<LoadService>(s => s.RecordStopAsync(load.Id, 1, at, at.AddHours(2)));
+        await Do<LoadService>(s => s.CreateAsync(new LoadDetails(shipper.Id, null, [new(StopKind.Pickup, "Dock 4"), new(StopKind.Delivery, "Store 12")], [])));
 
         // Nonprofit: a gift, a pledge, a grant, a release of restricted money.
         var donor = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Pat Donor", Email: "pat@donor.test")));

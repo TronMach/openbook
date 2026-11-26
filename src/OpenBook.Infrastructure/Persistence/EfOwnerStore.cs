@@ -38,6 +38,16 @@ internal sealed class EfOwnerStore(OpenBookDbContext db) : IOwnerStore
 
     public void Add(ReserveInterestRun run) => db.ReserveInterestRuns.Add(run);
 
+    // Stops, charges and dispatches all grow, so they're read apart.
+    public async Task<IReadOnlyList<Load>> ListLoadsAsync(CancellationToken ct) =>
+        await db.Loads.AsSplitQuery().OrderByDescending(l => l.Number).ToListAsync(ct);
+
+    public Task<Load?> GetLoadAsync(Guid id, CancellationToken ct) => db.Loads.AsSplitQuery().SingleOrDefaultAsync(l => l.Id == id, ct);
+
+    public async Task<int> LastLoadNumberAsync(CancellationToken ct) => await db.Loads.MaxAsync(l => (int?)l.Number, ct) ?? 0;
+
+    public void Add(Load load) => db.Loads.Add(load);
+
     public void Add(OwnerOperator owner) => db.OwnerOperators.Add(owner);
 
     public void Add(Truck truck) => db.Trucks.Add(truck);

@@ -69,6 +69,19 @@ public static class DispatchEndpoints
         app.MapPost("/dispatch/interest/{id:guid}/void", async (Guid id, IFormCollection form, OwnerService owners, CancellationToken ct) =>
             await Back("/dispatch/interest", () => owners.VoidInterestAsync(id, form["reason"].ToString(), ct))).RequireAuthorization();
 
+        // A stop's times, as the person's clock reads them in the company's time zone (datetime-local fields).
+        app.MapPost("/dispatch/loads/{id:guid}/stops/{sequence:int}", async (Guid id, int sequence, IFormCollection form, LoadService loads, CancellationToken ct) =>
+            await Back($"/dispatch/loads/{id}#stops", () => loads.RecordStopAsync(id, sequence, LocalTime(form["arrived"]), LocalTime(form["departed"]), ct))).RequireAuthorization();
+
+        app.MapPost("/dispatch/loads/{id:guid}/status", async (Guid id, IFormCollection form, LoadService loads, CancellationToken ct) =>
+            await Back($"/dispatch/loads/{id}", () => form["status"].ToString() switch
+            {
+                "Cancelled" => loads.SetCancelledAsync(id, true, ct),
+                "Restore" => loads.SetCancelledAsync(id, false, ct),
+                var text => Enum.TryParse<LoadStatus>(text, out var status) ? loads.SetStatusAsync(id, status, ct)
+                    : throw new DomainException("load.status_invalid", "Choose where the load is."),
+            })).RequireAuthorization();
+
         app.MapPost("/dispatch/trucks", async (IFormCollection form, OwnerService owners, CancellationToken ct) =>
         {
             try
@@ -121,6 +134,17 @@ public static class DispatchEndpoints
 
     /// <summary>A typed amount or rate (through <see cref="FormNumbers"/>); blank is null.</summary>
     internal static decimal? Number(IFormCollection form, string name, string what) => FormNumbers.Number(form[name]);
+
+    /// <summary>A datetime-local field's value in the company's time zone, in UTC; blank is null.</summary>
+    internal static DateTimeOffset? LocalTime(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (!DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local))
+            throw new DomainException("form.time_unreadable", $"'{text.Trim()}' isn't a date and time OpenBook can read.");
+        var utc = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), CompanyTime.Zone);
+        return new DateTimeOffset(utc, TimeSpan.Zero);
+    }
 
     private static OwnerDetails Owner(IFormCollection form) => new(
         Id(form, "vendorId") ?? Guid.Empty, Id(form, "payAccountId"), Id(form, "receivableAccountId"), Id(form, "reserveAccountId"), Id(form, "classId"), form["memo"].ToString());

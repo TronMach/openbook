@@ -59,6 +59,7 @@ public static class ApiVersions
         ("/api/dispatch/charges", typeof(Domain.Settlements.OwnerCharge)),
         ("/api/dispatch/settlements", typeof(Domain.Settlements.OwnerSettlement)),
         ("/api/dispatch/interest", typeof(Domain.Settlements.ReserveInterestRun)),
+        ("/api/dispatch/loads", typeof(Domain.Settlements.Load)),
     ];
 
     public static string Tag(int version) => $"\"v{version}\"";

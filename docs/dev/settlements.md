@@ -70,6 +70,14 @@ The carrier's side: the company pays owner-operators by settlement and dispatche
 - `ReserveInterestRun` (audit `reserve_interest`, Versioned; `Source = settlements.reserve_interest`, one entry dated the month's last day): Dr the expense ("Interest Paid on Owner Reserves", other expense, made on first use, or the last run's, or one chosen), Cr each owner's reserve account. One standing run a month; lines per owner reserve with the balance at month end (settlements dated to it, interest before it) × rate / 12. Interest counts in reserve balances and the `owner-reserves` check; not on the 1099-NEC.
 - Page `/dispatch/interest`; API `PUT /api/dispatch/owners/{id}/deductions/{number}`, `GET|POST /api/dispatch/interest` (`due?month=`, `{id}/void`).
 
+## Loads (B4, 2026-11-26)
+
+- `Load` (audit `load`, Versioned; numbered from 1001, unique): customer, reference, `LoadStatus` (Booked → Dispatched → InTransit → Delivered; Cancelled), miles, commodity, weight, memo, `InvoiceId` (B5), owned `LoadStop`s (pickup or delivery, place, number, appointment window and arrived/departed, all `DateTimeOffset` in UTC; pages convert with `CompanyTime.Zone`), `LoadChargeLine`s (a `LoadCharge` kind, quantity × rate to the cent, an optional item for invoicing) and `Dispatch`es (truck once per load, driver, loaded and empty miles, share percent). Loads with all three collections read with `AsSplitQuery`.
+- Status: a dispatch makes it Dispatched (and none Booked again); `RecordStop` moves it: leaving the first pickup is InTransit, leaving the last delivery Delivered, taking a time back moves it back. Times on a stop that's the same after a change stay. Cancelled and invoiced loads can't change; a dispatch paid on a standing owner settlement can't change and blocks cancelling (`load.dispatch_paid`).
+- `Load.Warnings`: split shares not 100%, trucks' loaded miles not the load's, nothing charged. Shown, never refused.
+- Audit snapshots give stops by kind and time, not places (they name the customer's customers).
+- Pages `/dispatch/loads` (board by status; `?all=true` a table), `/dispatch/loads/new` and `/{id}/edit` (interactive, `FormDraft` "load-new"), `/dispatch/loads/{id}` (stop times by datetime-local forms in the company's time, status); API `/api/dispatch/loads` (`{id}/stops/{sequence}`, `status`, `cancel`, `restore`).
+
 - **Before release**: an accountant should confirm the 1099 gross treatment. Never call any of this compliant with 49 CFR 376.
 
 ## The edition and the setting

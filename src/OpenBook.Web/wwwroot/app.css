@@ -866,3 +866,9 @@ main.page:focus { outline: none; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; scroll-behavior: auto !important; }
 }
+.load-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; align-items: start; }
+.load-board > section { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.load-board h2 { font-size: 1rem; margin: 0; }
+.load-card { display: block; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 6px; color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+.load-card:hover, .load-card:focus-visible { border-color: var(--accent); }
+.load-card .muted { display: block; font-size: 0.85rem; }

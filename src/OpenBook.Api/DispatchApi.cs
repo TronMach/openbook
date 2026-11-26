@@ -93,6 +93,27 @@ public sealed record OwnerPlanResponse(Guid OwnerId, string OwnerName, decimal G
     public static OwnerPlanResponse From(OwnerPlan p) => new(p.Owner.Owner.Id, p.Owner.Name, p.Gross, p.ReportableGross, p.Net, p.StillOpen, p.Notes, p.Lines);
 }
 
+/// <summary>A load as its rate confirmation has it. Changing one replaces its stops, charges and trucks; recorded stop times stay on unchanged stops.</summary>
+public sealed record LoadRequest(
+    Guid CustomerId, string? Reference, IReadOnlyList<LoadStopDraft>? Stops, IReadOnlyList<LoadChargeDraft>? Charges, IReadOnlyList<DispatchDraft>? Dispatches = null,
+    decimal? Miles = null, string? Commodity = null, decimal? Weight = null, string? Memo = null)
+{
+    public LoadDetails ToDetails() => new(CustomerId, Reference, Stops ?? [], Charges ?? [], Dispatches ?? [], Miles, Commodity, Weight, Memo);
+}
+
+public sealed record LoadStopTimesRequest(DateTimeOffset? Arrived, DateTimeOffset? Departed);
+
+public sealed record LoadStatusRequest(LoadStatus Status);
+
+public sealed record LoadResponse(
+    Guid Id, int Number, Guid CustomerId, string Customer, string? Reference, LoadStatus Status, decimal? Miles, string? Commodity, decimal? Weight, string? Memo, decimal Total,
+    Guid? InvoiceId, IReadOnlyList<LoadStop> Stops, IReadOnlyList<LoadChargeLine> Charges, IReadOnlyList<Dispatch> Dispatches, IReadOnlyList<string> Warnings)
+{
+    public static LoadResponse From(LoadView v) => new(
+        v.Load.Id, v.Load.Number, v.Load.CustomerId, v.Customer, v.Load.Reference, v.Load.Status, v.Load.Miles, v.Load.Commodity, v.Load.Weight, v.Load.Memo, v.Load.Total,
+        v.Load.InvoiceId, v.Load.Stops, v.Load.Charges, v.Load.Dispatches, v.Load.Warnings());
+}
+
 public static class DispatchApi
 {
     public static void MapDispatchApi(this RouteGroupBuilder api)
@@ -124,6 +145,40 @@ public static class DispatchApi
             await s.SetDeductionAsync(id, number, r.ToDraft(), ct);
             return OwnerResponse.From((await s.GetOwnerAsync(id, ct))!);
         });
+        dispatch.MapGet("/loads", async (bool? all, LoadService s, CancellationToken ct) => (await s.ListAsync(all == true, ct)).Select(LoadResponse.From));
+        dispatch.MapGet("/loads/{id:guid}", async (Guid id, LoadService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } v ? Results.Ok(LoadResponse.From(v)) : Results.NotFound());
+        dispatch.MapPost("/loads", async (LoadRequest r, LoadService s, CancellationToken ct) =>
+        {
+            var load = await s.CreateAsync(r.ToDetails(), ct);
+            return Results.Created($"/api/dispatch/loads/{load.Id}", LoadResponse.From((await s.GetAsync(load.Id, ct))!));
+        });
+        dispatch.MapPut("/loads/{id:guid}", async (Guid id, LoadRequest r, LoadService s, CancellationToken ct) =>
+        {
+            await s.ChangeAsync(id, r.ToDetails(), ct);
+            return LoadResponse.From((await s.GetAsync(id, ct))!);
+        });
+        dispatch.MapPost("/loads/{id:guid}/stops/{sequence:int}", async (Guid id, int sequence, LoadStopTimesRequest r, LoadService s, CancellationToken ct) =>
+        {
+            await s.RecordStopAsync(id, sequence, r.Arrived, r.Departed, ct);
+            return LoadResponse.From((await s.GetAsync(id, ct))!);
+        });
+        dispatch.MapPost("/loads/{id:guid}/status", async (Guid id, LoadStatusRequest r, LoadService s, CancellationToken ct) =>
+        {
+            await s.SetStatusAsync(id, r.Status, ct);
+            return LoadResponse.From((await s.GetAsync(id, ct))!);
+        });
+        dispatch.MapPost("/loads/{id:guid}/cancel", async (Guid id, LoadService s, CancellationToken ct) =>
+        {
+            await s.SetCancelledAsync(id, true, ct);
+            return LoadResponse.From((await s.GetAsync(id, ct))!);
+        });
+        dispatch.MapPost("/loads/{id:guid}/restore", async (Guid id, LoadService s, CancellationToken ct) =>
+        {
+            await s.SetCancelledAsync(id, false, ct);
+            return LoadResponse.From((await s.GetAsync(id, ct))!);
+        });
+
         dispatch.MapGet("/interest", async (OwnerService s, CancellationToken ct) =>
             (await s.ListInterestRunsAsync(ct)).Select(r => new { r.Id, r.Date, r.Total, r.ExpenseAccountId, r.JournalEntryId, r.IsVoided,
                 Lines = r.Lines.Select(l => new { l.OwnerId, l.ReserveNumber, l.Balance, l.Amount }) }));

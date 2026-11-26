@@ -1,0 +1,189 @@
+@page "/dispatch/loads/{Id:guid}"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject LoadService LoadService
+
+<PageTitle>@L["Load {0}", _view?.Load.Number ?? 0] · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_view is null)
+    {
+        <div class="card"><p>@L["That load doesn't exist."] <a href="/dispatch/loads">@L["Load board"]</a></p></div>
+    }
+    else
+    {
+        var load = _view.Load;
+        var open = load.Status != LoadStatus.Cancelled && load.InvoiceId is null;
+        <div class="toolbar">
+            <h1>@L["Load {0}", load.Number] · @_view.Customer</h1>
+            <span class="badge">@LoadStatuses.Label(load.Status)</span>
+            @if (open)
+            {
+                <ActionLink Class="button secondary" Href="@($"/dispatch/loads/{load.Id}/edit")">@L["Change"]</ActionLink>
+            }
+            <ActionLink Class="button secondary" Href="/dispatch/loads">@L["Load board"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={load.Id}")">@L["History"]</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        @foreach (var warning in load.Warnings())
+        {
+            <div class="alert notice" role="status">@warning</div>
+        }
+
+        <div class="card">
+            <dl class="facts">
+                <dt>@L["Customer"]</dt><dd><a href="/customers/@load.CustomerId">@_view.Customer</a></dd>
+                @if (load.Reference is { } reference)
+                {
+                    <dt>@L["Customer's load number"]</dt><dd>@reference</dd>
+                }
+                @if (load.Miles is { } miles)
+                {
+                    <dt>@L["Miles"]</dt><dd>@miles.ToString("#,##0.#")</dd>
+                }
+                @if (load.Commodity is { } commodity)
+                {
+                    <dt>@L["Commodity"]</dt><dd>@commodity@(load.Weight is { } w ? $", {w:#,##0} lb" : "")</dd>
+                }
+                @if (load.Memo is { } memo)
+                {
+                    <dt>@L["Memo"]</dt><dd>@memo</dd>
+                }
+                @if (load.InvoiceId is { } invoiceId)
+                {
+                    <dt>@L["Invoice"]</dt><dd><a href="/sales/invoices/@invoiceId">@L["Open"]</a></dd>
+                }
+            </dl>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2 id="stops">@L["Stops"]</h2>
+            @foreach (var stop in load.Stops)
+            {
+                <section style="margin-bottom: 1rem" aria-labelledby="stop-@stop.Sequence">
+                    <h3 id="stop-@stop.Sequence">@stop.Sequence. @(stop.Kind == StopKind.Pickup ? L["Pickup"] : L["Delivery"]): @stop.Place</h3>
+                    <p class="muted">
+                        @if (stop.AppointmentFrom is { } from)
+                        {
+                            @L["Appointment {0}", DispatchLabels.Time(from) + (stop.AppointmentTo is { } to ? $" – {DispatchLabels.Time(to)}" : "")]
+                        }
+                        @if (stop.Reference is { } number)
+                        {
+                            <span> · @number</span>
+                        }
+                        @if (stop.Stayed is { } stayed)
+                        {
+                            <span> · @L["There {0} h {1} min", (int)stayed.TotalHours, stayed.Minutes]</span>
+                        }
+                    </p>
+                    @if (load.Status != LoadStatus.Cancelled)
+                    {
+                        <PostForm Action="@($"/dispatch/loads/{load.Id}/stops/{stop.Sequence}")" data-enhance="false">
+                            <AntiforgeryToken />
+                            <div class="row">
+                                <div class="field">
+                                    <label for="arrived-@stop.Sequence">@L["Arrived"]</label>
+                                    <input id="arrived-@stop.Sequence" name="arrived" type="datetime-local" value="@DispatchLabels.Field(stop.Arrived)" />
+                                </div>
+                                <div class="field">
+                                    <label for="departed-@stop.Sequence">@L["Left"]</label>
+                                    <input id="departed-@stop.Sequence" name="departed" type="datetime-local" value="@DispatchLabels.Field(stop.Departed)" />
+                                </div>
+                                <div class="actions"><button type="submit" class="secondary">@L["Save the times"]</button></div>
+                            </div>
+                        </PostForm>
+                    }
+                </section>
+            }
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["Charges"]</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>@L["Charge"]</th><th>@L["Description"]</th><th class="num">@L["Quantity"]</th><th class="num">@L["Rate"]</th><th class="num">@L["Amount"]</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in load.Charges)
+                        {
+                            <tr><td>@LoadCharges.Label(c.Charge)</td><td>@c.Description</td><td class="num">@c.Quantity.ToString("#,##0.####")</td><td class="num">@c.Rate.ToString("#,##0.00##")</td><td class="num">@Labels.Amount(c.Amount)</td></tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><td colspan="4">@L["Total"]</td><td class="num">@Labels.Amount(load.Total)</td></tr></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["Trucks"]</h2>
+            @if (load.Dispatches.Count == 0)
+            {
+                <p>@L["No truck yet."] @if (open) { <ActionLink Href="@($"/dispatch/loads/{load.Id}/edit")">@L["Assign one"]</ActionLink> }</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>@L["Truck"]</th><th>@L["Driver"]</th><th class="num">@L["Loaded miles"]</th><th class="num">@L["Empty miles"]</th><th class="num">@L["Share"]</th></tr></thead>
+                        <tbody>
+                            @for (var i = 0; i < load.Dispatches.Count; i++)
+                            {
+                                var d = load.Dispatches[i];
+                                <tr>
+                                    <td><a href="/dispatch/trucks/@d.TruckId">@_view.Trucks[i]</a></td>
+                                    <td>@d.Driver</td>
+                                    <td class="num">@d.LoadedMiles?.ToString("#,##0.#")</td>
+                                    <td class="num">@d.EmptyMiles?.ToString("#,##0.#")</td>
+                                    <td class="num">@d.SharePercent.ToString("0.##")%</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["Where it is"]</h2>
+            <p class="muted">@L["Saving a stop's times moves the load along: leaving the first pickup puts it in transit, leaving the last delivery delivers it. Or set it here."]</p>
+            <PostForm Action="@($"/dispatch/loads/{load.Id}/status")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="load-status">@L["Status"]</label>
+                        <select id="load-status" name="status">
+                            @if (load.Status == LoadStatus.Cancelled)
+                            {
+                                <option value="Restore">@L["Restore the load"]</option>
+                            }
+                            else
+                            {
+                                @foreach (var s in new[] { LoadStatus.Booked, LoadStatus.Dispatched, LoadStatus.InTransit, LoadStatus.Delivered })
+                                {
+                                    <option value="@s" selected="@(s == load.Status)">@LoadStatuses.Label(s)</option>
+                                }
+                                <option value="Cancelled">@L["Cancelled"]</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary">@L["Set"]</button></div>
+                </div>
+            </PostForm>
+        </div>
+
+        <Notes EntityType="load" EntityId="load.Id" />
+        <Attachments EntityType="load" EntityId="load.Id" />
+    }
+</div>
+
+@code {
+    private LoadView? _view;
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync() => _view = await LoadService.GetAsync(Id);
+}

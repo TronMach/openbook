@@ -1,0 +1,77 @@
+@page "/dispatch/loads"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject LoadService LoadService
+
+<PageTitle>@L["Load board"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Load board"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button" Href="/dispatch/loads/new">@L["New load"]</ActionLink>
+        <ActionLink Class="button secondary" Href="@(All ? "/dispatch/loads" : "/dispatch/loads?all=true")">@(All ? L["Open loads only"] : L["Every load"])</ActionLink>
+    </div>
+
+    @if (_loads.Count == 0)
+    {
+        <p>@L["No loads yet."]</p>
+    }
+    else if (!All)
+    {
+        <div class="load-board">
+            @foreach (var status in new[] { LoadStatus.Booked, LoadStatus.Dispatched, LoadStatus.InTransit, LoadStatus.Delivered })
+            {
+                var these = _loads.Where(l => l.Load.Status == status).ToList();
+                <section aria-labelledby="column-@status">
+                    <h2 id="column-@status">@LoadStatuses.Label(status) <span class="muted">(@these.Count)</span></h2>
+                    @foreach (var v in these)
+                    {
+                        <a class="load-card" href="/dispatch/loads/@v.Load.Id">
+                            <strong>@L["Load {0}", v.Load.Number]</strong> · @v.Customer
+                            <span class="muted">@DispatchLabels.Route(v.Load)</span>
+                            @if (DispatchLabels.Next(v.Load) is { } next)
+                            {
+                                <span class="muted">@next</span>
+                            }
+                            @if (v.Trucks.Count > 0)
+                            {
+                                <span class="muted">@L["Truck {0}", string.Join(", ", v.Trucks)]</span>
+                            }
+                        </a>
+                    }
+                </section>
+            }
+        </div>
+        <p class="hint">@L["Delivered loads stay here until they're invoiced."]</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th class="num">@L["Load"]</th><th>@L["Customer"]</th><th>@L["Route"]</th><th>@L["Status"]</th><th class="num">@L["Charges"]</th></tr></thead>
+                <tbody>
+                    @foreach (var v in _loads)
+                    {
+                        <tr class="@(v.Load.Status == LoadStatus.Cancelled ? "muted" : "")">
+                            <td class="num"><a href="/dispatch/loads/@v.Load.Id">@v.Load.Number</a></td>
+                            <td>@v.Customer</td>
+                            <td>@DispatchLabels.Route(v.Load)</td>
+                            <td>@LoadStatuses.Label(v.Load.Status)@(v.Load.InvoiceId is null ? "" : L[", invoiced"])</td>
+                            <td class="num">@Labels.Amount(v.Load.Total)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<LoadView> _loads = [];
+
+    [SupplyParameterFromQuery] private bool All { get; set; }
+
+    protected override async Task OnInitializedAsync() => _loads = await LoadService.ListAsync(All);
+}

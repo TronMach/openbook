@@ -123,6 +123,7 @@ public static class Links
         "owner_charge" => $"/dispatch/charges/{id}",
         "owner_settlement" => $"/dispatch/settlements/{id}",
         "reserve_interest" => "/dispatch/interest",
+        "load" => $"/dispatch/loads/{id}",
         "loan" => $"/loans/{id}",
         "time_entry" => $"/time/{id}/edit",
         "time_sheet" => "/time/review",

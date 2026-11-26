@@ -49,6 +49,21 @@ The table shows what each has taken so far.
 
 **Dispatch → Trucks.** Each truck has a **unit number**, and an **owner-operator** unless it's one of yours. A **class** for the truck lets reports by class show what each truck earned and cost. Year, make, VIN and plate are for your records.
 
+## Loads and the load board
+
+**Dispatch → Load board** shows every load not yet invoiced, by where it is: **Booked**, **Dispatched**, **In transit** and **Delivered**. **Every load** lists them all, cancelled and invoiced ones too.
+
+**Dispatch → New load** (standard role):
+
+- The **customer**, their **load number** from the rate confirmation, and the loaded **miles**; commodity, weight and a memo if you like.
+- **Stops**: at least one pickup and one delivery, each with the shipper or receiver and where, their pickup or delivery number, and the appointment (with its window's end, when there is one).
+- **What the customer is charged**: linehaul, fuel surcharge, tolls, detention, tarps or other, each a quantity times a rate (linehaul by the mile is the miles times the rate per mile). The **item** is what the invoice will use.
+- **Trucks**: the truck, its driver, and its loaded and empty miles. A load split between trucks gets a row each, with each truck's **share**; OpenBook says when the shares don't add up to 100% or the trucks' loaded miles don't add up to the load's.
+
+A load with a truck is **Dispatched**. On the load's page, save when the truck **Arrived** at and **Left** each stop: leaving the first pickup puts the load **In transit**, leaving the last delivery **delivers** it, and the time spent at each stop is shown. Or set where it is by hand under **Where it is**, which is also where a load is **Cancelled** (and restored).
+
+A load posts nothing in the books: its invoice does, and the owner-operators' settlements pay for it. Attach the rate confirmation, bill of lading and proof of delivery on its page.
+
 ## Charges and advances
 
 **Dispatch → Charges and advances.** Anything an owner-operator owes you waits here until a settlement takes it back: fuel on your fuel card, tolls, a repair you paid the shop for, or an **advance** of money.

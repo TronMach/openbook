@@ -43,6 +43,16 @@ public interface IOwnerStore
 
     void Add(ReserveInterestRun run);
 
+    /// <summary>Tracked, with their stops, charges and dispatches, newest first.</summary>
+    Task<IReadOnlyList<Load>> ListLoadsAsync(CancellationToken ct);
+
+    Task<Load?> GetLoadAsync(Guid id, CancellationToken ct);
+
+    /// <summary>The highest load number, 0 before the first.</summary>
+    Task<int> LastLoadNumberAsync(CancellationToken ct);
+
+    void Add(Load load);
+
     void Add(OwnerOperator owner);
     void Add(Truck truck);
     void Add(OwnerCharge charge);

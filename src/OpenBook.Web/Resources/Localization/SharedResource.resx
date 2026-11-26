@@ -92,6 +92,9 @@
   <data name=", expires {0}" xml:space="preserve">
     <value>, expires {0}</value>
   </data>
+  <data name=", invoiced" xml:space="preserve">
+    <value>, invoiced</value>
+  </data>
   <data name="1 add-in" xml:space="preserve">
     <value>1 add-in</value>
   </data>
@@ -157,6 +160,9 @@
   </data>
   <data name="A drop-down per area listing its pages, so most pages are one click away" xml:space="preserve">
     <value>A drop-down per area listing its pages, so most pages are one click away</value>
+  </data>
+  <data name="A load split between trucks gets a row each, with its share and miles." xml:space="preserve">
+    <value>A load split between trucks gets a row each, with its share and miles.</value>
   </data>
   <data name="A mailbox bills are forwarded to: what's attached goes in the document inbox by itself." xml:space="preserve">
     <value>A mailbox bills are forwarded to: what's attached goes in the document inbox by itself.</value>
@@ -281,6 +287,9 @@
   <data name="Add a channel" xml:space="preserve">
     <value>Add a channel</value>
   </data>
+  <data name="Add a charge" xml:space="preserve">
+    <value>Add a charge</value>
+  </data>
   <data name="Add a charge or advance" xml:space="preserve">
     <value>Add a charge or advance</value>
   </data>
@@ -310,6 +319,9 @@
   </data>
   <data name="Add a reserve" xml:space="preserve">
     <value>Add a reserve</value>
+  </data>
+  <data name="Add a stop" xml:space="preserve">
+    <value>Add a stop</value>
   </data>
   <data name="Add a truck" xml:space="preserve">
     <value>Add a truck</value>
@@ -509,6 +521,15 @@
   <data name="Apply credit" xml:space="preserve">
     <value>Apply credit</value>
   </data>
+  <data name="Appointment" xml:space="preserve">
+    <value>Appointment</value>
+  </data>
+  <data name="Appointment window ends" xml:space="preserve">
+    <value>Appointment window ends</value>
+  </data>
+  <data name="Appointment {0}" xml:space="preserve">
+    <value>Appointment {0}</value>
+  </data>
   <data name="Approve" xml:space="preserve">
     <value>Approve</value>
   </data>
@@ -523,6 +544,9 @@
   </data>
   <data name="Areas" xml:space="preserve">
     <value>Areas</value>
+  </data>
+  <data name="Arrived" xml:space="preserve">
+    <value>Arrived</value>
   </data>
   <data name="As a report" xml:space="preserve">
     <value>As a report</value>
@@ -547,6 +571,9 @@
   </data>
   <data name="Assembly build" xml:space="preserve">
     <value>Assembly build</value>
+  </data>
+  <data name="Assign one" xml:space="preserve">
+    <value>Assign one</value>
   </data>
   <data name="At least {0} characters." xml:space="preserve">
     <value>At least {0} characters.</value>
@@ -839,6 +866,9 @@
   <data name="Change invoice {0}" xml:space="preserve">
     <value>Change invoice {0}</value>
   </data>
+  <data name="Change load" xml:space="preserve">
+    <value>Change load</value>
+  </data>
   <data name="Change password" xml:space="preserve">
     <value>Change password</value>
   </data>
@@ -911,6 +941,9 @@
   <data name="Charge {0} pays" xml:space="preserve">
     <value>Charge {0} pays</value>
   </data>
+  <data name="Charges" xml:space="preserve">
+    <value>Charges</value>
+  </data>
   <data name="Charges and advances" xml:space="preserve">
     <value>Charges and advances</value>
   </data>
@@ -952,6 +985,9 @@
   </data>
   <data name="Choose" xml:space="preserve">
     <value>Choose</value>
+  </data>
+  <data name="Choose a customer…" xml:space="preserve">
+    <value>Choose a customer…</value>
   </data>
   <data name="Choose a person…" xml:space="preserve">
     <value>Choose a person…</value>
@@ -1054,6 +1090,9 @@
   </data>
   <data name="Commission report" xml:space="preserve">
     <value>Commission report</value>
+  </data>
+  <data name="Commodity" xml:space="preserve">
+    <value>Commodity</value>
   </data>
   <data name="Company" xml:space="preserve">
     <value>Company</value>
@@ -1196,6 +1235,9 @@
   <data name="Customer to bill line {0} to" xml:space="preserve">
     <value>Customer to bill line {0} to</value>
   </data>
+  <data name="Customer's load number" xml:space="preserve">
+    <value>Customer's load number</value>
+  </data>
   <data name="Customers" xml:space="preserve">
     <value>Customers</value>
   </data>
@@ -1240,6 +1282,12 @@
   </data>
   <data name="Delete this request?" xml:space="preserve">
     <value>Delete this request?</value>
+  </data>
+  <data name="Delivered loads stay here until they're invoiced." xml:space="preserve">
+    <value>Delivered loads stay here until they're invoiced.</value>
+  </data>
+  <data name="Delivery" xml:space="preserve">
+    <value>Delivery</value>
   </data>
   <data name="Description" xml:space="preserve">
     <value>Description</value>
@@ -1303,6 +1351,9 @@
   </data>
   <data name="Download support file" xml:space="preserve">
     <value>Download support file</value>
+  </data>
+  <data name="Driver" xml:space="preserve">
+    <value>Driver</value>
   </data>
   <data name="Due" xml:space="preserve">
     <value>Due</value>
@@ -1465,6 +1516,9 @@
   </data>
   <data name="Every day at {0:00}:00" xml:space="preserve">
     <value>Every day at {0:00}:00</value>
+  </data>
+  <data name="Every load" xml:space="preserve">
+    <value>Every load</value>
   </data>
   <data name="Every other session is signed out. This browser stays signed in." xml:space="preserve">
     <value>Every other session is signed out. This browser stays signed in.</value>
@@ -2096,6 +2150,9 @@
   <data name="Leave blank when it all went into the carrier's usual account. Otherwise list every account it went into." xml:space="preserve">
     <value>Leave blank when it all went into the carrier's usual account. Otherwise list every account it went into.</value>
   </data>
+  <data name="Left" xml:space="preserve">
+    <value>Left</value>
+  </data>
   <data name="Left as it is" xml:space="preserve">
     <value>Left as it is</value>
   </data>
@@ -2119,6 +2176,9 @@
   </data>
   <data name="Line {0} is right" xml:space="preserve">
     <value>Line {0} is right</value>
+  </data>
+  <data name="Linehaul by the mile: the miles as the quantity, the rate per mile. The item is what the invoice uses." xml:space="preserve">
+    <value>Linehaul by the mile: the miles as the quantity, the rate per mile. The item is what the invoice uses.</value>
   </data>
   <data name="Lines" xml:space="preserve">
     <value>Lines</value>
@@ -2161,6 +2221,9 @@
   </data>
   <data name="Load" xml:space="preserve">
     <value>Load</value>
+  </data>
+  <data name="Load board" xml:space="preserve">
+    <value>Load board</value>
   </data>
   <data name="Load {0}" xml:space="preserve">
     <value>Load {0}</value>
@@ -2387,6 +2450,9 @@
   <data name="New journal entry" xml:space="preserve">
     <value>New journal entry</value>
   </data>
+  <data name="New load" xml:space="preserve">
+    <value>New load</value>
+  </data>
   <data name="New password" xml:space="preserve">
     <value>New password</value>
   </data>
@@ -2474,6 +2540,9 @@
   <data name="No items match." xml:space="preserve">
     <value>No items match.</value>
   </data>
+  <data name="No loads yet." xml:space="preserve">
+    <value>No loads yet.</value>
+  </data>
   <data name="No names match." xml:space="preserve">
     <value>No names match.</value>
   </data>
@@ -2534,6 +2603,9 @@
   <data name="No transactions yet." xml:space="preserve">
     <value>No transactions yet.</value>
   </data>
+  <data name="No truck yet." xml:space="preserve">
+    <value>No truck yet.</value>
+  </data>
   <data name="No trucks yet." xml:space="preserve">
     <value>No trucks yet.</value>
   </data>
@@ -2560,6 +2632,9 @@
   </data>
   <data name="None open" xml:space="preserve">
     <value>None open</value>
+  </data>
+  <data name="None yet" xml:space="preserve">
+    <value>None yet</value>
   </data>
   <data name="None: everyone has one of the four roles" xml:space="preserve">
     <value>None: everyone has one of the four roles</value>
@@ -2723,6 +2798,9 @@
   <data name="Online refunds still waiting" xml:space="preserve">
     <value>Online refunds still waiting</value>
   </data>
+  <data name="Only a load that isn't cancelled or invoiced can be changed." xml:space="preserve">
+    <value>Only a load that isn't cancelled or invoiced can be changed.</value>
+  </data>
   <data name="Only a settlement waiting to be posted can be changed. Void its entry first." xml:space="preserve">
     <value>Only a settlement waiting to be posted can be changed. Void its entry first.</value>
   </data>
@@ -2764,6 +2842,9 @@
   </data>
   <data name="Open it" xml:space="preserve">
     <value>Open it</value>
+  </data>
+  <data name="Open loads only" xml:space="preserve">
+    <value>Open loads only</value>
   </data>
   <data name="Open the capture page" xml:space="preserve">
     <value>Open the capture page</value>
@@ -3067,6 +3148,12 @@
   </data>
   <data name="Phone" xml:space="preserve">
     <value>Phone</value>
+  </data>
+  <data name="Pickup" xml:space="preserve">
+    <value>Pickup</value>
+  </data>
+  <data name="Pickup or delivery number" xml:space="preserve">
+    <value>Pickup or delivery number</value>
   </data>
   <data name="Plaid bank feeds" xml:space="preserve">
     <value>Plaid bank feeds</value>
@@ -3461,11 +3548,20 @@
   <data name="Remove the saved auth token" xml:space="preserve">
     <value>Remove the saved auth token</value>
   </data>
+  <data name="Remove this charge" xml:space="preserve">
+    <value>Remove this charge</value>
+  </data>
   <data name="Remove this line" xml:space="preserve">
     <value>Remove this line</value>
   </data>
   <data name="Remove this passkey? It can't be signed in with any more." xml:space="preserve">
     <value>Remove this passkey? It can't be signed in with any more.</value>
+  </data>
+  <data name="Remove this stop" xml:space="preserve">
+    <value>Remove this stop</value>
+  </data>
+  <data name="Remove this truck" xml:space="preserve">
+    <value>Remove this truck</value>
   </data>
   <data name="Remove {0}" xml:space="preserve">
     <value>Remove {0}</value>
@@ -3536,6 +3632,9 @@
   <data name="Restore" xml:space="preserve">
     <value>Restore</value>
   </data>
+  <data name="Restore the load" xml:space="preserve">
+    <value>Restore the load</value>
+  </data>
   <data name="Restricted or secret key" xml:space="preserve">
     <value>Restricted or secret key</value>
   </data>
@@ -3589,6 +3688,9 @@
   </data>
   <data name="Round to whole dollars" xml:space="preserve">
     <value>Round to whole dollars</value>
+  </data>
+  <data name="Route" xml:space="preserve">
+    <value>Route</value>
   </data>
   <data name="Rows to add" xml:space="preserve">
     <value>Rows to add</value>
@@ -3683,6 +3785,9 @@
   <data name="Save invoice" xml:space="preserve">
     <value>Save invoice</value>
   </data>
+  <data name="Save load" xml:space="preserve">
+    <value>Save load</value>
+  </data>
   <data name="Save settings" xml:space="preserve">
     <value>Save settings</value>
   </data>
@@ -3713,6 +3818,9 @@
   <data name="Save the shares" xml:space="preserve">
     <value>Save the shares</value>
   </data>
+  <data name="Save the times" xml:space="preserve">
+    <value>Save the times</value>
+  </data>
   <data name="Saved." xml:space="preserve">
     <value>Saved.</value>
   </data>
@@ -3724,6 +3832,9 @@
   </data>
   <data name="saved; leave empty to keep it" xml:space="preserve">
     <value>saved; leave empty to keep it</value>
+  </data>
+  <data name="Saving a stop's times moves the load along: leaving the first pickup puts it in transit, leaving the last delivery delivers it. Or set it here." xml:space="preserve">
+    <value>Saving a stop's times moves the load along: leaving the first pickup puts it in transit, leaving the last delivery delivers it. Or set it here.</value>
   </data>
   <data name="Saving messages to a folder (nothing is sent)" xml:space="preserve">
     <value>Saving messages to a folder (nothing is sent)</value>
@@ -3803,6 +3914,9 @@
   <data name="Service of budget line {0}" xml:space="preserve">
     <value>Service of budget line {0}</value>
   </data>
+  <data name="Set" xml:space="preserve">
+    <value>Set</value>
+  </data>
   <data name="Set it in the email settings" xml:space="preserve">
     <value>Set it in the email settings</value>
   </data>
@@ -3853,6 +3967,15 @@
   </data>
   <data name="Settlements made: {0}. Their bills are ready to pay on Pay bills." xml:space="preserve">
     <value>Settlements made: {0}. Their bills are ready to pay on Pay bills.</value>
+  </data>
+  <data name="Share" xml:space="preserve">
+    <value>Share</value>
+  </data>
+  <data name="Share %" xml:space="preserve">
+    <value>Share %</value>
+  </data>
+  <data name="Shipper or receiver, and where" xml:space="preserve">
+    <value>Shipper or receiver, and where</value>
   </data>
   <data name="Shipping" xml:space="preserve">
     <value>Shipping</value>
@@ -4064,6 +4187,9 @@
   <data name="Stop charging this card, and have it removed at {0}?" xml:space="preserve">
     <value>Stop charging this card, and have it removed at {0}?</value>
   </data>
+  <data name="Stops" xml:space="preserve">
+    <value>Stops</value>
+  </data>
   <data name="Stops after taking" xml:space="preserve">
     <value>Stops after taking</value>
   </data>
@@ -4165,6 +4291,9 @@
   </data>
   <data name="That device already has a passkey for you." xml:space="preserve">
     <value>That device already has a passkey for you.</value>
+  </data>
+  <data name="That load doesn't exist." xml:space="preserve">
+    <value>That load doesn't exist.</value>
   </data>
   <data name="That owner-operator doesn't exist." xml:space="preserve">
     <value>That owner-operator doesn't exist.</value>
@@ -4360,6 +4489,9 @@
   </data>
   <data name="Theme" xml:space="preserve">
     <value>Theme</value>
+  </data>
+  <data name="There {0} h {1} min" xml:space="preserve">
+    <value>There {0} h {1} min</value>
   </data>
   <data name="There's no bank account to write a check from yet." xml:space="preserve">
     <value>There's no bank account to write a check from yet.</value>
@@ -4754,6 +4886,9 @@
   <data name="Week timesheet" xml:space="preserve">
     <value>Week timesheet</value>
   </data>
+  <data name="Weight (lb)" xml:space="preserve">
+    <value>Weight (lb)</value>
+  </data>
   <data name="What" xml:space="preserve">
     <value>What</value>
   </data>
@@ -4808,6 +4943,9 @@
   <data name="What the carrier takes out counts under this vendor in Expenses by vendor." xml:space="preserve">
     <value>What the carrier takes out counts under this vendor in Expenses by vendor.</value>
   </data>
+  <data name="What the customer is charged" xml:space="preserve">
+    <value>What the customer is charged</value>
+  </data>
   <data name="What the loads' customers were billed" xml:space="preserve">
     <value>What the loads' customers were billed</value>
   </data>
@@ -4843,6 +4981,9 @@
   </data>
   <data name="When the invoice is paid: each payment earns its share" xml:space="preserve">
     <value>When the invoice is paid: each payment earns its share</value>
+  </data>
+  <data name="Where it is" xml:space="preserve">
+    <value>Where it is</value>
   </data>
   <data name="Where the money came from: the bank for an advance, a fuel card's account for fuel." xml:space="preserve">
     <value>Where the money came from: the bank for an advance, a fuel card's account for fuel.</value>
