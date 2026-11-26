@@ -33,6 +33,9 @@ public enum EmailKind
 
     /// <summary>To a customer: the link where they agree to pay their invoices automatically with a saved card.</summary>
     CardAgreement,
+
+    /// <summary>To an owner-operator: their settlement statement (L16, 2026-11-26).</summary>
+    OwnerSettlement,
 }
 
 /// <summary>How a customer gets their documents by email.</summary>
@@ -93,6 +96,7 @@ public static partial class EmailTemplates
         EmailKind.W9Request => "W-9 request",
         EmailKind.PledgeReminder => "Pledge reminder",
         EmailKind.CardAgreement => "Automatic payment link",
+        EmailKind.OwnerSettlement => "Owner settlement",
         _ => kind.ToString(),
     };
 
@@ -109,6 +113,7 @@ public static partial class EmailTemplates
         EmailKind.W9Request => "w9-request",
         EmailKind.PledgeReminder => "pledge-reminder",
         EmailKind.CardAgreement => "automatic-payment",
+        EmailKind.OwnerSettlement => "owner-settlement",
         _ => kind.ToString().ToLowerInvariant(),
     };
 
@@ -147,6 +152,11 @@ public static partial class EmailTemplates
             new("when", "\"is due on …\", \"is due today\" or \"was due on …, n days ago\"", $"was due on {Sample(new DateOnly(2026, 3, 31))}, 5 days ago"), Company,
         ],
         EmailKind.CardAgreement => [Customer, new("link", "The link where they agree", "https://books.example.com/portal/obp_…/card"), Company],
+        EmailKind.OwnerSettlement =>
+        [
+            new("owner", "The owner-operator's name", "Lee Freight LLC"), Number, Date, new("through", "The period's last day", Sample(new DateOnly(2026, 3, 13))),
+            new("net", "The net pay", "1,078.13"), Company,
+        ],
         EmailKind.Form1099Copy or EmailKind.W9Request => [new("vendor", "The vendor's name", "Acme Supply"), new("year", "The tax year", "2026"), Company],
         EmailKind.PaymentReceipt =>
         [
@@ -205,6 +215,8 @@ public static partial class EmailTemplates
         EmailKind.CardAgreement => ("Pay {company} automatically",
             "Hello,\n\nIf you'd like, we can charge your invoices to your card on the day they're due. You enter the card once, on our payment provider's own page, and you can stop it at any time.\n\n" +
             "Read about it and agree here:\n{link}\n\nThe link opens your account with us, so please keep it to yourself. Nothing changes unless you agree.\n\nThank you,\n{company}"),
+        EmailKind.OwnerSettlement => ("Settlement {number} from {company}",
+            "Hello,\n\nYour settlement {number}, for the period through {through}, is attached: net pay {net}.\n\nPlease get in touch if anything doesn't match your records.\n\nThank you,\n{company}"),
         EmailKind.Report => ("{report}",
             "{report}, as of {as_of}, is attached.\n\nSent by OpenBook on a schedule set up by {scheduled_by}."),
         EmailKind.Invitation => ("You're invited to {company} in OpenBook",

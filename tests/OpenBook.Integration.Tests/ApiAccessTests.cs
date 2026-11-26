@@ -610,6 +610,8 @@ public sealed class AccessRulesTests
     [InlineData("/dispatch/loads/0190a7a2-0000-7000-8000-000000000000/detention", "POST", UserRole.Standard)]
     [InlineData("/dispatch/owners/0190a7a2-0000-7000-8000-000000000000/pay", "POST", UserRole.Accountant)]
     [InlineData("/dispatch/charges/import", "GET", UserRole.Standard)]
+    [InlineData("/dispatch/settlements/0190a7a2-0000-7000-8000-000000000000/pdf", "GET", UserRole.ViewOnly)]
+    [InlineData("/dispatch/settlements/0190a7a2-0000-7000-8000-000000000000/email", "GET", UserRole.Standard)]
     [InlineData("/dispatch/charges/import", "POST", UserRole.Standard)]
     [InlineData("/api/dispatch/charges/import", "POST", UserRole.Standard)]
     [InlineData("/api/dispatch/owners/0190a7a2-0000-7000-8000-000000000000/pay", "PUT", UserRole.Accountant)]

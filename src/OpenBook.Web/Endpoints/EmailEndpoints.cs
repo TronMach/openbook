@@ -19,6 +19,7 @@ public static class EmailEndpoints
         // The compose pages' addresses (see EmailCompose.razor); each takes /preview and /test.
         Compose(app, "/sales/email/{kind}/{id:guid}", r => SalesSource(r));
         Compose(app, "/purchases/orders/{id:guid}/email", r => new EmailSource(EmailKind.PurchaseOrder, Route(r, "id")));
+        Compose(app, "/dispatch/settlements/{id:guid}/email", r => new EmailSource(EmailKind.OwnerSettlement, Route(r, "id")));
         Compose(app, "/nonprofit/gifts/{id:guid}/email", r => new EmailSource(EmailKind.GiftAcknowledgment, Route(r, "id")));
         Compose(app, "/nonprofit/pledges/{id:guid}/email", r => new EmailSource(EmailKind.PledgeReminder, Route(r, "id")));
         Compose(app, "/nonprofit/statements/{year:int}/{id:guid}/email",

@@ -5515,6 +5515,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<bool>("Personal")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ProtectedAccountNumber")
                         .IsRequired()
                         .HasMaxLength(2000)

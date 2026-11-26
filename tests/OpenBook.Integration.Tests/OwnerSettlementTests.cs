@@ -466,5 +466,49 @@ public sealed class OwnerSettlementTests : IAsyncLifetime
             s.ImportChargesAsync(OwnerChargeKind.Advance, _fuelCard.Id, System.Text.Encoding.UTF8.GetBytes(Fuzz.Seeds.FuelCard), true))).Code);
     }
 
+    [Fact]
+    public async Task A_settlement_prints_its_statement_and_is_emailed_to_the_owner()
+    {
+        await In<OwnerService, OwnerOperator>(s => s.SetReserveAsync(_owner.Id, 0, new OwnerReserveDraft("Maintenance", ReserveMethod.Fixed, 50m)));
+        await Charge(OwnerChargeKind.Fuel, 120m);
+        var settlement = Assert.Single(await Run(Friday, Load("S1", 1000m, 500m, 20m)));
+        var form = await In<OwnerStatements, Application.Forms.RenderedForm>(s => s.RenderAsync(settlement.Id));
+        Assert.Equal("%PDF"u8.ToArray(), form.Pdf[..4]);
+        Assert.Equal(("Settlement 1", _vendor.Id), (form.Title, form.CustomerId));
+
+        var source = new Application.Forms.EmailSource(Domain.Email.EmailKind.OwnerSettlement, settlement.Id);
+        var draft = await In<Application.Forms.EmailService, Application.Forms.EmailDraft>(f => f.DraftAsync(source));
+        Assert.Contains("Settlement 1", draft.Subject, StringComparison.Ordinal);
+        Assert.Contains("830.00", draft.Body, StringComparison.Ordinal);
+        await _db.InScope(sp => sp.GetRequiredService<Application.Forms.EmailService>().SaveSettingsAsync(new Application.Forms.EmailSettingsCommand(
+            Domain.Companies.EmailDelivery.Smtp, "smtp.test", 587, Domain.Companies.SmtpSecurity.Auto, "books", "s3cret", false, "books@carrier.test", "Carrier", null)));
+        await In<Application.Forms.EmailService, Domain.Email.SentEmail>(f => f.SendAsync(source, draft with { To = "lee@freight.test" }));
+        var sent = Assert.Single(_db.Mail.Sent);
+        Assert.Equal(("lee@freight.test", "application/pdf"), (sent.Message.To, sent.Message.Attachments.Single().ContentType));
+
+        await In<OwnerSettlementService, OwnerSettlement>(s => s.VoidAsync(settlement.Id, "Wrong week"));
+        Assert.Equal("owner_settlement.voided", (await Refused<Application.Forms.EmailService, Domain.Email.SentEmail>(f => f.SendAsync(source, draft with { To = "lee@freight.test" }))).Code);
+    }
+
+    [Fact]
+    public void An_ach_file_pays_personal_accounts_in_a_ppd_batch_beside_the_ccd_one()
+    {
+        var settings = AchSettings.For(Guid.NewGuid());
+        settings.Update("011000015", "Federal Reserve Bank", "1234567890", "Carrier LLC", "1234567890", "Carrier LLC", "Settlement");
+        var file = Ach.Build(settings,
+            [new AchEntry("021000021", "123456789", BankAccountKind.Checking, 100m, "V1", "Parts Supply"), new AchEntry("021000021", "987654321", BankAccountKind.Checking, 1078.13m, "V2", "Lee Freight", Personal: true)],
+            new DateOnly(2026, 3, 16), new DateTime(2026, 3, 13, 9, 30, 0), 'A');
+        var records = file.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.All(records, r => Assert.Equal(Ach.RecordLength, r.Length));
+        var batches = records.Where(r => r[0] == '5').ToList();
+        Assert.Equal(["CCD", "PPD"], batches.Select(b => b.Substring(50, 3)));
+        Assert.Equal(["0000001", "0000002"], batches.Select(b => b[87..]));
+        Assert.Equal(["0000001", "0000002"], records.Where(r => r[0] == '6').Select(r => r[87..]));
+        var control = records.First(r => r[0] == '9');
+        Assert.Equal(("000002", "00000002", "000000117813"), (control.Substring(1, 6), control.Substring(13, 8), control.Substring(43, 12)));
+        Assert.Equal(["000000010000", "000000107813"], records.Where(r => r[0] == '8').Select(r => r.Substring(32, 12)));
+        Assert.Equal(0, records.Length % 10);
+    }
+
     private static CheckOutcome OutcomeOf(Application.Ledger.CheckResult result) => result.Outcome;
 }

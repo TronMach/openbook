@@ -16,6 +16,11 @@
         var s = _view.Settlement;
         <div class="toolbar">
             <h1>@L["Settlement {0}", s.Number] · @_view.OwnerName</h1>
+            <a class="button secondary" href="/dispatch/settlements/@s.Id/pdf" target="_blank" rel="noopener">@L["Statement PDF"]</a>
+            @if (s.Stands)
+            {
+                <ActionLink Class="button secondary" Href="@($"/dispatch/settlements/{s.Id}/email")">@L["Email"]</ActionLink>
+            }
             @if (_view.Bill is { } bill)
             {
                 <ActionLink Class="button secondary" Href="@($"/purchases/bills/{bill.Id}")">@L["Its bill"]</ActionLink>

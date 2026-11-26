@@ -90,6 +90,13 @@ The carrier's side: the company pays owner-operators by settlement and dispatche
 - `OwnerService.ImportChargesAsync(kind, paidFrom, bytes, save)`: a truck by unit, else by plate ignoring spaces and case; rows for an owner's truck become charges (`StageChargeAsync`, each its own entry, `ImportHash` the file's SHA-256), all in one save. Left out: our own trucks, unknown ones, credits (zero or less), and a row matching a standing charge of the owner by kind, date, amount and reference (so a file imported twice adds nothing; the hash only warns). Fuel, tolls, repairs or other.
 - Page `/dispatch/charges/import`; form `POST /dispatch/charges/import`; API `POST /api/dispatch/charges/import?kind=&paidFrom=&dryRun=`.
 
+## Statements, email and PPD (B7, 2026-11-26)
+
+- `OwnerStatementForm` (Application/Forms) and `IFormRenderer.Render(OwnerStatementForm)` in `MigraDocFormRenderer`: the company's default design's look, lines grouped by part (a subtotal only for a part of more than one line), net pay, then "After this settlement" (each reserve's balance as of the settlement's date, and the owner's open charges now), kept on one page with its heading. Snapshot `minimal-owner-settlement` in `FormSnapshotTests`.
+- `OwnerStatements.RenderAsync(id)` (in `CompanyRegion.Use`); `GET /dispatch/settlements/{id}/pdf`, `GET /api/dispatch/settlements/{id}/pdf`.
+- Email: `EmailKind.OwnerSettlement` (appended last; key `owner-settlement`; placeholders owner, number, date, through, net, company), `OwnerSettlementEmailSource` (to the vendor's email; a voided settlement is refused), compose page `/dispatch/settlements/{id}/email` (`EmailCompose.razor`, `EmailEndpoints.Compose`).
+- ACH: `VendorBankAccount.Personal` (new column, false for existing ones) puts a vendor's entries in a PPD batch; `Ach.Build` writes a CCD batch and/or a PPD batch (numbered 1, 2), trace numbers running on, the file control counting batches. Checkbox on the vendor's bank details; `personal` on `PUT /api/purchases/ach/vendors/{id}`.
+
 - **Before release**: an accountant should confirm the 1099 gross treatment. Never call any of this compliant with 49 CFR 376.
 
 ## The edition and the setting

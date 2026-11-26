@@ -258,6 +258,11 @@ public static class DispatchApi
             var views = (await s.ListAsync(null, ct)).Where(v => made.Any(m => m.Id == v.Settlement.Id));
             return Results.Ok(views.Select(v => OwnerSettlementResponse.From(v, lines: true)));
         });
+        dispatch.MapGet("/settlements/{id:guid}/pdf", async (Guid id, OwnerStatements s, CancellationToken ct) =>
+        {
+            var form = await s.RenderAsync(id, ct);
+            return Results.File(form.Pdf, "application/pdf", form.FileName);
+        });
         dispatch.MapPost("/settlements/{id:guid}/void", async (Guid id, VoidSettlementRequest r, OwnerSettlementService s, CancellationToken ct) =>
         {
             await s.VoidAsync(id, r.Reason ?? "Settlement voided", ct);

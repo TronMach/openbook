@@ -5508,6 +5508,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Personal")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ProtectedAccountNumber")
                         .IsRequired()
                         .HasMaxLength(2000)

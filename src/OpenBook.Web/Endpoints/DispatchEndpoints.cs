@@ -153,6 +153,12 @@ public static class DispatchEndpoints
             }
         }).RequireAuthorization();
 
+        app.MapGet("/dispatch/settlements/{id:guid}/pdf", async (Guid id, OwnerStatements statements, CancellationToken ct) =>
+        {
+            var form = await statements.RenderAsync(id, ct);
+            return Results.File(form.Pdf, "application/pdf", form.FileName);
+        }).RequireAuthorization();
+
         app.MapPost("/dispatch/settlements/{id:guid}/void", async (Guid id, IFormCollection form, OwnerSettlementService settlements, CancellationToken ct) =>
             await Back($"/dispatch/settlements/{id}", () => settlements.VoidAsync(id, form["reason"].ToString(), ct))).RequireAuthorization();
 

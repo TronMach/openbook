@@ -121,6 +121,12 @@ A settlement never pays less than nothing: whatever doesn't fit stays open for t
 
 Bills from settlements wait for approval like any other when your **approval limit** (Settings → Purchasing) is set. For a settlement, the limit is compared with the **gross pay**, not the net, since that's what the owner earned.
 
+### The statement, and paying by ACH
+
+On a settlement's page, **Statement PDF** is the owner-operator's settlement statement: each line under its part (earnings, reimbursements, deductions, charges taken back, reserves), the net pay, and their reserves and the charges they still owe after it. **Email** sends it to them, from a template you can change in **Settings → Email templates** (Owner settlement).
+
+To pay owner-operators by direct deposit, enter their bank details on their vendor page as for any vendor, and tick **A person's own account** when it's their personal account rather than a business's: ACH files then put those payments in a **PPD** batch, beside the **CCD** batch for businesses, as banks expect.
+
 ### Correcting a settlement
 
 A settlement's bill can't be changed or voided on its own. Open the settlement (**Dispatch → Owner settlements**) and **Void** it: its bill is voided on the same date, what it took back of charges is open again, what its deductions left as charges is gone, and its reserves and deductions are as they were. Then run it again. Only an owner-operator's **latest** settlement can be voided, because each one starts from what the one before took and left; void the later ones first. A bill with a payment on it can't be voided: void the payment first.

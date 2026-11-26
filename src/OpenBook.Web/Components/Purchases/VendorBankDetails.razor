@@ -9,7 +9,7 @@
     }
     @if (_account is not null)
     {
-        <p>@_account.Kind account @_account.Masked at routing number @_account.RoutingNumber.</p>
+        <p>@_account.Kind account @_account.Masked at routing number @_account.RoutingNumber@(_account.Personal ? L[", a personal account (paid by PPD)"] : "").</p>
     }
     else
     {
@@ -35,6 +35,10 @@
                     </select>
                 </div>
             </div>
+            <label class="check">
+                <input type="checkbox" name="personal" value="true" checked="@(_account?.Personal == true)" />
+                <span>@L["A person's own account, such as an owner-operator's: paid in a PPD batch instead of CCD"]</span>
+            </label>
             <div class="actions">
                 <button type="submit" name="action" value="save" class="secondary">Save bank details</button>
                 @if (_account is not null)

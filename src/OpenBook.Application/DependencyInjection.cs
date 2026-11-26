@@ -110,6 +110,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailSource, SalesEmailSource>();
         services.AddScoped<IEmailSource, PurchaseOrderEmailSource>();
         services.AddScoped<IEmailSource, GiftEmailSource>();
+        services.AddScoped<IEmailSource, OpenBook.Application.Settlements.OwnerSettlementEmailSource>();
         services.AddScoped<CustomerService>();
         services.AddScoped<ItemService>();
         services.AddScoped<InventoryAccounts>();
@@ -194,6 +195,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Settlements.OwnerService>();
         services.AddScoped<OpenBook.Application.Settlements.OwnerSettlementService>();
         services.AddScoped<OpenBook.Application.Settlements.LoadService>();
+        services.AddScoped<OpenBook.Application.Settlements.OwnerStatements>();
         services.AddScoped<OpenBook.Application.Settlements.IMileageSource, OpenBook.Application.Settlements.OwnerMileage>();
         services.AddScoped<OpenBook.Application.Settlements.SettlementReports>();
         services.AddScoped<OpenBook.Application.Settlements.SettlementCaptureService>();

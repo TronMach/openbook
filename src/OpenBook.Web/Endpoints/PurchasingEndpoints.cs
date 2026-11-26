@@ -226,7 +226,7 @@ public static class PurchasingEndpoints
                     await ach.RemoveVendorBankAccountAsync(vendorId, ct);
                 else
                     await ach.SetVendorBankAccountAsync(vendorId, new VendorBankAccountCommand(form["routing"].ToString(), form["accountNumber"].ToString(),
-                        Enum.TryParse<BankAccountKind>(form["kind"], out var kind) ? kind : BankAccountKind.Checking), ct);
+                        Enum.TryParse<BankAccountKind>(form["kind"], out var kind) ? kind : BankAccountKind.Checking, form["personal"] == "true"), ct);
                 return Results.Redirect($"/vendors/{vendorId}#bank");
             }
             catch (DomainException ex)

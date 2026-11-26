@@ -89,6 +89,9 @@
   <data name="+ Add “{0}”" xml:space="preserve">
     <value>+ Add “{0}”</value>
   </data>
+  <data name=", a personal account (paid by PPD)" xml:space="preserve">
+    <value>, a personal account (paid by PPD)</value>
+  </data>
   <data name=", expires {0}" xml:space="preserve">
     <value>, expires {0}</value>
   </data>
@@ -184,6 +187,9 @@
   </data>
   <data name="A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role." xml:space="preserve">
     <value>A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role.</value>
+  </data>
+  <data name="A person's own account, such as an owner-operator's: paid in a PPD batch instead of CCD" xml:space="preserve">
+    <value>A person's own account, such as an owner-operator's: paid in a PPD batch instead of CCD</value>
   </data>
   <data name="A petty cash box holds a fixed float. Open a box to work through it, in this order:" xml:space="preserve">
     <value>A petty cash box holds a fixed float. Open a box to work through it, in this order:</value>
@@ -4216,6 +4222,9 @@
   </data>
   <data name="Statement number" xml:space="preserve">
     <value>Statement number</value>
+  </data>
+  <data name="Statement PDF" xml:space="preserve">
+    <value>Statement PDF</value>
   </data>
   <data name="Statement says" xml:space="preserve">
     <value>Statement says</value>
