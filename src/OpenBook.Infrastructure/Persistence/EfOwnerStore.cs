@@ -31,6 +31,13 @@ internal sealed class EfOwnerStore(OpenBookDbContext db) : IOwnerStore
 
     public void Add(OwnerSettlement settlement) => db.OwnerSettlements.Add(settlement);
 
+    public async Task<IReadOnlyList<ReserveInterestRun>> ListInterestRunsAsync(CancellationToken ct) =>
+        await db.ReserveInterestRuns.OrderByDescending(r => r.Date).ToListAsync(ct);
+
+    public Task<ReserveInterestRun?> GetInterestRunAsync(Guid id, CancellationToken ct) => db.ReserveInterestRuns.SingleOrDefaultAsync(r => r.Id == id, ct);
+
+    public void Add(ReserveInterestRun run) => db.ReserveInterestRuns.Add(run);
+
     public void Add(OwnerOperator owner) => db.OwnerOperators.Add(owner);
 
     public void Add(Truck truck) => db.Trucks.Add(truck);

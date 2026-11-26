@@ -118,6 +118,13 @@ public sealed class OwnerSettlementService(
             var entry = command.Owners.First(o => o.OwnerId == plan.Owner.Owner.Id);
             var settlement = OwnerSettlement.Create(number, plan.Owner.Owner.Id, date, command.From, command.Through, plan.Lines, entry.Memo, clock.UtcNow, user.Actor);
             await ApplyAsync(settlement, plan, ct);
+            foreach (var left in settlement.Lines.Where(l => l.Kind == OwnerLineKind.Left))
+            {
+                var charge = OwnerCharge.Left(settlement.OwnerId, settlement.Id, date, left.Description, left.Amount, clock.UtcNow, user.Actor);
+                store.Add(charge);
+                store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Created, OwnerService.ChargeEntity, charge.Id, null, OwnerService.Snapshot(charge)));
+            }
+
             var memo = $"Settlement {number} for {plan.Owner.Name} through {command.Through:MMM d, yyyy}";
             if (settlement.Net > 0m)
             {
@@ -247,6 +254,31 @@ public sealed class OwnerSettlementService(
             available -= taken;
             if (taken < held)
                 notes.Add($"Backup withholding of {held:N2} is more than the pay: {taken:N2} is held back.");
+        }
+
+        // Regular deductions, in their order: what one can't take is left as an open charge, when it says so.
+        var takenBefore = owner.Deductions.Count == 0 ? new Dictionary<int, decimal>() : await owners.DeductionsTakenAsync(owner.Id, ct);
+        foreach (var deduction in owner.Deductions.Where(d => d.AppliesOn(date)))
+        {
+            var wanted = deduction.Wanted(miles, takenBefore.GetValueOrDefault(deduction.Number));
+            if (wanted <= 0m)
+                continue;
+            var taken = Take(wanted);
+            available -= taken;
+            if (taken < wanted && deduction.CarryShort)
+            {
+                lines.Add(new OwnerLineDraft(OwnerLineKind.Deduction, deduction.Name, -wanted, deduction.AccountId, owner.ClassId, DeductionNumber: deduction.Number));
+                lines.Add(new OwnerLineDraft(OwnerLineKind.Left, $"{deduction.Name}: left for next time", wanted - taken, owner.ReceivableAccountId, owner.ClassId,
+                    DeductionNumber: deduction.Number));
+                notes.Add($"{deduction.Name}: {wanted - taken:N2} of {wanted:N2} is left as a charge for the next settlement.");
+            }
+            else
+            {
+                if (taken > 0m)
+                    lines.Add(new OwnerLineDraft(OwnerLineKind.Deduction, deduction.Name, -taken, deduction.AccountId, owner.ClassId, DeductionNumber: deduction.Number));
+                if (taken < wanted)
+                    notes.Add($"{deduction.Name} wanted {wanted:N2}; there was room for {taken:N2}.");
+            }
         }
 
         foreach (var charge in charges)

@@ -321,5 +321,104 @@ public sealed class OwnerSettlementTests : IAsyncLifetime
         Assert.Equal(1000m - 1150m, (await In<PayablesService, IReadOnlyList<Payment1099>>(s => s.Payments1099Async(2026))).Single().Amount);
     }
 
+    private async Task<Guid> Income(string name) => (await _db.CreateAccount(name, AccountType.Income)).Id;
+
+    private Task<OwnerOperator> Deduct(OwnerDeductionDraft draft, int number = 0) =>
+        In<OwnerService, OwnerOperator>(s => s.SetDeductionAsync(_owner.Id, number, draft));
+
+    [Fact]
+    public async Task Regular_deductions_come_in_their_order_before_charges_and_stop_at_their_total()
+    {
+        var insurance = await Income("Insurance Charged to Owners");
+        var lease = await _db.CreateAccount("Truck Sale Receivable", AccountType.OtherCurrentAsset);
+        await Deduct(new OwnerDeductionDraft("Truck payment", lease.Id, DeductionMethod.PerMile, 0.10m, UpTo: 250m, Priority: 2));
+        await Deduct(new OwnerDeductionDraft("Occupational accident", insurance, DeductionMethod.Fixed, 150m, Priority: 1));
+        await Charge(OwnerChargeKind.Fuel, 200m);
+
+        var first = Assert.Single(await Run(Friday, Load("D1", 1000m, 900m, 100m)));
+        Assert.Equal([1000m, -150m, -100m, -200m], first.Lines.Select(l => l.Amount));
+        Assert.Equal(550m, first.Net);
+
+        var second = Assert.Single(await Run(Friday.AddDays(7), Load("D2", 1200m, 2000m)));
+        Assert.Equal([1200m, -150m, -150m], second.Lines.Select(l => l.Amount));
+        var third = Assert.Single(await Run(Friday.AddDays(14), Load("D3", 800m, 1000m)));
+        Assert.Equal([800m, -150m], third.Lines.Select(l => l.Amount));
+
+        Assert.Equal(-250m, await Balance(lease.Id));
+        Assert.Equal(-450m, await Balance(insurance));
+        var taken = await In<OwnerService, IReadOnlyDictionary<int, decimal>>(s => s.DeductionsTakenAsync(_owner.Id));
+        Assert.Equal((250m, 450m), (taken[1], taken[2]));
+        // Deductions come out of the gross: the 1099 is still what was earned.
+        foreach (var made in new[] { first, second, third })
+            await PayBill((await BillOf(made))!, Friday.AddDays(21));
+        Assert.Equal(3000m, (await Form1099()).Total);
+        Assert.Equal("owner.deduction_account_type", (await Refused<OwnerService, OwnerOperator>(s =>
+            s.SetDeductionAsync(_owner.Id, 0, new OwnerDeductionDraft("Bad", _checking.Id, DeductionMethod.Fixed, 5m)))).Code);
+    }
+
+    [Fact]
+    public async Task What_a_deduction_cant_take_is_left_as_a_charge_unless_it_says_otherwise()
+    {
+        var insurance = await Income("Insurance Charged to Owners");
+        var fee = await Income("Settlement Fees");
+        await Deduct(new OwnerDeductionDraft("Insurance", insurance, DeductionMethod.Fixed, 150m, Priority: 1));
+        await Deduct(new OwnerDeductionDraft("Fee", fee, DeductionMethod.Fixed, 20m, Priority: 2, CarryShort: false));
+
+        var short1 = Assert.Single(await Run(Friday, Load("S1", 100m)));
+        Assert.Equal([100m, -150m, 50m], short1.Lines.Select(l => l.Amount));
+        Assert.Equal(0m, short1.Net);
+        Assert.NotNull(short1.JournalEntryId);
+        var left = Assert.Single(await In<OwnerService, IReadOnlyList<OwnerCharge>>(s => s.ListChargesAsync(_owner.Id, openOnly: true)));
+        Assert.Equal((OwnerChargeKind.Carried, 50m, short1.Id), (left.Kind, left.Balance, left.FromSettlementId));
+        Assert.Equal(50m, await Balance(_owner.ReceivableAccountId));
+        Assert.Equal(-150m, await Balance(insurance));
+        Assert.Equal(0m, await Balance(fee));
+        Assert.Equal("charge.from_settlement", (await Refused<OwnerService, OwnerCharge>(s => s.VoidChargeAsync(left.Id, ""))).Code);
+
+        var next = Assert.Single(await Run(Friday.AddDays(7), Load("S2", 1000m)));
+        Assert.Equal([1000m, -150m, -20m, -50m], next.Lines.Select(l => l.Amount));
+        Assert.Equal(0m, (await In<OwnerService, OwnerCharge?>(s => s.GetChargeAsync(left.Id)))!.Balance);
+        Assert.Equal(CheckOutcome.Ok, OutcomeOf(await Check("owner-receivables")));
+
+        await In<OwnerSettlementService, OwnerSettlement>(s => s.VoidAsync(next.Id, "Redo"));
+        Assert.Equal(50m, (await In<OwnerService, OwnerCharge?>(s => s.GetChargeAsync(left.Id)))!.Balance);
+        await In<OwnerSettlementService, OwnerSettlement>(s => s.VoidAsync(short1.Id, "Redo"));
+        Assert.True((await In<OwnerService, OwnerCharge?>(s => s.GetChargeAsync(left.Id)))!.IsVoided);
+        Assert.Equal(0m, await Balance(_owner.ReceivableAccountId));
+        Assert.Equal(0m, await Balance(insurance));
+        Assert.Equal(CheckOutcome.Ok, OutcomeOf(await Check("owner-receivables")));
+    }
+
+    [Fact]
+    public async Task A_month_of_interest_is_added_to_the_reserves_once()
+    {
+        await In<OwnerService, OwnerOperator>(s => s.SetReserveAsync(_owner.Id, 0, new OwnerReserveDraft("Escrow", ReserveMethod.Fixed, 100m, Opening: 1200m, InterestPercent: 6m)));
+        await In<OwnerService, OwnerOperator>(s => s.SetReserveAsync(_owner.Id, 0, new OwnerReserveDraft("Plates", ReserveMethod.Fixed, 25m)));
+        await Run(new DateOnly(2026, 3, 20), Load("I1", 1000m));
+        var march = new DateOnly(2026, 3, 31);
+
+        var due = await In<OwnerService, IReadOnlyList<ReserveInterestLineDraft>>(s => s.InterestDueAsync(march));
+        Assert.Equal((1, 1300m, 6.50m), (Assert.Single(due).ReserveNumber, due[0].Balance, due[0].Amount));
+        Assert.Equal("interest.month_end", (await Refused<OwnerService, ReserveInterestRun>(s => s.PostInterestAsync(new DateOnly(2026, 3, 30)))).Code);
+
+        var run = await In<OwnerService, ReserveInterestRun>(s => s.PostInterestAsync(march));
+        Assert.Equal(6.50m, run.Total);
+        Assert.Equal(6.50m, await Balance(run.ExpenseAccountId));
+        Assert.Equal(-131.50m, await Balance(_owner.ReserveAccountId));
+        Assert.Equal(1306.50m, (await In<OwnerService, IReadOnlyList<ReserveBalance>>(s => s.ReserveBalancesAsync(_owner.Id)))[0].Balance);
+        Assert.Equal("interest.month_taken", (await Refused<OwnerService, ReserveInterestRun>(s => s.PostInterestAsync(march))).Code);
+        Assert.Equal(CheckOutcome.Ok, OutcomeOf(await Check("owner-reserves")));
+
+        // April's is on the balance with March's interest in it.
+        Assert.Equal(6.53m, Assert.Single(await In<OwnerService, IReadOnlyList<ReserveInterestLineDraft>>(s => s.InterestDueAsync(new DateOnly(2026, 4, 30)))).Amount);
+
+        await In<OwnerService, ReserveInterestRun>(s => s.VoidInterestAsync(run.Id, "Wrong rate"));
+        Assert.Equal(0m, await Balance(run.ExpenseAccountId));
+        Assert.Equal(1300m, (await In<OwnerService, IReadOnlyList<ReserveBalance>>(s => s.ReserveBalancesAsync(_owner.Id)))[0].Balance);
+        Assert.Equal(6.50m, (await In<OwnerService, ReserveInterestRun>(s => s.PostInterestAsync(march))).Total);
+        // Interest isn't pay: the 1099 is what was earned.
+        Assert.Equal(1000m - 875m, (await In<PayablesService, IReadOnlyList<Payment1099>>(s => s.Payments1099Async(2026))).Single().Amount);
+    }
+
     private static CheckOutcome OutcomeOf(Application.Ledger.CheckResult result) => result.Outcome;
 }

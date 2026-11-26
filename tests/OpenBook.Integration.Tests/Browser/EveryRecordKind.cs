@@ -188,11 +188,13 @@ internal static class EveryRecordKind
         // A carrier's side: an owner-operator with a reserve, their truck, and an advance waiting to be taken back.
         var hauler = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Pat Hauling")));
         var owner = await In<OwnerService, OwnerOperator>(s => s.CreateOwnerAsync(new OwnerDetails(hauler.Id)));
-        await Do<OwnerService>(s => s.SetReserveAsync(owner.Id, 0, new OwnerReserveDraft("Maintenance", ReserveMethod.PerMile, 0.05m, 5000m)));
+        await Do<OwnerService>(s => s.SetReserveAsync(owner.Id, 0, new OwnerReserveDraft("Maintenance", ReserveMethod.PerMile, 0.05m, 5000m, InterestPercent: 4m)));
+        await Do<OwnerService>(s => s.SetDeductionAsync(owner.Id, 0, new OwnerDeductionDraft("Insurance", income, DeductionMethod.Fixed, 40m)));
         var truck = await In<OwnerService, Truck>(s => s.CreateTruckAsync(new TruckDetails("T-12", owner.Id, Make: "Kenworth")));
         await Do<OwnerService>(s => s.CreateChargeAsync(new OwnerChargeDetails(owner.Id, d, OwnerChargeKind.Advance, 300m, checking, "Advance", TruckId: truck.Id)));
         await Do<OwnerService>(s => s.CreateChargeAsync(new OwnerChargeDetails(owner.Id, d, OwnerChargeKind.Fuel, 120m, checking, "Fuel", TruckId: truck.Id)));
         await Do<OwnerSettlementService>(s => s.RunAsync(new OwnerRunCommand(d, [new OwnerRunEntry(owner.Id, [new OwnerPayDraft(OwnerLineKind.Earning, "Load 7", 1400m, "7", truck.Id, 600m, 40m)])], d)));
+        await Do<OwnerService>(s => s.PostInterestAsync(new DateOnly(d.Year, d.Month, 1).AddMonths(1).AddDays(-1)));
 
         // Nonprofit: a gift, a pledge, a grant, a release of restricted money.
         var donor = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Pat Donor", Email: "pat@donor.test")));

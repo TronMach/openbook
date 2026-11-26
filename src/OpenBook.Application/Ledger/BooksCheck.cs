@@ -255,6 +255,8 @@ public sealed class BooksCheckService(
             Add($"Owner charge of {c.Date:MMM d, yyyy}", "owner_charge", c.Id, Domain.Settlements.OwnerCharge.Source, c.JournalEntryId, !c.IsVoided);
         foreach (var s in await owners.ListSettlementsAsync(null, ct))
             Add($"Owner settlement {s.Number}", "owner_settlement", s.Id, Domain.Settlements.OwnerSettlement.Source, s.JournalEntryId, s.Stands);
+        foreach (var r in await owners.ListInterestRunsAsync(ct))
+            Add($"Interest on owner reserves for {r.Date:MMMM yyyy}", "reserve_interest", r.Id, Domain.Settlements.ReserveInterestRun.Source, r.JournalEntryId, !r.IsVoided);
 
         foreach (var b in await channelOrders.ListBatchesAsync(null, ct))
         {
@@ -619,9 +621,11 @@ public sealed class BooksCheckService(
         var accountIds = (await owners.ListOwnersAsync(ct)).Select(o => o.ReserveAccountId).ToHashSet();
         var settled = SettlementBills(d);
         var lines = d.Accrual.Where(l => accountIds.Contains(l.AccountId)).ToList();
-        var others = lines.Where(l => !(l.Source == Domain.Settlements.OwnerSettlement.Source || (l.Source == Bill.Source && l.SourceId is { } bill && settled.Contains(bill)))).ToList();
+        var others = lines.Where(l => !(l.Source is Domain.Settlements.OwnerSettlement.Source or Domain.Settlements.ReserveInterestRun.Source
+            || (l.Source == Bill.Source && l.SourceId is { } bill && settled.Contains(bill)))).ToList();
         var expected = (await owners.ListSettlementsAsync(null, ct)).Where(s => s.Stands).SelectMany(s => s.Lines)
-            .Where(l => l.Kind is Domain.Settlements.OwnerLineKind.ReserveAdded or Domain.Settlements.OwnerLineKind.ReserveReleased).Sum(l => l.Amount);
+            .Where(l => l.Kind is Domain.Settlements.OwnerLineKind.ReserveAdded or Domain.Settlements.OwnerLineKind.ReserveReleased).Sum(l => l.Amount)
+            - (await owners.ListInterestRunsAsync(ct)).Where(r => !r.IsVoided).Sum(r => r.Total);
         return Compare("owner-reserves", "Owner reserves match the settlements",
             "What owner-operators' settlements put into their reserves, less what they paid out, equals the reserve accounts, on the accrual basis. What was held before OpenBook is in the books some other way, and counted with the other lines.",
             expected, lines.Sum(l => l.Amount), others, "The reserves' balances", Names(d, accountIds, "the owner reserve account"), credit: true);

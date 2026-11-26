@@ -31,6 +31,20 @@ On the owner-operator's page, under **Reserves**, **Add a reserve** for each fun
 
 The table shows each reserve's balance. A reserve can be stopped (untick **Still added to**), but never removed, since its history counts toward the balance.
 
+**Interest.** Reserves with a yearly interest rate earn a month's interest on their balance at the month's end. On **Dispatch → Interest on reserves**, choose the month and **Add the interest**: OpenBook posts one entry on the month's last day, an expense ("Interest Paid on Owner Reserves" unless you choose another) against each owner's reserve, and adds it to their reserve. Once a month; void it there to do it again. The interest isn't pay, so it isn't on the owner's 1099-NEC (interest of $10 or more a year goes on a 1099-INT, which OpenBook doesn't prepare).
+
+### Regular deductions
+
+Under **Regular deductions** on the owner-operator's page, **Add a deduction** for anything taken from every settlement by agreement: insurance, a truck payment, a fee.
+
+- **Goes to**: an income account for a charge you make (insurance you charge back), or an asset for a balance the owner is paying you off (a truck they're buying from you).
+- **Worked out**: a fixed amount each settlement, or an amount per mile on it.
+- **Stops after taking**: for a balance being paid off, or a target. Blank for no end. **From** and **Until** limit it to dates.
+- **Order**: lower numbers are taken first when the pay doesn't cover them all.
+- **What a settlement can't take is left as a charge for the next one**: ticked, a week too small leaves the rest as an open charge, taken back like any other; unticked, the rest is simply not taken.
+
+The table shows what each has taken so far.
+
 ## Trucks
 
 **Dispatch → Trucks.** Each truck has a **unit number**, and an **owner-operator** unless it's one of yours. A **class** for the truck lets reports by class show what each truck earned and cost. Year, make, VIN and plate are for your records.
@@ -59,8 +73,9 @@ Settlements take charges back oldest first, as far as each week's pay allows. A 
 What's taken out, in this order and only as far as the pay goes:
 
 1. **Backup withholding**, when it's turned on for their vendor record (24% of what counts on the 1099).
-2. **Charges and advances**, oldest first.
-3. **Reserves**, by their own rule, up to their target.
+2. **Regular deductions**, in their order.
+3. **Charges and advances**, oldest first.
+4. **Reserves**, by their own rule, up to their target.
 
 A settlement never pays less than nothing: whatever doesn't fit stays open for the next one, and the preview says so. A week that comes to exactly zero has no bill (bills must be above zero); it posts its own entry instead.
 
@@ -68,7 +83,7 @@ Bills from settlements wait for approval like any other when your **approval lim
 
 ### Correcting a settlement
 
-A settlement's bill can't be changed or voided on its own. Open the settlement (**Dispatch → Owner settlements**) and **Void** it: its bill is voided on the same date, what it took back of charges is open again, and its reserves are as they were. Then run it again. Only an owner-operator's **latest** settlement can be voided, because each one starts from what the one before took and left; void the later ones first. A bill with a payment on it can't be voided: void the payment first.
+A settlement's bill can't be changed or voided on its own. Open the settlement (**Dispatch → Owner settlements**) and **Void** it: its bill is voided on the same date, what it took back of charges is open again, what its deductions left as charges is gone, and its reserves and deductions are as they were. Then run it again. Only an owner-operator's **latest** settlement can be voided, because each one starts from what the one before took and left; void the later ones first. A bill with a payment on it can't be voided: void the payment first.
 
 ### The 1099
 
@@ -78,4 +93,4 @@ An owner-operator's 1099 counts their **gross** earnings, not what you paid afte
 
 ## The books check
 
-**Owner receivables match the open charges** (in the books check) compares what's still open on the charges with the owner receivable accounts. A journal entry made straight to those accounts is listed, so you can see what it was.
+**Owner receivables match the open charges** (in the books check) compares what's still open on the charges with the owner receivable accounts, and **Owner reserves match the settlements** what settlements and interest put into the reserves with the reserve accounts. A journal entry made straight to those accounts is listed, so you can see what it was.

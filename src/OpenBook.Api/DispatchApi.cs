@@ -19,15 +19,29 @@ public sealed record OwnerReserveRequest(
     public OwnerReserveDraft ToDraft() => new(Name, Method, Rate, Target, Opening, InterestPercent, IsActive);
 }
 
+public sealed record OwnerDeductionRequest(
+    string Name, Guid AccountId, DeductionMethod Method, decimal Rate, decimal? UpTo = null, int Priority = 10, DateOnly? StartsOn = null, DateOnly? EndsOn = null,
+    bool CarryShort = true, bool IsActive = true)
+{
+    public OwnerDeductionDraft ToDraft() => new(Name, AccountId, Method, Rate, UpTo, Priority, StartsOn, EndsOn, CarryShort, IsActive);
+}
+
+public sealed record OwnerDeductionResponse(
+    int Number, string Name, Guid AccountId, DeductionMethod Method, decimal Rate, decimal? UpTo, int Priority, DateOnly? StartsOn, DateOnly? EndsOn, bool CarryShort, bool IsActive);
+
+/// <param name="Month">The month's last day.</param>
+public sealed record ReserveInterestRequest(DateOnly Month, Guid? ExpenseAccountId = null);
+
 public sealed record OwnerReserveResponse(int Number, string Name, ReserveMethod Method, decimal Rate, decimal? Target, decimal Opening, decimal? InterestPercent, bool IsActive);
 
 public sealed record OwnerResponse(
     Guid Id, string Name, Guid VendorId, Guid PayAccountId, Guid ReceivableAccountId, Guid ReserveAccountId, Guid? ClassId, string? Memo, bool IsActive,
-    IReadOnlyList<OwnerReserveResponse> Reserves)
+    IReadOnlyList<OwnerReserveResponse> Reserves, IReadOnlyList<OwnerDeductionResponse>? Deductions = null)
 {
     public static OwnerResponse From(OwnerView v) => new(
         v.Owner.Id, v.Name, v.Owner.VendorId, v.Owner.PayAccountId, v.Owner.ReceivableAccountId, v.Owner.ReserveAccountId, v.Owner.ClassId, v.Owner.Memo, v.Owner.IsActive,
-        v.Owner.Reserves.Select(r => new OwnerReserveResponse(r.Number, r.Name, r.Method, r.Rate, r.Target, r.Opening, r.InterestPercent, r.IsActive)).ToList());
+        v.Owner.Reserves.Select(r => new OwnerReserveResponse(r.Number, r.Name, r.Method, r.Rate, r.Target, r.Opening, r.InterestPercent, r.IsActive)).ToList(),
+        v.Owner.Deductions.Select(d => new OwnerDeductionResponse(d.Number, d.Name, d.AccountId, d.Method, d.Rate, d.UpTo, d.Priority, d.StartsOn, d.EndsOn, d.CarryShort, d.IsActive)).ToList());
 }
 
 public sealed record TruckRequest(string Unit, Guid? OwnerId = null, Guid? ClassId = null, string? Vin = null, string? Plate = null, int? Year = null, string? Make = null, bool? IsActive = null)
@@ -103,6 +117,26 @@ public static class DispatchApi
         {
             await s.SetReserveAsync(id, number, r.ToDraft(), ct);
             return OwnerResponse.From((await s.GetOwnerAsync(id, ct))!);
+        });
+        // Number 0 adds a deduction.
+        dispatch.MapPut("/owners/{id:guid}/deductions/{number:int}", async (Guid id, int number, OwnerDeductionRequest r, OwnerService s, CancellationToken ct) =>
+        {
+            await s.SetDeductionAsync(id, number, r.ToDraft(), ct);
+            return OwnerResponse.From((await s.GetOwnerAsync(id, ct))!);
+        });
+        dispatch.MapGet("/interest", async (OwnerService s, CancellationToken ct) =>
+            (await s.ListInterestRunsAsync(ct)).Select(r => new { r.Id, r.Date, r.Total, r.ExpenseAccountId, r.JournalEntryId, r.IsVoided,
+                Lines = r.Lines.Select(l => new { l.OwnerId, l.ReserveNumber, l.Balance, l.Amount }) }));
+        dispatch.MapGet("/interest/due", async (DateOnly month, OwnerService s, CancellationToken ct) => await s.InterestDueAsync(month, ct));
+        dispatch.MapPost("/interest", async (ReserveInterestRequest r, OwnerService s, CancellationToken ct) =>
+        {
+            var run = await s.PostInterestAsync(r.Month, r.ExpenseAccountId, ct);
+            return Results.Created($"/api/dispatch/interest/{run.Id}", new { run.Id, run.Date, run.Total, run.JournalEntryId });
+        });
+        dispatch.MapPost("/interest/{id:guid}/void", async (Guid id, VoidSettlementRequest r, OwnerService s, CancellationToken ct) =>
+        {
+            var run = await s.VoidInterestAsync(id, r.Reason, ct);
+            return new { run.Id, run.Date, run.Total, run.IsVoided };
         });
         dispatch.MapGet("/owners/{id:guid}/reserves", async (Guid id, OwnerService s, CancellationToken ct) =>
             (await s.ReserveBalancesAsync(id, ct)).Select(b => new { b.Reserve.Number, b.Reserve.Name, b.Opening, b.Added, b.Released, b.Interest, b.Balance, b.Room }));

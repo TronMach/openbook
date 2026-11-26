@@ -44,6 +44,31 @@ public static class DispatchEndpoints
                     Number(form, "interest", "yearly interest"), form["active"] == "true" || number == 0), ct);
             })).RequireAuthorization();
 
+        // One deduction: number (0 adds one), name, account, method, rate, upTo, priority, startsOn, endsOn, carry, active.
+        app.MapPost("/dispatch/owners/{id:guid}/deductions", async (Guid id, IFormCollection form, OwnerService owners, CancellationToken ct) =>
+            await Back($"/dispatch/owners/{id}#deductions", () =>
+            {
+                var number = int.TryParse(form["number"], NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 0;
+                return owners.SetDeductionAsync(id, number, new OwnerDeductionDraft(form["name"].ToString(), Id(form, "accountId") ?? Guid.Empty,
+                    Enum.TryParse<DeductionMethod>(form["method"], out var m) ? m : DeductionMethod.Fixed, Number(form, "rate", "rate") ?? 0m, Number(form, "upTo", "total"),
+                    int.TryParse(form["priority"], NumberStyles.None, CultureInfo.InvariantCulture, out var p) ? p : 10,
+                    DateOnly.TryParse(form["startsOn"], CultureInfo.InvariantCulture, out var from) ? from : null,
+                    DateOnly.TryParse(form["endsOn"], CultureInfo.InvariantCulture, out var to) ? to : null,
+                    form["carry"] == "true", form["active"] == "true" || number == 0), ct);
+            })).RequireAuthorization();
+
+        // A month's interest: month as yyyy-MM, its last day the date.
+        app.MapPost("/dispatch/interest", async (IFormCollection form, OwnerService owners, CancellationToken ct) =>
+            await Back("/dispatch/interest", () =>
+            {
+                if (!DateOnly.TryParseExact($"{form["month"]}-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var first))
+                    throw new DomainException("interest.month_required", "Choose the month.");
+                return owners.PostInterestAsync(first.AddMonths(1).AddDays(-1), Id(form, "accountId"), ct);
+            })).RequireAuthorization();
+
+        app.MapPost("/dispatch/interest/{id:guid}/void", async (Guid id, IFormCollection form, OwnerService owners, CancellationToken ct) =>
+            await Back("/dispatch/interest", () => owners.VoidInterestAsync(id, form["reason"].ToString(), ct))).RequireAuthorization();
+
         app.MapPost("/dispatch/trucks", async (IFormCollection form, OwnerService owners, CancellationToken ct) =>
         {
             try

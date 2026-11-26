@@ -69,6 +69,73 @@ public sealed class OwnerReserve
     };
 }
 
+/// <summary>How a regular deduction is worked out on each settlement.</summary>
+public enum DeductionMethod
+{
+    /// <summary>The same amount every settlement: insurance, a truck payment, a fee.</summary>
+    Fixed,
+
+    /// <summary>An amount for each mile on the settlement.</summary>
+    PerMile,
+}
+
+/// <param name="Name">"Occupational accident", "Truck payment".</param>
+/// <param name="AccountId">Where what's taken goes: an income account for a fee charged back, an asset for a balance the owner is paying off.</param>
+/// <param name="Rate">The amount, or the amount per mile.</param>
+/// <param name="UpTo">It stops once it has taken this much in all: a balance paid off, or a target reached. Null for no end.</param>
+/// <param name="Priority">Lower comes first, when the pay doesn't cover them all.</param>
+/// <param name="CarryShort">What a settlement can't take is left as an open charge for the next one; otherwise it's simply not taken.</param>
+public sealed record OwnerDeductionDraft(
+    string Name, Guid AccountId, DeductionMethod Method, decimal Rate, decimal? UpTo = null, int Priority = 10, DateOnly? StartsOn = null, DateOnly? EndsOn = null,
+    bool CarryShort = true, bool IsActive = true);
+
+/// <summary>Something taken from each of an owner's settlements by agreement, until it ends or has taken all it should.</summary>
+public sealed class OwnerDeduction
+{
+    private OwnerDeduction() => Name = string.Empty;
+
+    internal OwnerDeduction(int number) : this() => Number = number;
+
+    public int Number { get; private set; }
+    public string Name { get; private set; }
+    public Guid AccountId { get; private set; }
+    public DeductionMethod Method { get; private set; }
+    public decimal Rate { get; private set; }
+    public decimal? UpTo { get; private set; }
+    public int Priority { get; private set; }
+    public DateOnly? StartsOn { get; private set; }
+    public DateOnly? EndsOn { get; private set; }
+    public bool CarryShort { get; private set; }
+    public bool IsActive { get; private set; }
+
+    internal void Update(OwnerDeductionDraft draft)
+    {
+        Name = Text.Optional(draft.Name, 60, "owner.deduction_name_too_long", "Deduction name")
+            ?? throw new DomainException("owner.deduction_name_required", "Name the deduction.");
+        AccountId = draft.AccountId != Guid.Empty ? draft.AccountId : throw new DomainException("owner.deduction_account", $"Choose where {Name} goes.");
+        Method = Enum.IsDefined(draft.Method) ? draft.Method : throw new DomainException("owner.deduction_method", "Unknown way of working out a deduction.");
+        Rate = Method == DeductionMethod.PerMile
+            ? draft.Rate is >= 0m and <= 100m && decimal.Round(draft.Rate, 4) == draft.Rate ? draft.Rate
+                : throw new DomainException("owner.deduction_rate", $"{Name}: an amount per mile is between 0 and 100, with up to four decimals.")
+            : OwnerAmounts.Cents(draft.Rate, Name);
+        UpTo = draft.UpTo is { } upTo ? OwnerAmounts.Cents(upTo, $"{Name}'s total") : null;
+        Priority = draft.Priority is >= 0 and <= 999 ? draft.Priority : throw new DomainException("owner.deduction_priority", "The order is a number from 0 to 999.");
+        if (draft.StartsOn is { } from && draft.EndsOn is { } to && to < from)
+            throw new DomainException("owner.deduction_dates", $"{Name} ends before it starts.");
+        (StartsOn, EndsOn, CarryShort, IsActive) = (draft.StartsOn, draft.EndsOn, draft.CarryShort, draft.IsActive);
+    }
+
+    /// <summary>Whether it's taken on a settlement dated <paramref name="date"/>.</summary>
+    public bool AppliesOn(DateOnly date) => IsActive && (StartsOn is not { } from || date >= from) && (EndsOn is not { } to || date <= to);
+
+    /// <summary>What a settlement should take, given what it has taken before; zero once it's taken all it should.</summary>
+    public decimal Wanted(decimal miles, decimal takenBefore)
+    {
+        var amount = Method == DeductionMethod.PerMile ? OwnerAmounts.Round(Rate * miles) : Rate;
+        return UpTo is { } upTo ? Math.Max(0m, Math.Min(amount, upTo - takenBefore)) : amount;
+    }
+}
+
 /// <param name="VendorId">The vendor record its settlements are billed to and its 1099 counted under.</param>
 /// <param name="PayAccountId">The expense its gross pay goes to; null finds or makes "Owner-Operator Pay".</param>
 /// <param name="ReceivableAccountId">Where open charges and advances wait to be taken back; null finds or makes "Owner Receivables".</param>
@@ -84,8 +151,10 @@ public sealed record OwnerDetails(
 public sealed class OwnerOperator
 {
     public const int MaxReserves = 10;
+    public const int MaxDeductions = 30;
 
     private readonly List<OwnerReserve> _reserves = [];
+    private readonly List<OwnerDeduction> _deductions = [];
 
     private OwnerOperator() { }
 
@@ -102,6 +171,34 @@ public sealed class OwnerOperator
     public IReadOnlyList<OwnerReserve> Reserves => [.. _reserves.OrderBy(r => r.Number)];
 
     public OwnerReserve? Reserve(int number) => _reserves.Find(r => r.Number == number);
+
+    /// <summary>In the order they're taken: by priority, then number.</summary>
+    public IReadOnlyList<OwnerDeduction> Deductions => [.. _deductions.OrderBy(d => d.Priority).ThenBy(d => d.Number)];
+
+    public OwnerDeduction? Deduction(int number) => _deductions.Find(d => d.Number == number);
+
+    /// <summary>Adds a deduction (number 0) or changes one; one that has been taken can be stopped, never removed.</summary>
+    public OwnerDeduction SetDeduction(int number, OwnerDeductionDraft draft)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+        var deduction = number == 0 ? null : Deduction(number) ?? throw new DomainException("owner.deduction_unknown", "That deduction doesn't exist.");
+        if (deduction is null)
+        {
+            if (_deductions.Count >= MaxDeductions)
+                throw new DomainException("owner.too_many_deductions", $"An owner-operator has at most {MaxDeductions} deductions.");
+            deduction = new OwnerDeduction(_deductions.Count == 0 ? 1 : _deductions.Max(d => d.Number) + 1);
+            deduction.Update(draft);
+            _deductions.Add(deduction);
+        }
+        else
+        {
+            deduction.Update(draft);
+        }
+
+        if (_deductions.Count(d => string.Equals(d.Name, deduction.Name, StringComparison.OrdinalIgnoreCase)) > 1)
+            throw new DomainException("owner.deduction_taken", $"There's already a deduction called {deduction.Name}.");
+        return deduction;
+    }
 
     /// <summary>The accounts are found or made, and checked, by the service first.</summary>
     public static OwnerOperator Create(OwnerDetails details, Guid payAccountId, Guid receivableAccountId, Guid reserveAccountId, DateTimeOffset createdAt)

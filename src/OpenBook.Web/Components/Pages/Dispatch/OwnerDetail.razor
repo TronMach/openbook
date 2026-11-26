@@ -124,6 +124,98 @@
         </div>
 
         <div class="card" style="margin-top: 1.5rem">
+            <h2 id="deductions">@L["Regular deductions"]</h2>
+            <p class="muted">@L["Taken from each settlement by agreement, after backup withholding and before open charges: insurance, a truck payment, a fee. One with a total stops once it has taken it all."]</p>
+            @if (owner.Deductions.Count > 0)
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr><th>@L["Order"]</th><th>@L["Deduction"]</th><th>@L["Each settlement"]</th><th>@L["Goes to"]</th><th class="num">@L["Taken so far"]</th><th class="num">@L["Up to"]</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in owner.Deductions)
+                            {
+                                <tr class="@(d.IsActive ? "" : "muted")">
+                                    <td>@d.Priority</td>
+                                    <td>@d.Name@(d.IsActive ? "" : L[" (stopped)"])</td>
+                                    <td>@(d.Method == DeductionMethod.PerMile ? $"{d.Rate:0.00##} a mile" : Labels.Amount(d.Rate))</td>
+                                    <td>@(_chart.Find(d.AccountId) is null ? "" : _chart.FullName(d.AccountId))</td>
+                                    <td class="num">@Labels.Amount(_taken.GetValueOrDefault(d.Number))</td>
+                                    <td class="num">@(d.UpTo is { } up ? Labels.Amount(up) : "")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @foreach (var deduction in owner.Deductions.Cast<OwnerDeduction?>().Append(null))
+            {
+                var key = deduction?.Number ?? 0;
+                <details open="@(owner.Deductions.Count == 0 && deduction is null)">
+                    <summary>@(deduction is null ? L["Add a deduction"] : L["Change {0}", deduction.Name])</summary>
+                    <PostForm Action="@($"/dispatch/owners/{owner.Id}/deductions")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="number" value="@key" />
+                        <div class="row">
+                            <div class="field">
+                                <label for="deduction-name-@key">@L["Name"]</label>
+                                <input id="deduction-name-@key" name="name" maxlength="60" required value="@deduction?.Name" />
+                            </div>
+                            <div class="field">
+                                <label for="deduction-account-@key">@L["Goes to"]</label>
+                                <DispatchAccountSelect Id="@($"deduction-account-{key}")" Name="accountId" Chart="_chart" Fits="DispatchLabels.TakesDeductions" Value="deduction?.AccountId" Required="true" />
+                            </div>
+                            <div class="field">
+                                <label for="deduction-method-@key">@L["Worked out"]</label>
+                                <select id="deduction-method-@key" name="method">
+                                    <option value="@DeductionMethod.Fixed" selected="@(deduction?.Method == DeductionMethod.Fixed)">@L["Fixed each settlement"]</option>
+                                    <option value="@DeductionMethod.PerMile" selected="@(deduction?.Method == DeductionMethod.PerMile)">@L["Per mile"]</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="deduction-rate-@key">@L["Amount, or per mile"]</label>
+                                <input id="deduction-rate-@key" name="rate" inputmode="decimal" required value="@deduction?.Rate.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="deduction-upto-@key">@L["Stops after taking"] <span class="muted">@L["(optional)"]</span></label>
+                                <input id="deduction-upto-@key" name="upTo" inputmode="decimal" value="@deduction?.UpTo?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" />
+                                <span class="hint">@L["A balance being paid off, or a target to reach."]</span>
+                            </div>
+                            <div class="field">
+                                <label for="deduction-priority-@key">@L["Order"]</label>
+                                <input id="deduction-priority-@key" name="priority" inputmode="numeric" value="@(deduction?.Priority ?? 10)" />
+                                <span class="hint">@L["Lower is taken first when the pay doesn't cover them all."]</span>
+                            </div>
+                            <div class="field">
+                                <label for="deduction-from-@key">@L["From"] <span class="muted">@L["(optional)"]</span></label>
+                                <input id="deduction-from-@key" name="startsOn" type="date" value="@deduction?.StartsOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                            <div class="field">
+                                <label for="deduction-to-@key">@L["Until"] <span class="muted">@L["(optional)"]</span></label>
+                                <input id="deduction-to-@key" name="endsOn" type="date" value="@deduction?.EndsOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                        </div>
+                        <label class="check">
+                            <input type="checkbox" name="carry" value="true" checked="@(deduction?.CarryShort ?? true)" />
+                            <span>@L["What a settlement can't take is left as a charge for the next one"]</span>
+                        </label>
+                        @if (deduction is not null)
+                        {
+                            <label class="check">
+                                <input type="checkbox" name="active" value="true" checked="@deduction.IsActive" />
+                                <span>@L["Still taken"]</span>
+                            </label>
+                        }
+                        <div class="actions"><button type="submit" class="secondary">@(deduction is null ? L["Add the deduction"] : L["Save the deduction"])</button></div>
+                    </PostForm>
+                </details>
+            }
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
             <h2 id="charges">@L["Open charges and advances"]</h2>
             @if (_charges.Count == 0)
             {
@@ -180,6 +272,7 @@
     private IReadOnlyList<ReserveBalance> _balances = [];
     private IReadOnlyList<OwnerCharge> _charges = [];
     private IReadOnlyList<Truck> _trucks = [];
+    private IReadOnlyDictionary<int, decimal> _taken = new Dictionary<int, decimal>();
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -191,6 +284,7 @@
             return;
         _chart = await AccountService.GetChartAsync();
         _balances = await OwnerService.ReserveBalancesAsync(Id);
+        _taken = await OwnerService.DeductionsTakenAsync(Id);
         _charges = await OwnerService.ListChargesAsync(Id, openOnly: true);
         _trucks = [.. (await OwnerService.ListTrucksAsync(includeInactive: true)).Where(t => t.OwnerId == Id)];
     }

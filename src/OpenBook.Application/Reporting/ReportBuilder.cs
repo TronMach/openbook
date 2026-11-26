@@ -106,7 +106,7 @@ public sealed class ReportBuilder(
         "Invoice", "Payment", "Sales receipt", "Credit memo", "Refund", "Deposit", "Bill", "Bill payment", "Vendor credit", "Vendor refund",
         "Expense", "Transfer", "Sales tax payment", "Inventory adjustment", "Goods received", "Assembly build", "Landed cost", "Bad debt write-off",
         "Retainer", "Retainer applied", "Retainer refund", "Depreciation", "Asset disposal", "Loan", "Loan payment", "Gift", "Pledge", "Pledge cancelled",
-        "Grant award", "Grant payment", "Grant income earned", "Grant adjustment", "Release from restriction", "Channel payout", "Channel orders", "Channel return", "Settlement", "Owner charge", "Owner settlement", "Journal entry",
+        "Grant award", "Grant payment", "Grant income earned", "Grant adjustment", "Release from restriction", "Channel payout", "Channel orders", "Channel return", "Settlement", "Owner charge", "Owner settlement", "Reserve interest", "Journal entry",
     ];
 
     public static string Header(BuilderColumn column) => column switch

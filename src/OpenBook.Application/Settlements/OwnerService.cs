@@ -36,6 +36,13 @@ public interface IOwnerStore
     /// <summary>The highest settlement number, 0 before the first.</summary>
     Task<int> LastSettlementNumberAsync(CancellationToken ct);
 
+    /// <summary>Tracked, with their lines, newest first.</summary>
+    Task<IReadOnlyList<ReserveInterestRun>> ListInterestRunsAsync(CancellationToken ct);
+
+    Task<ReserveInterestRun?> GetInterestRunAsync(Guid id, CancellationToken ct);
+
+    void Add(ReserveInterestRun run);
+
     void Add(OwnerOperator owner);
     void Add(Truck truck);
     void Add(OwnerCharge charge);
@@ -70,6 +77,8 @@ public sealed class OwnerService(
     public const string PayName = "Owner-Operator Pay";
     public const string ReceivableName = "Owner Receivables";
     public const string ReserveName = "Owner Reserves";
+    public const string InterestEntity = "reserve_interest";
+    public const string InterestName = "Interest Paid on Owner Reserves";
 
     public async Task<IReadOnlyList<OwnerView>> ListOwnersAsync(bool includeInactive = false, CancellationToken ct = default)
     {
@@ -139,16 +148,130 @@ public sealed class OwnerService(
         return owner;
     }
 
+    /// <summary>
+    /// Adds a regular deduction (number 0) or changes one; changes apply from the next settlement on. Its account can be
+    /// anything but what customers or vendors owe, or a bank or card.
+    /// </summary>
+    public async Task<OwnerOperator> SetDeductionAsync(Guid ownerId, int number, OwnerDeductionDraft draft, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+        var owner = await OwnerAsync(ownerId, ct);
+        if (draft.AccountId != Guid.Empty && draft.AccountId != owner.Deduction(number)?.AccountId)
+        {
+            var account = (await accounts.GetChartAsync(ct)).Find(draft.AccountId) ?? throw new EntityNotFoundException("account", draft.AccountId);
+            if (!account.IsActive)
+                throw new DomainException("account.inactive", $"'{account.Name}' is inactive.");
+            if (account.Type is AccountType.AccountsReceivable or AccountType.AccountsPayable or AccountType.Bank or AccountType.CreditCard)
+                throw new DomainException("owner.deduction_account_type", $"'{account.Name}' can't take a deduction: choose an income, expense, asset or liability account.");
+        }
+
+        var before = DeductionsSnapshot(owner);
+        owner.SetDeduction(number, draft);
+        store.Add(Audit(AuditAction.Updated, OwnerEntity, owner.Id, before, DeductionsSnapshot(owner)));
+        await store.SaveChangesAsync(ct);
+        return owner;
+    }
+
+    /// <summary>What each of the owner's deductions has taken so far, on settlements that stand, by number.</summary>
+    public async Task<IReadOnlyDictionary<int, decimal>> DeductionsTakenAsync(Guid ownerId, CancellationToken ct = default) =>
+        (await store.ListSettlementsAsync(ownerId, ct)).Where(s => s.Stands).SelectMany(s => s.Lines)
+            .Where(l => l.Kind == OwnerLineKind.Deduction && l.DeductionNumber is not null)
+            .GroupBy(l => l.DeductionNumber!.Value).ToDictionary(g => g.Key, g => -g.Sum(l => l.Amount));
+
     /// <summary>Each reserve's balance from what's in the books: its opening, the settlements that stand and the interest posted.</summary>
     public async Task<IReadOnlyList<ReserveBalance>> ReserveBalancesAsync(Guid ownerId, CancellationToken ct = default) =>
         await ReserveBalancesAsync(await OwnerAsync(ownerId, ct), ct);
 
-    internal async Task<IReadOnlyList<ReserveBalance>> ReserveBalancesAsync(OwnerOperator owner, CancellationToken ct)
+    /// <param name="asOf">Settlements dated up to it, and interest dated before it; null for everything.</param>
+    internal async Task<IReadOnlyList<ReserveBalance>> ReserveBalancesAsync(OwnerOperator owner, CancellationToken ct, DateOnly? asOf = null)
     {
-        var lines = (await store.ListSettlementsAsync(owner.Id, ct)).Where(s => s.Stands).SelectMany(s => s.Lines).Where(l => l.ReserveNumber is not null).ToList();
+        var lines = (await store.ListSettlementsAsync(owner.Id, ct)).Where(s => s.Stands && (asOf is not { } on || s.Date <= on))
+            .SelectMany(s => s.Lines).Where(l => l.ReserveNumber is not null).ToList();
+        var interest = (await store.ListInterestRunsAsync(ct)).Where(r => !r.IsVoided && (asOf is not { } before || r.Date < before))
+            .SelectMany(r => r.Lines).Where(l => l.OwnerId == owner.Id).ToList();
         return [.. owner.Reserves.Select(r => new ReserveBalance(r, r.Opening,
             -lines.Where(l => l.ReserveNumber == r.Number && l.Kind == OwnerLineKind.ReserveAdded).Sum(l => l.Amount),
-            lines.Where(l => l.ReserveNumber == r.Number && l.Kind == OwnerLineKind.ReserveReleased).Sum(l => l.Amount), 0m))];
+            lines.Where(l => l.ReserveNumber == r.Number && l.Kind == OwnerLineKind.ReserveReleased).Sum(l => l.Amount),
+            interest.Where(l => l.ReserveNumber == r.Number).Sum(l => l.Amount)))];
+    }
+
+    public async Task<IReadOnlyList<ReserveInterestRun>> ListInterestRunsAsync(CancellationToken ct = default) => await store.ListInterestRunsAsync(ct);
+
+    /// <summary>What a month's interest would be: each reserve that earns it, on its balance at the month's end.</summary>
+    public async Task<IReadOnlyList<ReserveInterestLineDraft>> InterestDueAsync(DateOnly monthEnd, CancellationToken ct = default)
+    {
+        var due = new List<ReserveInterestLineDraft>();
+        foreach (var owner in (await store.ListOwnersAsync(ct)).Where(o => o.Reserves.Any(r => r.InterestPercent > 0m)))
+        {
+            foreach (var balance in await ReserveBalancesAsync(owner, ct, monthEnd))
+            {
+                if (balance.Reserve.InterestPercent is { } rate && ReserveInterestRun.On(balance.Balance, rate) is > 0m and var amount)
+                    due.Add(new ReserveInterestLineDraft(owner.Id, balance.Reserve.Number, balance.Balance, amount));
+            }
+        }
+
+        return due;
+    }
+
+    /// <summary>
+    /// Posts a month's interest on the reserves that earn it, as one entry on the month's last day: Dr the interest expense
+    /// (found or made, or the one chosen), Cr each owner's reserve account. Once a month while it stands.
+    /// </summary>
+    public async Task<ReserveInterestRun> PostInterestAsync(DateOnly monthEnd, Guid? expenseAccountId = null, CancellationToken ct = default)
+    {
+        if (monthEnd.AddDays(1).Day != 1)
+            throw new DomainException("interest.month_end", "Interest is added for a whole month, on its last day.");
+        if ((await store.ListInterestRunsAsync(ct)).Any(r => !r.IsVoided && r.Date == monthEnd))
+            throw new DomainException("interest.month_taken", $"Interest for {monthEnd:MMMM yyyy} is already added. Void it first to add it again.");
+        var due = await InterestDueAsync(monthEnd, ct);
+        if (due.Count == 0)
+            throw new DomainException("interest.nothing", "No reserve earns interest for that month.");
+        var expense = await InterestAccountAsync(expenseAccountId, ct);
+        var owners = (await store.ListOwnersAsync(ct)).ToDictionary(o => o.Id);
+        var id = Guid.CreateVersion7();
+        var memo = $"Interest on owner reserves, {monthEnd:MMMM yyyy}";
+        var credits = due.GroupBy(l => (owners[l.OwnerId].ReserveAccountId, owners[l.OwnerId].ClassId))
+            .Select(g => JournalLineDraft.Cr(g.Key.ReserveAccountId, g.Sum(l => l.Amount), memo, g.Key.ClassId));
+        var entry = await engine.StageAsync(new PostJournalEntryCommand(monthEnd,
+            [JournalLineDraft.Dr(expense, due.Sum(l => l.Amount), memo), .. credits], memo, ReserveInterestRun.Source, id), ct);
+        var run = ReserveInterestRun.Create(id, monthEnd, expense, due, entry.Id, clock.UtcNow, user.Actor);
+        store.Add(run);
+        store.Add(Audit(AuditAction.Posted, InterestEntity, run.Id, null, Snapshot(run)));
+        await store.SaveChangesAsync(ct);
+        return run;
+    }
+
+    /// <summary>Voids a month's interest: its entry is reversed on the same date.</summary>
+    public async Task<ReserveInterestRun> VoidInterestAsync(Guid id, string? reason, CancellationToken ct = default)
+    {
+        var run = await store.GetInterestRunAsync(id, ct) ?? throw new EntityNotFoundException(InterestEntity, id);
+        var before = Snapshot(run);
+        run.Void();
+        await engine.StageVoidAsync(run.JournalEntryId, string.IsNullOrWhiteSpace(reason) ? "Interest voided" : reason.Trim(), fromDocument: true, ct);
+        store.Add(Audit(AuditAction.Voided, InterestEntity, run.Id, before, Snapshot(run)));
+        await store.SaveChangesAsync(ct);
+        return run;
+    }
+
+    private async Task<Guid> InterestAccountAsync(Guid? chosen, CancellationToken ct)
+    {
+        var chart = await accounts.GetChartAsync(ct);
+        if (chosen is { } id && id != Guid.Empty)
+        {
+            var account = chart.Find(id) ?? throw new EntityNotFoundException("account", id);
+            if (!account.IsActive)
+                throw new DomainException("account.inactive", $"'{account.Name}' is inactive.");
+            return account.Type is AccountType.Expense or AccountType.OtherExpense ? id
+                : throw new DomainException("interest.account_type", $"'{account.Name}' isn't an expense account.");
+        }
+
+        var runs = await store.ListInterestRunsAsync(ct);
+        var last = runs.Count > 0 ? runs[0].ExpenseAccountId : (Guid?)null;
+        if (last is { } remembered && chart.Find(remembered) is { IsActive: true })
+            return remembered;
+        return (chart.Ordered(includeInactive: false).Select(x => x.Account)
+                .FirstOrDefault(a => a.Type == AccountType.OtherExpense && string.Equals(a.Name, InterestName, StringComparison.OrdinalIgnoreCase))
+            ?? await accounts.CreateUsualAsync(new CreateAccountCommand(InterestName, AccountType.OtherExpense, Description: "Interest owed to owner-operators on the reserves held for them."), ct)).Id;
     }
 
     public async Task<IReadOnlyList<Truck>> ListTrucksAsync(bool includeInactive = false, CancellationToken ct = default) =>
@@ -327,6 +450,21 @@ public sealed class OwnerService(
     private static string ReservesSnapshot(OwnerOperator o) => JsonSerializer.Serialize(o.Reserves.ToDictionary(
         r => $"Reserve {r.Number}",
         r => $"{r.Name}: {r.Method} {r.Rate:0.####}{(r.Target is { } t ? $" up to {t:0.00}" : "")}, opening {r.Opening:0.00}{(r.InterestPercent is { } i ? $", interest {i:0.####}%" : "")}{(r.IsActive ? "" : ", stopped")}"));
+
+    private static string DeductionsSnapshot(OwnerOperator o) => JsonSerializer.Serialize(o.Deductions.ToDictionary(
+        d => $"Deduction {d.Number}",
+        d => $"{d.Name}: {d.Method} {d.Rate:0.####} to {d.AccountId}{(d.UpTo is { } up ? $" up to {up:0.00}" : "")}, order {d.Priority}"
+            + $"{(d.StartsOn is { } from ? $" from {from:yyyy-MM-dd}" : "")}{(d.EndsOn is { } to ? $" to {to:yyyy-MM-dd}" : "")}{(d.CarryShort ? "" : ", not carried")}{(d.IsActive ? "" : ", stopped")}"));
+
+    private static string Snapshot(ReserveInterestRun r) => JsonSerializer.Serialize(new
+    {
+        r.Date,
+        r.Total,
+        r.ExpenseAccountId,
+        Lines = r.Lines.Select(l => $"{l.OwnerId} reserve {l.ReserveNumber}: {l.Amount:0.00} on {l.Balance:0.00}").ToList(),
+        r.JournalEntryId,
+        r.IsVoided,
+    });
 
     private static string Snapshot(Truck t) => JsonSerializer.Serialize(new { t.Unit, t.OwnerId, t.ClassId, t.Vin, t.Plate, t.Year, t.Make, t.IsActive });
 

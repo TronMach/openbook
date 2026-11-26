@@ -1,0 +1,96 @@
+@page "/dispatch/interest"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject OwnerService OwnerService
+@inject AccountService AccountService
+
+<PageTitle>@L["Interest on reserves"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Interest on reserves"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button secondary" Href="/dispatch/owners">@L["Owner-operators"]</ActionLink>
+    </div>
+    <p class="muted">@L["Reserves with a yearly interest rate earn a month's interest on their balance at the month's end. It's added to the reserve, and posted as one entry on the month's last day."]</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <h2>@L["Add a month's interest"]</h2>
+        <PostForm Action="/dispatch/interest" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="interest-month">@L["Month"]</label>
+                    <input id="interest-month" name="month" type="month" required value="@_lastMonth.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)" />
+                </div>
+                <div class="field">
+                    <label for="interest-account">@L["Expense account"]</label>
+                    <select id="interest-account" name="accountId" data-search>
+                        <option value="">@L["{0} (made when needed)", OwnerService.InterestName]</option>
+                        @foreach (var a in _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(a => a.Type is AccountType.Expense or AccountType.OtherExpense))
+                        {
+                            <option value="@a.Id" selected="@(a.Id == _runs.FirstOrDefault()?.ExpenseAccountId)">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            @if (_due.Count > 0)
+            {
+                <p class="hint">@L["For {0}: {1} on {2} reserves.", _lastMonth.ToString("MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture), Labels.Amount(_due.Sum(d => d.Amount)), _due.Count]</p>
+            }
+            <div class="actions"><button type="submit">@L["Add the interest"]</button></div>
+        </PostForm>
+    </div>
+
+    @if (_runs.Count > 0)
+    {
+        <div class="table-wrap" style="margin-top: 1.5rem">
+            <table class="data">
+                <thead><tr><th>@L["Month"]</th><th class="num">@L["Reserves"]</th><th class="num">@L["Interest"]</th><th>@L["Entry"]</th><th><span class="visually-hidden">@L["Void"]</span></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _runs)
+                    {
+                        <tr class="@(r.IsVoided ? "muted" : "")">
+                            <td>@r.Date.ToString("MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture)@(r.IsVoided ? L[" (voided)"] : "")</td>
+                            <td class="num">@r.Lines.Count</td>
+                            <td class="num">@Labels.Amount(r.Total)</td>
+                            <td><a href="/journal/@r.JournalEntryId">@L["Open"]</a></td>
+                            <td>
+                                @if (!r.IsVoided)
+                                {
+                                    <PostForm Action="@($"/dispatch/interest/{r.Id}/void")" data-enhance="false">
+                                        <AntiforgeryToken />
+                                        <button type="submit" class="link" data-confirm="@L["Void this month's interest? Its entry is reversed."]">@L["Void"]</button>
+                                    </PostForm>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ReserveInterestRun> _runs = [];
+    private IReadOnlyList<ReserveInterestLineDraft> _due = [];
+    private ChartOfAccounts _chart = new([]);
+    private DateOnly _lastMonth;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = CompanyTime.Today;
+        _lastMonth = new DateOnly(today.Year, today.Month, 1).AddDays(-1);
+        _runs = await OwnerService.ListInterestRunsAsync();
+        _chart = await AccountService.GetChartAsync();
+        if (!_runs.Any(r => !r.IsVoided && r.Date == _lastMonth))
+            _due = await OwnerService.InterestDueAsync(_lastMonth);
+    }
+}

@@ -20,6 +20,10 @@ public static class DispatchLabels
         _ => Labels.Amount(reserve.Rate),
     };
 
+    /// <summary>Where a deduction can go: anything but what customers or vendors owe, a bank or a card.</summary>
+    public static bool TakesDeductions(Account a) =>
+        a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable or AccountType.Bank or AccountType.CreditCard);
+
     public static bool IsExpense(Account a) => a.Type is AccountType.Expense or AccountType.CostOfGoodsSold or AccountType.OtherExpense;
 
     /// <summary>Where a charge's money can come from: a bank, a card, or another current account such as a fuel card's.</summary>

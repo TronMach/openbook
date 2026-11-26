@@ -8536,6 +8536,46 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("OwnerSettlements", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Settlements.ReserveInterestRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsVoided")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.ToTable("ReserveInterestRuns", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Settlements.Settlement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -14126,6 +14166,66 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.OwnsMany("OpenBook.Domain.Settlements.OwnerDeduction", "Deductions", b1 =>
+                        {
+                            b1.Property<Guid>("OwnerId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Number")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("CarryShort")
+                                .HasColumnType("boolean");
+
+                            b1.Property<DateOnly?>("EndsOn")
+                                .HasColumnType("date");
+
+                            b1.Property<bool>("IsActive")
+                                .HasColumnType("boolean");
+
+                            b1.Property<string>("Method")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)");
+
+                            b1.Property<int>("Priority")
+                                .HasColumnType("integer");
+
+                            b1.Property<long>("Rate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("StartsOn")
+                                .HasColumnType("date");
+
+                            b1.Property<long?>("UpTo")
+                                .HasColumnType("bigint")
+                                .HasColumnName("UpToMinor");
+
+                            b1.HasKey("OwnerId", "Number");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("OwnerDeductions", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("OwnerId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Settlements.OwnerReserve", "Reserves", b1 =>
                         {
                             b1.Property<Guid>("OwnerId")
@@ -14170,6 +14270,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("OwnerId");
                         });
+
+                    b.Navigation("Deductions");
 
                     b.Navigation("Reserves");
                 });
@@ -14277,6 +14379,61 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("SettlementId");
+                        });
+
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.ReserveInterestRun", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.ReserveInterestLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("RunId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<long>("Balance")
+                                .HasColumnType("bigint")
+                                .HasColumnName("BalanceMinor");
+
+                            b1.Property<Guid>("OwnerId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("ReserveNumber")
+                                .HasColumnType("integer");
+
+                            b1.HasKey("RunId", "LineNumber");
+
+                            b1.HasIndex("OwnerId");
+
+                            b1.ToTable("ReserveInterestLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Settlements.OwnerOperator", null)
+                                .WithMany()
+                                .HasForeignKey("OwnerId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("RunId");
                         });
 
                     b.Navigation("Lines");

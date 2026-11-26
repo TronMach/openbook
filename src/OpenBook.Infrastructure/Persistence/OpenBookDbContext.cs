@@ -41,6 +41,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Settlements.Truck> Trucks => Set<OpenBook.Domain.Settlements.Truck>();
     public DbSet<OpenBook.Domain.Settlements.OwnerCharge> OwnerCharges => Set<OpenBook.Domain.Settlements.OwnerCharge>();
     public DbSet<OpenBook.Domain.Settlements.OwnerSettlement> OwnerSettlements => Set<OpenBook.Domain.Settlements.OwnerSettlement>();
+    public DbSet<OpenBook.Domain.Settlements.ReserveInterestRun> ReserveInterestRuns => Set<OpenBook.Domain.Settlements.ReserveInterestRun>();
     public DbSet<OpenBook.Domain.Nonprofit.RestrictionRelease> RestrictionReleases => Set<OpenBook.Domain.Nonprofit.RestrictionRelease>();
     public DbSet<OpenBook.Domain.Nonprofit.Donation> Donations => Set<OpenBook.Domain.Nonprofit.Donation>();
     public DbSet<OpenBook.Domain.Nonprofit.Pledge> Pledges => Set<OpenBook.Domain.Nonprofit.Pledge>();
@@ -222,7 +223,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         typeof(Domain.Projects.ExpenseClaim),
         typeof(Domain.Channels.ChannelPayout), typeof(Domain.Channels.ChannelOrderBatch),
         typeof(Domain.Settlements.Carrier), typeof(Domain.Settlements.Settlement),
-        typeof(Domain.Settlements.OwnerOperator), typeof(Domain.Settlements.Truck), typeof(Domain.Settlements.OwnerCharge), typeof(Domain.Settlements.OwnerSettlement),
+        typeof(Domain.Settlements.OwnerOperator), typeof(Domain.Settlements.Truck), typeof(Domain.Settlements.OwnerCharge), typeof(Domain.Settlements.OwnerSettlement), typeof(Domain.Settlements.ReserveInterestRun),
         typeof(Item), typeof(Customer), typeof(Vendor), typeof(BankTransaction), typeof(BankDeposit),
         // Settings pages note the version when they open and check it when they save (2026-11-14).
         typeof(Company), typeof(EmailSettings), typeof(SignInSettings), typeof(OnlinePaymentSettings), typeof(OpenBook.Domain.Documents.DocumentReadingSettings), typeof(OpenBook.Domain.Documents.BillsMailbox),
@@ -1443,6 +1444,41 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 r.Property(x => x.InterestPercent).HasColumnName("InterestTenThousandths").HasConversion(NullableTenThousandths);
             });
             b.Navigation(o => o.Reserves).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.OwnsMany(o => o.Deductions, d =>
+            {
+                d.ToTable("OwnerDeductions");
+                d.WithOwner().HasForeignKey("OwnerId");
+                d.HasKey("OwnerId", nameof(OpenBook.Domain.Settlements.OwnerDeduction.Number));
+                d.Property(x => x.Number).ValueGeneratedNever();
+                d.Property(x => x.Name).HasMaxLength(60);
+                d.Property(x => x.Method).HasConversion<string>().HasMaxLength(20);
+                d.Property(x => x.Rate).HasColumnName("RateTenThousandths").HasConversion(TenThousandths);
+                d.Property(x => x.UpTo).HasColumnName("UpToMinor").HasConversion(NullableMinorUnits);
+                d.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(o => o.Deductions).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OpenBook.Domain.Settlements.ReserveInterestRun>(b =>
+        {
+            b.ToTable("ReserveInterestRuns");
+            b.HasKey(r => r.Id);
+            b.HasIndex(r => r.Date);
+            b.Property(r => r.CreatedBy).HasMaxLength(100);
+            b.Ignore(r => r.Total);
+            b.HasOne<Account>().WithMany().HasForeignKey(r => r.ExpenseAccountId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<JournalEntry>().WithMany().HasForeignKey(r => r.JournalEntryId).OnDelete(DeleteBehavior.Restrict);
+            b.OwnsMany(r => r.Lines, l =>
+            {
+                l.ToTable("ReserveInterestLines");
+                l.WithOwner().HasForeignKey("RunId");
+                l.HasKey("RunId", nameof(OpenBook.Domain.Settlements.ReserveInterestLine.LineNumber));
+                l.Property(x => x.LineNumber).ValueGeneratedNever();
+                l.Property(x => x.Balance).HasColumnName("BalanceMinor").HasConversion(MinorUnits);
+                l.Property(x => x.Amount).HasColumnName("AmountMinor").HasConversion(MinorUnits);
+                l.HasOne<OpenBook.Domain.Settlements.OwnerOperator>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
+            });
+            b.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Settlements.Truck>(b =>

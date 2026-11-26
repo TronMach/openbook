@@ -747,6 +747,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
         Domain.Settlements.Settlement.Source => "Settlement",
         Domain.Settlements.OwnerCharge.Source => "Owner charge",
         Domain.Settlements.OwnerSettlement.Source => "Owner settlement",
+        Domain.Settlements.ReserveInterestRun.Source => "Reserve interest",
         Domain.Assets.FixedAsset.DisposalSource => "Asset disposal",
         Domain.Assets.Loan.Source => "Loan",
         Domain.Assets.Loan.PaymentSource => "Loan payment",

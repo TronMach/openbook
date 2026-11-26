@@ -63,6 +63,13 @@ The carrier's side: the company pays owner-operators by settlement and dispatche
 - Books check `owner-reserves`: standing settlements' reserve lines against the owners' reserve accounts (accrual); settlement bills' lines and `settlements.owner` are ours, the rest listed. `owner-receivables` also counts those two sources' lines; a bill that isn't a settlement's on those accounts is someone's own.
 - `SegmentService` reclassifying a settlement's bill or entry moves the settlement lines of that account and class too, so `OwnerMileage` (an `IMileageSource`: standing settlements' lines with miles, their class) follows.
 - Pages `/dispatch/settlements` (list), `/dispatch/settlements/new` (interactive run with preview and `FormDraft` "owner-run"), `/dispatch/settlements/{id}` (lines, void); the bill page links to its settlement and offers no Change or Void. API `/api/dispatch/settlements` (`preview`, `run`, `{id}/void`).
+## Deductions and interest (B3, 2026-11-26)
+
+- `OwnerDeduction`s, owned by the owner (numbered, `OwnerDeductions`): fixed or per mile, an account (anything but A/R, A/P, a bank or a card: income for a charge-back, an asset for a balance paid off), `UpTo` (stops once standing settlements' deduction lines took that much: a balance or a target), `Priority`, `StartsOn`/`EndsOn`, `CarryShort`. Changes from the next settlement; stopped, never removed.
+- The run takes them after backup withholding and before charges, by priority then number. Short with `CarryShort`: a Deduction line for the whole amount and a `Left` line (Dr the receivable) for the rest, and `OwnerCharge.Left` (`FromSettlementId`) made with the settlement; it can't be voided alone, and voiding the settlement voids it. Without: only what fits is taken, with a note.
+- `ReserveInterestRun` (audit `reserve_interest`, Versioned; `Source = settlements.reserve_interest`, one entry dated the month's last day): Dr the expense ("Interest Paid on Owner Reserves", other expense, made on first use, or the last run's, or one chosen), Cr each owner's reserve account. One standing run a month; lines per owner reserve with the balance at month end (settlements dated to it, interest before it) × rate / 12. Interest counts in reserve balances and the `owner-reserves` check; not on the 1099-NEC.
+- Page `/dispatch/interest`; API `PUT /api/dispatch/owners/{id}/deductions/{number}`, `GET|POST /api/dispatch/interest` (`due?month=`, `{id}/void`).
+
 - **Before release**: an accountant should confirm the 1099 gross treatment. Never call any of this compliant with 49 CFR 376.
 
 ## The edition and the setting
