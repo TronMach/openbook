@@ -258,6 +258,21 @@ internal static class Seeds
         "W10,,,Deductions,UD,,,,Fuel discount,50.00-,,,\n" +
         "W11,2026-03-13,-30.00,Other,BF,1103,,,Balance forward,(30.00),,,\n";
 
+    /// <summary>A fuel card's export with a title line above the header; made up.</summary>
+    public const string FuelCard =
+        "Fleet fuel card, transactions\n" +
+        "Transaction Date,Unit,Card,Location,Gallons,Total Amount,Transaction #\n" +
+        "03/02/2026 06:12,101,****1234,\"Truck stop, Town A\",120.512,\"$457.95\",T1001\n" +
+        "03/04/2026,101,****1234,Truck stop B,98.000,372.40,T1002\n" +
+        "03/05/2026,900,****9999,Truck stop C,50,190.00,T1003\n" +
+        "03/05/2026,101,****1234,Truck stop B,,-12.00,T1004\n";
+
+    /// <summary>A toll account's export by plate; made up.</summary>
+    public const string Tolls =
+        "Posted Date;Tag;Plaza;Amount\n" +
+        "2026-03-03;ABC 1234;Plaza 7;18.50\n" +
+        "2026-03-04;ABC1234;Plaza 9;7.25\n";
+
     public const string OcrWords =
         "level\tpage\tblock\tpar\tline\tword\tleft\ttop\twidth\theight\tconf\ttext\n" +
         "5\t1\t1\t1\t1\t1\t300\t10\t80\t16\t96\tREVENUE\n5\t1\t1\t1\t1\t2\t390\t10\t80\t16\t96\tSECTION\n" +

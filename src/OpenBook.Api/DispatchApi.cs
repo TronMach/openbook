@@ -264,6 +264,13 @@ public static class DispatchApi
             return OwnerSettlementResponse.From((await s.GetAsync(id, ct))!, lines: true);
         });
 
+        // A fuel card's or toll account's CSV file as the body; ?kind=Fuel|Toll, ?paidFrom= (none: already in the books), ?dryRun=true shows what's in it.
+        dispatch.MapPost("/charges/import", async (HttpRequest request, OwnerChargeKind kind, Guid? paidFrom, bool? dryRun, OwnerService s, CancellationToken ct) =>
+        {
+            using var memory = new MemoryStream();
+            await request.Body.CopyToAsync(memory, ct);
+            return await s.ImportChargesAsync(kind, paidFrom, memory.ToArray(), save: dryRun != true, ct);
+        });
         dispatch.MapPost("/charges/{id:guid}/void", async (Guid id, VoidSettlementRequest r, OwnerService s, CancellationToken ct) =>
             OwnerChargeResponse.From(await s.VoidChargeAsync(id, r.Reason ?? "Charge voided", ct)));
     }

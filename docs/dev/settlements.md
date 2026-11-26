@@ -84,6 +84,12 @@ The carrier's side: the company pays owner-operators by settlement and dispatche
 - Detention: `Load.DetentionHours(free)` sums each stop's time beyond the free hours, rounded up to the quarter hour; `ChargeDetentionAsync` replaces the Detention charge with those hours at the rate.
 - `OwnerOperator.PayBasis` (Typed, PercentOfLinehaul, PerMile, Flat; backfilled "Typed"), `PayRate`, `PayEmptyMiles`, owned `OwnerPassThrough`s (percent per non-linehaul `LoadCharge`). The run (`OwnerRunEntry.Loads`, on by default) adds, before typed pay, each dispatch of the owner's trucks on a Delivered load whose last delivery was left by `Through` (or marked delivered without times) and not on a standing settlement: linehaul × share × percent, or the truck's loaded (and empty) miles × rate, or the flat rate × share; then each pass-through charge × share × percent (tolls as a Reimbursement). Lines carry `LoadId`, `DispatchNumber`, quantity and rate; a paid dispatch can't change and blocks cancelling, until its settlement is voided.
 
+## Fuel and toll imports (B6, 2026-11-26)
+
+- `OwnerChargeReader.Read(text)`: a header (found among the first lines by `Csv.FromHeader`) with a date, a truck (unit, plate, tag, transponder) and an amount column, in any order; gallons, location and reference when there. Date order detected; amounts beyond `Money.MaxAmount`, blank trucks and unreadable dates leave the row out, counted. At most 5,000 rows. Fuzz target `owner-charges-csv` (seeds `FuelCard`, `Tolls`).
+- `OwnerService.ImportChargesAsync(kind, paidFrom, bytes, save)`: a truck by unit, else by plate ignoring spaces and case; rows for an owner's truck become charges (`StageChargeAsync`, each its own entry, `ImportHash` the file's SHA-256), all in one save. Left out: our own trucks, unknown ones, credits (zero or less), and a row matching a standing charge of the owner by kind, date, amount and reference (so a file imported twice adds nothing; the hash only warns). Fuel, tolls, repairs or other.
+- Page `/dispatch/charges/import`; form `POST /dispatch/charges/import`; API `POST /api/dispatch/charges/import?kind=&paidFrom=&dryRun=`.
+
 - **Before release**: an accountant should confirm the 1099 gross treatment. Never call any of this compliant with 49 CFR 376.
 
 ## The edition and the setting

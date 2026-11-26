@@ -91,6 +91,12 @@ Tick **already counted on the owner's 1099** only when the money went to the own
 
 A charge nothing has taken back yet can be voided on its page: its entry is reversed on the same date.
 
+### Importing fuel and tolls
+
+**Dispatch → Import fuel and tolls** takes a fuel card's or toll account's export as a CSV file. It needs columns for the **date**, the **truck** (its unit number, or its plate or tag) and the **amount**; gallons, the location and a reference (a transaction or ticket number) are kept when the file has them. Lines above the header, such as a title, are skipped.
+
+Choose **what's in it** (fuel, tolls, repairs or other charges) and **Paid from**, the fuel card's or toll account's own account (usually a credit card or an other current liability). Each row for an owner-operator's truck becomes a charge to them. Rows are left out, and counted, when they're for one of your own trucks, for a truck OpenBook doesn't know (add it, with its unit or plate as the file writes it, and import again), when they're a credit or refund, or when the owner already has a charge for the same date, amount and reference, so importing the same file twice adds nothing.
+
 Settlements take charges back oldest first, as far as each week's pay allows. A settlement never pays less than nothing: what doesn't fit waits for the next one.
 
 ## Paying owner-operators each week

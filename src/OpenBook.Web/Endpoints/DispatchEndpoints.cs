@@ -156,6 +156,31 @@ public static class DispatchEndpoints
         app.MapPost("/dispatch/settlements/{id:guid}/void", async (Guid id, IFormCollection form, OwnerSettlementService settlements, CancellationToken ct) =>
             await Back($"/dispatch/settlements/{id}", () => settlements.VoidAsync(id, form["reason"].ToString(), ct))).RequireAuthorization();
 
+        // Form-bound (the file), so the page's antiforgery token is checked automatically.
+        app.MapPost("/dispatch/charges/import", async (IFormFile? file, [Microsoft.AspNetCore.Mvc.FromForm] string? kind, [Microsoft.AspNetCore.Mvc.FromForm] string? paidFrom,
+            OwnerService owners, CancellationToken ct) =>
+        {
+            if (file is null || file.Length == 0)
+                return Results.Redirect($"/dispatch/charges/import?error={Uri.EscapeDataString("Choose the file to import.")}");
+            if (file.Length > SettlementEndpoints.MaxFileBytes)
+                return Results.Redirect($"/dispatch/charges/import?error={Uri.EscapeDataString("The file is larger than 5 MB.")}");
+            using var memory = new MemoryStream();
+            await file.CopyToAsync(memory, ct);
+            try
+            {
+                Guid? from = paidFrom == "books" ? null : Guid.TryParse(paidFrom, out var account) ? account
+                    : throw new DomainException("charge.paid_from_required", "Choose where the money came from.");
+                var result = await owners.ImportChargesAsync(Enum.TryParse<OwnerChargeKind>(kind, out var k) ? k : OwnerChargeKind.Fuel, from, memory.ToArray(), save: true, ct);
+                var left = result.Rows.Count - result.Charged;
+                var note = string.Join(" ", result.Warnings);
+                return Results.Redirect($"/dispatch/charges/import?imported={result.Charged}&left={left}&total={result.Total.ToString(CultureInfo.InvariantCulture)}{(note.Length > 0 ? $"&note={Uri.EscapeDataString(note)}" : "")}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/dispatch/charges/import?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(SettlementEndpoints.MaxFileBytes * 2));
+
         app.MapPost("/dispatch/charges/{id:guid}/void", async (Guid id, IFormCollection form, OwnerService owners, CancellationToken ct) =>
             await Back($"/dispatch/charges/{id}", () => owners.VoidChargeAsync(id, form["reason"].ToString(), ct))).RequireAuthorization();
 

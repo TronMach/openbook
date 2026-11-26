@@ -420,5 +420,51 @@ public sealed class OwnerSettlementTests : IAsyncLifetime
         Assert.Equal(1000m - 875m, (await In<PayablesService, IReadOnlyList<Payment1099>>(s => s.Payments1099Async(2026))).Single().Amount);
     }
 
+    private Task<ChargeImportResult> Import(string csv, OwnerChargeKind kind = OwnerChargeKind.Fuel, bool save = true) =>
+        In<OwnerService, ChargeImportResult>(s => s.ImportChargesAsync(kind, _fuelCard.Id, System.Text.Encoding.UTF8.GetBytes(csv), save));
+
+    [Fact]
+    public async Task A_fuel_card_file_charges_each_owners_truck_and_leaves_the_rest_out()
+    {
+        await In<OwnerService, Truck>(s => s.CreateTruckAsync(new TruckDetails("101", _owner.Id, Plate: "ABC 1234")));
+        await In<OwnerService, Truck>(s => s.CreateTruckAsync(new TruckDetails("900")));
+        var csv = Fuzz.Seeds.FuelCard + "03/06/2026,777,****0000,Truck stop D,10,40.00,T1005\n";
+
+        var dry = await Import(csv, save: false);
+        Assert.Equal([ImportedChargeOutcome.Charged, ImportedChargeOutcome.Charged, ImportedChargeOutcome.OurTruck, ImportedChargeOutcome.Credit, ImportedChargeOutcome.UnknownTruck],
+            dry.Rows.Select(r => r.Outcome));
+        Assert.Empty(await In<OwnerService, IReadOnlyList<OwnerCharge>>(s => s.ListChargesAsync(_owner.Id)));
+
+        var result = await Import(csv);
+        Assert.Equal((2, 830.35m), (result.Charged, result.Total));
+        Assert.Equal(2, result.Warnings.Count);
+        var charges = await In<OwnerService, IReadOnlyList<OwnerCharge>>(s => s.ListChargesAsync(_owner.Id));
+        Assert.Equal([372.40m, 457.95m], charges.Select(c => c.Amount));
+        Assert.Equal(120.512m, charges.Single(c => c.Reference == "T1001").Gallons);
+        Assert.All(charges, c => Assert.Equal(OwnerChargeKind.Fuel, c.Kind));
+        Assert.Equal(830.35m, await Balance(_owner.ReceivableAccountId));
+        Assert.Equal(-830.35m, await Balance(_fuelCard.Id));
+
+        // The same file again adds nothing.
+        var again = await Import(csv);
+        Assert.Equal(0, again.Charged);
+        Assert.Contains(again.Warnings, w => w.Contains("imported before", StringComparison.Ordinal));
+        Assert.Equal(CheckOutcome.Ok, OutcomeOf(await Check("owner-receivables")));
+    }
+
+    [Fact]
+    public async Task A_toll_file_finds_trucks_by_plate()
+    {
+        await In<OwnerService, Truck>(s => s.CreateTruckAsync(new TruckDetails("101", _owner.Id, Plate: "ABC 1234")));
+        var result = await Import("Posted Date,Tag,Plaza,Amount\n2026-03-03,ABC1234,Plaza 7,18.50\n2026-03-04,abc 1234,Plaza 9,7.25\n2026-03-04,,Plaza 9,7.25\n", OwnerChargeKind.Toll);
+        Assert.Equal(2, result.Charged);
+        Assert.Contains(result.Warnings, w => w.Contains("couldn't be read: 3", StringComparison.Ordinal));
+        Assert.All(await In<OwnerService, IReadOnlyList<OwnerCharge>>(s => s.ListChargesAsync(_owner.Id)), c => Assert.Equal(OwnerChargeKind.Toll, c.Kind));
+        Assert.Equal("charge.file_columns", (await Refused<OwnerService, ChargeImportResult>(s =>
+            s.ImportChargesAsync(OwnerChargeKind.Toll, _fuelCard.Id, System.Text.Encoding.UTF8.GetBytes("Date,Amount\n2026-03-03,5.00\n"), true))).Code);
+        Assert.Equal("charge.import_kind", (await Refused<OwnerService, ChargeImportResult>(s =>
+            s.ImportChargesAsync(OwnerChargeKind.Advance, _fuelCard.Id, System.Text.Encoding.UTF8.GetBytes(Fuzz.Seeds.FuelCard), true))).Code);
+    }
+
     private static CheckOutcome OutcomeOf(Application.Ledger.CheckResult result) => result.Outcome;
 }

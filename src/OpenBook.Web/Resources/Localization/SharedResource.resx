@@ -164,6 +164,9 @@
   <data name="A flat amount a load" xml:space="preserve">
     <value>A flat amount a load</value>
   </data>
+  <data name="A fuel card's or toll account's export, as a CSV file. Each row for an owner-operator's truck becomes a charge to them, taken back by their settlements. Rows for your own trucks, trucks OpenBook doesn't know, credits and rows already entered are left out." xml:space="preserve">
+    <value>A fuel card's or toll account's export, as a CSV file. Each row for an owner-operator's truck becomes a charge to them, taken back by their settlements. Rows for your own trucks, trucks OpenBook doesn't know, credits and rows already entered are left out.</value>
+  </data>
   <data name="A load split between trucks gets a row each, with its share and miles." xml:space="preserve">
     <value>A load split between trucks gets a row each, with its share and miles.</value>
   </data>
@@ -974,6 +977,9 @@
   <data name="Charges dated after it wait for the next run." xml:space="preserve">
     <value>Charges dated after it wait for the next run.</value>
   </data>
+  <data name="Charges made: {0}, for {1}. Rows left out: {2}." xml:space="preserve">
+    <value>Charges made: {0}, for {1}. Rows left out: {2}.</value>
+  </data>
   <data name="Chart of Accounts" xml:space="preserve">
     <value>Chart of Accounts</value>
   </data>
@@ -1622,6 +1628,9 @@
   <data name="Figures in the books that don't agree" xml:space="preserve">
     <value>Figures in the books that don't agree</value>
   </data>
+  <data name="File" xml:space="preserve">
+    <value>File</value>
+  </data>
   <data name="Files can be at most {0} MB." xml:space="preserve">
     <value>Files can be at most {0} MB.</value>
   </data>
@@ -1756,6 +1765,9 @@
   </data>
   <data name="From your contract, in percent. When you enter what a load's customer was billed, the settlement's page says what you should have been paid and what's short. Leave blank what you don't want checked." xml:space="preserve">
     <value>From your contract, in percent. When you enter what a load's customer was billed, the settlement's page says what you should have been paid and what's short. Leave blank what you don't want checked.</value>
+  </data>
+  <data name="Fuel" xml:space="preserve">
+    <value>Fuel</value>
   </data>
   <data name="Full view" xml:space="preserve">
     <value>Full view</value>
@@ -1958,6 +1970,9 @@
   <data name="Import a payout report" xml:space="preserve">
     <value>Import a payout report</value>
   </data>
+  <data name="Import fuel and tolls" xml:space="preserve">
+    <value>Import fuel and tolls</value>
+  </data>
   <data name="Import orders" xml:space="preserve">
     <value>Import orders</value>
   </data>
@@ -2047,6 +2062,9 @@
   </data>
   <data name="It didn't go through" xml:space="preserve">
     <value>It didn't go through</value>
+  </data>
+  <data name="It needs columns for the date, the truck's unit number (or plate or tag) and the amount; gallons, location and a reference are kept when it has them." xml:space="preserve">
+    <value>It needs columns for the date, the truck's unit number (or plate or tag) and the amount; gallons, location and a reference are kept when it has them.</value>
   </data>
   <data name="It only changes the menu, the home page and which reports come first; everything stays available." xml:space="preserve">
     <value>It only changes the menu, the home page and which reports come first; everything stays available.</value>
@@ -2966,6 +2984,9 @@
   <data name="Other" xml:space="preserve">
     <value>Other</value>
   </data>
+  <data name="Other charges" xml:space="preserve">
+    <value>Other charges</value>
+  </data>
   <data name="Other OpenID Connect provider" xml:space="preserve">
     <value>Other OpenID Connect provider</value>
   </data>
@@ -3614,6 +3635,9 @@
   <data name="Reorder at" xml:space="preserve">
     <value>Reorder at</value>
   </data>
+  <data name="Repairs" xml:space="preserve">
+    <value>Repairs</value>
+  </data>
   <data name="Repeat every" xml:space="preserve">
     <value>Repeat every</value>
   </data>
@@ -3919,6 +3943,9 @@
   </data>
   <data name="See the contents" xml:space="preserve">
     <value>See the contents</value>
+  </data>
+  <data name="See the open charges" xml:space="preserve">
+    <value>See the open charges</value>
   </data>
   <data name="See the starting stock adjustment" xml:space="preserve">
     <value>See the starting stock adjustment</value>
@@ -4415,6 +4442,9 @@
   <data name="The first month of your financial year: where reports' year and the year-end close start. Changing it doesn't alter any transactions." xml:space="preserve">
     <value>The first month of your financial year: where reports' year and the year-end close start. Changing it doesn't alter any transactions.</value>
   </data>
+  <data name="The fuel card's or toll account's own account, usually a credit card or other current liability." xml:space="preserve">
+    <value>The fuel card's or toll account's own account, usually a credit card or other current liability.</value>
+  </data>
   <data name="The guide isn't installed with this copy of OpenBook. You can read it online:" xml:space="preserve">
     <value>The guide isn't installed with this copy of OpenBook. You can read it online:</value>
   </data>
@@ -4672,6 +4702,9 @@
   </data>
   <data name="to {0}" xml:space="preserve">
     <value>to {0}</value>
+  </data>
+  <data name="Tolls" xml:space="preserve">
+    <value>Tolls</value>
   </data>
   <data name="Too many tries. Wait a while, then try again." xml:space="preserve">
     <value>Too many tries. Wait a while, then try again.</value>
@@ -5017,6 +5050,9 @@
   </data>
   <data name="What you sell and buy" xml:space="preserve">
     <value>What you sell and buy</value>
+  </data>
+  <data name="What's in it" xml:space="preserve">
+    <value>What's in it</value>
   </data>
   <data name="What's owed when starting fresh, from a CSV." xml:space="preserve">
     <value>What's owed when starting fresh, from a CSV.</value>

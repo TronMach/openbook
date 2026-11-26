@@ -61,6 +61,33 @@ public interface IOwnerStore
     Task SaveChangesAsync(CancellationToken ct);
 }
 
+/// <summary>What became of one row of an imported fuel or toll file.</summary>
+public enum ImportedChargeOutcome
+{
+    /// <summary>A charge to the truck's owner, made (or to be made).</summary>
+    Charged,
+
+    /// <summary>The owner has a charge like it already: same kind, date, amount and reference.</summary>
+    AlreadyEntered,
+
+    /// <summary>The truck is the company's own: its costs are entered another way.</summary>
+    OurTruck,
+
+    UnknownTruck,
+
+    /// <summary>A refund or discount, which isn't imported: void or change the charge it's for.</summary>
+    Credit,
+}
+
+public sealed record ImportedCharge(int Row, DateOnly Date, string Unit, decimal Amount, decimal? Gallons, ImportedChargeOutcome Outcome, string? Owner, Guid? ChargeId);
+
+public sealed record ChargeImportResult(IReadOnlyList<ImportedCharge> Rows, IReadOnlyList<string> Warnings)
+{
+    public int Charged => Rows.Count(r => r.Outcome == ImportedChargeOutcome.Charged);
+
+    public decimal Total => Rows.Where(r => r.Outcome == ImportedChargeOutcome.Charged).Sum(r => r.Amount);
+}
+
 /// <summary>An owner-operator with its vendor's name.</summary>
 public sealed record OwnerView(OwnerOperator Owner, string Name, bool VendorActive);
 
@@ -398,6 +425,60 @@ public sealed class OwnerService(
         store.Add(charge);
         store.Add(Audit(AuditAction.Created, ChargeEntity, charge.Id, null, Snapshot(charge)));
         return charge;
+    }
+
+    /// <summary>
+    /// A fuel card's or toll account's file (<see cref="OwnerChargeReader"/>): each row for a truck an owner-operator owns
+    /// becomes a charge to them, paid from <paramref name="paidFromAccountId"/> (null: already in the books), each its own
+    /// entry. Rows for the company's own trucks, trucks it doesn't know, credits and rows already entered are left out and
+    /// listed. All of the charges are made, or none.
+    /// </summary>
+    public async Task<ChargeImportResult> ImportChargesAsync(OwnerChargeKind kind, Guid? paidFromAccountId, byte[] content, bool save, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        if (kind is not (OwnerChargeKind.Fuel or OwnerChargeKind.Toll or OwnerChargeKind.Repair or OwnerChargeKind.Other))
+            throw new DomainException("charge.import_kind", "Import fuel, tolls, repairs or other charges.");
+        var reading = OwnerChargeReader.Read(Import.TextFiles.Decode(content));
+        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(content));
+        var warnings = reading.Warnings.ToList();
+        var existing = await store.ListChargesAsync(null, ct);
+        if (existing.Any(c => c.ImportHash == hash && !c.IsVoided))
+            warnings.Add("This file was imported before: rows already entered are left out.");
+        var trucks = await store.ListTrucksAsync(ct);
+        var owners = (await ListOwnersAsync(includeInactive: true, ct)).ToDictionary(o => o.Owner.Id);
+        Truck? Find(string unit) =>
+            trucks.FirstOrDefault(t => string.Equals(t.Unit, unit, StringComparison.OrdinalIgnoreCase))
+            ?? trucks.FirstOrDefault(t => t.Plate is { } plate && string.Equals(plate.Replace(" ", "", StringComparison.Ordinal), unit.Replace(" ", "", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase));
+
+        var standing = existing.Where(c => !c.IsVoided).Select(c => (c.OwnerId, c.Kind, c.Date, c.Amount, c.Reference)).ToHashSet();
+        var rows = new List<ImportedCharge>();
+        foreach (var row in reading.Rows)
+        {
+            var truck = Find(row.Unit);
+            var owner = truck?.OwnerId is { } ownerId ? owners.GetValueOrDefault(ownerId) : null;
+            var outcome = row.Amount <= 0m ? ImportedChargeOutcome.Credit
+                : truck is null ? ImportedChargeOutcome.UnknownTruck
+                : owner is null ? ImportedChargeOutcome.OurTruck
+                : !standing.Add((owner.Owner.Id, kind, row.Date, row.Amount, row.Reference)) ? ImportedChargeOutcome.AlreadyEntered
+                : ImportedChargeOutcome.Charged;
+            Guid? chargeId = null;
+            if (save && outcome == ImportedChargeOutcome.Charged)
+            {
+                var charge = await StageChargeAsync(new OwnerChargeDetails(owner!.Owner.Id, row.Date, kind, row.Amount, paidFromAccountId, row.Description, row.Reference, truck!.Id,
+                    kind == OwnerChargeKind.Fuel ? row.Gallons : null), ct, hash);
+                chargeId = charge.Id;
+            }
+
+            rows.Add(new ImportedCharge(row.Row, row.Date, row.Unit, row.Amount, row.Gallons, outcome, owner?.Name, chargeId));
+        }
+
+        if (rows.Count(r => r.Outcome == ImportedChargeOutcome.UnknownTruck) is > 0 and var unknown)
+            warnings.Add($"Rows for trucks OpenBook doesn't know, left out: {unknown}. Add the truck, with its unit number or plate as the file has it, and import again.");
+        if (rows.Count(r => r.Outcome == ImportedChargeOutcome.Credit) is > 0 and var credits)
+            warnings.Add($"Credits and refunds left out: {credits}. Void or change the charge each is for.");
+        if (save)
+            await store.SaveChangesAsync(ct);
+        return new ChargeImportResult(rows, warnings);
     }
 
     /// <summary>Voids a charge nothing has taken back yet; its entry is reversed on its own date.</summary>
