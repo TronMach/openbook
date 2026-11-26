@@ -10,8 +10,6 @@ namespace OpenBook.Infrastructure.Persistence;
 
 internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
 {
-    private long _highestStaged;
-
     public async Task<IReadOnlyList<Account>> ListAccountsAsync(CancellationToken ct) =>
         await db.Accounts.ToListAsync(ct);
 
@@ -67,7 +65,7 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
     {
         // Remembered as they're added: asking the change tracker each time makes a large import take the square of its size.
         var saved = await db.JournalEntries.IgnoreQueryFilters().MaxAsync(e => (long?)e.Number, ct) ?? 0;
-        return Math.Max(saved, _highestStaged) + 1;
+        return Math.Max(saved, db.HighestStagedEntry) + 1;
     }
 
     public Task<bool> IsInReconciliationAsync(Guid entryId, CancellationToken ct) =>
@@ -261,7 +259,7 @@ internal sealed class EfLedgerStore(OpenBookDbContext db) : ILedgerStore
 
     public void Add(JournalEntry entry)
     {
-        _highestStaged = Math.Max(_highestStaged, entry.Number);
+        db.HighestStagedEntry = Math.Max(db.HighestStagedEntry, entry.Number);
         db.JournalEntries.Add(entry);
     }
 

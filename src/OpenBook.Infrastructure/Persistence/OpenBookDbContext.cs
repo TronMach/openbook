@@ -233,9 +233,45 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     ];
 
     /// <summary>Whether anything has been saved through this context, so an operation that then hit a conflict can't simply be run again.</summary>
-    public bool HasSaved { get; private set; }
+    public bool HasSaved { get; internal set; }
 
     public void ForgetEarlierSaves() => HasSaved = false;
+
+    /// <summary>The highest entry number added and not saved yet, so one save can hold several entries.</summary>
+    internal long HighestStagedEntry { get; set; }
+
+    /// <summary>Forgets everything loaded, changed or added.</summary>
+    internal void Forget()
+    {
+        ChangeTracker.Clear();
+        HighestStagedEntry = 0;
+    }
+
+    /// <summary>Any constant will do: advisory locks belong to the database, and OpenBook takes no other.</summary>
+    private const long TurnLock = 0x4F70656E426F6F6B;
+
+    private Guid? _turnTakenIn;
+
+    /// <summary>
+    /// Waits, inside the current transaction, for other turns and for saves of entries to finish, and makes the next
+    /// ones wait until it's over. A SQLite transaction that isn't only reading has the file's one write lock from its
+    /// start, so there's nothing to take; on PostgreSQL it's an advisory lock that the transaction's end releases.
+    /// </summary>
+    internal async Task TakeTurnAsync(CancellationToken ct)
+    {
+        if (Database.CurrentTransaction is not { } transaction || transaction.TransactionId == _turnTakenIn || !Database.IsNpgsql())
+            return;
+        try
+        {
+            await Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock({TurnLock})", ct);
+        }
+        catch (Npgsql.NpgsqlException ex) when (ex.InnerException is TimeoutException)
+        {
+            throw Busy();
+        }
+
+        _turnTakenIn = transaction.TransactionId;
+    }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -275,16 +311,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
         {
             throw new ConcurrencyConflictException(ex);
         }
-        catch (DbUpdateException ex) when (IsBusy(ex))
+        catch (Exception ex) when (IsBusy(ex))
         {
             throw Busy();
         }
     }
 
     /// <summary>A long save holding a SQLite file's one write lock (a big import, say), past the wait for it.</summary>
-    private static bool IsBusy(DbUpdateException ex) => ex.InnerException is Microsoft.Data.Sqlite.SqliteException { SqliteErrorCode: 5 or 6 };
+    internal static bool IsBusy(Exception ex) =>
+        (ex is DbUpdateException ? ex.InnerException : ex) is Microsoft.Data.Sqlite.SqliteException { SqliteErrorCode: 5 or 6 };
 
-    private static Domain.Common.DomainException Busy() =>
+    internal static Domain.Common.DomainException Busy() =>
         new("save.busy", "OpenBook is busy with a long job, such as an import, so this wasn't saved. Try again in a moment.");
 
     /// <summary>
@@ -393,6 +430,8 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             : null;
         try
         {
+            // Whoever holds the turn read the last entry number after everyone's earlier saves; none may come in between now.
+            await TakeTurnAsync(cancellationToken);
             var written = await base.SaveChangesAsync(acceptAllChangesOnSuccess: false, cancellationToken);
             // In pieces: SQLite takes at most 32,766 values in a statement, and a large import has more entries than that.
             foreach (var part in newEntryIds.Chunk(5_000))

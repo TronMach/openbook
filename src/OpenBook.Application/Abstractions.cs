@@ -189,6 +189,14 @@ public interface IUnitOfWork
 {
     Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken ct);
 
+    /// <summary>
+    /// A transaction no other save can come in the middle of, for work that reads a number and saves the one after it:
+    /// two documents made at the same moment take their numbers one after the other instead of drawing the same one.
+    /// Begin it before reading anything the save depends on, and keep it short (no calls to other services): everyone
+    /// else saving waits. Inside another transaction it joins that one. Disposed uncommitted, it's as if it never ran.
+    /// </summary>
+    Task<IUnitOfWorkTransaction> BeginTurnAsync(CancellationToken ct);
+
     /// <summary>Reads from here until it's disposed see one moment of the books, and hold nobody else up.</summary>
     Task<IAsyncDisposable> BeginSnapshotAsync(CancellationToken ct);
 

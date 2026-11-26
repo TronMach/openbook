@@ -79,6 +79,7 @@ public sealed class InvoiceService(
     ICompanyStore companies,
     ILedgerStore ledger,
     SalesReps salesReps,
+    IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser user)
 {
@@ -126,6 +127,8 @@ public sealed class InvoiceService(
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Lines);
 
+        // Until it's saved: two invoices made at the same moment mustn't draw the same number.
+        await using var turn = await unitOfWork.BeginTurnAsync(ct);
         var customer = await store.GetCustomerAsync(command.CustomerId, ct) ?? throw new EntityNotFoundException("customer", command.CustomerId);
         if (!customer.IsActive)
             throw new DomainException("customer.inactive", $"{customer.DisplayName} is inactive.");
@@ -179,10 +182,12 @@ public sealed class InvoiceService(
             drafts = [.. drafts.Select((d, i) => (d, i)).OrderBy(x => x.d.Group is { } g ? groupOrder.IndexOf(g) + 1 : 0).ThenBy(x => x.i).Select(x => x.d)];
         }
 
-        var number = Invoice.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
-        if ((await store.ListInvoiceNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("invoice.number_taken", $"Invoice number {number} is already used.");
-        await EnsureNotCreditMemoAsync(number, ct);
+        // Invoices and credit memos share one sequence, so a number is taken by either.
+        var invoiceNumbers = await store.ListInvoiceNumbersAsync(ct);
+        var number = SalesAccounts.TakeNumber(command.Number, [.. invoiceNumbers, .. await store.ListCreditMemoNumbersAsync(ct)], Invoice.NormalizeNumber,
+            n => new DomainException("invoice.number_taken", invoiceNumbers.Contains(n, StringComparer.OrdinalIgnoreCase)
+                ? $"Invoice number {n} is already used."
+                : $"Number {n} is already used by a credit memo."));
 
         var built = await lineBuilder.BuildAsync(drafts, customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
         var (lines, taxCodeId, exemption) = built;
@@ -241,6 +246,7 @@ public sealed class InvoiceService(
         }
 
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return invoice;
     }
 

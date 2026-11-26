@@ -78,17 +78,17 @@
     private int? _version;
 
     // What's typed so far, kept in the tab in case the connection goes (new estimates only).
-    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, DateOnly? ExpirationDate, string? Memo, Guid? TaxCodeId, Guid? LocationId, List<SalesLineModel> Lines);
+    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, DateOnly? ExpirationDate, string? Memo, Guid? TaxCodeId, Guid? LocationId, List<SalesLineModel> Lines, string? SuggestedNumber = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => Id is not null || (_customerId is null && _lines.All(l => l.IsBlank)) ? null
-        : new Draft(_customerId, _number, _date, _expirationDate, _memo, _taxCodeId, _locationId, _lines);
+        : new Draft(_customerId, _number, _date, _expirationDate, _memo, _taxCodeId, _locationId, _lines, _suggestedNumber);
 
     private async Task RestoreAsync(Draft draft)
     {
         _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
-        (_number, _date, _expirationDate, _memo, _locationId) = (draft.Number, draft.Date, draft.ExpirationDate, draft.Memo, draft.LocationId);
+        (_number, _suggestedNumber, _date, _expirationDate, _memo, _locationId) = (draft.Number, draft.SuggestedNumber, draft.Date, draft.ExpirationDate, draft.Memo, draft.LocationId);
         _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
         await DateChangedAsync();
@@ -98,6 +98,7 @@
     private IReadOnlyList<Item> _items = [];
     private Guid? _customerId;
     private string? _number;
+    private string? _suggestedNumber;
     private DateOnly _date = CompanyTime.Today;
     private DateOnly? _expirationDate = CompanyTime.Today.AddDays(30);
     private string? _memo;
@@ -180,6 +181,7 @@
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<EstimateService>().SuggestNumberAsync(),
             (Id ?? Copy) is { } id ? await sp.GetRequiredService<EstimateService>().GetAsync(id) : null));
+        _suggestedNumber = _number;
         _customerId = PresetCustomer;
         DefaultTaxCode();
 
@@ -229,7 +231,9 @@
         try
         {
             var command = new SaveEstimateCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _expirationDate, _number, _memo, _taxCodeId ?? Guid.Empty, _locationId);
-            var estimate = await Ops.ChangeAsync<Estimate, EstimateService, Estimate>(Id ?? Guid.Empty, _version, s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            var estimate = Id is { } id
+                ? await Ops.ChangeAsync<Estimate, EstimateService, Estimate>(id, _version, s => s.UpdateAsync(id, command))
+                : await SuggestedNumber.SaveAsync(_number, _suggestedNumber, number => Ops.RunAsync<EstimateService, Estimate>(s => s.CreateAsync(command with { Number = number })));
             if (_draft is not null)
                 await _draft.ClearAsync();
             Navigation.NavigateTo($"/sales/estimates/{estimate.Id}");

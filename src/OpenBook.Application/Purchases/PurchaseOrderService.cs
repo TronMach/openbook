@@ -86,7 +86,7 @@ public sealed record PurchaseOrderProgress(IReadOnlyList<Bill> Bills, IReadOnlyL
 /// </summary>
 public sealed class PurchaseOrderService(
     IPurchasesStore store, Sales.ISalesStore sales, AccountService accounts, WarehouseService warehouses, BillService bills,
-    InventoryService inventory, PostingEngine engine, CustomFields.CustomFieldStamper customFields, IClock clock, ICurrentUser user)
+    InventoryService inventory, PostingEngine engine, CustomFields.CustomFieldStamper customFields, IUnitOfWork unitOfWork, IClock clock, ICurrentUser user)
 {
     internal const string EntityType = "purchase_order";
     public const string ReceiptSource = "purchases.receipt";
@@ -103,15 +103,18 @@ public sealed class PurchaseOrderService(
     public async Task<PurchaseOrder> CreateAsync(SavePurchaseOrderCommand command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        var number = PurchaseOrder.NormalizeNumber(command.Number ?? await SuggestNumberAsync(ct));
-        if ((await store.ListPurchaseOrderNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("purchaseorder.number_taken", $"Purchase order number {number} is already used.");
+
+        // Until it's saved: two orders made at the same moment mustn't draw the same number.
+        await using var turn = await unitOfWork.BeginTurnAsync(ct);
+        var number = Sales.SalesAccounts.TakeNumber(command.Number, await store.ListPurchaseOrderNumbersAsync(ct), PurchaseOrder.NormalizeNumber,
+            n => new DomainException("purchaseorder.number_taken", $"Purchase order number {n} is already used."));
         var order = PurchaseOrder.Create(Guid.CreateVersion7(), number, clock.UtcNow);
         await FillAsync(order, command, ct);
         store.Add(order);
         store.Add(Audit(AuditAction.Created, order, null));
         await customFields.StampAsync(EntityType, order.Id, order.VendorId, order.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return order;
     }
 

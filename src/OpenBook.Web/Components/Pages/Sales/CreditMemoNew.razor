@@ -63,17 +63,17 @@
 @code {
     private decimal? _taxAmount; // typed in place of the worked-out tax (C328)
     private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
-    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines, Guid? SalesRepId = null);
+    internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines, Guid? SalesRepId = null, string? SuggestedNumber = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => _customerId is null && _lines.All(l => l.IsBlank) ? null
-        : new Draft(_customerId, _number, _date, _memo, _taxCodeId, _locationId, _warehouseId, _lines, _salesRepId);
+        : new Draft(_customerId, _number, _date, _memo, _taxCodeId, _locationId, _warehouseId, _lines, _salesRepId, _suggestedNumber);
 
     private async Task Restore(Draft draft)
     {
         _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
-        (_number, _date, _memo, _taxCodeId, _locationId, _warehouseId) = (draft.Number, draft.Date, draft.Memo, draft.TaxCodeId, draft.LocationId, draft.WarehouseId);
+        (_number, _suggestedNumber, _date, _memo, _taxCodeId, _locationId, _warehouseId) = (draft.Number, draft.SuggestedNumber, draft.Date, draft.Memo, draft.TaxCodeId, draft.LocationId, draft.WarehouseId);
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
         await DefaultSalesRepAsync();
         _salesRepId = _reps.Any(w => w.Id == draft.SalesRepId) ? draft.SalesRepId : null;
@@ -84,6 +84,7 @@
     private IReadOnlyList<Item> _items = [];
     private Guid? _customerId;
     private string? _number;
+    private string? _suggestedNumber;
     private DateOnly _date = CompanyTime.Today;
     private string? _memo;
     private List<SalesLineModel> _lines = [new()];
@@ -163,6 +164,7 @@
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<InvoiceService>().SuggestNumberAsync()));
+        _suggestedNumber = _number;
         _customerId = PresetCustomer;
         DefaultTaxCode();
         await DefaultSalesRepAsync();
@@ -178,7 +180,8 @@
         try
         {
             var command = new CreateCreditMemoCommand(_customerId!.Value, _date, SalesLineModel.Drafts(_lines), _number, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, TaxAmount: TypedTaxAmount, SalesRepId: _salesRepId ?? Guid.Empty);
-            var credit = await Ops.RunAsync<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(command), _closingPassword);
+            var credit = await SuggestedNumber.SaveAsync(_number, _suggestedNumber,
+                number => Ops.RunAsync<CreditService, CreditMemo>(s => s.CreateCreditMemoAsync(command with { Number = number }), _closingPassword));
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/credit-memos/{credit.Id}");
         }

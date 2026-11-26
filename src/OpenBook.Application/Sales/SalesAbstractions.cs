@@ -442,6 +442,16 @@ public sealed class SalesAccounts(AccountService accounts)
     }
 
     /// <summary>
+    /// The number given, refused when it's in <paramref name="used"/>, or the next one when none is. The caller holds the
+    /// turn (<see cref="IUnitOfWork.BeginTurnAsync"/>) from before it reads <paramref name="used"/> until it has saved.
+    /// </summary>
+    internal static string TakeNumber(string? given, IReadOnlyList<string> used, Func<string, string> normalize, Func<string, DomainException> taken)
+    {
+        var number = normalize(given ?? NextNumber(used));
+        return used.Contains(number, StringComparer.OrdinalIgnoreCase) ? throw taken(number) : number;
+    }
+
+    /// <summary>
     /// The number in use whose trailing digits are highest, plus one, keeping what comes before them and their width
     /// ("INV-0042" → "INV-0043", "0099" → "0100"), passing over any already taken; 1001 to start. Numbers without
     /// trailing digits are ignored.
