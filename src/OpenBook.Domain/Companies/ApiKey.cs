@@ -93,7 +93,7 @@ public static class ApiScopes
         ["inventory"] = ("Inventory", ["/api/inventory"]),
         ["projects"] = ("Projects, time and mileage", ["/api/projects"]),
         ["channels"] = ("Sales channels and payouts", ["/api/channels"]),
-        ["settlements"] = ("Carrier settlements", ["/api/settlements"]),
+        ["settlements"] = ("Trucking: carrier settlements, owner-operators and dispatch", ["/api/settlements", "/api/dispatch"]),
         ["assets"] = ("Fixed assets and loans", ["/api/assets"]),
         ["nonprofit"] = ("Nonprofit: gifts, pledges, grants and donor restrictions", ["/api/nonprofit"]),
         ["reports"] = ("Reports, budgets and the accountant's tools", ["/api/reports", "/api/saved-reports", "/api/budgets", "/api/accountant"]),

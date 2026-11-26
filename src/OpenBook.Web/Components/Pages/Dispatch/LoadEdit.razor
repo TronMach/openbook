@@ -1,0 +1,326 @@
+@page "/dispatch/loads/new"
+@page "/dispatch/loads/{Id:guid}/edit"
+@rendermode InteractiveServer
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@Title · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@Title</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button secondary" Href="@BackUrl">@L["Back"]</ActionLink>
+    </div>
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _problem is not null)
+    {
+        <div class="card"><p>@_problem <a href="@BackUrl">@L["Back"]</a></p></div>
+    }
+    else if (_loaded)
+    {
+        @if (Id is null)
+        {
+            <FormDraft @ref="_draft" T="Draft" Key="load-new" Snapshot="TakeDraft" OnRestore="Restore" />
+        }
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="customer">@L["Customer"]</label>
+                    <SearchSelect Id="customer" Options="PickerOptions.Customers(_customers)" CustomerAdded="c => _customers = [.. _customers, c]" Value="_customerId"
+                                  OnChange="PickCustomer" Placeholder="@L["Choose a customer…"]" />
+                </div>
+                <div class="field">
+                    <label for="reference">@L["Customer's load number"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="reference" maxlength="60" @bind="_reference" />
+                </div>
+                <div class="field">
+                    <label for="miles">@L["Loaded miles"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="miles" class="amount" type="number" step="0.1" min="0" @bind="_miles" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="commodity">@L["Commodity"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="commodity" maxlength="100" @bind="_commodity" />
+                </div>
+                <div class="field">
+                    <label for="weight">@L["Weight (lb)"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="weight" class="amount" type="number" step="1" min="0" @bind="_weight" />
+                </div>
+                <div class="field">
+                    <label for="memo">@L["Memo"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="memo" maxlength="1000" @bind="_memo" />
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["Stops"]</h2>
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr><th>@L["Kind"]</th><th>@L["Shipper or receiver, and where"]</th><th>@L["Number"]</th><th>@L["Appointment"]</th><th>@L["Until"]</th><th><span class="visually-hidden">@L["Remove"]</span></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var stop in _stops)
+                        {
+                            <tr>
+                                <td>
+                                    <select aria-label="@L["Kind"]" @bind="stop.Kind">
+                                        <option value="@StopKind.Pickup">@L["Pickup"]</option>
+                                        <option value="@StopKind.Delivery">@L["Delivery"]</option>
+                                    </select>
+                                </td>
+                                <td><input aria-label="@L["Shipper or receiver, and where"]" maxlength="200" @bind="stop.Place" /></td>
+                                <td><input aria-label="@L["Pickup or delivery number"]" maxlength="60" size="8" @bind="stop.Reference" /></td>
+                                <td><input aria-label="@L["Appointment"]" type="datetime-local" @bind="stop.From" /></td>
+                                <td><input aria-label="@L["Appointment window ends"]" type="datetime-local" @bind="stop.To" /></td>
+                                <td><button type="button" class="link" aria-label="@L["Remove this stop"]" @onclick="() => Remove(_stops, stop)">×</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <button type="button" class="secondary" @onclick="() => Add(_stops, new StopModel { Kind = StopKind.Delivery })">@L["Add a stop"]</button>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["What the customer is charged"]</h2>
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr><th>@L["Charge"]</th><th>@L["Description"]</th><th>@L["Item"]</th><th class="num">@L["Quantity"]</th><th class="num">@L["Rate"]</th><th class="num">@L["Amount"]</th><th><span class="visually-hidden">@L["Remove"]</span></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var charge in _charges)
+                        {
+                            <tr>
+                                <td>
+                                    <select aria-label="@L["Charge"]" @bind="charge.Charge">
+                                        @foreach (var c in Enum.GetValues<LoadCharge>())
+                                        {
+                                            <option value="@c">@LoadCharges.Label(c)</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input aria-label="@L["Description"]" maxlength="200" @bind="charge.Description" /></td>
+                                <td><SearchSelect AriaLabel="@L["Item"]" Options="PickerOptions.Items(_items)" ItemAdded="i => _items = [.. _items, i]" @bind-Value="charge.ItemId" EmptyText="@L["None yet"]" /></td>
+                                <td class="num"><input aria-label="@L["Quantity"]" class="amount" type="number" step="0.0001" min="0" @bind="charge.Quantity" /></td>
+                                <td class="num"><input aria-label="@L["Rate"]" class="amount" type="number" step="0.0001" min="0" @bind="charge.Rate" /></td>
+                                <td class="num">@Labels.Amount(decimal.Round((charge.Quantity ?? 0m) * (charge.Rate ?? 0m), 2, MidpointRounding.AwayFromZero))</td>
+                                <td><button type="button" class="link" aria-label="@L["Remove this charge"]" @onclick="() => Remove(_charges, charge)">×</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <button type="button" class="secondary" @onclick="() => Add(_charges, new ChargeModel { Charge = LoadCharge.FuelSurcharge, Quantity = 1m })">@L["Add a charge"]</button>
+            <p class="hint">@L["Linehaul by the mile: the miles as the quantity, the rate per mile. The item is what the invoice uses."]</p>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["Trucks"]</h2>
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr><th>@L["Truck"]</th><th>@L["Driver"]</th><th class="num">@L["Loaded miles"]</th><th class="num">@L["Empty miles"]</th><th class="num">@L["Share %"]</th><th><span class="visually-hidden">@L["Remove"]</span></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var dispatch in _dispatches)
+                        {
+                            <tr>
+                                <td>
+                                    <select aria-label="@L["Truck"]" @bind="dispatch.TruckId">
+                                        <option value="">@L["Choose…"]</option>
+                                        @foreach (var t in _trucks.Where(t => t.IsActive || t.Id == dispatch.TruckId))
+                                        {
+                                            <option value="@t.Id">@t.Unit</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td><input aria-label="@L["Driver"]" maxlength="100" @bind="dispatch.Driver" /></td>
+                                <td class="num"><input aria-label="@L["Loaded miles"]" class="amount" type="number" step="0.1" min="0" @bind="dispatch.LoadedMiles" /></td>
+                                <td class="num"><input aria-label="@L["Empty miles"]" class="amount" type="number" step="0.1" min="0" @bind="dispatch.EmptyMiles" /></td>
+                                <td class="num"><input aria-label="@L["Share %"]" class="amount" type="number" step="0.01" min="0" max="100" @bind="dispatch.Share" /></td>
+                                <td><button type="button" class="link" aria-label="@L["Remove this truck"]" @onclick="() => Remove(_dispatches, dispatch)">×</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <button type="button" class="secondary" @onclick="() => Add(_dispatches, new DispatchModel())">@L["Add a truck"]</button>
+            <p class="hint">@L["A load split between trucks gets a row each, with its share and miles."]</p>
+        </div>
+
+        <div class="actions" style="margin-top: 1.5rem">
+            <button type="button" disabled="@_busy" @onclick="SaveAsync">@L["Save load"]</button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private string? _problem;
+    private int? _version;
+    private IReadOnlyList<OpenBook.Domain.Sales.Customer> _customers = [];
+    private IReadOnlyList<OpenBook.Domain.Sales.Item> _items = [];
+    private IReadOnlyList<Truck> _trucks = [];
+    private FormDraft<Draft>? _draft;
+
+    private Guid? _customerId;
+    private string? _reference;
+    private decimal? _miles;
+    private string? _commodity;
+    private decimal? _weight;
+    private string? _memo;
+    private List<StopModel> _stops = [new() { Kind = StopKind.Pickup }, new() { Kind = StopKind.Delivery }];
+    private List<ChargeModel> _charges = [new() { Charge = LoadCharge.Linehaul, Quantity = 1m }];
+    private List<DispatchModel> _dispatches = [];
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private string Title => Id is null ? L["New load"] : L["Change load"];
+    private string BackUrl => Id is { } id ? $"/dispatch/loads/{id}" : "/dispatch/loads";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (Id is { } id)
+                _version = await Ops.VersionAsync<Load>(id);
+            var (view, customers, items, trucks) = await Ops.RunAsync(async sp =>
+            {
+                var loads = sp.GetRequiredService<LoadService>();
+                var sales = sp.GetRequiredService<OpenBook.Application.Sales.ISalesStore>();
+                return (Id is { } edited ? await loads.GetAsync(edited) : null, await sales.ListCustomersAsync(default), await sales.ListItemsAsync(default),
+                    await sp.GetRequiredService<OwnerService>().ListTrucksAsync(includeInactive: true));
+            });
+            var load = view?.Load;
+            _customers = [.. customers.Where(c => c.IsActive || c.Id == load?.CustomerId)];
+            _items = [.. items.Where(i => i.IsActive || load?.Charges.Any(c => c.ItemId == i.Id) == true)];
+            _trucks = trucks;
+            if (Id is not null && (load is null || load.Status == LoadStatus.Cancelled || view!.Billed))
+                _problem = load is null ? L["That load doesn't exist."] : L["Only a load that isn't cancelled or invoiced can be changed."];
+            else if (load is not null)
+                Show(load);
+        }
+        catch (DomainException ex)
+        {
+            _problem = ex.Message;
+        }
+
+        _loaded = true;
+    }
+
+    private void Show(Load load)
+    {
+        (_customerId, _reference, _miles, _commodity, _weight, _memo) = (load.CustomerId, load.Reference, load.Miles, load.Commodity, load.Weight, load.Memo);
+        _stops = [.. load.Stops.Select(s => new StopModel { Kind = s.Kind, Place = s.Place, Reference = s.Reference, From = DispatchLabels.Local(s.AppointmentFrom), To = DispatchLabels.Local(s.AppointmentTo) })];
+        _charges = [.. load.Charges.Select(c => new ChargeModel { Charge = c.Charge, Description = c.Description, ItemId = c.ItemId, Quantity = c.Quantity, Rate = c.Rate })];
+        _dispatches = [.. load.Dispatches.Select(d => new DispatchModel { TruckId = d.TruckId, Driver = d.Driver, LoadedMiles = d.LoadedMiles, EmptyMiles = d.EmptyMiles, Share = d.SharePercent })];
+    }
+
+    private void PickCustomer(ChangeEventArgs e)
+    {
+        if (_busy)
+            return;
+        _customerId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+    }
+
+    private void Add<T>(List<T> rows, T row)
+    {
+        if (_busy)
+            return;
+        rows.Add(row);
+    }
+
+    private void Remove<T>(List<T> rows, T row)
+    {
+        if (_busy)
+            return;
+        rows.Remove(row);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var details = new LoadDetails(_customerId ?? Guid.Empty, _reference,
+                [.. _stops.Where(s => !string.IsNullOrWhiteSpace(s.Place)).Select(s => new LoadStopDraft(s.Kind, s.Place!, DispatchLabels.Utc(s.From), DispatchLabels.Utc(s.To), Reference: s.Reference))],
+                [.. _charges.Where(c => c.Rate is not null).Select(c => new LoadChargeDraft(c.Charge, c.Quantity ?? 1m, c.Rate!.Value, c.Description, c.ItemId))],
+                [.. _dispatches.Where(d => d.TruckId is not null).Select(d => new DispatchDraft(d.TruckId!.Value, d.Driver, d.LoadedMiles, d.EmptyMiles, d.Share ?? 100m))],
+                _miles, _commodity, _weight, _memo);
+            var saved = Id is { } id
+                ? await Ops.ChangeAsync<Load, LoadService, Load>(id, _version, s => s.ChangeAsync(id, details))
+                : await Ops.RunAsync<LoadService, Load>(s => s.CreateAsync(details));
+            if (_draft is not null)
+                await _draft.ClearAsync();
+            Navigation.NavigateTo($"/dispatch/loads/{saved.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Draft? TakeDraft() => _customerId is null && _stops.All(s => string.IsNullOrWhiteSpace(s.Place)) ? null
+        : new Draft(_customerId, _reference, _miles, _commodity, _weight, _memo, _stops, _charges, _dispatches);
+
+    private void Restore(Draft draft)
+    {
+        // What's gone meanwhile is dropped: a customer, item or truck made inactive.
+        _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
+        (_reference, _miles, _commodity, _weight, _memo) = (draft.Reference, draft.Miles, draft.Commodity, draft.Weight, draft.Memo);
+        _stops = draft.Stops;
+        _charges = [.. draft.Charges.Select(c => { if (c.ItemId is { } i && !_items.Any(x => x.Id == i)) c.ItemId = null; return c; })];
+        _dispatches = [.. draft.Dispatches.Where(d => d.TruckId is null || _trucks.Any(t => t.Id == d.TruckId && t.IsActive))];
+    }
+
+    public sealed record Draft(Guid? CustomerId, string? Reference, decimal? Miles, string? Commodity, decimal? Weight, string? Memo,
+        List<StopModel> Stops, List<ChargeModel> Charges, List<DispatchModel> Dispatches);
+
+    public sealed class StopModel
+    {
+        public StopKind Kind { get; set; }
+        public string? Place { get; set; }
+        public string? Reference { get; set; }
+        public DateTime? From { get; set; }
+        public DateTime? To { get; set; }
+    }
+
+    public sealed class ChargeModel
+    {
+        public LoadCharge Charge { get; set; }
+        public string? Description { get; set; }
+        public Guid? ItemId { get; set; }
+        public decimal? Quantity { get; set; }
+        public decimal? Rate { get; set; }
+    }
+
+    public sealed class DispatchModel
+    {
+        public Guid? TruckId { get; set; }
+        public string? Driver { get; set; }
+        public decimal? LoadedMiles { get; set; }
+        public decimal? EmptyMiles { get; set; }
+        public decimal? Share { get; set; } = 100m;
+    }
+}

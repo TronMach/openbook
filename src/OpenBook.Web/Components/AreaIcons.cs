@@ -40,6 +40,7 @@ public static class AreaIcons
         "/time" => Clock,
         "/nonprofit" => Gift,
         "/settlements" => Truck,
+        "/dispatch" => Truck,
         "/accounts" => Ledger,
         "/journal" => Pencil,
         "/reports" => Chart,

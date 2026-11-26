@@ -185,6 +185,25 @@ internal static class EveryRecordKind
             await store.SaveChangesAsync(default);
         });
 
+        // A carrier's side: an owner-operator with a reserve, their truck, and an advance waiting to be taken back.
+        var hauler = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Pat Hauling")));
+        var owner = await In<OwnerService, OwnerOperator>(s => s.CreateOwnerAsync(new OwnerDetails(hauler.Id)));
+        await Do<OwnerService>(s => s.SetReserveAsync(owner.Id, 0, new OwnerReserveDraft("Maintenance", ReserveMethod.PerMile, 0.05m, 5000m, InterestPercent: 4m)));
+        await Do<OwnerService>(s => s.SetDeductionAsync(owner.Id, 0, new OwnerDeductionDraft("Insurance", income, DeductionMethod.Fixed, 40m)));
+        var truck = await In<OwnerService, Truck>(s => s.CreateTruckAsync(new TruckDetails("T-12", owner.Id, Make: "Kenworth")));
+        await Do<OwnerService>(s => s.CreateChargeAsync(new OwnerChargeDetails(owner.Id, d, OwnerChargeKind.Advance, 300m, checking, "Advance", TruckId: truck.Id)));
+        await Do<OwnerService>(s => s.CreateChargeAsync(new OwnerChargeDetails(owner.Id, d, OwnerChargeKind.Fuel, 120m, checking, "Fuel", TruckId: truck.Id)));
+        await Do<OwnerSettlementService>(s => s.RunAsync(new OwnerRunCommand(d, [new OwnerRunEntry(owner.Id, [new OwnerPayDraft(OwnerLineKind.Earning, "Load 7", 1400m, "7", truck.Id, 600m, 40m)])], d)));
+        await Do<OwnerService>(s => s.PostInterestAsync(new DateOnly(d.Year, d.Month, 1).AddMonths(1).AddDays(-1)));
+        var shipper = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Kind Grain Co")));
+        var at = new DateTimeOffset(d.ToDateTime(new TimeOnly(15, 0)), TimeSpan.Zero);
+        var load = await In<LoadService, Load>(s => s.CreateAsync(new LoadDetails(shipper.Id, "PO-1",
+            [new(StopKind.Pickup, "Elevator", at), new(StopKind.Delivery, "Mill", at.AddDays(1))], [new(LoadCharge.Linehaul, 500m, 2m, "Linehaul")], [new(truck.Id, "Pat", 500m, 30m)], 500m)));
+        await Do<LoadService>(s => s.RecordStopAsync(load.Id, 1, at, at.AddHours(4)));
+        await Do<LoadService>(s => s.RecordStopAsync(load.Id, 2, at.AddDays(1), at.AddDays(1).AddHours(1)));
+        await Do<OwnerService>(s => s.SetPayAsync(owner.Id, PayBasis.PercentOfLinehaul, 72m, false, [(LoadCharge.FuelSurcharge, 100m)]));
+        await Do<LoadService>(s => s.CreateAsync(new LoadDetails(shipper.Id, null, [new(StopKind.Pickup, "Dock 4"), new(StopKind.Delivery, "Store 12")], [])));
+
         // Nonprofit: a gift, a pledge, a grant, a release of restricted money.
         var donor = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Pat Donor", Email: "pat@donor.test")));
         var scholarships = await In<SegmentService, Segment>(s => s.CreateAsync(SegmentKind.Class, "Scholarships"));

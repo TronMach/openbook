@@ -24,12 +24,16 @@
         <h1>Bill from @_vendor.DisplayName</h1>
         <span class="badge @(status == "Overdue" ? "warn" : status == "Paid" ? "ok" : null)">@status</span>
         <ActionLink Class="button secondary" Href="/purchases">Back to purchases</ActionLink>
-        @if (_bill.PurchaseOrderId is null)
+        @if (_bill.PurchaseOrderId is null && _bill.OwnerSettlementId is null)
         {
             <ActionLink Class="button secondary" Href="@($"/purchases/bills/new?copy={_bill.Id}")">Copy</ActionLink>
         }
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_bill.Id}")">History</ActionLink>
-        @if (_bill.Status == DocumentStatus.Posted)
+        @if (_bill.OwnerSettlementId is { } settlementId)
+        {
+            <ActionLink Class="button secondary" Href="@($"/dispatch/settlements/{settlementId}")">@L["Its settlement"]</ActionLink>
+        }
+        else if (_bill.Status == DocumentStatus.Posted)
         {
             <ActionLink Class="button secondary" Href="@($"/purchases/bills/{_bill.Id}/edit")">Change</ActionLink>
         }
@@ -157,7 +161,11 @@
         </table>
     }
 
-    @if (_bill.Status == DocumentStatus.Posted)
+    @if (_bill.Status == DocumentStatus.Posted && _bill.OwnerSettlementId is not null)
+    {
+        <p class="hint">@L["An owner-operator's settlement made this bill: to change or void it, void the settlement on its page."]</p>
+    }
+    else if (_bill.Status == DocumentStatus.Posted)
     {
         <div class="card" style="margin-top: 1.5rem">
             <h2>Void this bill</h2>

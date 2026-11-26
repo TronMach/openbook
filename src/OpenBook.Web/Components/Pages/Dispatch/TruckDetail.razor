@@ -1,0 +1,58 @@
+@page "/dispatch/trucks/{Id:guid}"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject OwnerService OwnerService
+
+<PageTitle>@L["Truck"] @_truck?.Unit · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_truck is null)
+    {
+        <div class="card"><p>@L["That truck doesn't exist."] <a href="/dispatch/trucks">@L["Trucks"]</a></p></div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@L["Truck {0}", _truck.Unit]</h1>
+            <ActionLink Class="button secondary" Href="/dispatch/trucks">@L["Trucks"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_truck.Id}")">@L["History"]</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <div class="card">
+            <PostForm Action="@($"/dispatch/trucks/{_truck.Id}")" data-enhance="false">
+                <AntiforgeryToken />
+                <SettingsVersion TRecord="Truck" Id="_truck.Id" />
+                <TruckFields Truck="_truck" Owners="_owners" />
+                <label class="check">
+                    <input type="checkbox" name="active" value="true" checked="@_truck.IsActive" />
+                    <span>@L["Active: it can be dispatched"]</span>
+                </label>
+                <p class="hint">@L["A new owner or class applies to what's entered from now on."]</p>
+                <div class="actions"><button type="submit">@L["Save"]</button></div>
+            </PostForm>
+        </div>
+
+        <Notes EntityType="truck" EntityId="_truck.Id" />
+        <Attachments EntityType="truck" EntityId="_truck.Id" />
+    }
+</div>
+
+@code {
+    private Truck? _truck;
+    private IReadOnlyList<OwnerView> _owners = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _truck = await OwnerService.GetTruckAsync(Id);
+        if (_truck is not null)
+            _owners = await OwnerService.ListOwnersAsync(includeInactive: true);
+    }
+}

@@ -1,0 +1,167 @@
+@page "/dispatch/charges"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject OwnerService OwnerService
+@inject AccountService AccountService
+
+<PageTitle>@L["Charges and advances"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Charges and advances"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button secondary" Href="/dispatch/owners">@L["Owner-operators"]</ActionLink>
+    </div>
+    <p class="muted">@L["What owner-operators owe you: fuel, tolls, repairs and advances you paid for them. Each waits until a settlement has room to take it back, oldest first; a settlement never pays less than nothing."]</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <form method="get" action="/dispatch/charges" class="filters" role="search" aria-label="@L["Filter charges"]">
+        <div class="field">
+            <label for="filter-owner">@L["Owner-operator"]</label>
+            <select id="filter-owner" name="owner">
+                <option value="">@L["Everyone"]</option>
+                @foreach (var o in _owners)
+                {
+                    <option value="@o.Owner.Id" selected="@(o.Owner.Id == OwnerId)">@o.Name</option>
+                }
+            </select>
+        </div>
+        <label class="check">
+            <input type="checkbox" name="all" value="true" checked="@All" />
+            <span>@L["Taken back and voided too"]</span>
+        </label>
+        <button type="submit" class="secondary">@L["Show"]</button>
+    </form>
+
+    @if (_charges.Count == 0)
+    {
+        <p>@(All ? L["No charges yet."] : L["Nothing open."])</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Date"]</th><th>@L["Owner-operator"]</th><th>@L["Kind"]</th><th>@L["Description"]</th><th class="num">@L["Amount"]</th><th class="num">@L["Still open"]</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _charges)
+                    {
+                        <tr class="@(c.IsVoided ? "muted" : "")">
+                            <td><a href="/dispatch/charges/@c.Id">@Labels.Date(c.Date)</a></td>
+                            <td>@_names.GetValueOrDefault(c.OwnerId)</td>
+                            <td>@OwnerChargeKinds.Label(c.Kind)@(c.IsVoided ? L[" (voided)"] : "")</td>
+                            <td>@c.Description</td>
+                            <td class="num">@Labels.Amount(c.Amount)</td>
+                            <td class="num">@Labels.Amount(c.Balance)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot><tr><td colspan="5">@L["Total open"]</td><td class="num">@Labels.Amount(_charges.Sum(c => c.Balance))</td></tr></tfoot>
+            </table>
+        </div>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2 id="new">@L["Add a charge or advance"]</h2>
+        <PostForm Action="/dispatch/charges" data-enhance="false">
+            <AntiforgeryToken />
+            <input type="hidden" name="back" value="@(OwnerId is { } back ? $"/dispatch/charges?owner={back}" : "/dispatch/charges")" />
+            <div class="row">
+                <div class="field">
+                    <label for="charge-owner">@L["Owner-operator"]</label>
+                    <select id="charge-owner" name="ownerId" required data-search>
+                        <option value="">@L["Choose…"]</option>
+                        @foreach (var o in _owners.Where(o => o.Owner.IsActive))
+                        {
+                            <option value="@o.Owner.Id" selected="@(o.Owner.Id == OwnerId)">@o.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="charge-kind">@L["Kind"]</label>
+                    <select id="charge-kind" name="kind">
+                        @foreach (var k in Enum.GetValues<OwnerChargeKind>().Where(k => k != OwnerChargeKind.Carried))
+                        {
+                            <option value="@k">@OwnerChargeKinds.Label(k)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="charge-date">@L["Date"]</label>
+                    <input id="charge-date" name="date" type="date" required value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                </div>
+                <div class="field">
+                    <label for="charge-amount">@L["Amount"]</label>
+                    <input id="charge-amount" name="amount" inputmode="decimal" required />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="charge-paid-from">@L["Paid from"]</label>
+                    <select id="charge-paid-from" name="paidFrom" required data-search>
+                        <option value="">@L["Choose…"]</option>
+                        <option value="books">@L["Already in the books (on the owner receivable account)"]</option>
+                        @foreach (var a in _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(DispatchLabels.PaysCharges))
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                    <span class="hint">@L["Where the money came from: the bank for an advance, a fuel card's account for fuel."]</span>
+                </div>
+                <div class="field">
+                    <label for="charge-truck">@L["Truck"] <span class="muted">@L["(optional)"]</span></label>
+                    <select id="charge-truck" name="truckId">
+                        <option value="">@L["None"]</option>
+                        @foreach (var t in _trucks.Where(t => t.OwnerId is not null))
+                        {
+                            <option value="@t.Id">@t.Unit</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="charge-gallons">@L["Gallons"] <span class="muted">@L["(fuel)"]</span></label>
+                    <input id="charge-gallons" name="gallons" inputmode="decimal" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="charge-description">@L["Description"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="charge-description" name="description" maxlength="200" />
+                </div>
+                <div class="field">
+                    <label for="charge-reference">@L["Reference"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="charge-reference" name="reference" maxlength="60" />
+                </div>
+            </div>
+            <label class="check">
+                <input type="checkbox" name="counted1099" value="true" />
+                <span>@L["This money is already counted on the owner's 1099 (paid to them as an expense), so taking it back doesn't count again"]</span>
+            </label>
+            <div class="actions"><button type="submit">@L["Add"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<OwnerCharge> _charges = [];
+    private IReadOnlyList<OwnerView> _owners = [];
+    private IReadOnlyList<Truck> _trucks = [];
+    private Dictionary<Guid, string> _names = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery(Name = "owner")] private Guid? OwnerId { get; set; }
+    [SupplyParameterFromQuery] private bool All { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _owners = await OwnerService.ListOwnersAsync(includeInactive: true);
+        _names = _owners.ToDictionary(o => o.Owner.Id, o => o.Name);
+        _charges = await OwnerService.ListChargesAsync(OwnerId, openOnly: !All);
+        _trucks = await OwnerService.ListTrucksAsync();
+        _chart = await AccountService.GetChartAsync();
+    }
+}

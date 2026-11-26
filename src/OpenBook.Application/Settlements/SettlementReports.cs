@@ -28,6 +28,18 @@ public sealed class SettlementMileage(ISettlementStore store) : IMileageSource
                 new MilesDriven(s.Date, s.PeriodStart is { } from && from < s.Date ? from : s.Date, l.PostedClassId, s.LocationId, l.LoadedMiles ?? 0m, l.EmptyMiles ?? 0m)))];
 }
 
+/// <summary>
+/// The miles on owner-operators' settlements that stand, on the settlement's date and its line's class (the truck's, as
+/// reclassified since). A carrier's own miles: a company paid by a carrier gives its own through <see cref="SettlementMileage"/>.
+/// </summary>
+public sealed class OwnerMileage(IOwnerStore store) : IMileageSource
+{
+    public async Task<IReadOnlyList<MilesDriven>> ListAsync(CancellationToken ct) =>
+        [.. (await store.ListSettlementsAsync(null, ct)).Where(s => s.Stands)
+            .SelectMany(s => s.Lines.Where(l => l.Miles > 0m).Select(l =>
+                new MilesDriven(s.Date, s.PeriodStart is { } from && from < s.Date ? from : s.Date, l.ClassId, null, l.LoadedMiles ?? 0m, l.EmptyMiles ?? 0m)))];
+}
+
 /// <summary>The reports of a company paid by settlements: what it earned and cost per mile, its loads, its codes and its reserves.</summary>
 public sealed class SettlementReports(
     ISettlementStore store, ReportLedger ledger, AccountService accounts, ICompanyStore companies, ILedgerStore segments, IEnumerable<IMileageSource> mileage)

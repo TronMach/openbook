@@ -1,0 +1,69 @@
+@page "/dispatch/settlements"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject OwnerSettlementService SettlementService
+
+<PageTitle>@L["Owner settlements"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Owner settlements"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button" Href="/dispatch/settlements/new">@L["Pay owner-operators"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/pay-bills">@L["Pay their bills"]</ActionLink>
+    </div>
+    @if (Made is { } made)
+    {
+        <div class="alert notice" role="status">@L["Settlements made: {0}. Their bills are ready to pay on Pay bills.", made]</div>
+    }
+
+    @if (_settlements.Count == 0)
+    {
+        <p>@L["No settlements yet."]</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr><th class="num">@L["No."]</th><th>@L["Date"]</th><th>@L["Owner-operator"]</th><th class="num">@L["Earned"]</th><th class="num">@L["Net"]</th><th>@L["Bill"]</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var v in _settlements)
+                    {
+                        var s = v.Settlement;
+                        <tr class="@(s.Stands ? "" : "muted")">
+                            <td class="num"><a href="/dispatch/settlements/@s.Id">@s.Number</a></td>
+                            <td>@Labels.Date(s.Date)</td>
+                            <td>@v.OwnerName</td>
+                            <td class="num">@Labels.Amount(s.Earned)</td>
+                            <td class="num">@Labels.Amount(s.Net)</td>
+                            <td>
+                                @if (!s.Stands)
+                                {
+                                    @L["Voided"]
+                                }
+                                else if (v.Bill is { } bill)
+                                {
+                                    <a href="/purchases/bills/@bill.Id">@(bill.Balance == 0m ? L["Paid"] : bill.CanBePaid ? L["To pay"] : L["Waiting for approval"])</a>
+                                }
+                                else
+                                {
+                                    @L["Nothing to pay"]
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<OwnerSettlementView> _settlements = [];
+
+    [SupplyParameterFromQuery] private int? Made { get; set; }
+
+    protected override async Task OnInitializedAsync() => _settlements = await SettlementService.ListAsync();
+}

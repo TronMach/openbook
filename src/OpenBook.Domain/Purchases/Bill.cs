@@ -83,6 +83,14 @@ public sealed class Bill
         _sourceLines.AddRange(lines);
     }
 
+    /// <summary>
+    /// The owner-operator settlement that made it (Domain.Settlements). Such a bill is changed or voided only through its
+    /// settlement, since charges and reserves run forward from it.
+    /// </summary>
+    public Guid? OwnerSettlementId { get; private set; }
+
+    public void SetOwnerSettlement(Guid settlementId) => OwnerSettlementId = settlementId;
+
     /// <summary>Who entered it (the audit actor), for approvals by someone else.</summary>
     public string? EnteredBy { get; private set; }
 

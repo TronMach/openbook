@@ -62,6 +62,24 @@ public sealed class FormSnapshotTests
         Matches("minimal-invoice-de", Sales("minimal", FormDocuments.Invoice, SampleLines(), paper: FormPaperSize.A4, currency: "EUR", culture: "de-DE"));
     }
 
+    [Fact]
+    public void An_owner_settlement_statement_prints_as_saved()
+    {
+        using var region = new Region("en-US");
+        var (_, style) = Design("minimal", FormParts.None, null);
+        var form = new OwnerStatementForm(Company, new FormParty("Lee Freight LLC", "9 Depot Road\nSpringfield, IL 62703"), "Settlement 12", Date, Date.AddDays(-6), Date,
+            [
+                new OwnerStatementLine("Earnings", "Load 1001, linehaul", "1001", 640m, 1080m),
+                new OwnerStatementLine("Earnings", "Load 1001, fuel surcharge", "1001", null, 247.50m),
+                new OwnerStatementLine("Reimbursements", "Load 1001, tolls", "1001", null, 30m),
+                new OwnerStatementLine("Deductions", "Occupational accident", null, null, -45m),
+                new OwnerStatementLine("Charges taken back", "Fuel of Feb 24 (T1001)", null, null, -412.37m),
+                new OwnerStatementLine("Into reserves", "Maintenance", null, null, -32m),
+            ],
+            868.13m, [("Maintenance held for you", 1282m), ("Charges and advances you still owe", 99m)], "USD", style);
+        Matches("minimal-owner-settlement", Renderer.Render(form));
+    }
+
     private static byte[] Sales(
         string preset, FormDocuments document, IReadOnlyList<FormLine> lines, FormParts extra = FormParts.None,
         FormPaperSize? paper = null, string currency = "USD", string culture = "en-US")

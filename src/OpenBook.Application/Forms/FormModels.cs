@@ -165,6 +165,29 @@ public sealed record DonorLetter(
     string Currency,
     FormStyle Style);
 
+/// <summary>A line of an owner-operator's settlement statement, under its part ("Earnings", "Deductions").</summary>
+/// <param name="Miles">Loaded and empty miles together; null when none.</param>
+public sealed record OwnerStatementLine(string Part, string Description, string? Load, decimal? Miles, decimal Amount);
+
+/// <summary>
+/// What a carrier sends an owner-operator with a settlement: each line by its part, the net, and what's left after it
+/// (reserves held, charges still owed).
+/// </summary>
+/// <param name="Balances">"Maintenance reserve", 1,240.00: as they stand after the settlement.</param>
+public sealed record OwnerStatementForm(
+    FormParty Company,
+    FormParty Owner,
+    string Title,
+    DateOnly Date,
+    DateOnly? PeriodStart,
+    DateOnly PeriodEnd,
+    IReadOnlyList<OwnerStatementLine> Lines,
+    decimal Net,
+    IReadOnlyList<(string Label, decimal Amount)> Balances,
+    string Currency,
+    FormStyle Style,
+    string? Message = null);
+
 /// <summary>Renders forms to PDF. Implemented with MigraDoc in Infrastructure.</summary>
 public interface IFormRenderer
 {
@@ -176,6 +199,8 @@ public interface IFormRenderer
 
     /// <summary>Letters to donors, each starting on a new page, in one PDF (to print a batch).</summary>
     byte[] Render(IReadOnlyList<DonorLetter> letters);
+
+    byte[] Render(OwnerStatementForm form);
 
     /// <summary>Several PDFs as one, their pages in order.</summary>
     byte[] Combine(IReadOnlyList<byte[]> pdfs);

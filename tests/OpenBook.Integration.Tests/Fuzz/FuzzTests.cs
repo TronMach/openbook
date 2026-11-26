@@ -54,6 +54,7 @@ public sealed class FuzzTests
         new("csv", b => Csv.Parse(Text(b)), Seeds.Statement, Seeds.Wave, Seeds.Etsy),
         new("statement-values", b => StatementLine(Text(b)), Seeds.Statement),
         new("settlement-csv", b => OpenBook.Application.Settlements.SettlementReader.Read(Text(b), new DateOnly(2026, 3, 13)), Seeds.Settlement),
+        new("owner-charges-csv", b => OpenBook.Application.Settlements.OwnerChargeReader.Read(Text(b)), Seeds.FuelCard, Seeds.Tolls),
         new("settlement-words", b => OpenBook.Application.Settlements.SettlementTextParser.Parse(
             new OpenBook.Application.Settlements.StatementWords(true, StatementPages.ReadTsv(Text(b), 1)), new DateOnly(2026, 3, 13)), Seeds.OcrWords),
         new("settlement-answer", b => ClaudeSettlementReader.Parse(Text(b)), Seeds.SettlementAnswer),

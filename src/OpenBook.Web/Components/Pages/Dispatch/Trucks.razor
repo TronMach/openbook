@@ -1,0 +1,67 @@
+@page "/dispatch/trucks"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject OwnerService OwnerService
+
+<PageTitle>@L["Trucks"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Trucks"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button secondary" Href="/dispatch/owners">@L["Owner-operators"]</ActionLink>
+    </div>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_trucks.Count > 0)
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Unit"]</th><th>@L["Owner-operator"]</th><th>@L["Make and model"]</th><th>@L["Plate"]</th></tr></thead>
+                <tbody>
+                    @foreach (var t in _trucks)
+                    {
+                        <tr class="@(t.IsActive ? "" : "muted")">
+                            <td><a href="/dispatch/trucks/@t.Id">@t.Unit</a>@(t.IsActive ? "" : L[" (inactive)"])</td>
+                            <td>@(t.OwnerId is { } o ? _names.GetValueOrDefault(o) : L["Ours"])</td>
+                            <td>@(t.Year is { } y ? $"{y} " : "")@t.Make</td>
+                            <td>@t.Plate</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p>@L["No trucks yet."]</p>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2 id="new">@L["Add a truck"]</h2>
+        <PostForm Action="/dispatch/trucks" data-enhance="false">
+            <AntiforgeryToken />
+            <TruckFields Owners="_owners" />
+            <div class="actions"><button type="submit">@L["Add"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<Truck> _trucks = [];
+    private IReadOnlyList<OwnerView> _owners = [];
+    private Dictionary<Guid, string> _names = [];
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _trucks = await OwnerService.ListTrucksAsync(includeInactive: true);
+        _owners = await OwnerService.ListOwnersAsync(includeInactive: true);
+        _names = _owners.ToDictionary(o => o.Owner.Id, o => o.Name);
+    }
+}

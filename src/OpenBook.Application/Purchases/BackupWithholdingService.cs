@@ -49,7 +49,7 @@ public sealed record WithholdingReport(int Year, decimal OwedAtStart, IReadOnlyL
 /// "Backup Withholding Payable" (created on first use); an expense to that account pays it over to the IRS.
 /// </summary>
 public sealed class BackupWithholdingService(
-    IPurchasesStore store, AccountService accounts, IBankingStore bank, ICompanyStore companies, IClock clock, ICurrentUser user)
+    IPurchasesStore store, AccountService accounts, IBankingStore bank, ICompanyStore companies, IClock clock, ICurrentUser user, Settlements.IOwnerStore owners)
 {
     public const string AccountName = "Backup Withholding Payable";
     public const string LineMemo = "Backup withholding";
@@ -108,7 +108,9 @@ public sealed class BackupWithholdingService(
         ArgumentNullException.ThrowIfNull(chart);
         ArgumentNullException.ThrowIfNull(vendor);
         ArgumentNullException.ThrowIfNull(paid);
-        if ((!always && !vendor.WithholdsOn(date)) || chart.Find(paidFromAccountId)?.Type == AccountType.CreditCard)
+        // An owner-operator's settlement held it back from the gross already.
+        paid = [.. paid.Where(p => p.Bill.OwnerSettlementId is null)];
+        if ((!always && !vendor.WithholdsOn(date)) || chart.Find(paidFromAccountId)?.Type == AccountType.CreditCard || paid.Count == 0)
             return 0m;
         var excluded = NotReportable1099.Accounts(chart);
         var shares = paid.Select(p => p.Bill).DistinctBy(b => b.Id).ToDictionary(b => b.Id, b => NotReportable1099.Share(b, excluded));
@@ -164,6 +166,10 @@ public sealed class BackupWithholdingService(
         var payments = (await store.ListPaymentsAsync(null, ct)).ToDictionary(p => p.Id);
         var expenses = (await store.ListExpensesAsync(null, ct)).ToDictionary(e => e.Id);
         var vendors = (await store.ListVendorsAsync(ct)).ToDictionary(v => v.Id, v => v.DisplayName);
+        var settlements = await owners.ListSettlementsAsync(null, ct);
+        var byBill = settlements.Where(s => s.BillId is not null).ToDictionary(s => s.BillId!.Value);
+        var byId = settlements.ToDictionary(s => s.Id);
+        var ownerVendors = (await owners.ListOwnersAsync(ct)).ToDictionary(o => o.Id, o => o.VendorId);
         var result = new List<WithholdingLine>();
         // An entry is one line here, however many of its own are on the account.
         foreach (var entry in lines.Where(l => l.Date.Year == year).GroupBy(l => l.JournalEntryId))
@@ -172,7 +178,17 @@ public sealed class BackupWithholdingService(
             var amount = -entry.Sum(l => l.Amount);
             if (amount == 0m)
                 continue;
-            if (first.Source == BillPayment.Source && first.SourceId is { } paymentId && payments.GetValueOrDefault(paymentId) is { } payment)
+            var settlement = first.SourceId is not { } sourceId ? null
+                : first.Source == Bill.Source ? byBill.GetValueOrDefault(sourceId)
+                : first.Source == Domain.Settlements.OwnerSettlement.Source ? byId.GetValueOrDefault(sourceId) : null;
+            if (settlement is not null)
+            {
+                // Its gross, and what it held back (a void gives it back on the same day).
+                var payee = ownerVendors.TryGetValue(settlement.OwnerId, out var vendorId) ? vendors.GetValueOrDefault(vendorId) : null;
+                result.Add(new WithholdingLine(first.Date, "Owner settlement", payee, $"Settlement {settlement.Number}", amount > 0m ? settlement.ReportableGross : null,
+                    amount, 0m, 0m, "owner_settlement", settlement.Id));
+            }
+            else if (first.Source == BillPayment.Source && first.SourceId is { } paymentId && payments.GetValueOrDefault(paymentId) is { } payment)
             {
                 result.Add(new WithholdingLine(first.Date, "Bill payment", vendors.GetValueOrDefault(payment.VendorId), payment.Reference, payment.Amount, amount, 0m, 0m,
                     "bill_payment", payment.Id));

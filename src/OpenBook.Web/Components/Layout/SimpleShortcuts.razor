@@ -24,6 +24,10 @@
     {
         @Link("/settlements", L["Settlements"], AreaIcons.Truck)
     }
+    @if (Dispatch)
+    {
+        @Link("/dispatch", L["Dispatch"], AreaIcons.Truck)
+    }
     @if (Edition == Edition.ECommerce)
     {
         @Link("/sales/channels", L["Sales channels"], AreaIcons.Cart)
@@ -42,6 +46,9 @@
     /// <summary>Whether the company is paid by carrier settlements.</summary>
     [Parameter]
     public bool Settlements { get; set; }
+
+    [Parameter]
+    public bool Dispatch { get; set; }
 
     /// <summary>Whether each shortcut's picture is drawn above its name (the person's choice).</summary>
     [Parameter]

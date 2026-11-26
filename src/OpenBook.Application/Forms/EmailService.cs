@@ -549,6 +549,7 @@ public sealed class EmailService(
         EmailKind.PurchaseOrder => Purchases.PurchaseOrderService.EntityType,
         EmailKind.GiftAcknowledgment => Nonprofit.GiftService.DonationEntity,
         EmailKind.PaymentReceipt => Sales.PaymentService.EntityType,
+        EmailKind.OwnerSettlement => Settlements.OwnerSettlementService.EntityType,
         _ => "customer",
     };
 

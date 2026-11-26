@@ -98,7 +98,11 @@ public sealed class BillService(
     /// <param name="recurringBillId">The template entering it, recorded on the bill.</param>
     /// <param name="source">For a bill made from a purchase order.</param>
     /// <param name="approvedAs">For a bill made by approving something else (an expense claim): a hold is approved at once, with this note.</param>
-    internal async Task<Bill> CreateAsync(CreateBillCommand command, Guid? recurringBillId, CancellationToken ct, BillSource? source = null, string? approvedAs = null)
+    /// <param name="ownerSettlementId">The owner-operator settlement making it, which alone can void it.</param>
+    /// <param name="approvalTotal">What the approval limit is compared with, when not the total: a settlement's gross pay, before deductions.</param>
+    internal async Task<Bill> CreateAsync(
+        CreateBillCommand command, Guid? recurringBillId, CancellationToken ct, BillSource? source = null, string? approvedAs = null, Guid? ownerSettlementId = null,
+        decimal? approvalTotal = null)
     {
         ArgumentNullException.ThrowIfNull(command);
 
@@ -133,10 +137,14 @@ public sealed class BillService(
         bill.SetLocation(command.LocationId);
         bill.SetWarehouse(warehouseId);
         bill.SetEnteredBy(user.Actor);
+        if (ownerSettlementId is { } settlementId)
+            bill.SetOwnerSettlement(settlementId);
         var settings = await store.GetPurchasingSettingsAsync(ct);
         var holds = new List<string>(source?.Exceptions ?? []);
-        if (settings?.ApprovalThreshold is { } threshold && bill.Total >= threshold)
-            holds.Insert(0, $"The total, {bill.Total:N2}, is at or over the approval limit of {threshold:N2}.");
+        if (settings?.ApprovalThreshold is { } threshold && (approvalTotal ?? bill.Total) >= threshold)
+            holds.Insert(0, approvalTotal is { } gross
+                ? $"The gross pay, {gross:N2}, is at or over the approval limit of {threshold:N2}."
+                : $"The total, {bill.Total:N2}, is at or over the approval limit of {threshold:N2}.");
         bill.Hold(holds);
         if (approvedAs is not null && bill.Approval == BillApproval.Pending)
             bill.Approve(user.Actor, clock.UtcNow, approvedAs);
@@ -185,6 +193,8 @@ public sealed class BillService(
         var bill = await store.GetBillAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (bill.Status == DocumentStatus.Voided)
             throw new DomainException("bill.voided", "This bill is voided, so it can't be changed.");
+        if (bill.OwnerSettlementId is not null)
+            throw new DomainException("bill.from_settlement", "This bill was made by an owner-operator's settlement. Void the settlement and run it again to change it.");
         if (bill.PurchaseOrderId != source?.PurchaseOrderId)
             throw new DomainException("bill.from_order",
                 "This bill was entered from a purchase order, so it's changed from the order's side: use Change on the bill's page.");
@@ -304,9 +314,16 @@ public sealed class BillService(
         return Posted(a).SequenceEqual(Posted(b));
     }
 
-    public async Task<Bill> VoidAsync(Guid id, string reason, CancellationToken ct = default)
+    public Task<Bill> VoidAsync(Guid id, string reason, CancellationToken ct = default) => VoidAsync(id, reason, fromSettlement: false, ct);
+
+    /// <summary>Voids the bill of an owner-operator settlement being voided.</summary>
+    internal Task<Bill> VoidFromSettlementAsync(Guid id, string reason, CancellationToken ct) => VoidAsync(id, reason, fromSettlement: true, ct);
+
+    private async Task<Bill> VoidAsync(Guid id, string reason, bool fromSettlement, CancellationToken ct)
     {
         var bill = await store.GetBillAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
+        if (bill.OwnerSettlementId is not null && !fromSettlement)
+            throw new DomainException("bill.from_settlement", "This bill was made by an owner-operator's settlement: void the settlement instead.");
         if (bill.Status == DocumentStatus.Voided)
             throw new DomainException("bill.already_voided", "This bill is already voided.");
         if (bill.AmountPaid > 0m)
@@ -361,6 +378,7 @@ public sealed class BillService(
         b.ApprovedBy,
         b.ApprovedAt,
         b.ApprovalNote,
+        b.OwnerSettlementId,
         Lines = b.Lines.Select(l => new { l.AccountId, l.Description, l.Amount, l.ItemId, l.Quantity }),
         SourceLines = b.SourceLines.Select(l => new { l.LineNumber, l.Quantity, l.Amount }),
     });

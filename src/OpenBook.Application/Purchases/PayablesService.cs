@@ -55,7 +55,8 @@ public sealed record Payment1099(
 }
 
 /// <summary>What you owe vendors by age (A/P aging), and what you paid 1099 vendors in a year.</summary>
-public sealed class PayablesService(IPurchasesStore store, AccountService accounts, ILedgerStore ledger, SalesTax.ISalesTaxStore taxes, BackupWithholdingService withholding)
+public sealed class PayablesService(
+    IPurchasesStore store, AccountService accounts, ILedgerStore ledger, SalesTax.ISalesTaxStore taxes, BackupWithholdingService withholding, Settlements.IOwnerStore owners)
 {
     /// <summary>
     /// The 1099-NEC/MISC reporting threshold for payments made in <paramref name="year"/>: $600 through 2025,
@@ -158,7 +159,8 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
         if (excludedAccounts.Count > 0)
         {
             var paidBills = payments.Concat(fromDeposit.SelectMany(g => g)).SelectMany(p => p.Applications.Select(a => a.BillId)).ToHashSet();
-            foreach (var bill in (await store.ListBillsAsync(null, ct)).Where(b => paidBills.Contains(b.Id)))
+            // A settlement's bill is counted from its gross below, whatever accounts its deductions went to.
+            foreach (var bill in (await store.ListBillsAsync(null, ct)).Where(b => paidBills.Contains(b.Id) && b.OwnerSettlementId is null))
                 excludedShare[bill.Id] = NotReportable1099.Share(bill, excludedAccounts);
         }
 
@@ -196,6 +198,19 @@ public sealed class PayablesService(IPurchasesStore store, AccountService accoun
             foreach (var d in deposits)
                 foreach (var r in d.Refunds.Where(r => !r.IsVoided && InYear(r.Date)))
                     Add(d.VendorId, r.Date, "Deposit refund", r.Reference, r.AccountId, -r.Amount, 0m, "vendor_deposit", d.Id);
+        }
+
+        // An owner-operator's settlement: its bill's payment counts the net, so this adds what was taken out of the reportable
+        // gross (deductions, charges, reserves, withholding) and takes off what was paid that isn't (reimbursements, reserves
+        // paid out). A charge whose money was already counted (an advance paid as an expense) isn't counted again.
+        var counted = (await owners.ListChargesAsync(null, ct)).Where(c => c.Counted1099).Select(c => c.Id).ToHashSet();
+        var ownerVendors = (await owners.ListOwnersAsync(ct)).ToDictionary(o => o.Id, o => o.VendorId);
+        foreach (var s in (await owners.ListSettlementsAsync(null, ct)).Where(s => s.Stands && InYear(s.Date)))
+        {
+            var already = -s.Lines.Where(l => l.Kind == Domain.Settlements.OwnerLineKind.Charge && l.ChargeId is { } c && counted.Contains(c)).Sum(l => l.Amount);
+            var amount = s.ReportableGross - s.Net - already;
+            if (ownerVendors.TryGetValue(s.OwnerId, out var vendor) && (amount != 0m || s.Withheld != 0m))
+                result.Add(new Payment1099(vendor, s.Date, "Owner settlement, taken out of gross", $"Settlement {s.Number}", null, amount, 0m, false, "owner_settlement", s.Id, s.Withheld));
         }
 
         foreach (var p in await store.ListPrior1099Async(year, ct))

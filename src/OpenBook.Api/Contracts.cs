@@ -112,7 +112,8 @@ public sealed record CompanySettingsRequest(
     ViewMode? DefaultViewMode = null,
     bool? AllowSellingShort = null,
     string? Region = null,
-    bool? UsesSettlements = null);
+    bool? UsesSettlements = null,
+    bool? PaysOwnerOperators = null);
 
 public sealed record CompanyResponse(
     Guid Id,
@@ -131,9 +132,10 @@ public sealed record CompanyResponse(
     ViewMode DefaultViewMode,
     bool AllowSellingShort,
     string? Region,
-    bool UsesSettlements)
+    bool UsesSettlements,
+    bool PaysOwnerOperators = false)
 {
     public static CompanyResponse From(Company c) => new(
         c.Id, c.Name, c.BusinessType, c.LegalName, c.Email, c.Phone, c.Address, c.HomeCurrency.Code,
-        c.FiscalYearStartMonth, c.UseAccountNumbers, c.DefaultReportBasis, c.Edition, c.TimeZoneId, c.DefaultViewMode, c.AllowSellingShort, c.Region, c.UsesSettlements);
+        c.FiscalYearStartMonth, c.UseAccountNumbers, c.DefaultReportBasis, c.Edition, c.TimeZoneId, c.DefaultViewMode, c.AllowSellingShort, c.Region, c.UsesSettlements, c.PaysOwnerOperators);
 }
