@@ -36,12 +36,14 @@ public sealed record OwnerReserveResponse(int Number, string Name, ReserveMethod
 
 public sealed record OwnerResponse(
     Guid Id, string Name, Guid VendorId, Guid PayAccountId, Guid ReceivableAccountId, Guid ReserveAccountId, Guid? ClassId, string? Memo, bool IsActive,
-    IReadOnlyList<OwnerReserveResponse> Reserves, IReadOnlyList<OwnerDeductionResponse>? Deductions = null)
+    IReadOnlyList<OwnerReserveResponse> Reserves, IReadOnlyList<OwnerDeductionResponse>? Deductions = null, PayBasis PayBasis = PayBasis.Typed, decimal PayRate = 0m,
+    bool PayEmptyMiles = false, IReadOnlyList<OwnerPassThroughRequest>? PassThroughs = null)
 {
     public static OwnerResponse From(OwnerView v) => new(
         v.Owner.Id, v.Name, v.Owner.VendorId, v.Owner.PayAccountId, v.Owner.ReceivableAccountId, v.Owner.ReserveAccountId, v.Owner.ClassId, v.Owner.Memo, v.Owner.IsActive,
         v.Owner.Reserves.Select(r => new OwnerReserveResponse(r.Number, r.Name, r.Method, r.Rate, r.Target, r.Opening, r.InterestPercent, r.IsActive)).ToList(),
-        v.Owner.Deductions.Select(d => new OwnerDeductionResponse(d.Number, d.Name, d.AccountId, d.Method, d.Rate, d.UpTo, d.Priority, d.StartsOn, d.EndsOn, d.CarryShort, d.IsActive)).ToList());
+        v.Owner.Deductions.Select(d => new OwnerDeductionResponse(d.Number, d.Name, d.AccountId, d.Method, d.Rate, d.UpTo, d.Priority, d.StartsOn, d.EndsOn, d.CarryShort, d.IsActive)).ToList(),
+        v.Owner.PayBasis, v.Owner.PayRate, v.Owner.PayEmptyMiles, v.Owner.PassThroughs.Select(p => new OwnerPassThroughRequest(p.Charge, p.Percent)).ToList());
 }
 
 public sealed record TruckRequest(string Unit, Guid? OwnerId = null, Guid? ClassId = null, string? Vin = null, string? Plate = null, int? Year = null, string? Make = null, bool? IsActive = null)
@@ -102,6 +104,16 @@ public sealed record LoadRequest(
 }
 
 public sealed record LoadStopTimesRequest(DateTimeOffset? Arrived, DateTimeOffset? Departed);
+
+public sealed record LoadInvoiceRequest(DateOnly? Date = null);
+
+/// <param name="FreeHours">Free time at each stop.</param>
+public sealed record LoadDetentionRequest(decimal FreeHours, decimal Rate, Guid? ItemId = null);
+
+/// <summary>The owner's share of a kind of load charge other than linehaul.</summary>
+public sealed record OwnerPassThroughRequest(LoadCharge Charge, decimal Percent);
+
+public sealed record OwnerPayRequest(PayBasis Basis, decimal Rate = 0m, bool EmptyMiles = false, IReadOnlyList<OwnerPassThroughRequest>? PassThroughs = null);
 
 public sealed record LoadStatusRequest(LoadStatus Status);
 
@@ -167,6 +179,21 @@ public static class DispatchApi
         {
             await s.SetStatusAsync(id, r.Status, ct);
             return LoadResponse.From((await s.GetAsync(id, ct))!);
+        });
+        dispatch.MapPost("/loads/{id:guid}/invoice", async (Guid id, LoadInvoiceRequest r, LoadService s, CancellationToken ct) =>
+        {
+            var invoice = await s.InvoiceAsync(id, r.Date, ct);
+            return Results.Created($"/api/sales/invoices/{invoice.Id}", new { invoice.Id, invoice.Number, invoice.Total });
+        });
+        dispatch.MapPost("/loads/{id:guid}/detention", async (Guid id, LoadDetentionRequest r, LoadService s, CancellationToken ct) =>
+        {
+            await s.ChargeDetentionAsync(id, r.FreeHours, r.Rate, r.ItemId, ct);
+            return LoadResponse.From((await s.GetAsync(id, ct))!);
+        });
+        dispatch.MapPut("/owners/{id:guid}/pay", async (Guid id, OwnerPayRequest r, OwnerService s, CancellationToken ct) =>
+        {
+            await s.SetPayAsync(id, r.Basis, r.Rate, r.EmptyMiles, [.. (r.PassThroughs ?? []).Select(p => (p.Charge, p.Percent))], ct);
+            return OwnerResponse.From((await s.GetOwnerAsync(id, ct))!);
         });
         dispatch.MapPost("/loads/{id:guid}/cancel", async (Guid id, LoadService s, CancellationToken ct) =>
         {

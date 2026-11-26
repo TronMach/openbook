@@ -8505,6 +8505,18 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.Property<Guid>("PayAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("PayBasis")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("PayEmptyMiles")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("PayRate")
+                        .HasColumnType("bigint")
+                        .HasColumnName("PayRateTenThousandths");
+
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("uuid");
 
@@ -14434,6 +14446,27 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                                 .HasForeignKey("OwnerId");
                         });
 
+                    b.OwnsMany("OpenBook.Domain.Settlements.OwnerPassThrough", "PassThroughs", b1 =>
+                        {
+                            b1.Property<Guid>("OwnerId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Charge")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<long>("Percent")
+                                .HasColumnType("bigint")
+                                .HasColumnName("PercentTenThousandths");
+
+                            b1.HasKey("OwnerId", "Charge");
+
+                            b1.ToTable("OwnerPassThroughs", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("OwnerId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Settlements.OwnerReserve", "Reserves", b1 =>
                         {
                             b1.Property<Guid>("OwnerId")
@@ -14480,6 +14513,8 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         });
 
                     b.Navigation("Deductions");
+
+                    b.Navigation("PassThroughs");
 
                     b.Navigation("Reserves");
                 });

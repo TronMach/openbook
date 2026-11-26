@@ -14,7 +14,7 @@
     else
     {
         var load = _view.Load;
-        var open = load.Status != LoadStatus.Cancelled && load.InvoiceId is null;
+        var open = load.Status != LoadStatus.Cancelled && !_view.Billed;
         <div class="toolbar">
             <h1>@L["Load {0}", load.Number] · @_view.Customer</h1>
             <span class="badge">@LoadStatuses.Label(load.Status)</span>
@@ -55,7 +55,7 @@
                 }
                 @if (load.InvoiceId is { } invoiceId)
                 {
-                    <dt>@L["Invoice"]</dt><dd><a href="/sales/invoices/@invoiceId">@L["Open"]</a></dd>
+                    <dt>@L["Invoice"]</dt><dd><a href="/sales/invoices/@invoiceId">@(_view.Billed ? L["Open"] : L["Voided; it can be invoiced again"])</a></dd>
                 }
             </dl>
         </div>
@@ -116,6 +116,62 @@
                 </table>
             </div>
         </div>
+
+        @if (open && load.Status == LoadStatus.Delivered)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2 id="invoice">@L["Invoice the customer"]</h2>
+                @if (load.Charges.Any(c => c.ItemId is null))
+                {
+                    <p>@L["Choose the item each charge is invoiced with first."] <ActionLink Href="@($"/dispatch/loads/{load.Id}/edit")">@L["Change the load"]</ActionLink></p>
+                }
+                else
+                {
+                    <PostForm Action="@($"/dispatch/loads/{load.Id}/invoice")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <div class="row">
+                            <div class="field">
+                                <label for="invoice-date">@L["Invoice date"]</label>
+                                <input id="invoice-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                            <div class="actions"><button type="submit">@L["Invoice {0}", Labels.Amount(load.Total)]</button></div>
+                        </div>
+                    </PostForm>
+                }
+            </div>
+        }
+
+        @if (open && load.Stops.Any(s => s.Stayed is not null))
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2 id="detention">@L["Detention"]</h2>
+                <p class="muted">@L["The truck spent {0} hours at this load's stops beyond 2 free hours at each. Charge it here; charging it again replaces the detention charge.", load.DetentionHours(2m).ToString("0.##")]</p>
+                <PostForm Action="@($"/dispatch/loads/{load.Id}/detention")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="row">
+                        <div class="field">
+                            <label for="free-hours">@L["Free hours at each stop"]</label>
+                            <input id="free-hours" name="freeHours" inputmode="decimal" value="2" />
+                        </div>
+                        <div class="field">
+                            <label for="detention-rate">@L["Rate per hour"]</label>
+                            <input id="detention-rate" name="rate" inputmode="decimal" required />
+                        </div>
+                        <div class="field">
+                            <label for="detention-item">@L["Item"] <span class="muted">@L["(optional)"]</span></label>
+                            <select id="detention-item" name="itemId" data-search>
+                                <option value="">@L["None yet"]</option>
+                                @foreach (var item in _items)
+                                {
+                                    <option value="@item.Id">@item.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="actions"><button type="submit" class="secondary">@L["Charge detention"]</button></div>
+                    </div>
+                </PostForm>
+            </div>
+        }
 
         <div class="card" style="margin-top: 1.5rem">
             <h2>@L["Trucks"]</h2>
@@ -185,5 +241,14 @@
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
 
-    protected override async Task OnInitializedAsync() => _view = await LoadService.GetAsync(Id);
+    private IReadOnlyList<OpenBook.Domain.Sales.Item> _items = [];
+
+    [Inject] private OpenBook.Application.Sales.ItemService Items { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await LoadService.GetAsync(Id);
+        if (_view is not null)
+            _items = [.. (await Items.ListAsync()).Where(i => i.IsActive)];
+    }
 }

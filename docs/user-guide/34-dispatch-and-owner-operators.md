@@ -64,6 +64,23 @@ A load with a truck is **Dispatched**. On the load's page, save when the truck *
 
 A load posts nothing in the books: its invoice does, and the owner-operators' settlements pay for it. Attach the rate confirmation, bill of lading and proof of delivery on its page.
 
+### Invoicing a load
+
+Once a load is **Delivered**, its page has **Invoice the customer**: choose the date and OpenBook makes the invoice, a line for each charge with its item, quantity and rate, and the customer's load number in the memo. Each charge needs its item first (change the load to choose them). The load then leaves the board. If that invoice is voided, the load can be changed and invoiced again.
+
+### Detention
+
+When the truck's times at a load's stops are saved, its page shows how long it spent beyond the free time at each, and **Charge detention** adds a detention charge for those hours (rounded up to the quarter hour) at the rate per hour you give, before you invoice. Charged again, it replaces the one there is.
+
+### Pay for loads
+
+On the owner-operator's page, **Pay for loads** says how they're paid for the loads their trucks deliver:
+
+- **A percent of linehaul**, **by the mile** (the truck's own loaded miles, and its empty miles too if you tick it) or **a flat amount a load**. **As typed into each run** leaves it to you.
+- Their share, in percent, of the customer's **other charges**: fuel surcharge, tolls, detention, tarps, other. Tolls are paid as a reimbursement (not on the 1099), the rest as earnings.
+
+The weekly run then pays each delivered load once, for each of the owner's trucks on it: a load split between trucks pays each truck its share. A load whose truck left the last delivery after the run's **Through** date waits for the next run. A load paid on a settlement can't have its truck changed or be cancelled until that settlement is voided.
+
 ## Charges and advances
 
 **Dispatch → Charges and advances.** Anything an owner-operator owes you waits here until a settlement takes it back: fuel on your fuel card, tolls, a repair you paid the shop for, or an **advance** of money.
@@ -86,6 +103,8 @@ Settlements take charges back oldest first, as far as each week's pay allows. A 
 4. **Make the settlements**: each owner-operator gets one bill, numbered **Settlement 1**, **Settlement 2** and so on, to pay on **Pay bills** by check or ACH like any other.
 
 What's taken out, in this order and only as far as the pay goes:
+
+Their pay is what their loads earned by their pay rule (see Pay for loads), plus what you type. What's taken out, in order:
 
 1. **Backup withholding**, when it's turned on for their vendor record (24% of what counts on the 1099).
 2. **Regular deductions**, in their order.

@@ -78,6 +78,12 @@ The carrier's side: the company pays owner-operators by settlement and dispatche
 - Audit snapshots give stops by kind and time, not places (they name the customer's customers).
 - Pages `/dispatch/loads` (board by status; `?all=true` a table), `/dispatch/loads/new` and `/{id}/edit` (interactive, `FormDraft` "load-new"), `/dispatch/loads/{id}` (stop times by datetime-local forms in the company's time, status); API `/api/dispatch/loads` (`{id}/stops/{sequence}`, `status`, `cancel`, `restore`).
 
+## Invoicing loads and pay rules (B5, 2026-11-26)
+
+- `LoadService.InvoiceAsync`: a Delivered load whose charges all have items becomes one invoice through `InvoiceService.CreateAsync` (a line per charge, the reference in the memo), in one transaction with `Load.InvoiceId`. A load is billed while that invoice stands (`LoadView.Billed`): a voided one is forgotten (`ForgetVoidedInvoiceAsync`, audited) before a change, a cancel or invoicing again, so the invoice service needs no hook.
+- Detention: `Load.DetentionHours(free)` sums each stop's time beyond the free hours, rounded up to the quarter hour; `ChargeDetentionAsync` replaces the Detention charge with those hours at the rate.
+- `OwnerOperator.PayBasis` (Typed, PercentOfLinehaul, PerMile, Flat; backfilled "Typed"), `PayRate`, `PayEmptyMiles`, owned `OwnerPassThrough`s (percent per non-linehaul `LoadCharge`). The run (`OwnerRunEntry.Loads`, on by default) adds, before typed pay, each dispatch of the owner's trucks on a Delivered load whose last delivery was left by `Through` (or marked delivered without times) and not on a standing settlement: linehaul × share × percent, or the truck's loaded (and empty) miles × rate, or the flat rate × share; then each pass-through charge × share × percent (tolls as a Reimbursement). Lines carry `LoadId`, `DispatchNumber`, quantity and rate; a paid dispatch can't change and blocks cancelling, until its settlement is voided.
+
 - **Before release**: an accountant should confirm the 1099 gross treatment. Never call any of this compliant with 49 CFR 376.
 
 ## The edition and the setting

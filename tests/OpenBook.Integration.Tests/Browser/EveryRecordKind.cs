@@ -199,7 +199,9 @@ internal static class EveryRecordKind
         var at = new DateTimeOffset(d.ToDateTime(new TimeOnly(15, 0)), TimeSpan.Zero);
         var load = await In<LoadService, Load>(s => s.CreateAsync(new LoadDetails(shipper.Id, "PO-1",
             [new(StopKind.Pickup, "Elevator", at), new(StopKind.Delivery, "Mill", at.AddDays(1))], [new(LoadCharge.Linehaul, 500m, 2m, "Linehaul")], [new(truck.Id, "Pat", 500m, 30m)], 500m)));
-        await Do<LoadService>(s => s.RecordStopAsync(load.Id, 1, at, at.AddHours(2)));
+        await Do<LoadService>(s => s.RecordStopAsync(load.Id, 1, at, at.AddHours(4)));
+        await Do<LoadService>(s => s.RecordStopAsync(load.Id, 2, at.AddDays(1), at.AddDays(1).AddHours(1)));
+        await Do<OwnerService>(s => s.SetPayAsync(owner.Id, PayBasis.PercentOfLinehaul, 72m, false, [(LoadCharge.FuelSurcharge, 100m)]));
         await Do<LoadService>(s => s.CreateAsync(new LoadDetails(shipper.Id, null, [new(StopKind.Pickup, "Dock 4"), new(StopKind.Delivery, "Store 12")], [])));
 
         // Nonprofit: a gift, a pledge, a grant, a release of restricted money.

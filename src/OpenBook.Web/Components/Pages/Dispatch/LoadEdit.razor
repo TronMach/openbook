@@ -209,7 +209,7 @@
             _customers = [.. customers.Where(c => c.IsActive || c.Id == load?.CustomerId)];
             _items = [.. items.Where(i => i.IsActive || load?.Charges.Any(c => c.ItemId == i.Id) == true)];
             _trucks = trucks;
-            if (Id is not null && (load is null || load.Status == LoadStatus.Cancelled || load.InvoiceId is not null))
+            if (Id is not null && (load is null || load.Status == LoadStatus.Cancelled || view!.Billed))
                 _problem = load is null ? L["That load doesn't exist."] : L["Only a load that isn't cancelled or invoiced can be changed."];
             else if (load is not null)
                 Show(load);

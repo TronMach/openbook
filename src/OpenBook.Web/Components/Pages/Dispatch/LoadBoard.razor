@@ -58,7 +58,7 @@
                             <td class="num"><a href="/dispatch/loads/@v.Load.Id">@v.Load.Number</a></td>
                             <td>@v.Customer</td>
                             <td>@DispatchLabels.Route(v.Load)</td>
-                            <td>@LoadStatuses.Label(v.Load.Status)@(v.Load.InvoiceId is null ? "" : L[", invoiced"])</td>
+                            <td>@LoadStatuses.Label(v.Load.Status)@(v.Billed ? L[", invoiced"] : "")</td>
                             <td class="num">@Labels.Amount(v.Load.Total)</td>
                         </tr>
                     }

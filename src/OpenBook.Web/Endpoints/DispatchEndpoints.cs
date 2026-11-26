@@ -73,6 +73,38 @@ public static class DispatchEndpoints
         app.MapPost("/dispatch/loads/{id:guid}/stops/{sequence:int}", async (Guid id, int sequence, IFormCollection form, LoadService loads, CancellationToken ct) =>
             await Back($"/dispatch/loads/{id}#stops", () => loads.RecordStopAsync(id, sequence, LocalTime(form["arrived"]), LocalTime(form["departed"]), ct))).RequireAuthorization();
 
+        app.MapPost("/dispatch/loads/{id:guid}/invoice", async (Guid id, IFormCollection form, LoadService loads, CancellationToken ct) =>
+        {
+            try
+            {
+                var invoice = await loads.InvoiceAsync(id, DateOnly.TryParse(form["date"], CultureInfo.InvariantCulture, out var date) ? date : null, ct);
+                return Results.Redirect($"/sales/invoices/{invoice.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/dispatch/loads/{id}?error={Uri.EscapeDataString(ex.Message)}#invoice");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/dispatch/loads/{id:guid}/detention", async (Guid id, IFormCollection form, LoadService loads, CancellationToken ct) =>
+            await Back($"/dispatch/loads/{id}#invoice", () => loads.ChargeDetentionAsync(id, Number(form, "freeHours", "free time") ?? 2m,
+                Number(form, "rate", "rate") ?? throw new DomainException("load.rate", "Enter the detention rate per hour."), Id(form, "itemId"), ct))).RequireAuthorization();
+
+        // Pay rule: basis, rate, emptyMiles, pass:{charge} percents (blank for none).
+        app.MapPost("/dispatch/owners/{id:guid}/pay", async (Guid id, IFormCollection form, OwnerService owners, CancellationToken ct) =>
+            await Back($"/dispatch/owners/{id}#pay", () =>
+            {
+                var passes = new List<(LoadCharge, decimal)>();
+                foreach (var charge in Enum.GetValues<LoadCharge>().Where(c => c != LoadCharge.Linehaul))
+                {
+                    if (Number(form, $"pass:{charge}", "share") is { } percent)
+                        passes.Add((charge, percent));
+                }
+
+                return owners.SetPayAsync(id, Enum.TryParse<PayBasis>(form["basis"], out var basis) ? basis : PayBasis.Typed, Number(form, "rate", "pay rate") ?? 0m,
+                    form["emptyMiles"] == "true", passes, ct);
+            })).RequireAuthorization();
+
         app.MapPost("/dispatch/loads/{id:guid}/status", async (Guid id, IFormCollection form, LoadService loads, CancellationToken ct) =>
             await Back($"/dispatch/loads/{id}", () => form["status"].ToString() switch
             {

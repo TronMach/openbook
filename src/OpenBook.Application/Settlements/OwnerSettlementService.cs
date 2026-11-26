@@ -22,7 +22,9 @@ public sealed record OwnerPayDraft(
 public sealed record OwnerRelease(int ReserveNumber, decimal Amount);
 
 /// <param name="Hold">Leave this owner out of the run; what they earned waits for the next one.</param>
-public sealed record OwnerRunEntry(Guid OwnerId, IReadOnlyList<OwnerPayDraft>? Pay = null, IReadOnlyList<OwnerRelease>? Releases = null, bool Hold = false, string? Memo = null);
+/// <param name="Loads">Pay the loads its trucks delivered through the run's date, by its pay rule.</param>
+public sealed record OwnerRunEntry(
+    Guid OwnerId, IReadOnlyList<OwnerPayDraft>? Pay = null, IReadOnlyList<OwnerRelease>? Releases = null, bool Hold = false, string? Memo = null, bool Loads = true);
 
 /// <param name="Through">The period's last day: charges dated after it wait.</param>
 /// <param name="Date">The bills' date; defaults to today.</param>
@@ -226,6 +228,9 @@ public sealed class OwnerSettlementService(
                 pay.Reportable ?? pay.Kind == OwnerLineKind.Earning));
         }
 
+        if (entry.Loads && owner.PayBasis != PayBasis.Typed)
+            lines.AddRange(await LoadPayAsync(owner, through, trucks, ClassOf, ct));
+
         var balances = (await owners.ReserveBalancesAsync(owner, ct)).ToDictionary(b => b.Reserve.Number);
         foreach (var release in (entry.Releases ?? []).Where(r => r.Amount != 0m))
         {
@@ -313,6 +318,53 @@ public sealed class OwnerSettlementService(
 
         return new OwnerPlan(view, lines, stillOpen, notes);
     }
+
+    /// <summary>
+    /// What the owner earns for each dispatch of its trucks on a load delivered by <paramref name="through"/> (the truck
+    /// left the last delivery that day or before, or it was marked delivered without times) and not paid on a settlement
+    /// that stands: linehaul by its pay rule, times the truck's share; then its share of each other charge it passes
+    /// through, tolls as a reimbursement.
+    /// </summary>
+    private async Task<IReadOnlyList<OwnerLineDraft>> LoadPayAsync(
+        OwnerOperator owner, DateOnly through, IReadOnlyDictionary<Guid, Truck> trucks, Func<Guid?, Guid?> classOf, CancellationToken ct)
+    {
+        var paid = (await store.ListSettlementsAsync(null, ct)).Where(s => s.Stands).SelectMany(s => s.Lines)
+            .Where(l => l.LoadId is not null && l.DispatchNumber is not null).Select(l => (l.LoadId!.Value, l.DispatchNumber!.Value)).ToHashSet();
+        var lines = new List<OwnerLineDraft>();
+        foreach (var load in (await store.ListLoadsAsync(ct)).Where(l => l.Status == LoadStatus.Delivered
+                     && (l.DeliveredAt is not { } at || CompanyTime.TodayAt(at, CompanyTime.Zone) <= through)).OrderBy(l => l.Number))
+        {
+            foreach (var dispatch in load.Dispatches.Where(d => trucks.GetValueOrDefault(d.TruckId)?.OwnerId == owner.Id && !paid.Contains((load.Id, d.Number))))
+            {
+                var share = dispatch.SharePercent / 100m;
+                var loaded = dispatch.LoadedMiles ?? (load.Miles is { } miles ? decimal.Round(miles * share, 1) : null);
+                var linehaul = load.Charges.Where(c => c.Charge == LoadCharge.Linehaul).Sum(c => c.Amount) * share;
+                var (quantity, amount) = owner.PayBasis switch
+                {
+                    PayBasis.PercentOfLinehaul => (Round(linehaul), Round(linehaul * owner.PayRate / 100m)),
+                    PayBasis.PerMile => ((loaded ?? 0m) + (owner.PayEmptyMiles ? dispatch.EmptyMiles ?? 0m : 0m), Round(((loaded ?? 0m) + (owner.PayEmptyMiles ? dispatch.EmptyMiles ?? 0m : 0m)) * owner.PayRate)),
+                    _ => (share, Round(owner.PayRate * share)),
+                };
+                var classId = classOf(dispatch.TruckId);
+                lines.Add(new OwnerLineDraft(OwnerLineKind.Earning, $"Load {load.Number}, linehaul", amount, owner.PayAccountId, classId, $"{load.Number}", dispatch.TruckId,
+                    loaded, dispatch.EmptyMiles, Reportable: true, LoadId: load.Id, DispatchNumber: dispatch.Number, Quantity: quantity, Rate: owner.PayRate));
+                foreach (var pass in owner.PassThroughs.Where(p => p.Percent > 0m))
+                {
+                    var billed = load.Charges.Where(c => c.Charge == pass.Charge).Sum(c => c.Amount) * share;
+                    if (Round(billed * pass.Percent / 100m) is not (> 0m and var passed))
+                        continue;
+                    var kind = pass.Charge == LoadCharge.Tolls ? OwnerLineKind.Reimbursement : OwnerLineKind.Earning;
+                    lines.Add(new OwnerLineDraft(kind, $"Load {load.Number}, {LoadCharges.Label(pass.Charge).ToLowerInvariant()}", passed, owner.PayAccountId, classId,
+                        $"{load.Number}", dispatch.TruckId, Reportable: kind == OwnerLineKind.Earning, LoadId: load.Id, DispatchNumber: dispatch.Number,
+                        Quantity: Round(billed), Rate: pass.Percent));
+                }
+            }
+        }
+
+        return lines;
+    }
+
+    private static decimal Round(decimal amount) => decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>Stands in for the withholding account in a preview, before it's made.</summary>
     private static readonly Guid WithholdingPlaceholder = new("00000000-0000-7000-8000-0000000000bb");

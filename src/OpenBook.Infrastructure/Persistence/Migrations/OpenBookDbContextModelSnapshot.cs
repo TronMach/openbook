@@ -8498,6 +8498,18 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("PayAccountId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PayBasis")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PayEmptyMiles")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PayRate")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("PayRateTenThousandths");
+
                     b.Property<Guid>("ReceivableAccountId")
                         .HasColumnType("TEXT");
 
@@ -14357,6 +14369,27 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("OwnerId");
                         });
 
+                    b.OwnsMany("OpenBook.Domain.Settlements.OwnerPassThrough", "PassThroughs", b1 =>
+                        {
+                            b1.Property<Guid>("OwnerId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Charge")
+                                .HasMaxLength(20)
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long>("Percent")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("PercentTenThousandths");
+
+                            b1.HasKey("OwnerId", "Charge");
+
+                            b1.ToTable("OwnerPassThroughs", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("OwnerId");
+                        });
+
                     b.OwnsMany("OpenBook.Domain.Settlements.OwnerReserve", "Reserves", b1 =>
                         {
                             b1.Property<Guid>("OwnerId")
@@ -14403,6 +14436,8 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Deductions");
+
+                    b.Navigation("PassThroughs");
 
                     b.Navigation("Reserves");
                 });

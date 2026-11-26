@@ -325,13 +325,49 @@ public sealed class Load
             Status = _dispatches.Count > 0 ? LoadStatus.Dispatched : LoadStatus.Booked;
     }
 
-    public void Invoiced(Guid invoiceId)
+    /// <summary>Checks it can be invoiced: delivered, not already billed, and each charge has its item.</summary>
+    public void EnsureCanInvoice()
     {
         if (InvoiceId is not null)
             throw new DomainException("load.invoiced", "This load is already invoiced.");
-        InvoiceId = invoiceId;
-        Status = LoadStatus.Delivered;
+        if (Status != LoadStatus.Delivered)
+            throw new DomainException("load.not_delivered", "Invoice a load once it's delivered.");
+        if (_charges.Count == 0 || Total <= 0m)
+            throw new DomainException("load.nothing_to_invoice", "Nothing is charged for this load yet.");
+        if (_charges.Where(c => c.ItemId is null).Select(c => LoadCharges.Label(c.Charge)).Distinct().ToList() is { Count: > 0 } missing)
+            throw new DomainException("load.charge_item", $"Choose the item each charge is invoiced with: {string.Join(", ", missing)}.");
     }
+
+    public void Invoiced(Guid invoiceId)
+    {
+        EnsureCanInvoice();
+        InvoiceId = invoiceId;
+    }
+
+    /// <summary>
+    /// Hours spent at its stops beyond the free time at each, rounded up to the quarter hour: what detention can be
+    /// charged for. Stops without both times don't count.
+    /// </summary>
+    public decimal DetentionHours(decimal freeHours) =>
+        Math.Ceiling(_stops.Where(s => s.Stayed is not null).Sum(s => Math.Max(0m, (decimal)s.Stayed!.Value.TotalHours - freeHours)) * 4m) / 4m;
+
+    /// <summary>Adds a detention charge (or replaces the one there is), keeping the rest.</summary>
+    public void SetDetention(decimal hours, decimal rate, Guid? itemId, string? description)
+    {
+        EnsureChangeable();
+        var charges = _charges.Where(c => c.Charge != LoadCharge.Detention)
+            .Select(c => new LoadChargeDraft(c.Charge, c.Quantity, c.Rate, c.Description, c.ItemId)).ToList();
+        if (hours > 0m)
+            charges.Add(new LoadChargeDraft(LoadCharge.Detention, hours, rate, description, itemId));
+        if (charges.Count > MaxCharges)
+            throw new DomainException("load.too_many_charges", $"A load has at most {MaxCharges} charges.");
+        var made = charges.Select((c, i) => new LoadChargeLine(i + 1, c)).ToList();
+        _charges.Clear();
+        _charges.AddRange(made);
+    }
+
+    /// <summary>The company date the truck left its last delivery; null while it hasn't.</summary>
+    public DateTimeOffset? DeliveredAt => LastDelivery?.Departed;
 
     /// <summary>Its invoice was voided: it can be invoiced again.</summary>
     public void Uninvoiced() => InvoiceId = null;

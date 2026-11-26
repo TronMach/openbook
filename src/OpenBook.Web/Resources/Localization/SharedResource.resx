@@ -161,6 +161,9 @@
   <data name="A drop-down per area listing its pages, so most pages are one click away" xml:space="preserve">
     <value>A drop-down per area listing its pages, so most pages are one click away</value>
   </data>
+  <data name="A flat amount a load" xml:space="preserve">
+    <value>A flat amount a load</value>
+  </data>
   <data name="A load split between trucks gets a row each, with its share and miles." xml:space="preserve">
     <value>A load split between trucks gets a row each, with its share and miles.</value>
   </data>
@@ -172,6 +175,9 @@
   </data>
   <data name="A note with your gift" xml:space="preserve">
     <value>A note with your gift</value>
+  </data>
+  <data name="A percent of linehaul" xml:space="preserve">
+    <value>A percent of linehaul</value>
   </data>
   <data name="A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role." xml:space="preserve">
     <value>A permission set gives someone a level in each area of the books instead of one role everywhere: for example standard in sales, view-only in reports and nothing in banking. Give a set to someone on the Users page, in the role list. Admin things (users, backups, export, webhooks, add-ins) always need the admin role.</value>
@@ -560,6 +566,9 @@
   <data name="As sold" xml:space="preserve">
     <value>As sold</value>
   </data>
+  <data name="As typed into each run" xml:space="preserve">
+    <value>As typed into each run</value>
+  </data>
   <data name="Ask for a code from an authenticator app as well as your password." xml:space="preserve">
     <value>Ask for a code from an authenticator app as well as your password.</value>
   </data>
@@ -800,6 +809,12 @@
   <data name="By" xml:space="preserve">
     <value>By</value>
   </data>
+  <data name="By the mile" xml:space="preserve">
+    <value>By the mile</value>
+  </data>
+  <data name="By the mile counts empty miles too" xml:space="preserve">
+    <value>By the mile counts empty miles too</value>
+  </data>
   <data name="Can't scan it? Type this key into the app instead:" xml:space="preserve">
     <value>Can't scan it? Type this key into the app instead:</value>
   </data>
@@ -881,6 +896,9 @@
   <data name="Change the lines" xml:space="preserve">
     <value>Change the lines</value>
   </data>
+  <data name="Change the load" xml:space="preserve">
+    <value>Change the load</value>
+  </data>
   <data name="Change ticked items…" xml:space="preserve">
     <value>Change ticked items…</value>
   </data>
@@ -931,6 +949,9 @@
   </data>
   <data name="Charge" xml:space="preserve">
     <value>Charge</value>
+  </data>
+  <data name="Charge detention" xml:space="preserve">
+    <value>Charge detention</value>
   </data>
   <data name="Charge sales tax on it" xml:space="preserve">
     <value>Charge sales tax on it</value>
@@ -997,6 +1018,9 @@
   </data>
   <data name="Choose an account for each code below before posting." xml:space="preserve">
     <value>Choose an account for each code below before posting.</value>
+  </data>
+  <data name="Choose the item each charge is invoiced with first." xml:space="preserve">
+    <value>Choose the item each charge is invoiced with first.</value>
   </data>
   <data name="Choose the statement, then the pages that are the settlement itself. Only those pages are read and kept: statements often have other people's pay stubs and bank details further on. What's read waits for you to check; nothing is posted." xml:space="preserve">
     <value>Choose the statement, then the pages that are the settlement itself. Only those pages are read and kept: statements often have other people's pay stubs and bank details further on. What's read waits for you to check; nothing is posted.</value>
@@ -1298,6 +1322,9 @@
   <data name="Description of line {0}" xml:space="preserve">
     <value>Description of line {0}</value>
   </data>
+  <data name="Detention" xml:space="preserve">
+    <value>Detention</value>
+  </data>
   <data name="Device" xml:space="preserve">
     <value>Device</value>
   </data>
@@ -1465,9 +1492,6 @@
   </data>
   <data name="Enter Vendor Credits" xml:space="preserve">
     <value>Enter Vendor Credits</value>
-  </data>
-  <data name="Enter what each owner-operator earned this period. OpenBook takes out backup withholding, what they owe you (oldest first) and their reserves, as far as their pay goes, and makes one bill for each to pay as usual." xml:space="preserve">
-    <value>Enter what each owner-operator earned this period. OpenBook takes out backup withholding, what they owe you (oldest first) and their reserves, as far as their pay goes, and makes one bill for each to pay as usual.</value>
   </data>
   <data name="Enter what's in the box. The books say it holds {0} today. If your count differs from the books on that date, the difference is recorded to “{1}” (created on first use) so the books match the box." xml:space="preserve">
     <value>Enter what's in the box. The books say it holds {0} today. If your count differs from the books on that date, the difference is recorded to “{1}” (created on first use) so the books match the box.</value>
@@ -1721,6 +1745,9 @@
   <data name="Found by the daily check of the books" xml:space="preserve">
     <value>Found by the daily check of the books</value>
   </data>
+  <data name="Free hours at each stop" xml:space="preserve">
+    <value>Free hours at each stop</value>
+  </data>
   <data name="From" xml:space="preserve">
     <value>From</value>
   </data>
@@ -1901,6 +1928,9 @@
   <data name="How the document inbox reads scanned bills and orders: on this server, or by Claude for better results." xml:space="preserve">
     <value>How the document inbox reads scanned bills and orders: on this server, or by Claude for better results.</value>
   </data>
+  <data name="How the owner is paid for each load its trucks deliver. The weekly run works it out from the load board; a load split between trucks pays each its share. Leave it as typed to enter pay by hand in each run." xml:space="preserve">
+    <value>How the owner is paid for each load its trucks deliver. The weekly run works it out from the load board; a load split between trucks pays each its share. Leave it as typed to enter pay by hand in each run.</value>
+  </data>
   <data name="I checked every line against the statement, and none is missing" xml:space="preserve">
     <value>I checked every line against the statement, and none is missing</value>
   </data>
@@ -1999,6 +2029,9 @@
   </data>
   <data name="Invoice number" xml:space="preserve">
     <value>Invoice number</value>
+  </data>
+  <data name="Invoice the customer" xml:space="preserve">
+    <value>Invoice the customer</value>
   </data>
   <data name="Invoice {0}" xml:space="preserve">
     <value>Invoice {0}</value>
@@ -2236,6 +2269,9 @@
   </data>
   <data name="Loads against what was billed" xml:space="preserve">
     <value>Loads against what was billed</value>
+  </data>
+  <data name="Loads their trucks delivered through the period's last day are paid by each owner-operator's pay rule; enter anything else they earned. OpenBook takes out backup withholding, regular deductions, what they owe you (oldest first) and their reserves, as far as their pay goes, and makes one bill for each to pay as usual." xml:space="preserve">
+    <value>Loads their trucks delivered through the period's last day are paid by each owner-operator's pay rule; enter anything else they earned. OpenBook takes out backup withholding, regular deductions, what they owe you (oldest first) and their reserves, as far as their pay goes, and makes one bill for each to pay as usual.</value>
   </data>
   <data name="Loans" xml:space="preserve">
     <value>Loans</value>
@@ -3053,6 +3089,9 @@
   <data name="Pay Bills" xml:space="preserve">
     <value>Pay Bills</value>
   </data>
+  <data name="Pay for loads" xml:space="preserve">
+    <value>Pay for loads</value>
+  </data>
   <data name="Pay for something without a bill" xml:space="preserve">
     <value>Pay for something without a bill</value>
   </data>
@@ -3118,6 +3157,9 @@
   </data>
   <data name="Per mile" xml:space="preserve">
     <value>Per mile</value>
+  </data>
+  <data name="Percent, per mile or per load" xml:space="preserve">
+    <value>Percent, per mile or per load</value>
   </data>
   <data name="Percentage" xml:space="preserve">
     <value>Percentage</value>
@@ -3809,6 +3851,9 @@
   <data name="Save the mapping" xml:space="preserve">
     <value>Save the mapping</value>
   </data>
+  <data name="Save the pay" xml:space="preserve">
+    <value>Save the pay</value>
+  </data>
   <data name="Save the photo" xml:space="preserve">
     <value>Save the photo</value>
   </data>
@@ -4406,6 +4451,9 @@
   <data name="The notes, files and custom fields on the record itself." xml:space="preserve">
     <value>The notes, files and custom fields on the record itself.</value>
   </data>
+  <data name="The owner's share of the customer's other charges, in percent; blank passes none of it. Tolls are paid as a reimbursement, the rest as earnings." xml:space="preserve">
+    <value>The owner's share of the customer's other charges, in percent; blank passes none of it. Tolls are paid as a reimbursement, the rest as earnings.</value>
+  </data>
   <data name="The owner-operators you pay by settlement. Each is a vendor: their settlements are billed to it, and their 1099 counted under it." xml:space="preserve">
     <value>The owner-operators you pay by settlement. Each is a vendor: their settlements are billed to it, and their 1099 counted under it.</value>
   </data>
@@ -4450,6 +4498,9 @@
   </data>
   <data name="The text has gone." xml:space="preserve">
     <value>The text has gone.</value>
+  </data>
+  <data name="The truck spent {0} hours at this load's stops beyond 2 free hours at each. Charge it here; charging it again replaces the detention charge." xml:space="preserve">
+    <value>The truck spent {0} hours at this load's stops beyond 2 free hours at each. Charge it here; charging it again replaces the detention charge.</value>
   </data>
   <data name="The user guide's chapter about this page" xml:space="preserve">
     <value>The user guide's chapter about this page</value>
@@ -4858,6 +4909,9 @@
   </data>
   <data name="Voided" xml:space="preserve">
     <value>Voided</value>
+  </data>
+  <data name="Voided; it can be invoiced again" xml:space="preserve">
+    <value>Voided; it can be invoiced again</value>
   </data>
   <data name="Voids its bill (once nothing is paid on it) on the same date. What it took back of charges is open again, and its reserves are as before it." xml:space="preserve">
     <value>Voids its bill (once nothing is paid on it) on the same date. What it took back of charges is open again, and its reserves are as before it.</value>

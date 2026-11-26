@@ -182,6 +182,28 @@ public sealed class OwnerService(
         return owner;
     }
 
+    /// <summary>How the owner is paid for the loads its trucks haul, from the next run on.</summary>
+    public async Task<OwnerOperator> SetPayAsync(Guid ownerId, PayBasis basis, decimal rate, bool emptyMiles, IReadOnlyCollection<(LoadCharge Charge, decimal Percent)> passThroughs, CancellationToken ct = default)
+    {
+        var owner = await OwnerAsync(ownerId, ct);
+        var before = PaySnapshot(owner);
+        owner.SetPay(basis, rate, emptyMiles, passThroughs);
+        var after = PaySnapshot(owner);
+        if (after == before)
+            return owner;
+        store.Add(Audit(AuditAction.Updated, OwnerEntity, owner.Id, before, after));
+        await store.SaveChangesAsync(ct);
+        return owner;
+    }
+
+    private static string PaySnapshot(OwnerOperator o) => JsonSerializer.Serialize(new
+    {
+        Pay = o.PayBasis.ToString(),
+        o.PayRate,
+        o.PayEmptyMiles,
+        PassThroughs = o.PassThroughs.ToDictionary(p => p.Charge.ToString(), p => p.Percent),
+    });
+
     /// <summary>What each of the owner's deductions has taken so far, on settlements that stand, by number.</summary>
     public async Task<IReadOnlyDictionary<int, decimal>> DeductionsTakenAsync(Guid ownerId, CancellationToken ct = default) =>
         (await store.ListSettlementsAsync(ownerId, ct)).Where(s => s.Stands).SelectMany(s => s.Lines)

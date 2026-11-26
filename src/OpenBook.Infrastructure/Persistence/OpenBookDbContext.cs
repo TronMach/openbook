@@ -1458,6 +1458,17 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
                 d.HasOne<Account>().WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
             });
             b.Navigation(o => o.Deductions).UsePropertyAccessMode(PropertyAccessMode.Field);
+            b.Property(o => o.PayBasis).HasConversion<string>().HasMaxLength(20);
+            b.Property(o => o.PayRate).HasColumnName("PayRateTenThousandths").HasConversion(TenThousandths);
+            b.OwnsMany(o => o.PassThroughs, p =>
+            {
+                p.ToTable("OwnerPassThroughs");
+                p.WithOwner().HasForeignKey("OwnerId");
+                p.HasKey("OwnerId", nameof(OpenBook.Domain.Settlements.OwnerPassThrough.Charge));
+                p.Property(x => x.Charge).HasConversion<string>().HasMaxLength(20);
+                p.Property(x => x.Percent).HasColumnName("PercentTenThousandths").HasConversion(TenThousandths);
+            });
+            b.Navigation(o => o.PassThroughs).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Settlements.Load>(b =>
@@ -1476,6 +1487,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Ignore(l => l.Total);
             b.Ignore(l => l.FirstPickup);
             b.Ignore(l => l.LastDelivery);
+            b.Ignore(l => l.DeliveredAt);
             b.HasOne<Customer>().WithMany().HasForeignKey(l => l.CustomerId).OnDelete(DeleteBehavior.Restrict);
             b.OwnsMany(l => l.Stops, s =>
             {

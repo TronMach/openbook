@@ -44,6 +44,44 @@
         </div>
 
         <div class="card" style="margin-top: 1.5rem">
+            <h2 id="pay">@L["Pay for loads"]</h2>
+            <p class="muted">@L["How the owner is paid for each load its trucks deliver. The weekly run works it out from the load board; a load split between trucks pays each its share. Leave it as typed to enter pay by hand in each run."]</p>
+            <PostForm Action="@($"/dispatch/owners/{owner.Id}/pay")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="pay-basis">@L["Paid"]</label>
+                        <select id="pay-basis" name="basis">
+                            <option value="@PayBasis.Typed" selected="@(owner.PayBasis == PayBasis.Typed)">@L["As typed into each run"]</option>
+                            <option value="@PayBasis.PercentOfLinehaul" selected="@(owner.PayBasis == PayBasis.PercentOfLinehaul)">@L["A percent of linehaul"]</option>
+                            <option value="@PayBasis.PerMile" selected="@(owner.PayBasis == PayBasis.PerMile)">@L["By the mile"]</option>
+                            <option value="@PayBasis.Flat" selected="@(owner.PayBasis == PayBasis.Flat)">@L["A flat amount a load"]</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="pay-rate">@L["Percent, per mile or per load"]</label>
+                        <input id="pay-rate" name="rate" inputmode="decimal" value="@(owner.PayBasis == PayBasis.Typed ? "" : owner.PayRate.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" />
+                    </div>
+                    <label class="check">
+                        <input type="checkbox" name="emptyMiles" value="true" checked="@owner.PayEmptyMiles" />
+                        <span>@L["By the mile counts empty miles too"]</span>
+                    </label>
+                </div>
+                <p class="hint">@L["The owner's share of the customer's other charges, in percent; blank passes none of it. Tolls are paid as a reimbursement, the rest as earnings."]</p>
+                <div class="row">
+                    @foreach (var charge in Enum.GetValues<LoadCharge>().Where(c => c != LoadCharge.Linehaul))
+                    {
+                        <div class="field">
+                            <label for="pass-@charge">@LoadCharges.Label(charge) %</label>
+                            <input id="pass-@charge" name="pass:@charge" inputmode="decimal" value="@(owner.PassThroughOf(charge)?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" />
+                        </div>
+                    }
+                </div>
+                <div class="actions"><button type="submit" class="secondary">@L["Save the pay"]</button></div>
+            </PostForm>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
             <h2 id="reserves">@L["Reserves"]</h2>
             <p class="muted">@L["Money held back from each settlement toward the owner's own costs (maintenance, plates, a bond). It stays theirs: you owe it to them until it's released."]</p>
             @if (_balances.Count > 0)

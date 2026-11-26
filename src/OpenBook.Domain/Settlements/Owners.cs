@@ -136,6 +136,38 @@ public sealed class OwnerDeduction
     }
 }
 
+/// <summary>How an owner is paid for the loads it hauls; <see cref="Typed"/> leaves its pay to be typed into each run.</summary>
+public enum PayBasis
+{
+    Typed,
+
+    /// <summary>A percentage of what the load's linehaul charges come to.</summary>
+    PercentOfLinehaul,
+
+    /// <summary>An amount per mile the truck drove the load.</summary>
+    PerMile,
+
+    /// <summary>The same amount for each load.</summary>
+    Flat,
+}
+
+/// <summary>The owner's share of a kind of load charge other than linehaul, passed through when the customer pays it.</summary>
+public sealed class OwnerPassThrough
+{
+    private OwnerPassThrough() { }
+
+    internal OwnerPassThrough(LoadCharge charge, decimal percent)
+    {
+        Charge = Enum.IsDefined(charge) && charge != LoadCharge.Linehaul ? charge
+            : throw new DomainException("owner.pass_through_charge", "Linehaul is paid by the pay rule; pass through the other charges.");
+        Percent = percent is >= 0m and <= 100m && decimal.Round(percent, 4) == percent ? percent
+            : throw new DomainException("settlement.percent_range", "A share is between 0 and 100 percent, with up to four decimals.");
+    }
+
+    public LoadCharge Charge { get; private set; }
+    public decimal Percent { get; private set; }
+}
+
 /// <param name="VendorId">The vendor record its settlements are billed to and its 1099 counted under.</param>
 /// <param name="PayAccountId">The expense its gross pay goes to; null finds or makes "Owner-Operator Pay".</param>
 /// <param name="ReceivableAccountId">Where open charges and advances wait to be taken back; null finds or makes "Owner Receivables".</param>
@@ -155,6 +187,42 @@ public sealed class OwnerOperator
 
     private readonly List<OwnerReserve> _reserves = [];
     private readonly List<OwnerDeduction> _deductions = [];
+    private readonly List<OwnerPassThrough> _passThroughs = [];
+
+    public PayBasis PayBasis { get; private set; }
+
+    /// <summary>The percent of linehaul, the amount a mile, or the amount a load, by <see cref="PayBasis"/>.</summary>
+    public decimal PayRate { get; private set; }
+
+    /// <summary>Per-mile pay counts the empty miles to the pickup too.</summary>
+    public bool PayEmptyMiles { get; private set; }
+
+    public IReadOnlyList<OwnerPassThrough> PassThroughs => [.. _passThroughs.OrderBy(p => p.Charge)];
+
+    public decimal? PassThroughOf(LoadCharge charge) => _passThroughs.Find(p => p.Charge == charge)?.Percent;
+
+    /// <summary>How the owner is paid for its loads, from the next run on.</summary>
+    public void SetPay(PayBasis basis, decimal rate, bool emptyMiles, IReadOnlyCollection<(LoadCharge Charge, decimal Percent)> passThroughs)
+    {
+        ArgumentNullException.ThrowIfNull(passThroughs);
+        if (!Enum.IsDefined(basis))
+            throw new DomainException("owner.pay_basis", "Unknown way of paying for loads.");
+        PayRate = basis switch
+        {
+            PayBasis.Typed => 0m,
+            PayBasis.PercentOfLinehaul => rate is > 0m and <= 100m && decimal.Round(rate, 4) == rate ? rate
+                : throw new DomainException("owner.pay_rate", "The percent of linehaul is more than 0 and at most 100, with up to four decimals."),
+            PayBasis.PerMile => rate is > 0m and <= 100m && decimal.Round(rate, 4) == rate ? rate
+                : throw new DomainException("owner.pay_rate", "The pay per mile is more than 0 and at most 100, with up to four decimals."),
+            _ => rate > 0m ? OwnerAmounts.Cents(rate, "The pay per load") : throw new DomainException("owner.pay_rate", "The pay per load is more than zero."),
+        };
+        var made = passThroughs.Select(p => new OwnerPassThrough(p.Charge, p.Percent)).ToList();
+        if (made.Select(p => p.Charge).Distinct().Count() != made.Count)
+            throw new DomainException("settlement.share_twice", "Each kind of charge has one share.");
+        (PayBasis, PayEmptyMiles) = (basis, basis == PayBasis.PerMile && emptyMiles);
+        _passThroughs.Clear();
+        _passThroughs.AddRange(made);
+    }
 
     private OwnerOperator() { }
 
