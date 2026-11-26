@@ -97,7 +97,16 @@ The carrier's side: the company pays owner-operators by settlement and dispatche
 - Email: `EmailKind.OwnerSettlement` (appended last; key `owner-settlement`; placeholders owner, number, date, through, net, company), `OwnerSettlementEmailSource` (to the vendor's email; a voided settlement is refused), compose page `/dispatch/settlements/{id}/email` (`EmailCompose.razor`, `EmailEndpoints.Compose`).
 - ACH: `VendorBankAccount.Personal` (new column, false for existing ones) puts a vendor's entries in a PPD batch; `Ach.Build` writes a CCD batch and/or a PPD batch (numbered 1, 2), trace numbers running on, the file control counting batches. Checkbox on the vendor's bank details; `personal` on `PUT /api/purchases/ach/vendors/{id}`.
 
-- **Before release**: an accountant should confirm the 1099 gross treatment. Never call any of this compliant with 49 CFR 376.
+- Never call any of this compliant with 49 CFR 376.
+
+## The 1099 (checked 2026-11-26)
+
+Checked against IRS sources instead of an accountant (the user's choice); the guide's chapter 34, The 1099, says what people need.
+
+- Pay for hauling freight usually needs no 1099-NEC: the freight exception of Treas. Reg. § 1.6041-3, which IRS Information Letter 2001-0101 (not binding) applies to payments to independent truckers. Many carriers send one anyway, as a record that owners are contractors. Other work (unloading, installing, final mile) may need one; neither source gives a test. So nothing is counted unless the vendor's `Track1099` is ticked, which the guide and the Owners page now say only when a 1099 is sent.
+- Backup withholding applies only to reportable payments (§ 3406(b)), so exempt hauling pay needs none: it stays per vendor (`WithholdsOn`), never automatic.
+- When a 1099 is sent: gross before the carrier's deductions (common practice; no source speaks to carrier deductions directly), reimbursements left out only when the owner accounts for them (receipts), $2,000 threshold for 2026 (IRS instructions).
+- Not found in any source: reserves counting when held back rather than when paid out, and reserve interest on a 1099-INT (Treas. Reg. § 1.6049-5 mentions escrow interest, but not who reports it). The guide tells people to ask their accountant if unsure.
 
 ## The edition and the setting
 
