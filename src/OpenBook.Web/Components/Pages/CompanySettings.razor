@@ -100,6 +100,15 @@
         </fieldset>
 
         <fieldset>
+            <legend>@L["Trucking"]</legend>
+            <label class="check">
+                <InputCheckbox @bind-Value="Input.UsesSettlements" />
+                <span>@L["A carrier pays us by settlement statement"]</span>
+            </label>
+            <span class="hint">@L["For owner-operators: puts Settlements in the menu, whichever menu you chose above. Choosing the Trucking menu turns it on. It only changes what's shown."]</span>
+        </fieldset>
+
+        <fieldset>
             <legend>@L["View"]</legend>
             <div class="field">
                 <label for="default-view">@L["View for people who haven't chosen one"]</label>
@@ -226,6 +235,7 @@
             Region = company.Region,
             DefaultViewMode = company.DefaultViewMode,
             AllowSellingShort = company.AllowSellingShort,
+            UsesSettlements = company.UsesSettlements,
         };
     }
 
@@ -238,7 +248,7 @@
             await Versions.EnsureOnlyUnchangedAsync<OpenBook.Domain.Companies.Company>(PostedVersion);
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort, Input.Region, TaxId: Input.TaxId ?? string.Empty));
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort, Input.Region, TaxId: Input.TaxId ?? string.Empty, UsesSettlements: Input.UsesSettlements));
             _saved = true;
             _version = await Versions.GetOnlyAsync<OpenBook.Domain.Companies.Company>();
             _regionChosen = !string.IsNullOrEmpty(Input.Region);
@@ -271,6 +281,8 @@
         public string? Address { get; set; }
 
         public string? TaxId { get; set; }
+
+        public bool UsesSettlements { get; set; }
 
         [Range(1, 12)]
         public int FiscalYearStartMonth { get; set; } = 1;

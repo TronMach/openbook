@@ -54,6 +54,7 @@ public sealed class ErasureService(
     IProjectStore projects,
     IBankingStore banking,
     IAssetStore assets,
+    Settlements.ISettlementStore settlements,
     IOnlineMoneyStore cards,
     GiftService gifts,
     VendorDepositService deposits,
@@ -183,6 +184,7 @@ public sealed class ErasureService(
         Name(found, "Active recurring bills", (await purchases.ListRecurringBillsAsync(ct)).Where(r => r.VendorId == id && r.IsActive).Select(r => r.Name));
         Name(found, "Active recurring expenses", (await banking.ListRecurringExpensesAsync(ct)).Where(r => r.VendorId == id && r.IsActive).Select(r => r.Name));
         Name(found, "Loans still owed to them", (await assets.ListLoansAsync(ct)).Where(l => l.LenderVendorId == id && !l.IsVoided && !l.IsPaidOff).Select(l => l.Name));
+        Name(found, "Active carriers that use it", (await settlements.ListCarriersAsync(ct)).Where(c => c.VendorId == id && c.IsActive).Select(c => c.Name));
         return found;
     }
 

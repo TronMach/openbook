@@ -59,6 +59,7 @@ public sealed class BooksCheckService(
     Nonprofit.INonprofitStore nonprofit,
     Channels.IChannelStore channels,
     Channels.IChannelOrderStore channelOrders,
+    Settlements.ISettlementStore settlements,
     Auditing.AuditChainService auditChain)
 {
     /// <summary>Most findings listed per check; the summary still counts them all.</summary>
@@ -244,6 +245,9 @@ public sealed class BooksCheckService(
             Add($"Payout of {p.Date:MMM d, yyyy}, its tax moved to agencies", "channel_payout", p.Id, Domain.Channels.ChannelPayout.TaxMoveSource, p.TaxMoveEntryId,
                 p.Status == Domain.Channels.PayoutStatus.Posted);
         }
+
+        foreach (var s in await settlements.ListSettlementsAsync(null, ct))
+            Add($"Settlement {s.Number} of {s.Date:MMM d, yyyy}", "settlement", s.Id, Domain.Settlements.Settlement.Source, s.JournalEntryId, s.Status == Domain.Settlements.SettlementStatus.Posted);
 
         foreach (var b in await channelOrders.ListBatchesAsync(null, ct))
         {

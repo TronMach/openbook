@@ -1,0 +1,83 @@
+@using OpenBook.Domain.Settlements
+@using OpenBook.Application.Attachments
+@inject AttachmentService AttachmentService
+@* A scan is checked against the pages it was read from before it can post: each line pointed out, a tick for all the
+   others, and the net typed from the statement (Settlement.Confirm). *@
+
+<div class="card" style="margin-top: 1.5rem">
+    <h2 id="check">@L["Check the scan against the statement"]</h2>
+    @if (_file is not null)
+    {
+        <details open>
+            <summary>@L["The pages it was read from"]</summary>
+            @if (_file.ContentType == "application/pdf")
+            {
+                <iframe src="/attachments/@_file.Id" title="@L["The statement"]" style="width: 100%; height: 40rem; border: 0"></iframe>
+            }
+            else
+            {
+                <img src="/attachments/@_file.Id" alt="@L["The statement"]" style="max-width: 100%" />
+            }
+        </details>
+    }
+    @if (Settlement.CheckedBy is not null)
+    {
+        <p>@L["Checked. Changing a line asks for it to be checked again."]</p>
+    }
+    <PostForm Action="@($"/settlements/{Settlement.Id}/confirm")" data-enhance="false">
+        <AntiforgeryToken />
+        @if (_doubtful.Count > 0)
+        {
+            <p>@L["These lines need a careful look. Tick each one that's right, and use Change above to fix the ones that aren't."]</p>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th>@L["It's right"]</th><th class="num">@L["Line"]</th><th>@L["Part"]</th><th>@L["Code"]</th><th>@L["Load"]</th><th>@L["Description"]</th><th class="num">@L["Amount as printed"]</th><th>@L["Why"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _doubtful)
+                        {
+                            <tr>
+                                <td><input type="checkbox" name="line:@line.LineNumber" value="true" aria-label="@L["Line {0} is right", line.LineNumber]" /></td>
+                                <td class="num">@line.LineNumber</td>
+                                <td>@SettlementSections.Label(line.Section)</td>
+                                <td>@line.Code</td>
+                                <td>@line.Load @line.Dispatch</td>
+                                <td>@line.Description</td>
+                                <td class="num">@Labels.Amount(SettlementSections.Printed(line.Section, line.Amount))</td>
+                                <td>@line.Doubt</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <div class="row">
+            <div class="field">
+                <label for="scan-net">@L["Net paid, typed from the statement"]</label>
+                <input id="scan-net" name="netPaid" inputmode="decimal" autocomplete="off" required value="@(Settlement.CheckedBy is null ? null : Settlement.NetPaid.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" />
+                <span class="hint">@L["Not taken from the scan, so it's a check on it."]</span>
+            </div>
+        </div>
+        <label class="check">
+            <input type="checkbox" name="all" value="true" required />
+            <span>@L["I checked every line against the statement, and none is missing"]</span>
+        </label>
+        <div class="actions"><button type="submit">@L["Save the check"]</button></div>
+    </PostForm>
+</div>
+
+@code {
+    private IReadOnlyList<SettlementLine> _doubtful = [];
+    private OpenBook.Domain.Attachments.Attachment? _file;
+
+    [Parameter, EditorRequired] public Settlement Settlement { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _doubtful = [.. Settlement.Lines.Where(l => l.NeedsChecking)];
+        _file = (await AttachmentService.ListAsync("settlement", Settlement.Id)).FirstOrDefault(f => f.FileName.StartsWith("statement", StringComparison.Ordinal));
+    }
+}

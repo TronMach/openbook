@@ -1,0 +1,541 @@
+@page "/settlements/new"
+@page "/settlements/{Id:guid}/edit"
+@rendermode InteractiveServer
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Settlements
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@Title · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@Title</h1>
+        <HelpLink Chapter="33-trucking-settlements" />
+        <ActionLink Class="button secondary" Href="@BackUrl">@L["Back"]</ActionLink>
+    </div>
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _problem is not null)
+    {
+        <div class="card"><p>@_problem <a href="@BackUrl">@L["Back"]</a></p></div>
+    }
+    else if (_loaded && _carriers.Count == 0)
+    {
+        <div class="card">
+            <p>@L["Add the carrier that pays you first."]</p>
+            <div class="actions"><ActionLink Class="button" Href="/settlements/carriers">@L["Add a carrier"]</ActionLink></div>
+        </div>
+    }
+    else if (_loaded)
+    {
+        @if (Id is null)
+        {
+            <FormDraft @ref="_draft" T="Draft" Key="settlement-new" Snapshot="TakeDraft" OnRestore="Restore" />
+        }
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="carrier">@L["Carrier"]</label>
+                    <select id="carrier" @bind="_carrierId" disabled="@(Id is not null)">
+                        @foreach (var c in _carriers)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="number">@L["Statement number"]</label>
+                    <input id="number" @bind="_number" maxlength="60" />
+                    <span class="hint">@L["Its own number, or its date when it has none."]</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">@L["Paid on"]</label>
+                    <input id="date" type="date" @bind="_date" />
+                </div>
+                <div class="field">
+                    <label for="net">@L["Net paid"]</label>
+                    <input id="net" class="amount" type="number" step="0.01" min="0" @bind="_net" />
+                    <span class="hint">@L["What reached your bank account, as the statement says."]</span>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="from">@L["Period from"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="from" type="date" @bind="_from" />
+                </div>
+                <div class="field">
+                    <label for="to">@L["Period to"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="to" type="date" @bind="_to" />
+                </div>
+            </div>
+            <MoreOptions Open="@((_carried ?? 0m) != 0m || _memo is not null || _splits.Any(s => s.AccountId is not null))">
+                <div class="row">
+                    <div class="field">
+                        <label for="carried">@L["Carried forward"]</label>
+                        <input id="carried" class="amount" type="number" step="0.01" @bind="_carried" />
+                        <span class="hint">@L["A balance left for next week: with a minus when you owe the carrier."]</span>
+                    </div>
+                    <div class="field">
+                        <label for="memo">@L["Memo"] <span class="muted">@L["(optional)"]</span></label>
+                        <input id="memo" @bind="_memo" maxlength="1000" />
+                    </div>
+                </div>
+                <details open="@_splits.Any(s => s.AccountId is not null)">
+                    <summary>@L["Paid into more than one account"]</summary>
+                    <p class="hint">@L["Leave blank when it all went into the carrier's usual account. Otherwise list every account it went into."]</p>
+                    @for (var i = 0; i < _splits.Count; i++)
+                    {
+                        var split = _splits[i];
+                        var n = i + 1;
+                        <div class="row">
+                            <div class="field">
+                                <label for="split-account-@n">@L["Account {0}", n]</label>
+                                <select id="split-account-@n" @bind="split.AccountId">
+                                    <option value="">@L["None"]</option>
+                                    @foreach (var a in _depositAccounts)
+                                    {
+                                        <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="split-amount-@n">@L["Amount {0}", n]</label>
+                                <input id="split-amount-@n" class="amount" type="number" step="0.01" min="0" @bind="split.Amount" />
+                            </div>
+                        </div>
+                    }
+                </details>
+            </MoreOptions>
+
+            <details open="@(_stated.Any(s => s.Amount is not null) || _balances.Any(b => b.Amount is not null))">
+                <summary>@L["What the statement says, to check against"]</summary>
+                <p class="hint">@L["Optional. The page compares these with the lines and the books and says what's off; nothing is refused."]</p>
+                <div class="row">
+                    @foreach (var total in _stated)
+                    {
+                        var id = $"stated-{total.Section}";
+                        <div class="field">
+                            <label for="@id">@L["Total printed for {0}", SettlementSections.Label(total.Section)]</label>
+                            <input id="@id" class="amount" type="number" step="0.01" @bind="total.Amount" />
+                        </div>
+                    }
+                </div>
+                @for (var i = 0; i < _balances.Count; i++)
+                {
+                    var balance = _balances[i];
+                    var n = i + 1;
+                    <div class="row">
+                        <div class="field">
+                            <label for="balance-account-@n">@L["Reserve or balance {0}", n]</label>
+                            <select id="balance-account-@n" @bind="balance.AccountId">
+                                <option value="">@L["None"]</option>
+                                @foreach (var a in _balanceAccounts)
+                                {
+                                    <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="balance-amount-@n">@L["Balance printed {0}", n]</label>
+                            <input id="balance-amount-@n" class="amount" type="number" step="0.01" @bind="balance.Amount" />
+                        </div>
+                    </div>
+                }
+                <button type="button" class="secondary" @onclick="() => _balances.Add(new())">@L["Add a balance"]</button>
+            </details>
+
+            <details open="@_billed.Any(b => b.Amount is not null)">
+                <summary>@L["What the loads' customers were billed"]</summary>
+                <p class="hint">@L["Optional, from the freight bills sent with the statement: it checks that your share of each was paid, and the miles if you type them. The shares are on the carrier's page."]</p>
+                @for (var i = 0; i < _billed.Count; i++)
+                {
+                    var billed = _billed[i];
+                    var n = i + 1;
+                    <div class="row">
+                        <div class="field">
+                            <label for="billed-load-@n">@L["Load {0}", n]</label>
+                            <input id="billed-load-@n" maxlength="40" @bind="billed.Load" />
+                        </div>
+                        <div class="field">
+                            <label for="billed-charge-@n">@L["Charge {0}", n]</label>
+                            <select id="billed-charge-@n" @bind="billed.Charge">
+                                @foreach (var charge in Enum.GetValues<LoadCharge>())
+                                {
+                                    <option value="@charge">@LoadCharges.Label(charge)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="billed-amount-@n">@L["Billed {0}", n]</label>
+                            <input id="billed-amount-@n" class="amount" type="number" step="0.01" @bind="billed.Amount" />
+                        </div>
+                        <div class="field">
+                            <label for="billed-miles-@n">@L["Miles {0}", n]</label>
+                            <input id="billed-miles-@n" class="amount" type="number" step="0.1" min="0" @bind="billed.Miles" />
+                        </div>
+                    </div>
+                }
+                <button type="button" class="secondary" @onclick="() => _billed.Add(new() { Load = _billed[^1].Load })">@L["Add a billed charge"]</button>
+            </details>
+
+            <details class="paste-lines" open="@(Id is null)">
+                <summary>@L["Paste lines from a spreadsheet"]</summary>
+                <div class="field">
+                    <label for="paste">@L["Rows to add"]</label>
+                    <textarea id="paste" rows="5" @bind="_paste" spellcheck="false"></textarea>
+                    <span class="hint">@L["With a header row the columns can be in any order. Without one: {0}.", SettlementReader.PasteOrder]</span>
+                </div>
+                <div class="actions"><button type="button" class="secondary" disabled="@_busy" @onclick="AddPasted">@L["Add these lines"]</button></div>
+            </details>
+            @if (_pasted is not null)
+            {
+                <p role="status">@_pasted</p>
+            }
+
+            <p class="hint">@L["Type amounts as the statement prints them. Deductions and wages are positive when they take money; a minus gives it back (a fuel discount). In Other, money taken has a minus."]</p>
+            <div class="table-wrap">
+                <table class="data entry">
+                    <thead>
+                        <tr>
+                            <th>@L["Part"]</th><th>@L["Code"]</th><th>@L["Date"]</th><th>@L["Load"]</th><th>@L["Dispatch"]</th><th>@L["Description"]</th>
+                            <th class="num">@L["Amount"]</th><th class="num">@L["Loaded miles"]</th><th class="num">@L["Empty miles"]</th><th class="num">@L["Gallons"]</th>
+                            @if (_showAccounts)
+                            {
+                                <th>@L["Account for this line only"]</th>
+                            }
+                            @if (_showAccounts && _segments.ClassColumn is not null)
+                            {
+                                <th>@L["Class"]</th>
+                            }
+                            <th><span class="visually-hidden">@L["Actions"]</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _lines)
+                        {
+                            <tr @key="line">
+                                <td>
+                                    <select class="settlement-part" aria-label="@L["Part"]" @bind="line.Section">
+                                        @foreach (var s in Enum.GetValues<SettlementSection>())
+                                        {
+                                            <option value="@s">@SettlementSections.Label(s)</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <input class="settlement-code" aria-label="@L["Code"]" maxlength="@CarrierCode.MaxCodeLength" @bind="line.Code" />
+                                    @if (line.Doubt is { } doubt)
+                                    {
+                                        <span class="badge" title="@doubt">@L["Check this"]</span>
+                                    }
+                                </td>
+                                <td><input type="date" aria-label="@L["Date"]" @bind="line.Date" /></td>
+                                <td><input class="settlement-load" aria-label="@L["Load"]" maxlength="40" @bind="line.Load" /></td>
+                                <td><input class="settlement-code" aria-label="@L["Dispatch"]" maxlength="20" @bind="line.Dispatch" /></td>
+                                <td><input class="settlement-text" aria-label="@L["Description"]" maxlength="300" @bind="line.Description" /></td>
+                                <td><input class="amount" type="number" step="0.01" aria-label="@L["Amount"]" @bind="line.Amount" /></td>
+                                <td><input class="settlement-miles" type="number" step="0.1" min="0" aria-label="@L["Loaded miles"]" @bind="line.LoadedMiles" /></td>
+                                <td><input class="settlement-miles" type="number" step="0.1" min="0" aria-label="@L["Empty miles"]" @bind="line.EmptyMiles" /></td>
+                                <td><input class="settlement-miles" type="number" step="0.001" min="0" aria-label="@L["Gallons"]" @bind="line.Gallons" /></td>
+                                @if (_showAccounts)
+                                {
+                                    <td><SearchSelect Options="_accountOptions" @bind-Value="line.AccountId" EmptyText="@L["The code's account"]" Placeholder="@L["The code's account"]" AriaLabel="@L["Account for this line only"]" /></td>
+                                }
+                                @if (_showAccounts && _segments.ClassColumn is { } classes)
+                                {
+                                    <td><ClassSelect Classes="classes" Value="line.ClassId" ValueChanged="v => line.ClassId = v" /></td>
+                                }
+                                <td>
+                                    @if (_lines.Count > 1)
+                                    {
+                                        <button type="button" class="remove" title="@L["Remove line"]" aria-label="@L["Remove line"]" @onclick="() => _lines.Remove(line)">×</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="settlement-under">
+                <button type="button" class="secondary" @onclick="() => _lines.Add(new() { Section = _lines[^1].Section })">@L["Add line"]</button>
+                <label class="check">
+                    <input type="checkbox" @bind="_showAccounts" />
+                    <span>@L["Choose accounts for single lines"]</span>
+                </label>
+            </div>
+
+            <dl class="facts" aria-live="polite">
+                @foreach (var section in Enum.GetValues<SettlementSection>().Where(s => Filled.Any(l => l.Section == s)))
+                {
+                    <dt>@SettlementSections.Label(section)</dt>
+                    <dd>@Labels.Amount(Filled.Where(l => l.Section == section).Sum(l => l.Counted))</dd>
+                }
+                <dt>@L["The lines add up to"]</dt><dd>@Labels.Amount(Total)</dd>
+                @if (Difference != 0m)
+                {
+                    <dt>@L["Still to find"]</dt><dd class="neg">@Labels.Amount(Difference)</dd>
+                }
+            </dl>
+            @if (Difference != 0m)
+            {
+                <p class="hint">@L["You can save it now and finish later; it can't be posted until the lines add up to the net paid and what's carried forward."]</p>
+            }
+            <div class="actions">
+                <button type="button" disabled="@(_busy || !Filled.Any())" @onclick="SaveAsync">@L["Save settlement"]</button>
+                <ActionLink Class="button secondary" Href="@BackUrl">@L["Cancel"]</ActionLink>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private string? _problem;
+    private IReadOnlyList<Carrier> _carriers = [];
+    private ChartOfAccounts _chart = new([]);
+    private IReadOnlyList<Account> _depositAccounts = [];
+    private IReadOnlyList<PickerOption> _accountOptions = [];
+    private SegmentOptions _segments = SegmentOptions.None;
+    private int? _version;
+
+    private Guid _carrierId;
+    private string? _number;
+    private DateOnly _date = CompanyTime.Today;
+    private decimal? _net;
+    private decimal? _carried;
+    private DateOnly? _from;
+    private DateOnly? _to;
+    private string? _memo;
+    private string? _paste;
+    private string? _pasted;
+    private bool _showAccounts;
+    private List<LineModel> _lines = [new()];
+    private List<SplitModel> _splits = [new(), new()];
+    private List<StatedModel> _stated = [.. Enum.GetValues<SettlementSection>().Where(s => s != SettlementSection.Other).Select(s => new StatedModel { Section = s })];
+    private List<SplitModel> _balances = [new()];
+    private IReadOnlyList<Account> _balanceAccounts = [];
+    private List<BilledModel> _billed = [new()];
+    private FormDraft<Draft>? _draft;
+
+    [Parameter] public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "carrier")] private Guid? Preset { get; set; }
+
+    private string Title => Id is null ? L["Enter a settlement"] : L["Change settlement"];
+    private string BackUrl => Id is { } id ? $"/settlements/{id}" : "/settlements";
+    private IEnumerable<LineModel> Filled => _lines.Where(l => !l.IsBlank);
+    private decimal Total => Filled.Sum(l => l.Counted);
+    private decimal Difference => (_net ?? 0m) + (_carried ?? 0m) - Total;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (Id is { } id)
+                _version = await Ops.VersionAsync<Settlement>(id);
+            var (settlement, carriers, chart) = await Ops.RunAsync(async sp =>
+            {
+                var service = sp.GetRequiredService<SettlementService>();
+                return (Id is { } edited ? await service.GetAsync(edited) : null, await service.ListCarriersAsync(includeInactive: true), await sp.GetRequiredService<AccountService>().GetChartAsync());
+            });
+            var useNumbers = await Ops.RunAsync(async sp => (await sp.GetRequiredService<CompanySettingsService>().GetAsync()).UseAccountNumbers);
+            _segments = await Ops.RunAsync(sp => SegmentOptions.LoadAsync(sp, settlement?.Lines.Select(l => l.ClassId) ?? []));
+            _carriers = [.. carriers.Where(c => c.IsActive || c.Id == settlement?.CarrierId)];
+            _chart = chart;
+            var used = settlement?.Lines.Select(l => l.AccountId).OfType<Guid>().ToHashSet() ?? [];
+            _accountOptions = PickerOptions.Accounts(chart.Ordered(includeInactive: true).Select(x => x.Account)
+                .Where(a => a.Type is not (AccountType.AccountsReceivable or AccountType.AccountsPayable) && (a.IsActive || used.Contains(a.Id))), chart, useNumbers);
+            var paidInto = settlement?.Deposits.Select(d => d.AccountId).ToHashSet() ?? [];
+            _depositAccounts = [.. chart.Ordered(includeInactive: true).Select(x => x.Account).Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset && (a.IsActive || paidInto.Contains(a.Id)))];
+            var balanced = settlement?.StatedBalances.Select(b => b.AccountId).ToHashSet() ?? [];
+            _balanceAccounts = [.. chart.Ordered(includeInactive: true).Select(x => x.Account).Where(a => a.Type is AccountType.OtherCurrentAsset or AccountType.OtherAsset or AccountType.OtherCurrentLiability or AccountType.LongTermLiability && (a.IsActive || balanced.Contains(a.Id)))];
+            _carrierId = settlement?.CarrierId ?? (Preset is { } preset && _carriers.Any(c => c.Id == preset) ? preset : _carriers.FirstOrDefault()?.Id ?? Guid.Empty);
+            if (Id is not null && settlement is not { Status: SettlementStatus.Waiting })
+                _problem = settlement is null ? L["That settlement doesn't exist."] : L["Only a settlement waiting to be posted can be changed. Void its entry first."];
+            else if (settlement is not null)
+                Show(settlement);
+            else if (_carrierId != Guid.Empty)
+            {
+                // The balances checked last week are asked for again.
+                var again = await Ops.RunAsync<SettlementService, IReadOnlyList<Guid>>(s => s.CheckedAccountsAsync(_carrierId));
+                _balances = [.. again.Where(a => _balanceAccounts.Any(b => b.Id == a)).Select(a => new SplitModel { AccountId = a }), .. again.Count == 0 ? new[] { new SplitModel() } : []];
+            }
+        }
+        catch (DomainException ex)
+        {
+            _problem = ex.Message;
+        }
+
+        _loaded = true;
+    }
+
+    private void Show(Settlement s)
+    {
+        (_number, _date, _net, _from, _to, _memo) = (s.Number, s.Date, s.NetPaid, s.PeriodStart, s.PeriodEnd, s.Memo);
+        _carried = s.CarriedForward == 0m ? null : s.CarriedForward;
+        _lines = [.. s.Lines.Select(l => new LineModel
+        {
+            Section = l.Section, Code = l.Code, Date = l.Date, Load = l.Load, Dispatch = l.Dispatch, Description = l.Description, Amount = SettlementSections.Printed(l.Section, l.Amount),
+            LoadedMiles = l.LoadedMiles, EmptyMiles = l.EmptyMiles, Gallons = l.Gallons, AccountId = l.AccountId, ClassId = l.ClassId, Doubt = l.NeedsChecking ? l.Doubt : null,
+        })];
+        for (var i = 0; i < s.Deposits.Count; i++)
+        {
+            if (i >= _splits.Count)
+                _splits.Add(new());
+            (_splits[i].AccountId, _splits[i].Amount) = (s.Deposits[i].AccountId, s.Deposits[i].Amount);
+        }
+
+        foreach (var total in s.StatedTotals)
+        {
+            if (_stated.Find(x => x.Section == total.Section) is { } row)
+                row.Amount = SettlementSections.Printed(total.Section, total.Amount);
+        }
+
+        if (s.Billed.Count > 0)
+            _billed = [.. s.Billed.Select(b => new BilledModel { Load = b.Load, Charge = b.Charge, Amount = b.Amount, Miles = b.Miles })];
+        if (s.StatedBalances.Count > 0)
+            _balances = [.. s.StatedBalances.Select(b => new SplitModel { AccountId = b.AccountId, Amount = b.Amount })];
+        _showAccounts = _lines.Any(l => l.AccountId is not null || l.ClassId is not null);
+    }
+
+    private void AddPasted()
+    {
+        if (_busy)
+            return;
+        _pasted = null;
+        _error = null;
+        try
+        {
+            var read = SettlementReader.Read(_paste ?? string.Empty, _date);
+            var lines = read.Settlements.SelectMany(s => s.Lines).Select(l => new LineModel
+            {
+                Section = l.Section, Code = l.Code, Date = l.Date, Load = l.Load, Dispatch = l.Dispatch, Description = l.Description, Amount = SettlementSections.Printed(l.Section, l.Amount),
+                LoadedMiles = l.LoadedMiles, EmptyMiles = l.EmptyMiles, Gallons = l.Gallons,
+            }).ToList();
+            _lines = [.. Filled, .. lines];
+            if (read.Settlements is [{ } only])
+            {
+                _number ??= only.Number;
+                _net ??= only.NetPaid;
+            }
+
+            _paste = null;
+            _pasted = string.Join(" ", new[] { L["Lines added: {0}.", lines.Count].Value }.Concat(read.Warnings));
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (Filled.FirstOrDefault(l => l.Amount is null && l.LoadedMiles is null && l.EmptyMiles is null && l.Gallons is null) is { } missing)
+                throw new DomainException("settlement.line_amount", L["Enter the amount of {0}.", missing.Code ?? missing.Description ?? L["each line"].Value]);
+            if (_splits.Any(s => (s.AccountId is null) != (s.Amount is null or 0m)))
+                throw new DomainException("settlement.split", L["Give each account the money went into both an account and an amount."]);
+            var details = new SettlementDetails(_number ?? string.Empty, _date, _net ?? 0m,
+                Filled.Select(l => new SettlementLineDraft(l.Section, l.Code, l.Counted, l.Date, l.Load, l.Dispatch, l.Description, l.AccountId, l.ClassId, l.LoadedMiles, l.EmptyMiles, l.Gallons)).ToList(),
+                _from, _to, _carried ?? 0m, _splits.Where(s => s.AccountId is not null).Select(s => new SettlementDepositDraft(s.AccountId!.Value, s.Amount!.Value)).ToList(), _memo,
+                _stated.Where(t => t.Amount is not null).Select(t => new SettlementTotalDraft(t.Section, SettlementSections.Counted(t.Section, t.Amount!.Value))).ToList(),
+                _balances.Where(b => b.AccountId is not null && b.Amount is not null).Select(b => new SettlementBalanceDraft(b.AccountId!.Value, b.Amount!.Value)).ToList(),
+                _billed.Where(b => b.Amount is not null).Select(b => new SettlementBilledDraft(b.Load ?? string.Empty, b.Charge, b.Amount!.Value, b.Miles)).ToList());
+            var saved = Id is { } id
+                ? await Ops.ChangeAsync<Settlement, SettlementService, Settlement>(id, _version, s => s.ChangeAsync(id, details))
+                : await Ops.RunAsync<SettlementService, Settlement>(s => s.CreateAsync(_carrierId, details));
+            if (_draft is not null)
+                await _draft.ClearAsync();
+            Navigation.NavigateTo($"/settlements/{saved.Id}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Draft? TakeDraft() => !Filled.Any() && string.IsNullOrWhiteSpace(_number) ? null
+        : new Draft(_carrierId, _number, _date, _net, _carried, _from, _to, _memo, _lines, _splits, _stated, _balances, _billed);
+
+    private void Restore(Draft draft)
+    {
+        if (_carriers.Any(c => c.Id == draft.CarrierId))
+            _carrierId = draft.CarrierId;
+        (_number, _date, _net, _carried, _from, _to, _memo) = (draft.Number, draft.Date, draft.Net, draft.Carried, draft.From, draft.To, draft.Memo);
+        _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
+        foreach (var line in _lines.Where(l => l.AccountId is { } a && _chart.Find(a) is null))
+            line.AccountId = null;
+        _splits = draft.Splits.Count > 0 ? draft.Splits : [new(), new()];
+        _stated = draft.Stated ?? _stated;
+        _balances = draft.Balances ?? _balances;
+        _billed = draft.Billed is { Count: > 0 } kept ? kept : _billed;
+        _showAccounts = _lines.Any(l => l.AccountId is not null || l.ClassId is not null);
+    }
+
+    internal sealed record Draft(Guid CarrierId, string? Number, DateOnly Date, decimal? Net, decimal? Carried, DateOnly? From, DateOnly? To, string? Memo, List<LineModel> Lines, List<SplitModel> Splits,
+        List<StatedModel>? Stated = null, List<SplitModel>? Balances = null, List<BilledModel>? Billed = null);
+
+    internal sealed class BilledModel
+    {
+        public string? Load { get; set; }
+        public LoadCharge Charge { get; set; }
+        public decimal? Amount { get; set; }
+        public decimal? Miles { get; set; }
+    }
+
+    internal sealed class StatedModel
+    {
+        public SettlementSection Section { get; set; }
+        public decimal? Amount { get; set; }
+    }
+
+    internal sealed class SplitModel
+    {
+        public Guid? AccountId { get; set; }
+        public decimal? Amount { get; set; }
+    }
+
+    internal sealed class LineModel
+    {
+        public SettlementSection Section { get; set; }
+        public string? Code { get; set; }
+        public DateOnly? Date { get; set; }
+        public string? Load { get; set; }
+        public string? Dispatch { get; set; }
+        public string? Description { get; set; }
+
+        /// <summary>As the statement prints it in its section.</summary>
+        public decimal? Amount { get; set; }
+
+        public decimal? LoadedMiles { get; set; }
+        public decimal? EmptyMiles { get; set; }
+        public decimal? Gallons { get; set; }
+        public Guid? AccountId { get; set; }
+        public Guid? ClassId { get; set; }
+
+        /// <summary>What a scan wasn't sure of; shown until the settlement is saved, which keeps it on lines left as they were.</summary>
+        public string? Doubt { get; set; }
+
+        internal bool IsBlank => string.IsNullOrWhiteSpace(Code) && string.IsNullOrWhiteSpace(Description) && (Amount ?? 0m) == 0m;
+
+        internal decimal Counted => SettlementSections.Counted(Section, Amount ?? 0m);
+    }
+}

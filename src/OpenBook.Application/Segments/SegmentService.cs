@@ -40,6 +40,7 @@ public sealed class SegmentService(
     IPurchasesStore purchases,
     IBankingStore banking,
     Nonprofit.INonprofitStore nonprofit,
+    Settlements.ISettlementStore settlements,
     PostingEngine engine,
     IClock clock,
     ICurrentUser user)
@@ -369,6 +370,13 @@ public sealed class SegmentService(
                 return DocumentSegments.ForBill(bill.Lines, bill.SetLocation);
             case VendorCredit.Source when await purchases.GetVendorCreditAsync(id, ct) is { } vendorCredit:
                 return DocumentSegments.ForBill(vendorCredit.Lines, vendorCredit.SetLocation);
+            // Postings are one line per account and class: every settlement line in that group moves, its miles with it.
+            case Domain.Settlements.Settlement.Source when await settlements.GetSettlementAsync(id, ct) is { } settlement:
+                return new DocumentSegments((line, oldClass, newClass) =>
+                {
+                    foreach (var l in settlement.Lines.Where(l => l.PostedAccountId == line.AccountId && l.PostedClassId == oldClass))
+                        l.Reclassify(newClass);
+                }, settlement.SetLocation);
             case Domain.Nonprofit.Donation.Source when await nonprofit.GetDonationAsync(id, ct) is { } gift:
                 return new DocumentSegments((line, _, newClass) =>
                 {
