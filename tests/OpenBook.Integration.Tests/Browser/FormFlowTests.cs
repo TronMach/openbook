@@ -160,6 +160,16 @@ public sealed class FormFlowTests(BrowserApp app)
         var id = Guid.Parse(p.Url[^36..]);
         var settlement = await Db(db => db.Settlements.AsNoTracking().AsSplitQuery().SingleAsync(s => s.Id == id));
         Assert.Equal((11, 1406.95m, "text"), (settlement.Lines.Count, settlement.NetPaid, settlement.ReadMethod));
+        await Assertions.Expect(p.GetByText("Read from the PDF's own text.", new() { Exact = false })).ToBeVisibleAsync();
+
+        // The banner follows how it was read: a scan keeps its warning (a string parameter given without @ once showed every read as text).
+        await Db(async db =>
+        {
+            (await db.Settlements.SingleAsync(s => s.Id == id)).SetReading(OpenBook.Domain.Settlements.SettlementReadMethods.Ocr, null);
+            return await db.SaveChangesAsync();
+        });
+        await p.ReloadAsync();
+        await Assertions.Expect(p.GetByText("Read from a scan by OCR on this computer.")).ToBeVisibleAsync();
         await page.AssertCleanAsync();
     }
 

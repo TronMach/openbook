@@ -18,7 +18,7 @@ public sealed class ClaudeSettlementReader : IClaudeSettlementReader
 
     private const string Instructions = """
         You read a trucking carrier's settlement statement to an owner-operator for a bookkeeping program, and copy what it says into the given JSON schema.
-        Copy values exactly as printed; never guess or calculate a value that isn't on the statement. Leave out any field that's missing or unreadable.
+        Copy values exactly as printed; never guess or calculate a value that isn't on the statement. For anything missing or unreadable, use an empty string for text and null for a number.
         - lines: every line of the settlement itself that adds to or takes from what the owner is paid, in order. Leave out totals, subtotals, recaps,
           statistics, income statements, driver payroll stubs, toll lists, shop invoices and freight bills: what they show is already on a line.
         - section: "revenue" (pay for loads, surcharges, accessorials), "reimbursement" (money given back), "deduction" (charges taken), "wage" (a second driver's
@@ -31,8 +31,8 @@ public sealed class ClaudeSettlementReader : IClaudeSettlementReader
         - loaded_miles and empty_miles: only on the line the statement prints them on, once per dispatch. gallons: on fuel lines that give them.
         - Dates as YYYY-MM-DD. A date printed as a month and day belongs to the year that puts it on or before the pay date.
         - net_paid: what reaches the owner (the direct deposit), 0 when nothing is paid. carried_forward: a balance left for the next settlement, negative when the
-          owner owes it; left out when there is none.
-        - totals: the total printed for each section, with the same signs as its lines; left out for one that isn't printed.
+          owner owes it; null when there is none.
+        - totals: the total printed for each section, with the same signs as its lines; null for one that isn't printed.
         """;
 
     public async Task<SettlementReading> ReadAsync(string apiKey, string model, string fileName, byte[] content, DateOnly reference, CancellationToken ct)
@@ -96,15 +96,17 @@ public sealed class ClaudeSettlementReader : IClaudeSettlementReader
 
     private static DateOnly? Date(JsonElement e, string name) => ClaudeRequest.Date(e, name);
 
-    // Fields that may be missing are left out rather than null: Anthropic allows only 16 nullable (union) fields in a schema, and 24 optional ones.
+    // Every field is required, and only numbers are nullable: Anthropic allows 16 nullable (union) fields in a schema, and optional fields made it
+    // "too complex" to compile. Empty text is read as missing.
     public static Dictionary<string, JsonElement> Schema()
     {
         static object Of(string type) => new { type };
+        static object Nullable(string type) => new { type = new[] { type, "null" } };
         var line = new
         {
             type = "object",
             additionalProperties = false,
-            required = new[] { "section" },
+            required = new[] { "section", "code", "date", "load", "dispatch", "description", "amount", "loaded_miles", "empty_miles", "gallons" },
             properties = new
             {
                 section = new { type = "string", @enum = Sections.Keys.ToArray() },
@@ -113,29 +115,29 @@ public sealed class ClaudeSettlementReader : IClaudeSettlementReader
                 load = Of("string"),
                 dispatch = Of("string"),
                 description = Of("string"),
-                amount = Of("number"),
-                loaded_miles = Of("number"),
-                empty_miles = Of("number"),
-                gallons = Of("number"),
+                amount = Nullable("number"),
+                loaded_miles = Nullable("number"),
+                empty_miles = Nullable("number"),
+                gallons = Nullable("number"),
             },
         };
         var totals = new
         {
             type = "object",
             additionalProperties = false,
-            required = Array.Empty<string>(),
-            properties = new { revenue = Of("number"), reimbursement = Of("number"), deduction = Of("number"), wage = Of("number") },
+            required = new[] { "revenue", "reimbursement", "deduction", "wage" },
+            properties = new { revenue = Nullable("number"), reimbursement = Nullable("number"), deduction = Nullable("number"), wage = Nullable("number") },
         };
         return ClaudeRequest.Schema(
-            ["totals", "lines"],
+            ["number", "pay_date", "period_start", "period_end", "net_paid", "carried_forward", "totals", "lines"],
             new
             {
                 number = Of("string"),
                 pay_date = Of("string"),
                 period_start = Of("string"),
                 period_end = Of("string"),
-                net_paid = Of("number"),
-                carried_forward = Of("number"),
+                net_paid = Nullable("number"),
+                carried_forward = Nullable("number"),
                 totals,
                 lines = new { type = "array", items = line },
             });

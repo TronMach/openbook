@@ -172,7 +172,7 @@ public sealed class SettlementCaptureTests : IAsyncLifetime
         Assert.Null(missing.NetPaid);
     }
 
-    // Anthropic refuses a schema with more than 16 nullable (union) fields or 24 optional ones; a live read found the first.
+    // Anthropic refuses a schema with more than 16 nullable (union) fields, and found 19 optional ones "too complex": live reads found both.
     [Fact]
     public void The_schemas_sent_to_Claude_stay_within_its_limits()
     {
@@ -181,7 +181,7 @@ public sealed class SettlementCaptureTests : IAsyncLifetime
             var root = System.Text.Json.JsonSerializer.SerializeToElement(schema);
             var (unions, optional) = Count(root);
             Assert.True(unions <= 16, $"{unions} union fields");
-            Assert.True(optional <= 24, $"{optional} optional fields");
+            Assert.Equal(0, optional);
         }
 
         static (int Unions, int Optional) Count(System.Text.Json.JsonElement e)

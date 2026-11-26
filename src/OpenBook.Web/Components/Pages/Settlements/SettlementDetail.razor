@@ -33,7 +33,7 @@
         }
         @if (_settlement.ReadMethod is { } method)
         {
-            <SettlementReadBanner Settlement="_settlement" Method="method" />
+            <SettlementReadBanner Settlement="_settlement" Method="@method" />
         }
         @if (Note is not null)
         {
