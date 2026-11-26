@@ -1,0 +1,121 @@
+using System.Globalization;
+using OpenBook.Application;
+using OpenBook.Application.Settlements;
+using OpenBook.Domain.Common;
+using OpenBook.Domain.Settlements;
+using OpenBook.Web.Components;
+using OpenBook.Web.Security;
+
+namespace OpenBook.Web.Endpoints;
+
+/// <summary>Form posts for owner-operators, their trucks and charges.</summary>
+public static class DispatchEndpoints
+{
+    public static IEndpointRouteBuilder MapDispatchEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapPost("/dispatch/owners", async (IFormCollection form, OwnerService owners, CancellationToken ct) =>
+        {
+            try
+            {
+                var owner = await owners.CreateOwnerAsync(Owner(form), ct);
+                return Results.Redirect($"/dispatch/owners/{owner.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/dispatch/owners?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/dispatch/owners/{id:guid}", async (Guid id, IFormCollection form, OwnerService owners, IRecordVersions versions, CancellationToken ct) =>
+            await Back($"/dispatch/owners/{id}", async () =>
+            {
+                await SettingsVersions.EnsureUnchangedAsync<OwnerOperator>(versions, id, form, ct);
+                await owners.UpdateOwnerAsync(id, Owner(form), form["active"] == "true", ct);
+            })).RequireAuthorization();
+
+        // One reserve: number (0 adds one), name, method, rate, target, opening, interest, active.
+        app.MapPost("/dispatch/owners/{id:guid}/reserves", async (Guid id, IFormCollection form, OwnerService owners, CancellationToken ct) =>
+            await Back($"/dispatch/owners/{id}#reserves", () =>
+            {
+                var number = int.TryParse(form["number"], NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : 0;
+                var method = Enum.TryParse<ReserveMethod>(form["method"], out var m) ? m : ReserveMethod.Fixed;
+                return owners.SetReserveAsync(id, number, new OwnerReserveDraft(form["name"].ToString(), method,
+                    Number(form, "rate", "rate") ?? 0m, Number(form, "target", "target"), Number(form, "opening", "opening balance") ?? 0m,
+                    Number(form, "interest", "yearly interest"), form["active"] == "true" || number == 0), ct);
+            })).RequireAuthorization();
+
+        app.MapPost("/dispatch/trucks", async (IFormCollection form, OwnerService owners, CancellationToken ct) =>
+        {
+            try
+            {
+                var truck = await owners.CreateTruckAsync(Truck(form), ct);
+                return Results.Redirect(AccessRules.LocalPath(form["back"]) ?? $"/dispatch/trucks/{truck.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"/dispatch/trucks?error={Uri.EscapeDataString(ex.Message)}");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/dispatch/trucks/{id:guid}", async (Guid id, IFormCollection form, OwnerService owners, IRecordVersions versions, CancellationToken ct) =>
+            await Back($"/dispatch/trucks/{id}", async () =>
+            {
+                await SettingsVersions.EnsureUnchangedAsync<Truck>(versions, id, form, ct);
+                await owners.UpdateTruckAsync(id, Truck(form), form["active"] == "true", ct);
+            })).RequireAuthorization();
+
+        app.MapPost("/dispatch/charges", async (IFormCollection form, OwnerService owners, CancellationToken ct) =>
+        {
+            var back = AccessRules.LocalPath(form["back"]) ?? "/dispatch/charges";
+            try
+            {
+                var amount = Number(form, "amount", "amount") ?? throw new DomainException("charge.amount_required", "Enter the amount.");
+                var charge = await owners.CreateChargeAsync(new OwnerChargeDetails(
+                    Id(form, "ownerId") ?? Guid.Empty, DateOnly.TryParse(form["date"], CultureInfo.InvariantCulture, out var date) ? date : CompanyTime.Today,
+                    Enum.TryParse<OwnerChargeKind>(form["kind"], out var kind) ? kind : OwnerChargeKind.Other, amount,
+                    form["paidFrom"] == "books" ? null : Id(form, "paidFrom") ?? throw new DomainException("charge.paid_from_required", "Choose where the money came from."),
+                    form["description"].ToString(), form["reference"].ToString(), Id(form, "truckId"), Number(form, "gallons", "gallons"), form["counted1099"] == "true"), ct);
+                return Results.Redirect($"/dispatch/charges/{charge.Id}");
+            }
+            catch (DomainException ex)
+            {
+                return Results.Redirect($"{back}{(back.Contains('?', StringComparison.Ordinal) ? '&' : '?')}error={Uri.EscapeDataString(ex.Message)}#new");
+            }
+        }).RequireAuthorization();
+
+        app.MapPost("/dispatch/settlements/{id:guid}/void", async (Guid id, IFormCollection form, OwnerSettlementService settlements, CancellationToken ct) =>
+            await Back($"/dispatch/settlements/{id}", () => settlements.VoidAsync(id, form["reason"].ToString(), ct))).RequireAuthorization();
+
+        app.MapPost("/dispatch/charges/{id:guid}/void", async (Guid id, IFormCollection form, OwnerService owners, CancellationToken ct) =>
+            await Back($"/dispatch/charges/{id}", () => owners.VoidChargeAsync(id, form["reason"].ToString(), ct))).RequireAuthorization();
+
+        return app;
+    }
+
+    internal static Guid? Id(IFormCollection form, string name) => Guid.TryParse(form[name], out var id) && id != Guid.Empty ? id : null;
+
+    /// <summary>A typed amount or rate (through <see cref="FormNumbers"/>); blank is null.</summary>
+    internal static decimal? Number(IFormCollection form, string name, string what) => FormNumbers.Number(form[name]);
+
+    private static OwnerDetails Owner(IFormCollection form) => new(
+        Id(form, "vendorId") ?? Guid.Empty, Id(form, "payAccountId"), Id(form, "receivableAccountId"), Id(form, "reserveAccountId"), Id(form, "classId"), form["memo"].ToString());
+
+    private static TruckDetails Truck(IFormCollection form) => new(
+        form["unit"].ToString(), Id(form, "ownerId"), Id(form, "classId"), form["vin"].ToString(), form["plate"].ToString(),
+        int.TryParse(form["year"], NumberStyles.None, CultureInfo.InvariantCulture, out var year) ? year : null, form["make"].ToString());
+
+    internal static async Task<IResult> Back(string page, Func<Task> change)
+    {
+        try
+        {
+            await change();
+            return Results.Redirect(page);
+        }
+        catch (DomainException ex)
+        {
+            var hash = page.IndexOf('#', StringComparison.Ordinal);
+            var (path, fragment) = hash < 0 ? (page, "") : (page[..hash], page[hash..]);
+            return Results.Redirect($"{path}{(path.Contains('?', StringComparison.Ordinal) ? '&' : '?')}error={Uri.EscapeDataString(ex.Message)}{fragment}");
+        }
+    }
+}

@@ -60,6 +60,7 @@ public sealed class BooksCheckService(
     Channels.IChannelStore channels,
     Channels.IChannelOrderStore channelOrders,
     Settlements.ISettlementStore settlements,
+    Settlements.IOwnerStore owners,
     Auditing.AuditChainService auditChain)
 {
     /// <summary>Most findings listed per check; the summary still counts them all.</summary>
@@ -110,6 +111,8 @@ public sealed class BooksCheckService(
             await GrantsTieAsync(data, ct),
             await DepreciationTieAsync(data, ct),
             await LoansTieAsync(data, ct),
+            await OwnerReceivablesTieAsync(data, ct),
+            await OwnerReservesTieAsync(data, ct),
             await ReconciliationsAsync(data, ct),
             await StockBelowZeroAsync(ct),
             await AuditTrailAsync(ct),
@@ -248,6 +251,10 @@ public sealed class BooksCheckService(
 
         foreach (var s in await settlements.ListSettlementsAsync(null, ct))
             Add($"Settlement {s.Number} of {s.Date:MMM d, yyyy}", "settlement", s.Id, Domain.Settlements.Settlement.Source, s.JournalEntryId, s.Status == Domain.Settlements.SettlementStatus.Posted);
+        foreach (var c in await owners.ListChargesAsync(null, ct))
+            Add($"Owner charge of {c.Date:MMM d, yyyy}", "owner_charge", c.Id, Domain.Settlements.OwnerCharge.Source, c.JournalEntryId, !c.IsVoided);
+        foreach (var s in await owners.ListSettlementsAsync(null, ct))
+            Add($"Owner settlement {s.Number}", "owner_settlement", s.Id, Domain.Settlements.OwnerSettlement.Source, s.JournalEntryId, s.Stands);
 
         foreach (var b in await channelOrders.ListBatchesAsync(null, ct))
         {
@@ -593,11 +600,31 @@ public sealed class BooksCheckService(
     private async Task<CheckResult> WithholdingTiesAsync(Data d, CancellationToken ct)
     {
         var accountId = (await purchases.GetPurchasingSettingsAsync(ct))?.BackupWithholdingAccountId;
-        var lines = d.Accrual.Where(l => l.AccountId == accountId && l.Source == BillPayment.Source).ToList();
-        return Compare("backup-withholding", "Backup withholding matches the bill payments",
-            "What bill payments held back from vendors for the IRS equals what their entries credit to the backup withholding account.",
-            -d.BillPayments.Where(p => p.Status == DocumentStatus.Posted).Sum(p => p.Withheld), lines.Sum(l => l.Amount), [],
-            "Held back on bill payments", "their entries", credit: true);
+        // Owner-operator settlements hold it back from the gross, on their bill or (at zero) their own entry.
+        var settlements = await owners.ListSettlementsAsync(null, ct);
+        var settled = SettlementBills(d);
+        var lines = d.Accrual.Where(l => l.AccountId == accountId && (l.Source == BillPayment.Source || l.Source == Domain.Settlements.OwnerSettlement.Source
+            || (l.Source == Bill.Source && l.SourceId is { } bill && settled.Contains(bill)))).ToList();
+        return Compare("backup-withholding", "Backup withholding matches the bill payments and settlements",
+            "What bill payments and owner-operator settlements held back for the IRS equals what their entries credit to the backup withholding account.",
+            -d.BillPayments.Where(p => p.Status == DocumentStatus.Posted).Sum(p => p.Withheld) - settlements.Where(s => s.Stands).Sum(s => s.Withheld), lines.Sum(l => l.Amount), [],
+            "Held back on bill payments and settlements", "their entries", credit: true);
+    }
+
+    private static HashSet<Guid> SettlementBills(Data d) => d.Bills.Where(b => b.OwnerSettlementId is not null).Select(b => b.Id).ToHashSet();
+
+    /// <summary>What's on the owners' reserves (put in, less paid out, plus interest) against the reserve accounts, accrual basis.</summary>
+    private async Task<CheckResult> OwnerReservesTieAsync(Data d, CancellationToken ct)
+    {
+        var accountIds = (await owners.ListOwnersAsync(ct)).Select(o => o.ReserveAccountId).ToHashSet();
+        var settled = SettlementBills(d);
+        var lines = d.Accrual.Where(l => accountIds.Contains(l.AccountId)).ToList();
+        var others = lines.Where(l => !(l.Source == Domain.Settlements.OwnerSettlement.Source || (l.Source == Bill.Source && l.SourceId is { } bill && settled.Contains(bill)))).ToList();
+        var expected = (await owners.ListSettlementsAsync(null, ct)).Where(s => s.Stands).SelectMany(s => s.Lines)
+            .Where(l => l.Kind is Domain.Settlements.OwnerLineKind.ReserveAdded or Domain.Settlements.OwnerLineKind.ReserveReleased).Sum(l => l.Amount);
+        return Compare("owner-reserves", "Owner reserves match the settlements",
+            "What owner-operators' settlements put into their reserves, less what they paid out, equals the reserve accounts, on the accrual basis. What was held before OpenBook is in the books some other way, and counted with the other lines.",
+            expected, lines.Sum(l => l.Amount), others, "The reserves' balances", Names(d, accountIds, "the owner reserve account"), credit: true);
     }
 
     private async Task<CheckResult> PledgesTieAsync(Data d, CancellationToken ct)
@@ -659,6 +686,24 @@ public sealed class BooksCheckService(
         return Compare("loans", "Loan balances match the books",
             "What's left to repay on each loan, by its payments, equals the loan accounts. A loan entered without its money (already in the books) is counted from the entry that put it there.",
             expected, lines.Sum(l => l.Amount), others, "The loans' balances", Names(d, accountIds, "the loan accounts"), credit: true);
+    }
+
+    /// <summary>
+    /// What owner-operators still owe (charges and advances not yet taken back) against their receivable accounts. A charge
+    /// already in the books before it was entered is counted with the other lines; what settlements took back of it isn't.
+    /// </summary>
+    private async Task<CheckResult> OwnerReceivablesTieAsync(Data d, CancellationToken ct)
+    {
+        var accountIds = (await owners.ListOwnersAsync(ct)).Select(o => o.ReceivableAccountId).ToHashSet();
+        var charges = (await owners.ListChargesAsync(null, ct)).Where(c => !c.IsVoided).ToList();
+        var (lines, others) = On(d, accountIds, Domain.Settlements.OwnerCharge.Source, Domain.Settlements.OwnerSettlement.Source, Bill.Source);
+        // A bill counts as a settlement's only when a settlement made it; any other bill on these accounts was put there by hand.
+        var settled = SettlementBills(d);
+        others.AddRange(lines.Where(l => l.Source == Bill.Source && (l.SourceId is not { } id || !settled.Contains(id))));
+        return Compare("owner-receivables", "Owner receivables match the open charges",
+            "What owner-operators still owe for fuel, repairs, advances and the like (less what their settlements took back) equals their receivable accounts, on the accrual basis.",
+            charges.Where(c => c.PostedHere).Sum(c => c.Amount) - charges.Sum(c => c.Recovered), lines.Sum(l => l.Amount), others,
+            "Open charges", Names(d, accountIds, "the owner receivable account"));
     }
 
     private async Task<CheckResult> ReconciliationsAsync(Data d, CancellationToken ct)

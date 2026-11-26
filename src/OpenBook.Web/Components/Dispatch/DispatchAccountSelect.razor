@@ -1,0 +1,26 @@
+@* An account picker for the dispatch pages' static forms: the accounts that fit, the one chosen kept though inactive. *@
+
+<select id="@Id" name="@Name" data-search required="@Required">
+    <option value="">@(Empty ?? L["Choose…"])</option>
+    @foreach (var a in Chart.Ordered(includeInactive: true).Select(x => x.Account).Where(a => Fits(a) && (a.IsActive || a.Id == Value)))
+    {
+        <option value="@a.Id" selected="@(a.Id == Value)">@Chart.FullName(a.Id)</option>
+    }
+</select>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired] public ChartOfAccounts Chart { get; set; } = new([]);
+
+    [Parameter, EditorRequired] public Func<Account, bool> Fits { get; set; } = _ => true;
+
+    [Parameter] public Guid? Value { get; set; }
+
+    /// <summary>The first choice's text, for "made when needed"; null asks to choose.</summary>
+    [Parameter] public string? Empty { get; set; }
+
+    [Parameter] public bool Required { get; set; }
+}

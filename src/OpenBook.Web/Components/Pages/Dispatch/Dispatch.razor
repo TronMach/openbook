@@ -1,0 +1,59 @@
+@page "/dispatch"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject OwnerService OwnerService
+
+<PageTitle>@L["Dispatch"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Dispatch"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button" Href="/dispatch/settlements/new">@L["Pay owner-operators"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/dispatch/settlements">@L["Owner settlements"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/dispatch/owners">@L["Owner-operators"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/dispatch/trucks">@L["Trucks"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/dispatch/charges">@L["Charges and advances"]</ActionLink>
+    </div>
+    <p class="muted">@L["The owner-operators you pay by settlement: what each owes you, and what you hold for them."]</p>
+
+    @if (_owners.Count == 0)
+    {
+        <div class="card">
+            <p>@L["Start by adding each owner-operator as a vendor, then on Owner-operators, with their trucks."]</p>
+            <ActionLink Class="button" Href="/dispatch/owners#new">@L["Add an owner-operator"]</ActionLink>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Owner-operator"]</th><th class="num">@L["Open charges"]</th><th class="num">@L["Reserves held"]</th></tr></thead>
+                <tbody>
+                    @foreach (var (owner, open, held) in _rows)
+                    {
+                        <tr>
+                            <td><a href="/dispatch/owners/@owner.Owner.Id">@owner.Name</a></td>
+                            <td class="num">@Labels.Amount(open)</td>
+                            <td class="num">@Labels.Amount(held)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot><tr><td>@L["Total"]</td><td class="num">@Labels.Amount(_rows.Sum(r => r.Open))</td><td class="num">@Labels.Amount(_rows.Sum(r => r.Held))</td></tr></tfoot>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<OwnerView> _owners = [];
+    private List<(OwnerView Owner, decimal Open, decimal Held)> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _owners = await OwnerService.ListOwnersAsync();
+        var charges = await OwnerService.ListChargesAsync(openOnly: true);
+        foreach (var owner in _owners)
+            _rows.Add((owner, charges.Where(c => c.OwnerId == owner.Owner.Id).Sum(c => c.Balance), (await OwnerService.ReserveBalancesAsync(owner.Owner.Id)).Sum(b => b.Balance)));
+    }
+}

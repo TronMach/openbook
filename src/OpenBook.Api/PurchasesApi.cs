@@ -47,11 +47,12 @@ public sealed record BillResponse(
     IReadOnlyList<BillLineDraft> Lines,
     BillApproval Approval = BillApproval.NotRequired,
     string? HoldReason = null,
-    Guid? PurchaseOrderId = null)
+    Guid? PurchaseOrderId = null,
+    Guid? OwnerSettlementId = null)
 {
     public static BillResponse From(Bill b) => new(
         b.Id, b.VendorId, b.Reference, b.Date, b.DueDate, b.Memo, b.Total, b.AmountPaid, b.Balance, b.Status, b.JournalEntryId,
-        b.Lines.Select(l => l.ToDraft()).ToList(), b.Approval, b.HoldReason, b.PurchaseOrderId);
+        b.Lines.Select(l => l.ToDraft()).ToList(), b.Approval, b.HoldReason, b.PurchaseOrderId, b.OwnerSettlementId);
 }
 
 public sealed record PurchaseOrderResponse(

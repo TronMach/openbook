@@ -205,6 +205,14 @@ public sealed class Company
     public void SetUsesSettlements(bool uses) => UsesSettlements = uses;
 
     /// <summary>
+    /// Whether the company is a carrier that pays owner-operators by settlement and dispatches loads: Dispatch is in the
+    /// menus, whatever the edition. Only what's shown: the pages work either way.
+    /// </summary>
+    public bool PaysOwnerOperators { get; private set; }
+
+    public void SetPaysOwnerOperators(bool pays) => PaysOwnerOperators = pays;
+
+    /// <summary>
     /// Whether sales may take more stock than is on hand, for items that follow the company (<see cref="Sales.Item.SellShort"/>):
     /// for businesses that don't keep exact counts. Off by default.
     /// </summary>

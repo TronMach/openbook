@@ -1,0 +1,321 @@
+@page "/dispatch/settlements/new"
+@rendermode InteractiveServer
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject Operations Ops
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Pay owner-operators"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Pay owner-operators"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button secondary" Href="/dispatch/settlements">@L["Owner settlements"]</ActionLink>
+    </div>
+    <p class="muted">@L["Enter what each owner-operator earned this period. OpenBook takes out backup withholding, what they owe you (oldest first) and their reserves, as far as their pay goes, and makes one bill for each to pay as usual."]</p>
+    @if (_error is not null)
+    {
+        <div class="alert error" role="alert">@_error</div>
+    }
+
+    @if (_loaded && _owners.Count == 0)
+    {
+        <div class="card">
+            <p>@L["Add an owner-operator first."]</p>
+            <div class="actions"><ActionLink Class="button" Href="/dispatch/owners#new">@L["Add an owner-operator"]</ActionLink></div>
+        </div>
+    }
+    else if (_loaded)
+    {
+        <FormDraft @ref="_draft" T="Draft" Key="owner-run" Snapshot="TakeDraft" OnRestore="Restore" />
+        <div class="card">
+            <div class="row">
+                <div class="field">
+                    <label for="run-from">@L["Period from"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="run-from" type="date" @bind="_from" @bind:after="Changed" />
+                </div>
+                <div class="field">
+                    <label for="run-through">@L["Through"]</label>
+                    <input id="run-through" type="date" @bind="_through" @bind:after="Changed" />
+                    <span class="hint">@L["Charges dated after it wait for the next run."]</span>
+                </div>
+                <div class="field">
+                    <label for="run-date">@L["Bill date"]</label>
+                    <input id="run-date" type="date" @bind="_date" @bind:after="Changed" />
+                </div>
+            </div>
+        </div>
+
+        @foreach (var owner in _owners)
+        {
+            var model = _models[owner.Owner.Id];
+            var plan = _plans?.FirstOrDefault(p => p.Owner.Owner.Id == owner.Owner.Id);
+            <section class="card" style="margin-top: 1.5rem" aria-labelledby="owner-@owner.Owner.Id">
+                <div class="toolbar">
+                    <h2 id="owner-@owner.Owner.Id">@owner.Name</h2>
+                    <label class="check">
+                        <input type="checkbox" @bind="model.Hold" @bind:after="Changed" />
+                        <span>@L["Hold: leave out of this run"]</span>
+                    </label>
+                </div>
+                @if (!model.Hold)
+                {
+                    <div class="table-wrap">
+                        <table class="data entry">
+                            <thead>
+                                <tr>
+                                    <th>@L["Kind"]</th><th>@L["Description"]</th><th>@L["Load"]</th><th>@L["Truck"]</th>
+                                    <th class="num">@L["Loaded miles"]</th><th class="num">@L["Empty miles"]</th><th class="num">@L["Amount"]</th>
+                                    <th><span class="visually-hidden">@L["Remove"]</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in model.Lines)
+                                {
+                                    <tr>
+                                        <td>
+                                            <select aria-label="@L["Kind"]" @bind="line.Kind" @bind:after="Changed">
+                                                <option value="@OwnerLineKind.Earning">@L["Earning"]</option>
+                                                <option value="@OwnerLineKind.Reimbursement">@L["Reimbursement"]</option>
+                                            </select>
+                                        </td>
+                                        <td><input aria-label="@L["Description"]" maxlength="200" @bind="line.Description" @bind:after="Changed" /></td>
+                                        <td><input aria-label="@L["Load"]" maxlength="40" size="8" @bind="line.Load" @bind:after="Changed" /></td>
+                                        <td>
+                                            <select aria-label="@L["Truck"]" @bind="line.TruckId" @bind:after="Changed">
+                                                <option value="">@L["None"]</option>
+                                                @foreach (var t in _trucks.Where(t => t.OwnerId == owner.Owner.Id))
+                                                {
+                                                    <option value="@t.Id">@t.Unit</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td class="num"><input aria-label="@L["Loaded miles"]" class="amount" type="number" step="0.1" min="0" @bind="line.LoadedMiles" @bind:after="Changed" /></td>
+                                        <td class="num"><input aria-label="@L["Empty miles"]" class="amount" type="number" step="0.1" min="0" @bind="line.EmptyMiles" @bind:after="Changed" /></td>
+                                        <td class="num"><input aria-label="@L["Amount"]" class="amount" type="number" step="0.01" @bind="line.Amount" @bind:after="Changed" /></td>
+                                        <td><button type="button" class="link" aria-label="@L["Remove this line"]" @onclick="() => Remove(model, line)">×</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="secondary" @onclick="() => Add(model)">@L["Add a line"]</button>
+                    @if (_balances.GetValueOrDefault(owner.Owner.Id) is { Count: > 0 } held && held.Any(b => b.Balance > 0m))
+                    {
+                        <div class="row" style="margin-top: 1rem">
+                            @foreach (var b in held.Where(b => b.Balance > 0m))
+                            {
+                                <div class="field">
+                                    <label for="release-@owner.Owner.Id-@b.Reserve.Number">@L["Pay out of {0} (holds {1})", b.Reserve.Name, Labels.Amount(b.Balance)]</label>
+                                    <input id="release-@owner.Owner.Id-@b.Reserve.Number" class="amount" type="number" step="0.01" min="0"
+                                           value="@model.Releases.GetValueOrDefault(b.Reserve.Number)" @onchange="e => Release(model, b.Reserve.Number, e.Value)" />
+                                </div>
+                            }
+                        </div>
+                    }
+                    <div class="field">
+                        <label for="memo-@owner.Owner.Id">@L["Memo"] <span class="muted">@L["(optional)"]</span></label>
+                        <input id="memo-@owner.Owner.Id" maxlength="500" @bind="model.Memo" />
+                    </div>
+
+                    @if (plan is not null)
+                    {
+                        <h3>@L["What it makes"]</h3>
+                        <div class="table-wrap">
+                            <table class="data">
+                                <thead><tr><th>@L["Line"]</th><th>@L["Description"]</th><th class="num">@L["Amount"]</th></tr></thead>
+                                <tbody>
+                                    @foreach (var l in plan.Lines)
+                                    {
+                                        <tr><td>@OwnerLineKinds.Label(l.Kind)</td><td>@l.Description</td><td class="num">@Labels.Amount(l.Amount)</td></tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr><td colspan="2">@(plan.Net > 0m ? L["Net: billed to pay"] : L["Net: nothing to pay; its own entry"])</td><td class="num">@Labels.Amount(plan.Net)</td></tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        @foreach (var note in plan.Notes)
+                        {
+                            <p class="hint">@note</p>
+                        }
+                    }
+                }
+            </section>
+        }
+
+        <div class="actions" style="margin-top: 1.5rem">
+            <ClosedPeriodPassword Visible="_needsClosingPassword" @bind-Value="_closingPassword" />
+            <button type="button" class="secondary" disabled="@_busy" @onclick="PreviewAsync">@L["Preview"]</button>
+            <button type="button" disabled="@(_busy || _plans is not { Count: > 0 })" @onclick="RunAsync">@L["Make the settlements"]</button>
+        </div>
+        @if (_plans is null)
+        {
+            <p class="hint">@L["Preview first: it shows what each settlement takes out and pays before anything is made."]</p>
+        }
+    }
+</div>
+
+@code {
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _needsClosingPassword;
+    private string? _closingPassword;
+    private IReadOnlyList<OwnerView> _owners = [];
+    private IReadOnlyList<Truck> _trucks = [];
+    private Dictionary<Guid, IReadOnlyList<ReserveBalance>> _balances = [];
+    private Dictionary<Guid, OwnerModel> _models = [];
+    private IReadOnlyList<OwnerPlan>? _plans;
+    private FormDraft<Draft>? _draft;
+    private DateOnly? _from;
+    private DateOnly _through = CompanyTime.Today;
+    private DateOnly _date = CompanyTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            (_owners, _trucks) = await Ops.RunAsync(async sp =>
+            {
+                var service = sp.GetRequiredService<OwnerService>();
+                return (await service.ListOwnersAsync(), await service.ListTrucksAsync());
+            });
+            foreach (var owner in _owners)
+            {
+                _balances[owner.Owner.Id] = await Ops.RunAsync<OwnerService, IReadOnlyList<ReserveBalance>>(s => s.ReserveBalancesAsync(owner.Owner.Id));
+                _models[owner.Owner.Id] = new OwnerModel { OwnerId = owner.Owner.Id };
+            }
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+
+        _loaded = true;
+    }
+
+    /// <summary>Anything changed: the preview no longer says what would be made.</summary>
+    private void Changed() => _plans = null;
+
+    private void Add(OwnerModel model)
+    {
+        if (_busy)
+            return;
+        model.Lines.Add(new LineModel());
+        Changed();
+    }
+
+    private void Remove(OwnerModel model, LineModel line)
+    {
+        if (_busy)
+            return;
+        model.Lines.Remove(line);
+        Changed();
+    }
+
+    private void Release(OwnerModel model, int number, object? value)
+    {
+        if (_busy)
+            return;
+        if (decimal.TryParse(value?.ToString(), System.Globalization.NumberStyles.AllowDecimalPoint, System.Globalization.CultureInfo.InvariantCulture, out var amount) && amount > 0m)
+            model.Releases[number] = amount;
+        else
+            model.Releases.Remove(number);
+        Changed();
+    }
+
+    private OwnerRunCommand Command() => new(_through, [.. _models.Values.Select(m => new OwnerRunEntry(m.OwnerId,
+        [.. m.Lines.Where(l => l.Amount is not null && l.Amount != 0m).Select(l => new OwnerPayDraft(l.Kind,
+            string.IsNullOrWhiteSpace(l.Description) ? (l.Kind == OwnerLineKind.Earning ? L["Pay"].Value : L["Reimbursement"].Value) : l.Description,
+            l.Amount!.Value, l.Load, l.TruckId, l.LoadedMiles, l.EmptyMiles))],
+        [.. m.Releases.Select(r => new OwnerRelease(r.Key, r.Value))], m.Hold, m.Memo))], _date, _from);
+
+    private async Task PreviewAsync()
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = Command();
+            _plans = await Ops.RunAsync<OwnerSettlementService, IReadOnlyList<OwnerPlan>>(s => s.PreviewAsync(command));
+            if (_plans.Count == 0)
+                _error = L["There's nothing to settle: enter what at least one owner-operator earned."];
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        if (_busy)
+            return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var command = Command();
+            var made = await Ops.RunAsync<OwnerSettlementService, IReadOnlyList<OwnerSettlement>>(s => s.RunAsync(command), _closingPassword);
+            if (_draft is not null)
+                await _draft.ClearAsync();
+            Navigation.NavigateTo($"/dispatch/settlements?made={made.Count}");
+        }
+        catch (DomainException ex)
+        {
+            _error = ex.Message;
+            _needsClosingPassword |= ClosedPeriod.NeedsPassword(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Draft? TakeDraft() => _models.Values.All(m => m.Lines.All(l => l.Amount is null)) ? null : new Draft(_from, _through, _date, [.. _models.Values]);
+
+    private void Restore(Draft draft)
+    {
+        (_from, _through, _date) = (draft.From, draft.Through, draft.Date);
+        foreach (var model in draft.Owners.Where(m => _models.ContainsKey(m.OwnerId)))
+        {
+            // A truck reassigned meanwhile is dropped from the line.
+            foreach (var line in model.Lines.Where(l => l.TruckId is { } t && !_trucks.Any(x => x.Id == t && x.OwnerId == model.OwnerId)))
+                line.TruckId = null;
+            _models[model.OwnerId] = model;
+        }
+
+        Changed();
+    }
+
+    public sealed record Draft(DateOnly? From, DateOnly Through, DateOnly Date, List<OwnerModel> Owners);
+
+    public sealed class OwnerModel
+    {
+        public Guid OwnerId { get; set; }
+        public bool Hold { get; set; }
+        public string? Memo { get; set; }
+        public List<LineModel> Lines { get; set; } = [new()];
+        public Dictionary<int, decimal> Releases { get; set; } = [];
+    }
+
+    public sealed class LineModel
+    {
+        public OwnerLineKind Kind { get; set; } = OwnerLineKind.Earning;
+        public string? Description { get; set; }
+        public string? Load { get; set; }
+        public Guid? TruckId { get; set; }
+        public decimal? LoadedMiles { get; set; }
+        public decimal? EmptyMiles { get; set; }
+        public decimal? Amount { get; set; }
+    }
+}

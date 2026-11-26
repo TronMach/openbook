@@ -53,14 +53,19 @@ public static class Editions
 
     /// <summary>The main menu's links, in order (paths; the layout knows each one's label).</summary>
     /// <param name="settlements">Whether the company is paid by carrier settlements, which any edition's menu then has.</param>
-    public static IReadOnlyList<string> Menu(Edition edition, bool settlements = false)
+    /// <param name="dispatch">Whether the company pays owner-operators and dispatches loads, which any edition's menu then has.</param>
+    public static IReadOnlyList<string> Menu(Edition edition, bool settlements = false, bool dispatch = false)
     {
         var menu = Usual(edition);
-        if (!settlements)
-            return menu;
-        // First after Home in the trucking edition, where settlements are the sales; after Sales elsewhere.
-        var after = edition == Edition.Trucking ? "/" : "/sales";
-        return [.. menu.SelectMany(href => href == after ? [href, "/settlements"] : (IEnumerable<string>)[href])];
+        if (settlements)
+        {
+            // First after Home in the trucking edition, where settlements are the sales; after Sales elsewhere.
+            var after = edition == Edition.Trucking ? "/" : "/sales";
+            menu = [.. menu.SelectMany(href => href == after ? [href, "/settlements"] : (IEnumerable<string>)[href])];
+        }
+
+        // A carrier's loads come before its sales: they're what's invoiced.
+        return dispatch ? [.. menu.SelectMany(href => href == "/sales" ? ["/dispatch", href] : (IEnumerable<string>)[href])] : menu;
     }
 
     private static IReadOnlyList<string> Usual(Edition edition) => edition switch

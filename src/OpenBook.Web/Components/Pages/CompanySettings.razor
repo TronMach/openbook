@@ -106,6 +106,11 @@
                 <span>@L["A carrier pays us by settlement statement"]</span>
             </label>
             <span class="hint">@L["For owner-operators: puts Settlements in the menu, whichever menu you chose above. Choosing the Trucking menu turns it on. It only changes what's shown."]</span>
+            <label class="check">
+                <InputCheckbox @bind-Value="Input.PaysOwnerOperators" />
+                <span>@L["We pay owner-operators and dispatch loads"]</span>
+            </label>
+            <span class="hint">@L["For carriers: puts Dispatch in the menu, with the load board, owner-operators, their trucks, charges and weekly settlements. It only changes what's shown."]</span>
         </fieldset>
 
         <fieldset>
@@ -236,6 +241,7 @@
             DefaultViewMode = company.DefaultViewMode,
             AllowSellingShort = company.AllowSellingShort,
             UsesSettlements = company.UsesSettlements,
+            PaysOwnerOperators = company.PaysOwnerOperators,
         };
     }
 
@@ -248,7 +254,7 @@
             await Versions.EnsureOnlyUnchangedAsync<OpenBook.Domain.Companies.Company>(PostedVersion);
             await SettingsService.UpdateAsync(new UpdateCompanySettingsCommand(
                 Input.Name, Input.BusinessType, Input.LegalName, Input.Email, Input.Phone, Input.Address,
-                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort, Input.Region, TaxId: Input.TaxId ?? string.Empty, UsesSettlements: Input.UsesSettlements));
+                Input.FiscalYearStartMonth, Input.UseAccountNumbers, Input.DefaultReportBasis, Input.Edition, Input.TimeZoneId ?? string.Empty, Input.DefaultViewMode, Input.AllowSellingShort, Input.Region, TaxId: Input.TaxId ?? string.Empty, UsesSettlements: Input.UsesSettlements, PaysOwnerOperators: Input.PaysOwnerOperators));
             _saved = true;
             _version = await Versions.GetOnlyAsync<OpenBook.Domain.Companies.Company>();
             _regionChosen = !string.IsNullOrEmpty(Input.Region);
@@ -283,6 +289,8 @@
         public string? TaxId { get; set; }
 
         public bool UsesSettlements { get; set; }
+
+        public bool PaysOwnerOperators { get; set; }
 
         [Range(1, 12)]
         public int FiscalYearStartMonth { get; set; } = 1;

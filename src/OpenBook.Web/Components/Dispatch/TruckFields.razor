@@ -1,0 +1,64 @@
+@inject OpenBook.Application.Segments.SegmentService Segments
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@* A truck's fields, for the new truck form and the truck's page. *@
+
+<div class="row">
+    <div class="field">
+        <label for="truck-unit">@L["Unit number"]</label>
+        <input id="truck-unit" name="unit" maxlength="20" required value="@Truck?.Unit" />
+    </div>
+    <div class="field">
+        <label for="truck-owner">@L["Owner-operator"]</label>
+        <select id="truck-owner" name="ownerId" data-search>
+            <option value="">@L["None: it's ours"]</option>
+            @foreach (var o in Owners.Where(o => o.Owner.IsActive || o.Owner.Id == Truck?.OwnerId))
+            {
+                <option value="@o.Owner.Id" selected="@(o.Owner.Id == Truck?.OwnerId)">@o.Name</option>
+            }
+        </select>
+    </div>
+    @if (_classes.Count > 0)
+    {
+        <div class="field">
+            <label for="truck-class">@L["Class"] <span class="muted">@L["(optional)"]</span></label>
+            <select id="truck-class" name="classId">
+                <option value="">@L["None"]</option>
+                @foreach (var c in _classes)
+                {
+                    <option value="@c.Segment.Id" selected="@(c.Segment.Id == Truck?.ClassId)">@c.FullName</option>
+                }
+            </select>
+            <span class="hint">@L["Its loads, charges and miles are counted under it in reports by class."]</span>
+        </div>
+    }
+</div>
+<div class="row">
+    <div class="field">
+        <label for="truck-year">@L["Year"] <span class="muted">@L["(optional)"]</span></label>
+        <input id="truck-year" name="year" inputmode="numeric" maxlength="4" value="@Truck?.Year" />
+    </div>
+    <div class="field">
+        <label for="truck-make">@L["Make and model"] <span class="muted">@L["(optional)"]</span></label>
+        <input id="truck-make" name="make" maxlength="60" value="@Truck?.Make" />
+    </div>
+    <div class="field">
+        <label for="truck-vin">@L["VIN"] <span class="muted">@L["(optional)"]</span></label>
+        <input id="truck-vin" name="vin" maxlength="17" value="@Truck?.Vin" />
+    </div>
+    <div class="field">
+        <label for="truck-plate">@L["Plate"] <span class="muted">@L["(optional)"]</span></label>
+        <input id="truck-plate" name="plate" maxlength="20" value="@Truck?.Plate" />
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+
+    [Parameter] public Truck? Truck { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<OwnerView> Owners { get; set; } = [];
+
+    protected override async Task OnInitializedAsync() =>
+        _classes = [.. (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class)).Where(c => c.Segment.IsActive || c.Segment.Id == Truck?.ClassId)];
+}

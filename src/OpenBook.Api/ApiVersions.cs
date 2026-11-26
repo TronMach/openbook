@@ -54,6 +54,10 @@ public static class ApiVersions
         ("/api/channels/orders", typeof(Domain.Channels.ChannelOrderBatch)),
         ("/api/settlements", typeof(Domain.Settlements.Settlement)),
         ("/api/settlements/carriers", typeof(Domain.Settlements.Carrier)),
+        ("/api/dispatch/owners", typeof(Domain.Settlements.OwnerOperator)),
+        ("/api/dispatch/trucks", typeof(Domain.Settlements.Truck)),
+        ("/api/dispatch/charges", typeof(Domain.Settlements.OwnerCharge)),
+        ("/api/dispatch/settlements", typeof(Domain.Settlements.OwnerSettlement)),
     ];
 
     public static string Tag(int version) => $"\"v{version}\"";

@@ -38,7 +38,7 @@ Licence: AGPL-3.0-or-later (`LICENSE`; decided 2026-11-01, when the repository w
 
 ## User guide
 
-- `docs/user-guide/` (Markdown, 33 numbered chapters, one per area, indexed in its `README.md`; a new area gets a chapter and an index line). Written for bookkeepers, not developers: menu paths and on-screen labels exactly as the pages show them, roles where an action needs more than standard. When a change renames a label, moves a page or changes a rule a chapter describes, update the chapter in the same commit.
+- `docs/user-guide/` (Markdown, 34 numbered chapters, one per area, indexed in its `README.md`; a new area gets a chapter and an index line). Written for bookkeepers, not developers: menu paths and on-screen labels exactly as the pages show them, roles where an action needs more than standard. When a change renames a label, moves a page or changes a rule a chapter describes, update the chapter in the same commit.
 
 ## Website
 
@@ -128,7 +128,7 @@ Each area's rules, names and decisions, by milestone. Read the file for the area
 - `forms-and-email.md`: form designs, columns and fonts, the renderer, printing and the print queue, email templates, the composer, links and history.
 - `projects-and-assets.md`: projects, time, timers, the week grid and time sheets, mileage, billing runs, editions and the rate card, fixed assets and depreciation, loans.
 - `channels.md`: sales channels, payout imports and live connections, orders, SKUs and returns.
-- `settlements.md`: trucking: carriers, settlement statements and their codes, the trucking edition and setting.
+- `settlements.md`: trucking: carriers, settlement statements and their codes, the trucking edition and setting; owner-operators, their charges, reserves and weekly settlements, and dispatch.
 - `nonprofit.md`: restricted net assets and releases, functional expenses, gifts, pledges, recurring gifts, allocations, letters and statements, grants.
 - `security.md`: sign-in throttling, cookies and sessions, two-factor, invitations, record areas, permission sets, single sign-on.
 - `platform.md`: roles and access rules, API keys and OpenAPI, webhooks, concurrency and stale forms, encryption at rest, PostgreSQL, containers, logs and job status, CLI and PWA, add-ins and scoped keys, languages and regions, offline capture, rate limits, idempotency, job leases, limits.

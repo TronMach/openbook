@@ -212,6 +212,7 @@ app.MapAssetEndpoints();
 app.MapNonprofitEndpoints();
 app.MapChannelEndpoints();
 app.MapSettlementEndpoints();
+app.MapDispatchEndpoints();
 app.MapDashboardEndpoints();
 app.MapAuditRequestEndpoints();
 app.MapExpenseClaimEndpoints();
