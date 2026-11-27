@@ -84,6 +84,14 @@ public sealed class DepositService(
 
     public async Task<BankDeposit> DepositAsync(MakeDepositCommand command, CancellationToken ct = default)
     {
+        await using var turn = await engine.TurnAsync(ct);
+        var deposit = await DepositInTurnAsync(command, ct);
+        await turn.CommitAsync(ct);
+        return deposit;
+    }
+
+    private async Task<BankDeposit> DepositInTurnAsync(MakeDepositCommand command, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Items);
         var bank = (await accounts.GetChartAsync(ct)).Get(command.BankAccountId);

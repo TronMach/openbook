@@ -46,7 +46,7 @@ The company file is SQLite: one person's save waits while another's finishes, wh
 | 20 | 0.11–0.22 s | 0.03–0.08 s | none |
 | 40 | 0.12–0.19 s | 0.03–0.04 s | none, of 420 or more |
 
-With 20 people saving invoices one after another without a pause, none was refused either, and 95% of saves took under half a second. Invoices saved at the same moment take numbers in turn, so two never get the same one.
+With 20 people saving invoices one after another without a pause, none was refused either, and 95% of saves took under half a second. Invoices and other documents saved at the same moment take numbers in turn, so two never get the same one. So do customer payments, bills, bill payments, bank entries, deposits and journal entries: none of them is refused because another took its entry number.
 
 So an office of 20 is no strain. For many more, or for people working over the internet, use [PostgreSQL](server.md); `OpenBook.Web.exe move-to-postgres` moves the company there.
 

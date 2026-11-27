@@ -63,6 +63,11 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
             ["Input.DefaultViewMode"] = "Full",
         }));
         Assert.Equal(HttpStatusCode.Redirect, created.StatusCode);
+
+        // The app's first "not found" page (also drawn into an empty error answer, such as a form post's 400) costs about
+        // 2.5 s once, and many times that when a full run holds the processors, so tests that time their answers start warm.
+        using var warming = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        Assert.Equal(HttpStatusCode.NotFound, (await browser.GetAsync("/warming/up", warming.Token)).StatusCode);
         return browser;
     }
 
@@ -95,14 +100,10 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
     public async Task A_page_that_does_not_exist_answers_at_once_every_time()
     {
         var browser = await SetUpAsync(_app);
-        // The app's first missing page costs about 2.5 s once (the rest take milliseconds), and many times that when a full
-        // run holds the processors (2026-11-27: past 20 s on PostgreSQL), so the first gets longer. A page that never
-        // answers, which this test is for, still fails it.
-        var first = true;
+        // SetUpAsync has drawn the first one, which costs about 2.5 s once; a page that never answers still fails here.
         foreach (var path in new[] { "/no/such/page", "/no/such/page", "/api/customers/01a00000-0000-7000-8000-000000000001", "/no/such/page" })
         {
-            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(first ? 120 : 20));
-            first = false;
+            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             var response = await browser.GetAsync(path, patience.Token);
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
             var page = await response.Content.ReadAsStringAsync(patience.Token);

@@ -75,6 +75,14 @@ public sealed class PaymentService(
 
     public async Task<CustomerPayment> ReceiveAsync(ReceivePaymentCommand command, CancellationToken ct = default)
     {
+        await using var turn = await engine.TurnAsync(ct);
+        var payment = await ReceiveInTurnAsync(command, ct);
+        await turn.CommitAsync(ct);
+        return payment;
+    }
+
+    private async Task<CustomerPayment> ReceiveInTurnAsync(ReceivePaymentCommand command, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Applications);
 

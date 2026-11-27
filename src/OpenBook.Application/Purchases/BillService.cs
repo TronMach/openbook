@@ -104,6 +104,15 @@ public sealed class BillService(
         CreateBillCommand command, Guid? recurringBillId, CancellationToken ct, BillSource? source = null, string? approvedAs = null, Guid? ownerSettlementId = null,
         decimal? approvalTotal = null)
     {
+        await using var turn = await engine.TurnAsync(ct);
+        var bill = await CreateInTurnAsync(command, recurringBillId, source, approvedAs, ownerSettlementId, approvalTotal, ct);
+        await turn.CommitAsync(ct);
+        return bill;
+    }
+
+    private async Task<Bill> CreateInTurnAsync(
+        CreateBillCommand command, Guid? recurringBillId, BillSource? source, string? approvedAs, Guid? ownerSettlementId, decimal? approvalTotal, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(command);
 
         var vendor = await store.GetVendorAsync(command.VendorId, ct) ?? throw new EntityNotFoundException("vendor", command.VendorId);
