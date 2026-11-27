@@ -1,0 +1,112 @@
+@page "/purchases/receipts/new"
+@using System.Globalization
+@inject AccountService AccountService
+@inject VendorService VendorService
+
+<PageTitle>@L["Type in a receipt"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Type in a receipt"]</h1>
+        <HelpLink Chapter="16-document-inbox" />
+        <ActionLink Class="button secondary" Href="/purchases/receipts">@L["Receipts"]</ActionLink>
+    </div>
+    <p class="muted">@L["For a paper receipt: type in what's on it and it's recorded as an expense straight away, with a photo of it if you add one."]</p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    <div class="card">
+        <PostForm Action="/purchases/receipts/new" enctype="multipart/form-data" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="vendor">@L["Vendor"]</label>
+                    <select id="vendor" name="vendorId" data-search>
+                        <option value="">@L["None (use the payee below)"]</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id" selected="@(v.Id == VendorId)">@v.DisplayName</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="payee">@L["Payee"] <span class="muted">@L["(without a vendor)"]</span></label>
+                    <input id="payee" name="payee" maxlength="100" value="@Payee" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="account">@L["Paid from"]</label>
+                    <select id="account" name="accountId" required>
+                        @foreach (var a in _payFrom)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == AccountId)">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="category">@L["Category"]</label>
+                    <select id="category" name="categoryId" data-search>
+                        <option value="">@L["The vendor's default category"]</option>
+                        @foreach (var a in _categories)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == CategoryId)">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field">
+                    <label for="date">@L["Date"]</label>
+                    <input id="date" type="date" name="date" required value="@(_date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" />
+                </div>
+                <div class="field">
+                    <label for="amount">@L["Amount"]</label>
+                    <input id="amount" name="amount" class="amount" inputmode="decimal" required value="@Amount" />
+                </div>
+                <div class="field">
+                    <label for="memo">@L["Memo"] <span class="muted">@L["(optional)"]</span></label>
+                    <input id="memo" name="memo" maxlength="1000" value="@Memo" />
+                </div>
+            </div>
+            <div class="field">
+                <label for="photo">@L["Photo of the receipt"] <span class="muted">@L["(optional)"]</span></label>
+                <input id="photo" type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,image/*" />
+            </div>
+            <ClosedPeriodPassword Visible="Password" Interactive="false" />
+            <div class="actions"><button type="submit">@L["Record expense"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _payFrom = [];
+    private List<Account> _categories = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+    private DateOnly _date;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    // What was typed, back after a refusal.
+    [SupplyParameterFromQuery] private Guid? VendorId { get; set; }
+    [SupplyParameterFromQuery] private string? Payee { get; set; }
+    [SupplyParameterFromQuery] private Guid? AccountId { get; set; }
+    [SupplyParameterFromQuery] private Guid? CategoryId { get; set; }
+    [SupplyParameterFromQuery] private string? Date { get; set; }
+    [SupplyParameterFromQuery] private string? Amount { get; set; }
+    [SupplyParameterFromQuery] private string? Memo { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chart = await AccountService.GetChartAsync();
+        var accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _payFrom = [.. accounts.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard)];
+        _categories = [.. accounts.Where(a => a.Type.ClassOf() is AccountClass.Expense || a.Type is AccountType.CostOfGoodsSold or AccountType.OtherCurrentAsset or AccountType.FixedAsset)];
+        _vendors = await VendorService.ListRecordsAsync();
+        _date = DateOnly.TryParseExact(Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : CompanyTime.Today;
+    }
+}

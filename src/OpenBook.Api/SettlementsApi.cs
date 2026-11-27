@@ -84,6 +84,16 @@ public sealed record VoidSettlementRequest(string? Reason);
 /// <summary>That a person checked a settlement read by OCR against its statement (<see cref="SettlementService.ConfirmAsync"/>).</summary>
 public sealed record ConfirmSettlementRequest(decimal NetPaid, bool AllChecked, IReadOnlyList<int>? CheckedLines = null);
 
+/// <summary>A trucking receipt with its expense as that stands (amount, date, payee, account and class are the expense's).</summary>
+public sealed record TruckReceiptResponse(
+    Guid Id, Guid BankTransactionId, TruckReceiptKind Kind, DateOnly Date, decimal Amount, string? Payee, Guid? VendorId, Guid PaidFromAccountId,
+    Guid? AccountId, Guid? ClassId, decimal? Gallons, decimal? PricePerGallon, string? Jurisdiction, string? City, string? Number, bool Voided)
+{
+    public static TruckReceiptResponse From(TruckReceiptView v) => new(
+        v.Receipt.Id, v.Spend.Id, v.Receipt.Kind, v.Date, v.Amount, v.Spend.Payee, v.Spend.VendorId, v.Spend.AccountId,
+        v.AccountId, v.ClassId, v.Receipt.Gallons, v.PricePerGallon, v.Receipt.Jurisdiction, v.Receipt.City, v.Receipt.Number, v.IsVoided);
+}
+
 public static class SettlementsApi
 {
     public static void MapSettlementsApi(this RouteGroupBuilder api)
@@ -149,5 +159,20 @@ public static class SettlementsApi
             SettlementResponse.From(await s.VoidAsync(id, r.Reason ?? "Settlement voided", ct)));
         settlements.MapPost("/{id:guid}/dismiss", async (Guid id, SettlementService s, CancellationToken ct) => SettlementResponse.From(await s.SetDismissedAsync(id, true, ct)));
         settlements.MapPost("/{id:guid}/restore", async (Guid id, SettlementService s, CancellationToken ct) => SettlementResponse.From(await s.SetDismissedAsync(id, false, ct)));
+
+        // Receipts an owner-operator paid on the road, each recorded as an expense.
+        settlements.MapGet("/receipts", async (DateOnly? from, DateOnly? to, TruckReceiptService s, CancellationToken ct) =>
+            (await s.ListAsync(from, to, ct)).Select(TruckReceiptResponse.From));
+        settlements.MapGet("/receipts/fuel-by-state", async (DateOnly from, DateOnly to, TruckReceiptService s, CancellationToken ct) =>
+            await s.FuelByJurisdictionAsync(from, to, ct));
+        settlements.MapGet("/receipts/{id:guid}", async (Guid id, TruckReceiptService s, CancellationToken ct) =>
+            await s.GetAsync(id, ct) is { } v ? Results.Ok(TruckReceiptResponse.From(v)) : Results.NotFound());
+        settlements.MapPost("/receipts", async (TruckReceiptCommand r, TruckReceiptService s, CancellationToken ct) =>
+        {
+            var receipt = await s.RecordAsync(r, ct: ct);
+            return Results.Created($"/api/settlements/receipts/{receipt.Id}", TruckReceiptResponse.From((await s.GetAsync(receipt.Id, ct))!));
+        });
+        settlements.MapPost("/receipts/{id:guid}/void", async (Guid id, VoidSettlementRequest r, TruckReceiptService s, CancellationToken ct) =>
+            TruckReceiptResponse.From(await s.VoidAsync(id, r.Reason, ct)));
     }
 }

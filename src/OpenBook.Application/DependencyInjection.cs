@@ -193,6 +193,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Channels.ChannelOrderService>();
         services.AddScoped<OpenBook.Application.Settlements.SettlementService>();
         services.AddScoped<OpenBook.Application.Settlements.OwnerService>();
+        services.AddScoped<OpenBook.Application.Settlements.TruckReceiptService>();
         services.AddScoped<OpenBook.Application.Settlements.OwnerSettlementService>();
         services.AddScoped<OpenBook.Application.Settlements.LoadService>();
         services.AddScoped<OpenBook.Application.Settlements.OwnerStatements>();

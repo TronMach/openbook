@@ -1,4 +1,6 @@
+using System.Globalization;
 using OpenBook.Application;
+using OpenBook.Application.Ledger;
 using OpenBook.Application.Accounts;
 using OpenBook.Application.Settlements;
 using OpenBook.Domain.Common;
@@ -12,6 +14,12 @@ namespace OpenBook.Web.Endpoints;
 public static class SettlementEndpoints
 {
     public const long MaxFileBytes = 5L * 1024 * 1024;
+
+    private static string? Typed(IFormCollection form, string name) => form[name].ToString().Trim() is { Length: > 0 } text ? text : null;
+
+    /// <summary>The named fields that were filled in, as a query string for the form to show them again.</summary>
+    internal static string Query(IFormCollection form, params string[] names) =>
+        string.Join("&", names.Where(n => !string.IsNullOrWhiteSpace(form[n])).Select(n => $"{n}={Uri.EscapeDataString(form[n].ToString().Trim())}"));
 
     public static IEndpointRouteBuilder MapSettlementEndpoints(this IEndpointRouteBuilder app)
     {
@@ -132,6 +140,55 @@ public static class SettlementEndpoints
 
         app.MapPost("/settlements/{id:guid}/dismiss", async (Guid id, IFormCollection form, SettlementService settlements, CancellationToken ct) =>
             await Back($"/settlements/{id}", () => settlements.SetDismissedAsync(id, form["restore"] != "true", ct))).RequireAuthorization();
+
+        // A receipt typed in. Fields: kind, date, amount, paidFrom, accountId (blank: the kind's usual), classId, vendorId, payee,
+        // gallons, jurisdiction, city, number, memo, receiptId (an uploaded one it records), file (a photo); next=another opens a
+        // new one with the kind, date, account paid from and truck kept. A refusal comes back with what was typed.
+        app.MapPost("/settlements/receipts/new", async (IFormCollection form, TruckReceiptService receipts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            var file = form.Files.GetFile("file") is { Length: > 0 } f ? f : null;
+            try
+            {
+                var command = new TruckReceiptCommand(
+                    Enum.TryParse<TruckReceiptKind>(form["kind"], out var kind) && Enum.IsDefined(kind) ? kind
+                        : throw new DomainException("truck_receipt.kind_invalid", "Choose what the receipt is for."),
+                    DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date
+                        : throw new DomainException("truck_receipt.date_required", "Enter the date on the receipt."),
+                    FormNumbers.Amount(form["amount"]) ?? throw new DomainException("truck_receipt.amount_not_positive", "Enter the amount paid."),
+                    DispatchEndpoints.Id(form, "paidFrom") ?? throw new DomainException("truck_receipt.paid_from_required", "Choose the bank or card account it was paid from."),
+                    DispatchEndpoints.Id(form, "accountId"), DispatchEndpoints.Id(form, "classId"), DispatchEndpoints.Id(form, "vendorId"),
+                    Typed(form, "payee"), FormNumbers.Number(form["gallons"]), Typed(form, "jurisdiction"), Typed(form, "city"), Typed(form, "number"), Typed(form, "memo"),
+                    DispatchEndpoints.Id(form, "receiptId"));
+                await using var photo = file?.OpenReadStream();
+                var receipt = await receipts.RecordAsync(command, file?.FileName, photo, ct);
+                return Results.Redirect(form["next"] == "another"
+                    ? $"/settlements/receipts/new?saved={receipt.Id}&{Query(form, "kind", "date", "paidFrom", "classId")}"
+                    : $"/settlements/receipts/{receipt.Id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
+                var message = file is null ? ex.Message : $"{ex.Message} Choose the photo again.";
+                return Results.Redirect($"/settlements/receipts/new?error={Uri.EscapeDataString(message)}{password}&"
+                    + Query(form, "kind", "date", "amount", "paidFrom", "accountId", "classId", "vendorId", "payee", "gallons", "jurisdiction", "city", "number", "memo", "receiptId"));
+            }
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(DocumentEndpoints.MaxUploadBytes));
+
+        app.MapPost("/settlements/receipts/{id:guid}/void", async (Guid id, IFormCollection form, TruckReceiptService receipts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            try
+            {
+                await receipts.VoidAsync(id, form["reason"].ToString(), ct);
+                return Results.Redirect($"/settlements/receipts/{id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
+                return Results.Redirect($"/settlements/receipts/{id}?error={Uri.EscapeDataString(ex.Message)}{password}");
+            }
+        }).RequireAuthorization();
 
         return app;
     }

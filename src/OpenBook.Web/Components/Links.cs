@@ -121,6 +121,7 @@ public static class Links
         "owner_operator" => $"/dispatch/owners/{id}",
         "truck" => $"/dispatch/trucks/{id}",
         "owner_charge" => $"/dispatch/charges/{id}",
+        "truck_receipt" => $"/settlements/receipts/{id}",
         "owner_settlement" => $"/dispatch/settlements/{id}",
         "reserve_interest" => "/dispatch/interest",
         "load" => $"/dispatch/loads/{id}",

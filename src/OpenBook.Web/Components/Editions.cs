@@ -122,7 +122,7 @@ public static class Editions
         [
             new("/settlements", "Settlements", "Each week's statement from the carrier, and what's waiting to be posted"),
             new("/settlements/new", "Enter a settlement", "Type or paste a statement's lines"),
-            new("/purchases/receipts", "Receipts", "Fuel, scales and repairs you paid for yourself"),
+            new("/settlements/receipts/new", "Enter a receipt", "Fuel, scales and repairs you paid for yourself, with the gallons and the state"),
             new("/banking", "Banking", "Registers, deposits to match and reconciling"),
             new("/reports/operating-statement", "Operating statement", "What the truck earned and cost, per mile"),
             new("/reports/settlement-loads", "Loads", "Each load's miles, pay and own charges"),

@@ -57,6 +57,16 @@ public sealed class ReceiptCapture
         Status = ReceiptStatus.New,
     };
 
+    /// <summary>A receipt typed in from paper: no file to read (a photo may still be attached). Its file name is empty.</summary>
+    public static ReceiptCapture Typed(DateTimeOffset now, string? createdBy) => new()
+    {
+        Id = Guid.CreateVersion7(),
+        FileName = string.Empty,
+        CreatedAt = now.ToUniversalTime(),
+        CreatedBy = createdBy,
+        Status = ReceiptStatus.New,
+    };
+
     public void Read(string? text, ReceiptFields fields, Guid? vendorId)
     {
         ArgumentNullException.ThrowIfNull(fields);

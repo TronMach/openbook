@@ -26,6 +26,10 @@ However a file is read, check the result against the document before you post it
 
 Open the receipt to **Record as an expense**: check the **vendor** or **payee**, choose **paid from** (the card or bank account), the **category**, **date** and **amount**, then **Record expense**. The receipt file is attached to the expense. The text that was read is shown below the form so you can compare.
 
+**Type in a receipt** is for a paper receipt you'd rather not photograph: fill in the same fields (and a photo if you like) and **Record expense** records it straight away. It's listed with the others as **Typed in**. If a refused form comes back, choose the photo again.
+
+When trucking settlements are turned on, a receipt's page also offers **Record it as a trucking receipt**, which keeps the gallons, the state and the truck as well; see [Trucking settlements](33-trucking-settlements.md).
+
 **Dismiss** a receipt that isn't an expense or was entered already, for example because it also arrived through a bank import. If the same file was uploaded before, the receipt's page says so, with a link to the earlier one.
 
 ## The document inbox

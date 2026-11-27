@@ -185,6 +185,10 @@ internal static class EveryRecordKind
             await store.SaveChangesAsync(default);
         });
 
+        // Receipts typed in: fuel on the road (with its gallons and state) and a paper one under Purchases.
+        await Do<TruckReceiptService>(s => s.RecordAsync(new TruckReceiptCommand(TruckReceiptKind.Fuel, d, 412.50m, checking, Payee: "Pilot #612", Gallons: 110m, Jurisdiction: "TX", City: "Amarillo")));
+        await Do<ReceiptService>(s => s.EnterAsync(new RecordReceiptCommand(checking, Account("Fuel"), d, 18.40m, Payee: "Corner Hardware")));
+
         // A carrier's side: an owner-operator with a reserve, their truck, and an advance waiting to be taken back.
         var hauler = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Pat Hauling")));
         var owner = await In<OwnerService, OwnerOperator>(s => s.CreateOwnerAsync(new OwnerDetails(hauler.Id)));

@@ -6,6 +6,7 @@
 @inject CompanySettingsService Settings
 @inject NavigationManager Navigation
 @inject ClosedPeriodOverride ClosingOverride
+@inject OpenBook.Application.Settlements.TruckReceiptService TruckReceipts
 
 <PageTitle>@(_title ?? "Bank transaction") · OpenBook</PageTitle>
 
@@ -41,6 +42,13 @@
     @if (_transaction.Status == BankTransactionStatus.Voided)
     {
         <div class="alert notice" role="status">This transaction is voided. Its journal entry was reversed on the same date.</div>
+    }
+    @if (_truckReceipt is not null)
+    {
+        <p class="muted">
+            @L["Recorded from a trucking receipt ({0}), which keeps what it was for, the gallons and where it was bought.", OpenBook.Domain.Settlements.TruckReceiptKinds.Label(_truckReceipt.Kind)]
+            <a href="/settlements/receipts/@_truckReceipt.Id">@L["Open the receipt"]</a>
+        </p>
     }
     @if (_changes.Count > 0)
     {
@@ -176,7 +184,10 @@
         _ownMoney = !BankTransaction.IsBankingAccount(payFrom);
         _title = _ownMoney ? "Paid with your own money" : Labels.For(_transaction.Kind, payFrom);
         _changes = await BankingService.ChangesAsync(Id);
+        _truckReceipt = await TruckReceipts.ForTransactionAsync(Id);
     }
+
+    private OpenBook.Domain.Settlements.TruckReceipt? _truckReceipt;
 
     private async Task VoidAsync()
     {

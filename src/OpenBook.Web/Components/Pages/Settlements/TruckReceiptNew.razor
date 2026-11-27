@@ -1,0 +1,290 @@
+@page "/settlements/receipts/new"
+@using System.Globalization
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject TruckReceiptService Receipts
+@inject ReceiptService Uploads
+@inject AccountService AccountService
+@inject VendorService VendorService
+@inject OpenBook.Application.Segments.SegmentService Segments
+
+<PageTitle>@L["Enter a trucking receipt"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Enter a trucking receipt"]</h1>
+        <HelpLink Chapter="33-trucking-settlements" />
+        <ActionLink Class="button secondary" Href="/settlements/receipts">@L["Trucking receipts"]</ActionLink>
+    </div>
+    <p class="muted">@L["Type in what's on the paper receipt. It's recorded as an expense from the account you paid with, so it matches the line on your bank or card statement."]</p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (_saved is not null)
+    {
+        <div class="alert notice" role="status">
+            @L["Saved: {0}, {1} on {2}.", TruckReceiptKinds.Label(_saved.Receipt.Kind), Labels.Amount(_saved.Amount), Labels.Date(_saved.Date)]
+            <a href="/settlements/receipts/@_saved.Receipt.Id">@L["Open it"]</a>
+        </div>
+    }
+    @if (_upload is { Status: not ReceiptStatus.New })
+    {
+        <div class="alert error" role="alert">@L["That uploaded receipt has already been recorded or dismissed."] <a href="/purchases/receipts/@_upload.Id">@L["Open it"]</a></div>
+    }
+    else if (_upload is not null)
+    {
+        <div class="alert notice" role="status">
+            @L["Recording the uploaded receipt {0}: its photo goes on the expense. Check what was read against it.", _upload.FileName]
+            <a href="/purchases/receipts/@_upload.Id" target="_blank">@L["See the photo"]</a>
+        </div>
+    }
+
+    @if (_payFrom.Count == 0)
+    {
+        <div class="card">
+            <p>@L["Add the bank or credit card account you pay with to the chart of accounts first."]</p>
+            <ActionLink Class="button" Href="/accounts/new">@L["Add an account"]</ActionLink>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <PostForm Action="/settlements/receipts/new" enctype="multipart/form-data" data-enhance="false">
+                <AntiforgeryToken />
+                @if (_upload is { Status: ReceiptStatus.New })
+                {
+                    <input type="hidden" name="receiptId" value="@_upload.Id" />
+                }
+                <div class="row">
+                    <div class="field">
+                        <label for="receipt-kind">@L["What for"]</label>
+                        <select id="receipt-kind" name="kind">
+                            @foreach (var k in Enum.GetValues<TruckReceiptKind>())
+                            {
+                                <option value="@k" selected="@(k == _kind)">@TruckReceiptKinds.Label(k)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="receipt-date">@L["Date"]</label>
+                        <input id="receipt-date" name="date" type="date" required value="@_date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" />
+                    </div>
+                    <div class="field">
+                        <label for="receipt-amount">@L["Amount paid"]</label>
+                        <input id="receipt-amount" name="amount" class="amount" inputmode="decimal" required value="@_amount" />
+                    </div>
+                    <div class="field">
+                        <label for="receipt-gallons">@L["Gallons"] <span class="muted">@L["(fuel and DEF)"]</span></label>
+                        <input id="receipt-gallons" name="gallons" inputmode="decimal" value="@_gallons" />
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="receipt-payee">@L["Bought at"] <span class="muted">@L["(the truck stop or shop)"]</span></label>
+                        <input id="receipt-payee" name="payee" maxlength="100" value="@_payee" />
+                    </div>
+                    <div class="field">
+                        <label for="receipt-city">@L["City"] <span class="muted">@L["(optional)"]</span></label>
+                        <input id="receipt-city" name="city" maxlength="60" value="@_city" />
+                    </div>
+                    <div class="field">
+                        <label for="receipt-state">@L["State or province"]</label>
+                        <select id="receipt-state" name="jurisdiction" data-search>
+                            <option value="">@L["None"]</option>
+                            @foreach (var (abbr, name) in Jurisdictions.All)
+                            {
+                                <option value="@abbr" selected="@(abbr == _jurisdiction)">@name (@abbr)</option>
+                            }
+                        </select>
+                        <span class="hint">@L["Needed for fuel: a fuel tax return counts the gallons bought in each state."]</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="receipt-paid-from">@L["Paid from"]</label>
+                        <select id="receipt-paid-from" name="paidFrom" required>
+                            @foreach (var a in _payFrom)
+                            {
+                                <option value="@a.Id" selected="@(a.Id == _paidFrom)">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                        <span class="hint">@L["The bank account, card or cash account the money came from."]</span>
+                    </div>
+                    <div class="field">
+                        <label for="receipt-account">@L["Account"]</label>
+                        <select id="receipt-account" name="accountId" data-search>
+                            <option value="">@L["The usual one for what it's for"]</option>
+                            @foreach (var a in _categories)
+                            {
+                                <option value="@a.Id" selected="@(a.Id == _accountId)">@_chart.FullName(a.Id)</option>
+                            }
+                        </select>
+                        @if (_usual.Count > 0)
+                        {
+                            <span class="hint">@L["Usually: {0}.", string.Join("; ", _usual.Select(u => $"{TruckReceiptKinds.Label(u.Key)} → {_chart.FullName(u.Value)}"))]</span>
+                        }
+                    </div>
+                    @if (_classes.Count > 0)
+                    {
+                        <div class="field">
+                            <label for="receipt-class">@L["Truck (class)"]</label>
+                            <select id="receipt-class" name="classId">
+                                <option value="">@L["None"]</option>
+                                @foreach (var c in _classes)
+                                {
+                                    <option value="@c.Segment.Id" selected="@(c.Segment.Id == _classId)">@c.FullName</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="receipt-vendor">@L["Vendor record"] <span class="muted">@L["(optional)"]</span></label>
+                        <select id="receipt-vendor" name="vendorId" data-search>
+                            <option value="">@L["None"]</option>
+                            @foreach (var v in _vendors)
+                            {
+                                <option value="@v.Id" selected="@(v.Id == _vendorId)">@v.DisplayName</option>
+                            }
+                        </select>
+                        <span class="hint">@L["For a shop or chain you want in Expenses by vendor."]</span>
+                    </div>
+                    <div class="field">
+                        <label for="receipt-number">@L["Receipt number"] <span class="muted">@L["(optional)"]</span></label>
+                        <input id="receipt-number" name="number" maxlength="40" value="@_number" />
+                    </div>
+                    <div class="field">
+                        <label for="receipt-memo">@L["Memo"] <span class="muted">@L["(optional)"]</span></label>
+                        <input id="receipt-memo" name="memo" maxlength="1000" value="@_memo" />
+                    </div>
+                </div>
+                @if (_upload is null)
+                {
+                    <div class="field">
+                        <label for="receipt-photo">@L["Photo of the receipt"] <span class="muted">@L["(optional)"]</span></label>
+                        <input id="receipt-photo" type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,image/*" />
+                        <span class="hint">@L["Kept on the expense, in case you're asked for the receipt."]</span>
+                    </div>
+                }
+                <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                <div class="actions">
+                    <button type="submit">@L["Save"]</button>
+                    @if (_upload is null)
+                    {
+                        <button type="submit" class="secondary" name="next" value="another">@L["Save and enter another"]</button>
+                    }
+                </div>
+            </PostForm>
+        </div>
+    }
+</div>
+
+@code {
+    private ChartOfAccounts _chart = new([]);
+    private List<Account> _payFrom = [];
+    private List<Account> _categories = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+    private IReadOnlyDictionary<TruckReceiptKind, Guid> _usual = new Dictionary<TruckReceiptKind, Guid>();
+    private TruckReceiptView? _saved;
+    private ReceiptCapture? _upload;
+
+    private TruckReceiptKind _kind = TruckReceiptKind.Fuel;
+    private DateOnly _date;
+    private string? _amount;
+    private Guid? _paidFrom;
+    private Guid? _accountId;
+    private Guid? _classId;
+    private Guid? _vendorId;
+    private string? _payee;
+    private string? _jurisdiction;
+    private string? _city;
+    private string? _number;
+    private string? _memo;
+    private string? _gallons;
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+    [SupplyParameterFromQuery] private Guid? Saved { get; set; }
+    // Copy: another receipt's details; Receipt: an uploaded receipt (Purchases → Receipts) to record.
+    [SupplyParameterFromQuery] private Guid? Copy { get; set; }
+    [SupplyParameterFromQuery(Name = "receipt")] private Guid? Upload { get; set; }
+    // What was typed, back after a refusal (or kept for the next one).
+    [SupplyParameterFromQuery] private string? Kind { get; set; }
+    [SupplyParameterFromQuery] private string? Date { get; set; }
+    [SupplyParameterFromQuery] private string? Amount { get; set; }
+    [SupplyParameterFromQuery] private Guid? PaidFrom { get; set; }
+    [SupplyParameterFromQuery] private Guid? AccountId { get; set; }
+    [SupplyParameterFromQuery] private Guid? ClassId { get; set; }
+    [SupplyParameterFromQuery] private Guid? VendorId { get; set; }
+    [SupplyParameterFromQuery] private string? Payee { get; set; }
+    [SupplyParameterFromQuery] private string? Gallons { get; set; }
+    [SupplyParameterFromQuery] private string? Jurisdiction { get; set; }
+    [SupplyParameterFromQuery] private string? City { get; set; }
+    [SupplyParameterFromQuery] private string? Number { get; set; }
+    [SupplyParameterFromQuery] private string? Memo { get; set; }
+    [SupplyParameterFromQuery(Name = "receiptId")] private Guid? UploadAgain { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chart = await AccountService.GetChartAsync();
+        var accounts = _chart.Ordered(includeInactive: false).Select(x => x.Account).ToList();
+        _payFrom = [.. accounts.Where(a => BankTransaction.IsBankingAccount(a.Type))];
+        _categories = [.. accounts.Where(a => a.Type.ClassOf() is AccountClass.Expense || a.Type is AccountType.CostOfGoodsSold or AccountType.OtherCurrentAsset or AccountType.FixedAsset)];
+        _vendors = await VendorService.ListRecordsAsync();
+        _classes = [.. (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class)).Where(c => c.Segment.IsActive)];
+        _saved = Saved is { } saved ? await Receipts.GetAsync(saved) : null;
+
+        // The last receipt's account paid from and truck, else the defaults.
+        var defaults = await Receipts.DefaultsAsync();
+        _usual = defaults.Accounts;
+        _date = CompanyTime.Today;
+        _paidFrom = defaults.PaidFromAccountId;
+        _classId = defaults.ClassId;
+
+        if (Copy is { } copy && await Receipts.GetAsync(copy) is { } from)
+        {
+            _kind = from.Receipt.Kind;
+            _date = from.Date;
+            _amount = from.Amount.ToString("0.00", CultureInfo.InvariantCulture);
+            _paidFrom = from.Spend.AccountId;
+            _accountId = from.AccountId;
+            _classId = from.ClassId;
+            _vendorId = from.Spend.VendorId;
+            _payee = from.Spend.VendorId is null ? from.Spend.Payee : null;
+            _gallons = from.Receipt.Gallons?.ToString("0.###", CultureInfo.InvariantCulture);
+            _jurisdiction = from.Receipt.Jurisdiction;
+            _city = from.Receipt.City;
+            _number = from.Receipt.Number;
+            _memo = from.Spend.Memo;
+        }
+
+        if ((Upload ?? UploadAgain) is { } uploadId && await Uploads.GetAsync(uploadId) is { } upload)
+        {
+            _upload = upload;
+            _date = upload.Date ?? _date;
+            _amount = upload.Total?.ToString("0.00", CultureInfo.InvariantCulture);
+            _vendorId = upload.VendorId;
+            _payee = upload.VendorId is null ? upload.VendorName : null;
+        }
+
+        if (Enum.TryParse<TruckReceiptKind>(Kind, out var k) && Enum.IsDefined(k))
+            _kind = k;
+        if (DateOnly.TryParseExact(Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+            _date = d;
+        _amount = Amount ?? _amount;
+        _paidFrom = PaidFrom ?? _paidFrom;
+        _accountId = AccountId ?? _accountId;
+        _classId = ClassId ?? _classId;
+        _vendorId = VendorId ?? _vendorId;
+        _payee = Payee ?? _payee;
+        _jurisdiction = Jurisdiction ?? _jurisdiction;
+        _city = City ?? _city;
+        _number = Number ?? _number;
+        _memo = Memo ?? _memo;
+        _gallons = Gallons ?? _gallons;
+    }
+}

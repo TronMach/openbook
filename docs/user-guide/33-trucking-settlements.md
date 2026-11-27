@@ -89,6 +89,26 @@ To change a posted settlement, **Void the entry**; it goes back to waiting, wher
 
 Notes and files (the statement itself, say) can be kept with each settlement, at the bottom of its page. Statements often show other people's pay, so attach only what you need.
 
+## Receipts you paid on the road
+
+Fuel on your own card, a scale ticket, a lumper, a tire repair: what the carrier didn't pay and take back goes in **Settlements → Receipts → Enter a receipt**. Type in what's on the paper receipt:
+
+- **What for**: fuel, diesel exhaust fluid, tolls, scales, lumper, repairs, tires, parking or other.
+- **Date**, **Amount paid**, and for fuel and DEF the **Gallons**.
+- **Bought at** (the truck stop or shop), the **City** and the **State or province**. Fuel needs the gallons and the state: a fuel tax return counts the gallons bought in each one.
+- **Paid from**: the bank account, card or cash account the money came from.
+- **Account**: leave it on **The usual one for what it's for** and fuel goes to Fuel, tolls and scales to Tolls and Scales, repairs to Truck Repairs and so on (the accounts **Add the usual trucking accounts** makes, or ones named like them). Once you choose another for a kind, its next receipts go there too. Lumpers and other things have no usual account until you choose one.
+- **Truck (class)**, when you use classes: it starts on the last receipt's truck, or the carrier's class.
+- A **Vendor record**, a **Receipt number** and a **Memo** if you like, and a **Photo of the receipt**, kept on the expense in case you're asked for it.
+
+**Save and enter another** keeps the kind, date, account and truck for the next one, for a stack of receipts from one trip. If something is missing, the form comes back with what you typed (choose the photo again).
+
+Each receipt is recorded as an expense from the account you paid with, so it matches the line on your bank or card statement and shows in the **Operating statement** under its truck. The expense's page says which receipt it came from. To correct one, **Void** it on the receipt's page and **Copy** it to enter it again, or change the amount, date or account on the expense itself.
+
+**Settlements → Receipts** lists them by period (**This quarter**, **Last quarter**, or any dates), with the price per gallon, and **Fuel by state**: the gallons and money of the fuel receipts in each state or province. A fuel tax (IFTA) return also needs the miles driven in each state, which OpenBook doesn't keep.
+
+Photographed receipts can wait in **Purchases → Receipts** (see [The document inbox and receipt capture](16-document-inbox.md)); open one and choose **Record it as a trucking receipt** to keep its gallons, state and truck. Its photo goes on the expense.
+
 ## Reports
 
 Under **Reports → Trucking**:
@@ -100,4 +120,4 @@ Under **Reports → Trucking**:
 
 ## What it doesn't do
 
-It isn't payroll: a second driver's wages and taxes on the statement go to the accounts you choose, and no pay stubs or W-2s are made. Fuel tax (IFTA) returns aren't prepared, though the gallons are kept.
+It isn't payroll: a second driver's wages and taxes on the statement go to the accounts you choose, and no pay stubs or W-2s are made. Fuel tax (IFTA) returns aren't prepared, though the gallons are kept, and the gallons you bought are added up by state under **Receipts**.
