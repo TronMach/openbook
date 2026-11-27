@@ -7,7 +7,8 @@ OpenBook contacts other services only in the cases below. Apart from the update 
 ## Update check
 
 - **OpenBook Desktop** checks for a new version a minute after it starts and then once a day. It downloads `latest.json`, and the new installer when there is one, from the project's releases on GitHub. GitHub sees your computer's IP address and the OpenBook version, which is sent in the request (`OpenBook/x.y.z`). Nothing about your company is sent. Turn it off in **Settings → System → Updates**, or with `OpenBook:Updates:Check` set to `false`.
-- **OpenBook Server** doesn't check unless `OpenBook:Updates:Check` is set to `true`.
+- **OpenBook Server for Windows** checks the same way, but downloads only `latest.json`. Turn it off in the same places.
+- **OpenBook Server** with Docker doesn't check unless `OpenBook:Updates:Check` is set to `true`.
 
 ## Services you connect
 
@@ -20,7 +21,7 @@ OpenBook contacts other services only in the cases below. Apart from the update 
 | Bank connections | SimpleFIN Bridge or Plaid, with the access you give them | Requests for your accounts' balances and transactions |
 | Online payments, online giving and the customer portal | Stripe, PayPal or Square, with your own keys | The amounts and descriptions of what customers pay, and their email address; your customers enter their card details on the provider's own page, never in OpenBook (a card saved for automatic payment stays at Stripe; OpenBook keeps its last four digits and expiry) |
 | Sales channels | Stripe or Shopify, with your key or access token | Requests for payouts and their transactions |
-| Reading documents and receipts with Claude | Anthropic, with your API key | The file being read (a PDF, image or text) |
+| Reading documents and receipts with Claude | Anthropic, with your API key | The file being read (a PDF, image or text); of a carrier's settlement statement, only the pages you choose |
 | Google Fonts for printed forms | Google Fonts | The name of the font family someone adds; the font is downloaded once |
 | Single sign-on | The sign-in provider you set up (for example Microsoft Entra ID or Google) | The usual sign-in exchange, in the person's browser |
 | Webhooks | The addresses you enter | The changes those webhooks are set to send |

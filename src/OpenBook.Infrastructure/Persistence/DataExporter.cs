@@ -15,7 +15,7 @@ namespace OpenBook.Infrastructure.Persistence;
 /// files, and a README generated from the EF model that documents each file and column. Secrets never leave:
 /// password and token hashes, protected secrets and full tax IDs are left out (and listed in the README).
 /// </summary>
-internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataExporter
+internal sealed class DataExporter(OpenBookDbContext db, IUnitOfWork unitOfWork, IClock clock) : IDataExporter
 {
     private static readonly Dictionary<string, HashSet<string>> Excluded = new(StringComparer.Ordinal)
     {
@@ -60,7 +60,7 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
         using (var zip = new ZipArchive(file, ZipArchiveMode.Create))
         {
             // One snapshot: a save during the export can't leave lines without their entry.
-            await using (await new EfUnitOfWork(db).BeginSnapshotAsync(ct))
+            await using (await unitOfWork.BeginSnapshotAsync(ct))
             {
                 foreach (var table in tables)
                     counts[table.Name] = await WriteTableAsync(zip, table, ct);
@@ -245,19 +245,69 @@ internal sealed class DataExporter(OpenBookDbContext db, IClock clock) : IDataEx
 }
 
 /// <summary>
+/// The queue for this process's turns (<see cref="IUnitOfWork.BeginTurnAsync"/>), first come first served. The database
+/// keeps turns apart by itself, but a SQLite connection waiting for the write lock holds a thread and looks again only
+/// every 150 ms, so in a busy moment some would wait for long.
+/// </summary>
+internal sealed class SaveTurns : IDisposable
+{
+    /// <summary>As long as the database itself waits.</summary>
+    public static readonly TimeSpan Wait = TimeSpan.FromSeconds(30);
+
+    public SemaphoreSlim Queue { get; } = new(1, 1);
+
+    public void Dispose() => Queue.Dispose();
+}
+
+/// <summary>
 /// Real database transactions around several saves; OpenBookDbContext.SaveChangesAsync joins one that's open, and so
 /// does a transaction begun inside another (setting up a company from an import): the outer one commits or rolls back.
 /// </summary>
-internal sealed class EfUnitOfWork(OpenBookDbContext db) : IUnitOfWork
+internal sealed class EfUnitOfWork(OpenBookDbContext db, SaveTurns turns) : IUnitOfWork
 {
     public async Task<IUnitOfWorkTransaction> BeginAsync(CancellationToken ct) =>
         db.Database.CurrentTransaction is null ? new Transaction(await db.Database.BeginTransactionAsync(ct)) : new Joined();
+
+    public async Task<IUnitOfWorkTransaction> BeginTurnAsync(CancellationToken ct)
+    {
+        // Never waiting in the queue inside a transaction: the one whose turn it is may be waiting for that transaction.
+        if (db.Database.CurrentTransaction is not null)
+        {
+            await db.TakeTurnAsync(ct);
+            return new Joined();
+        }
+
+        if (!await turns.Queue.WaitAsync(SaveTurns.Wait, ct))
+            throw OpenBookDbContext.Busy();
+        try
+        {
+            var transaction = await db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                await db.TakeTurnAsync(ct);
+            }
+            catch
+            {
+                await transaction.DisposeAsync();
+                throw;
+            }
+
+            return new Turn(db, transaction, turns.Queue);
+        }
+        catch (Exception ex)
+        {
+            turns.Queue.Release();
+            if (OpenBookDbContext.IsBusy(ex))
+                throw OpenBookDbContext.Busy();
+            throw;
+        }
+    }
 
     public bool HasSaved => db.HasSaved;
 
     public void ForgetEarlierSaves() => db.ForgetEarlierSaves();
 
-    public void DiscardPending() => db.ChangeTracker.Clear();
+    public void DiscardPending() => db.Forget();
 
     public async Task<IAsyncDisposable> BeginSnapshotAsync(CancellationToken ct)
     {
@@ -290,6 +340,48 @@ internal sealed class EfUnitOfWork(OpenBookDbContext db) : IUnitOfWork
 
         // Not committed: rolled back, so nothing the import saved is kept.
         public ValueTask DisposeAsync() => inner.DisposeAsync();
+    }
+
+    private sealed class Turn : IUnitOfWorkTransaction
+    {
+        private readonly OpenBookDbContext _db;
+        private readonly Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction _inner;
+        private readonly SemaphoreSlim _queue;
+        private readonly bool _savedBefore;
+        private bool _committed;
+        private bool _over;
+
+        public Turn(OpenBookDbContext db, Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction inner, SemaphoreSlim queue)
+        {
+            (_db, _inner, _queue, _savedBefore) = (db, inner, queue, db.HasSaved);
+            db.HasSaved = false;
+        }
+
+        public async Task CommitAsync(CancellationToken ct)
+        {
+            await _inner.CommitAsync(ct);
+            _committed = true;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_over)
+                return;
+            _over = true;
+            try
+            {
+                await _inner.DisposeAsync();
+
+                // Saved along the way (an account made on first use) and rolled back: what's loaded says it's there, and it isn't.
+                if (!_committed && _db.HasSaved)
+                    _db.Forget();
+                _db.HasSaved = _savedBefore || (_committed && _db.HasSaved);
+            }
+            finally
+            {
+                _queue.Release();
+            }
+        }
     }
 
     private sealed class Joined : IUnitOfWorkTransaction

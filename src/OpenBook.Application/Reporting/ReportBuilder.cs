@@ -96,7 +96,7 @@ public sealed record BuilderOptions(
 /// </summary>
 public sealed class ReportBuilder(
     ReportLedger ledger, AccountService accounts, ISalesStore sales, IPurchasesStore purchases, Segments.SegmentService segments, ICompanyStore companies,
-    CustomFields.CustomFieldService customFields, Nonprofit.INonprofitStore nonprofit)
+    CustomFields.CustomFieldService customFields, Nonprofit.INonprofitStore nonprofit, Settlements.ISettlementStore settlements)
 {
     public const int MaxRows = 5000;
 
@@ -106,7 +106,7 @@ public sealed class ReportBuilder(
         "Invoice", "Payment", "Sales receipt", "Credit memo", "Refund", "Deposit", "Bill", "Bill payment", "Vendor credit", "Vendor refund",
         "Expense", "Transfer", "Sales tax payment", "Inventory adjustment", "Goods received", "Assembly build", "Landed cost", "Bad debt write-off",
         "Retainer", "Retainer applied", "Retainer refund", "Depreciation", "Asset disposal", "Loan", "Loan payment", "Gift", "Pledge", "Pledge cancelled",
-        "Grant award", "Grant payment", "Grant income earned", "Grant adjustment", "Release from restriction", "Channel payout", "Channel orders", "Channel return", "Journal entry",
+        "Grant award", "Grant payment", "Grant income earned", "Grant adjustment", "Release from restriction", "Channel payout", "Channel orders", "Channel return", "Settlement", "Owner charge", "Owner settlement", "Reserve interest", "Journal entry",
     ];
 
     public static string Header(BuilderColumn column) => column switch
@@ -336,6 +336,16 @@ public sealed class ReportBuilder(
                 Vendor(BankTransaction.SpendSource, e.Id, e.VendorId);
             else if (e.Payee is { } payee)
                 names[(BankTransaction.SpendSource, e.Id)] = (payee, null);
+        }
+
+        // A settlement's name is the carrier's vendor record, or the carrier's own name without one.
+        var carriers = (await settlements.ListCarriersAsync(ct)).ToDictionary(c => c.Id);
+        foreach (var s in await settlements.ListSettlementsAsync(null, ct))
+        {
+            if (!carriers.TryGetValue(s.CarrierId, out var carrier))
+                continue;
+            names[(Domain.Settlements.Settlement.Source, s.Id)] = (carrier.Name, null);
+            Vendor(Domain.Settlements.Settlement.Source, s.Id, carrier.VendorId);
         }
 
         return names;

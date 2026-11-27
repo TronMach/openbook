@@ -89,6 +89,8 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Projects.IProjectStore, EfProjectStore>();
         services.AddScoped<OpenBook.Application.Assets.IAssetStore, EfAssetStore>();
         services.AddScoped<OpenBook.Application.Channels.IChannelStore, EfChannelStore>();
+        services.AddScoped<OpenBook.Application.Settlements.ISettlementStore, EfSettlementStore>();
+        services.AddScoped<OpenBook.Application.Settlements.IOwnerStore, EfOwnerStore>();
         services.AddScoped<OpenBook.Application.Accounts.IPartnerStore, EfPartnerStore>();
         services.AddScoped<OpenBook.Application.Channels.IChannelOrderStore, EfChannelOrderStore>();
         services.AddScoped<OpenBook.Application.Nonprofit.INonprofitStore, EfNonprofitStore>();
@@ -102,6 +104,7 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Forms.IBundledFonts, Forms.BundledFonts>();
         services.AddSingleton<OpenBook.Application.Forms.IBuiltInFont, Forms.BuiltInFont>();
         services.TryAddSingleton<OpenBook.Application.Forms.IGoogleFonts>(_ => new Forms.GoogleFontsClient());
+        services.AddSingleton<SaveTurns>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IRecordVersions, EfRecordVersions>();
         services.AddScoped<Application.Lists.IRecordMerger, EfRecordMerger>();
@@ -125,6 +128,8 @@ public static class DependencyInjection
         services.AddSingleton<OpenBook.Application.Channels.IChannelClient, Channels.ChannelClient>();
         services.TryAddSingleton<OpenBook.Application.Purchases.IReceiptTextExtractor>(new Payments.ReceiptTextExtractor(null));
         services.TryAddSingleton<OpenBook.Application.Documents.IClaudeDocumentReader, Documents.ClaudeDocumentReader>();
+        services.TryAddSingleton<OpenBook.Application.Settlements.IClaudeSettlementReader, Documents.ClaudeSettlementReader>();
+        services.TryAddSingleton<OpenBook.Application.Settlements.IStatementPages>(new Documents.StatementPages(null));
         services.TryAddSingleton<OpenBook.Application.Documents.IMailboxReader, Documents.ImapMailboxReader>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
         services.AddSingleton<IClock, SystemClock>();

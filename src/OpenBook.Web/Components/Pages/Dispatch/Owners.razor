@@ -1,0 +1,89 @@
+@page "/dispatch/owners"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject OwnerService OwnerService
+@inject AccountService AccountService
+@inject VendorService Vendors
+
+<PageTitle>@L["Owner-operators"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Owner-operators"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button secondary" Href="/dispatch/trucks">@L["Trucks"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/dispatch/charges">@L["Charges and advances"]</ActionLink>
+    </div>
+    <p class="muted">@L["The owner-operators you pay by settlement. Each is a vendor: their settlements are billed to it, and their 1099 counted under it if you send one."]</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+
+    @if (_owners.Count > 0)
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>@L["Owner-operator"]</th><th class="num">@L["Trucks"]</th><th class="num">@L["Open charges"]</th><th class="num">@L["Reserves"]</th></tr></thead>
+                <tbody>
+                    @foreach (var o in _owners)
+                    {
+                        <tr class="@(o.Owner.IsActive ? "" : "muted")">
+                            <td><a href="/dispatch/owners/@o.Owner.Id">@o.Name</a>@(o.Owner.IsActive ? "" : L[" (inactive)"])</td>
+                            <td class="num">@_trucks.Count(t => t.OwnerId == o.Owner.Id)</td>
+                            <td class="num">@Labels.Amount(_charges.Where(c => c.OwnerId == o.Owner.Id).Sum(c => c.Balance))</td>
+                            <td class="num">@o.Owner.Reserves.Count</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p>@L["No owner-operators yet."]</p>
+    }
+
+    <div class="card" style="margin-top: 1.5rem">
+        <h2 id="new">@L["Add an owner-operator"]</h2>
+        <PostForm Action="/dispatch/owners" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="owner-vendor">@L["Vendor record"]</label>
+                    <select id="owner-vendor" name="vendorId" required data-search>
+                        <option value="">@L["Choose…"]</option>
+                        @foreach (var v in _vendors)
+                        {
+                            <option value="@v.Id">@v.DisplayName</option>
+                        }
+                    </select>
+                    <span class="hint">@L["Add the vendor first, with their tax ID, on Vendors. Pay for hauling freight usually needs no 1099: tick Track for 1099 there only if you send one."]</span>
+                </div>
+            </div>
+            <OwnerAccountFields Chart="_chart" />
+            <div class="actions"><button type="submit">@L["Add"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<OwnerView> _owners = [];
+    private IReadOnlyList<Truck> _trucks = [];
+    private IReadOnlyList<OwnerCharge> _charges = [];
+    private IReadOnlyList<Vendor> _vendors = [];
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _owners = await OwnerService.ListOwnersAsync(includeInactive: true);
+        _trucks = await OwnerService.ListTrucksAsync();
+        _charges = await OwnerService.ListChargesAsync(openOnly: true);
+        _chart = await AccountService.GetChartAsync();
+        var taken = _owners.Select(o => o.Owner.VendorId).ToHashSet();
+        _vendors = [.. (await Vendors.ListRecordsAsync()).Where(v => !taken.Contains(v.Id))];
+    }
+}

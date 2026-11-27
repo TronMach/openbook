@@ -17,7 +17,7 @@ public static class EncryptionCommands
 
     public static async Task<int> RunAsync(IConfiguration configuration, Installation installation, string connectionString, string command)
     {
-        if (!installation.IsDesktop && OpenBook.Infrastructure.DatabaseProviders.Parse(configuration["OpenBook:Database"], connectionString) != OpenBook.Infrastructure.DatabaseProvider.Sqlite)
+        if (installation.CompanyFile is null && OpenBook.Infrastructure.DatabaseProviders.Parse(configuration["OpenBook:Database"], connectionString) != OpenBook.Infrastructure.DatabaseProvider.Sqlite)
         {
             Console.Error.WriteLine("This is for SQLite company files. This install keeps its company in PostgreSQL, so encryption at rest is the database server's own.");
             return 1;

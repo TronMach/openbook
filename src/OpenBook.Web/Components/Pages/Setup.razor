@@ -56,7 +56,7 @@
                 {
                     <div class="field">
                         <label for="read-setup-code">Setup code</label>
-                        <input id="read-setup-code" name="SetupCode" autocomplete="off" spellcheck="false" required />
+                        <input id="read-setup-code" name="SetupCode" value="@Input.SetupCode" autocomplete="off" spellcheck="false" required />
                     </div>
                 }
                 <p class="hint muted">Upload your export: OpenBook fills in the company details it finds below, and imports your accounts, customers, vendors, products and transactions when you create the company. Or skip this and start with a starter chart of accounts.</p>
@@ -97,8 +97,15 @@
                 <div class="field">
                     <label for="setup-code">Setup code</label>
                     <InputText id="setup-code" @bind-Value="Input.SetupCode" autocomplete="off" spellcheck="false" />
-                    <span class="hint">Proves you run this server. OpenBook writes it to its log when it starts without a company
-                        (with Docker: <code>docker compose logs openbook</code>), unless it was chosen in the setting OpenBook:SetupCode.</span>
+                    @if (Code.File is { } codeFile)
+                    {
+                        <span class="hint">Proves you run this server. It's in @codeFile on the server computer, which only administrators can open.</span>
+                    }
+                    else
+                    {
+                        <span class="hint">Proves you run this server. OpenBook writes it to its log when it starts without a company
+                            (with Docker: <code>docker compose logs openbook</code>), unless it was chosen in the setting OpenBook:SetupCode.</span>
+                    }
                 </div>
             </fieldset>
         }
@@ -262,11 +269,15 @@
     [SupplyParameterFromForm(FormName = "read")]
     private string? Source { get; set; }
 
+    /// <summary>The setup code, in the address the Windows installer opens.</summary>
+    [SupplyParameterFromQuery(Name = "code")]
+    private string? CodeInAddress { get; set; }
+
     private SetupUpload? Upload => State.Held(Input.ImportToken);
 
     protected override void OnInitialized()
     {
-        Input ??= new();
+        Input ??= new() { SetupCode = CodeInAddress };
         Input.Region ??= Company.Regions.Contains(System.Globalization.CultureInfo.CurrentCulture.Name)
             ? System.Globalization.CultureInfo.CurrentCulture.Name : Company.Regions[0];
     }
@@ -276,7 +287,7 @@
         string? typed = HttpContext.Request.Form["SetupCode"];
         if (!Code.Matches(typed))
         {
-            _error = WrongCode;
+            _error = Code.File is { } codeFile ? $"That setup code isn't right. It's in {codeFile} on the server computer." : WrongCode;
             return;
         }
 
@@ -362,7 +373,7 @@
     {
         if (!Code.Matches(Input.SetupCode))
         {
-            _error = WrongCode;
+            _error = Code.File is { } codeFile ? $"That setup code isn't right. It's in {codeFile} on the server computer." : WrongCode;
             return;
         }
 
@@ -413,6 +424,7 @@
             }
 
             State.MarkSetUp();
+            Code.Used();
             await WebSecurity.SignInAsync(HttpContext, new AuthenticatedUser(owner.Id, owner.Username, owner.SecurityStamp, owner.Role));
             if (upload is not null)
             {
@@ -441,6 +453,8 @@
         {
             var template = Input.Edition == Edition.Nonprofit ? "nonprofit" : ChartTemplates.ForBusinessType(Input.BusinessType).Key;
             await Templates.ApplyAsync(template, new StarterAnswers(Input.Sells ?? StarterSales.Both, Input.KeepsStock), HttpContext.RequestAborted);
+            if (Input.Edition == Edition.Trucking)
+                await Templates.AddTruckingAsync(HttpContext.RequestAborted);
             if (Input.Sells != StarterSales.Products)
                 await Items.CreateStarterServiceAsync(HttpContext.RequestAborted);
             return true;

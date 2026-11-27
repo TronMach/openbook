@@ -47,6 +47,9 @@ public sealed class FakePlaid : HttpMessageHandler
         switch (path)
         {
             case "link/token/create":
+                // Update mode names a login it knows. Real Plaid ignores products there; OpenBook leaves them out, which this holds it to.
+                if (body["access_token"] is { } access && ((string?)access != AccessToken || body["products"] is not null))
+                    return Error("INVALID_FIELD", "products must not be provided in update mode, and the access token must be valid", "INVALID_REQUEST");
                 return Ok(new JsonObject { ["link_token"] = LinkToken, ["expiration"] = "2026-11-20T00:00:00Z" });
             case "item/public_token/exchange":
                 return (string?)body["public_token"] == PublicToken

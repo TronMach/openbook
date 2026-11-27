@@ -126,6 +126,7 @@
     private SegmentOptions _segments = SegmentOptions.None;
     private Guid? _vendorId;
     private string? _number;
+    private string? _suggestedNumber;
     private DateOnly _date = CompanyTime.Today;
     private DateOnly? _expectedDate;
     private string? _memo;
@@ -134,18 +135,18 @@
     private List<LineModel> _lines = [new()];
 
     /// <summary>A new order as it's typed, kept in the tab in case the connection drops (C302).</summary>
-    internal sealed record Draft(Guid? VendorId, string? Number, DateOnly Date, DateOnly? ExpectedDate, string? Memo, Guid? WarehouseId, Guid? LocationId, List<LineModel> Lines);
+    internal sealed record Draft(Guid? VendorId, string? Number, DateOnly Date, DateOnly? ExpectedDate, string? Memo, Guid? WarehouseId, Guid? LocationId, List<LineModel> Lines, string? SuggestedNumber = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => Id is not null || (_vendorId is null && _lines.All(l => l.ItemId is null && l.AccountId is null && (l.UnitCost ?? 0m) == 0m && string.IsNullOrWhiteSpace(l.Description)))
         ? null
-        : new Draft(_vendorId, _number, _date, _expectedDate, _memo, _warehouseId, _locationId, _lines);
+        : new Draft(_vendorId, _number, _date, _expectedDate, _memo, _warehouseId, _locationId, _lines, _suggestedNumber);
 
     private void Restore(Draft draft)
     {
         _vendorId = _vendors.Any(v => v.Id == draft.VendorId) ? draft.VendorId : null;
-        (_number, _date, _expectedDate, _memo, _warehouseId, _locationId) = (draft.Number, draft.Date, draft.ExpectedDate, draft.Memo, draft.WarehouseId, draft.LocationId);
+        (_number, _suggestedNumber, _date, _expectedDate, _memo, _warehouseId, _locationId) = (draft.Number, draft.SuggestedNumber, draft.Date, draft.ExpectedDate, draft.Memo, draft.WarehouseId, draft.LocationId);
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
     }
 
@@ -186,6 +187,7 @@
         _vendorOptions = PickerOptions.Vendors(_vendors);
         _itemOptions = PickerOptions.Items(_items);
         _categoryOptions = PickerOptions.Accounts(BillLineModel.Categories(chart), chart, useNumbers);
+        _suggestedNumber = _number;
         _vendorId = PresetVendor;
 
         if (Id is null && order is not null)
@@ -255,7 +257,9 @@
                 .Select(l => new PurchaseOrderLineDraft(l.ItemId, l.ItemId is null ? l.AccountId : null, l.Description, l.Quantity ?? 1m, l.UnitCost ?? 0m))
                 .ToList();
             var command = new SavePurchaseOrderCommand(_vendorId!.Value, _date, drafts, _expectedDate, _number, _memo, _warehouseId, _locationId);
-            var order = await Ops.ChangeAsync<PurchaseOrder, PurchaseOrderService, PurchaseOrder>(Id ?? Guid.Empty, _version, s => Id is { } id ? s.UpdateAsync(id, command) : s.CreateAsync(command));
+            var order = Id is { } id
+                ? await Ops.ChangeAsync<PurchaseOrder, PurchaseOrderService, PurchaseOrder>(id, _version, s => s.UpdateAsync(id, command))
+                : await SuggestedNumber.SaveAsync(_number, _suggestedNumber, number => Ops.RunAsync<PurchaseOrderService, PurchaseOrder>(s => s.CreateAsync(command with { Number = number })));
             if (_draft is not null)
                 await _draft.ClearAsync();
             Navigation.NavigateTo($"/purchases/orders/{order.Id}");

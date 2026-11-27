@@ -86,6 +86,48 @@ internal sealed class MigraDocFormRenderer : IFormRenderer
         return Pdf(document);
     }
 
+    public byte[] Render(OwnerStatementForm form)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+        var look = Look.For(form.Style);
+        var (document, section) = NewDocument(look, form.Style.Footer);
+        var period = form.PeriodStart is { } from ? $"{D(from)} – {D(form.PeriodEnd)}" : $"Through {D(form.PeriodEnd)}";
+        Header(section, look, form.Company, form.Title.ToUpperInvariant(), [("Date", D(form.Date)), ("Period", period), ("Net pay", Money(form.Net, form.Currency))]);
+        BillTo(section, look, form.Owner, "OWNER-OPERATOR");
+
+        ColumnAlign[] aligns = [ColumnAlign.Left, ColumnAlign.Left, ColumnAlign.Right, ColumnAlign.Right];
+        var table = Table(section, look, [3.8, 1.2, 1.0, 1.2]);
+        Heading(table, look, [("Description", aligns[0]), ("Load", aligns[1]), ("Miles", aligns[2]), ("Amount", aligns[3])]);
+        var stripe = 0;
+        foreach (var part in form.Lines.GroupBy(l => l.Part))
+        {
+            Body(table, look, aligns, 0, part.Key, "", "", "").Format.Font.Bold = true;
+            foreach (var line in part)
+                Body(table, look, aligns, stripe++, line.Description, line.Load ?? "", line.Miles is { } m ? m.ToString("#,##0.#", CultureInfo.CurrentCulture) : "", Amount(line.Amount));
+            if (part.Count() > 1)
+                Body(table, look, aligns, 0, $"Total {part.Key.ToLower(CultureInfo.CurrentCulture)}", "", "", Amount(part.Sum(l => l.Amount))).Format.Font.Italic = true;
+        }
+
+        Body(table, look, aligns, 0, "Net pay", "", "", Money(form.Net, form.Currency)).Format.Font.Bold = true;
+
+        if (form.Balances.Count > 0)
+        {
+            section.AddParagraph().Format.SpaceAfter = 6;
+            var balances = Table(section, look, [5.0, 2.2]);
+            ColumnAlign[] two = [ColumnAlign.Left, ColumnAlign.Right];
+            Heading(balances, look, [("After this settlement", two[0]), ("Balance", two[1])]);
+            var row = 0;
+            foreach (var (label, amount) in form.Balances)
+                Body(balances, look, two, row++, label, Amount(amount));
+            // Kept on one page with its heading.
+            balances.Rows[0].KeepWith = balances.Rows.Count - 1;
+        }
+
+        if (!string.IsNullOrWhiteSpace(form.Message))
+            section.AddParagraph(form.Message).Format.SpaceBefore = 14;
+        return Pdf(document);
+    }
+
     public byte[] Render(IReadOnlyList<DonorLetter> letters)
     {
         ArgumentNullException.ThrowIfNull(letters);

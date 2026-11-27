@@ -43,7 +43,8 @@ public sealed class PostingEngine(
     ICurrentUser user,
     Attachments.AttachmentService attachments,
     Notes.NoteService notes,
-    Banking.IBankingStore bank)
+    Banking.IBankingStore bank,
+    IUnitOfWork unitOfWork)
 {
     private const string EntityType = "journal_entry";
 
@@ -55,10 +56,19 @@ public sealed class PostingEngine(
 
     public async Task<JournalEntry> PostAsync(PostJournalEntryCommand command, CancellationToken ct = default)
     {
+        await using var turn = await TurnAsync(ct);
         var entry = await StageAsync(command, ct);
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return entry;
     }
+
+    /// <summary>
+    /// A turn (<see cref="IUnitOfWork.BeginTurnAsync"/>) for work that posts an entry: begun before anything is read and
+    /// committed after the save, so two saved at the same moment can't draw the same entry number, and the first time
+    /// is enough. Inside a transaction or turn already open it joins it. Keep what happens in it short: other saves wait.
+    /// </summary>
+    internal Task<IUnitOfWorkTransaction> TurnAsync(CancellationToken ct) => unitOfWork.BeginTurnAsync(ct);
 
     /// <summary>
     /// Voids a journal entry (manual, recurring, opening balance or automatic reversal). Entries posted by documents (bank transactions, invoices, ...) are voided
@@ -68,6 +78,7 @@ public sealed class PostingEngine(
     /// <returns>The reversing entry.</returns>
     public async Task<JournalEntry> VoidAsync(Guid entryId, string reason, CancellationToken ct = default)
     {
+        await using var turn = await TurnAsync(ct);
         var mirror = await StandingAutoReversalAsync(entryId, ct);
         if (mirror is not null && await store.IsInReconciliationAsync(mirror.Id, ct))
             throw new DomainException("journal.reconciled",
@@ -77,6 +88,7 @@ public sealed class PostingEngine(
         if (mirror is not null)
             await StageVoidAsync(mirror.Id, reason, fromDocument: false, ct);
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return reversal;
     }
 

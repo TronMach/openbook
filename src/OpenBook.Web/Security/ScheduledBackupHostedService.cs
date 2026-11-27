@@ -5,9 +5,9 @@ namespace OpenBook.Web.Security;
 
 /// <summary>
 /// Runs scheduled backups: checks every 15 minutes whether the schedule is due (in the server's time zone) and, if
-/// so, makes and sends a backup. Failures are kept on the schedule for the backup page, and logged. On OpenBook Desktop
-/// it first saves the default schedule (to the Backups folder beside the company file) once a company exists, as "system",
-/// and checks right away at startup, since a desktop computer is often switched off at the scheduled hour.
+/// so, makes and sends a backup. Failures are kept on the schedule for the backup page, and logged. On OpenBook Desktop and
+/// Server for Windows it first saves the default schedule (to the Backups folder beside the company file) once a company exists, as "system",
+/// and checks right away at startup, since an office computer is often switched off at the scheduled hour.
 /// </summary>
 internal sealed partial class ScheduledBackupHostedService(
     IServiceScopeFactory scopes, OpenBook.Application.IJobLeases leases, SetupState setup, Hosting.Installation installation, Diagnostics.JobStatus status,
@@ -20,8 +20,8 @@ internal sealed partial class ScheduledBackupHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // A new desktop install gets its daily backups within a minute of setting up the company.
-        if (installation.IsDesktop)
+        // A new Windows install gets its daily backups within a minute of setting up the company.
+        if (installation.BackupFolder is not null)
         {
             while (!await RunDueAsync(stoppingToken))
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
@@ -47,8 +47,8 @@ internal sealed partial class ScheduledBackupHostedService(
                 return true;
             scope.ServiceProvider.GetRequiredService<CircuitUser>().Principal = SystemPrincipal;
             var backups = scope.ServiceProvider.GetRequiredService<ScheduledBackupService>();
-            if (installation.IsDesktop && await backups.SetUpDefaultAsync(installation.BackupFolder!, ct))
-                LogDefaultSchedule(installation.BackupFolder!);
+            if (installation.BackupFolder is { } folder && await backups.SetUpDefaultAsync(folder, ct))
+                LogDefaultSchedule(folder);
             var result = await backups.RunDueAsync(CompanyTime.Zone, ct);
             if (result is { Succeeded: true })
                 LogBackedUp(result.FileName!, result.Deleted);

@@ -47,7 +47,7 @@ internal sealed class ProcessInstallerLauncher : IInstallerLauncher
 /// Desktop, downloads the newer installer, checks its size and hash, and installs it on request: a backup first (as when
 /// quitting), then the installer runs silently, this server stops, and the installer starts OpenBook again. A server only
 /// reports what's available; whoever runs it updates it. Checking is on by default for an installed desktop copy only
-/// (not a server, nor a copy run from source); <c>OpenBook:Updates:Check</c> and the System page's switch change that.
+/// (not a server, nor a copy run from source) and for Server for Windows, which says where to get the installer; <c>OpenBook:Updates:Check</c> and the System page's switch change that.
 /// </summary>
 public sealed partial class UpdateService(
     Installation installation, IConfiguration configuration, IHttpClientFactory http, DesktopQuit quit, IInstallerLauncher launcher,
@@ -76,7 +76,7 @@ public sealed partial class UpdateService(
 
     private string Feed => configuration["OpenBook:Updates:Feed"] is { Length: > 0 } feed ? feed : DefaultFeed;
 
-    // Desktop: the person's own choice from the System page, beside the keys.
+    // Desktop and Windows Server: the choice from the System page, beside the keys.
     private string? ChoiceFile => installation.AppFolder is null ? null : Path.Combine(installation.AppFolder, "updates.json");
 
     private string? DownloadFolder => installation.AppFolder is null ? null : Path.Combine(installation.AppFolder, "updates");
@@ -99,15 +99,15 @@ public sealed partial class UpdateService(
             }
 
             return configuration.GetValue<bool?>("OpenBook:Updates:Check")
-                ?? installation.IsDesktop && File.Exists(Path.Combine(AppContext.BaseDirectory, Installation.InstallFile));
+                ?? installation.AppFolder is not null && File.Exists(Path.Combine(AppContext.BaseDirectory, Installation.InstallFile));
         }
     }
 
-    /// <summary>Desktop: remembers whether to check automatically. A server's checking is set in its configuration.</summary>
+    /// <summary>Desktop and Windows Server: remembers whether to check automatically. Another server's checking is set in its configuration.</summary>
     public void SetEnabled(bool enabled)
     {
         if (ChoiceFile is not { } file)
-            throw new InvalidOperationException("Only OpenBook Desktop keeps this choice; a server sets OpenBook:Updates:Check.");
+            throw new InvalidOperationException("Only OpenBook Desktop and Server for Windows keep this choice; another server sets OpenBook:Updates:Check.");
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         File.WriteAllText(file, JsonSerializer.Serialize(new { Check = enabled }));
     }
@@ -157,6 +157,7 @@ public sealed partial class UpdateService(
     private string? Note(UpdateManifest? available) => available switch
     {
         null => null,
+        _ when installation.IsWindowsServer => "Back up first (Settings > Backup & restore). Then, on the server computer, run the new OpenBook-Setup and choose \"Several people\": it stops OpenBook for a minute or two, updates it and starts it again. Your books and settings stay.",
         _ when !installation.IsDesktop => "Update the server yourself: get the new source, build it and restart (see the server guide).",
         _ when available.MinimumVersion is { } minimum && UpdateVersion.IsNewer(minimum, CurrentVersion) =>
             $"Version {available.Version} needs version {minimum} or later to update from; download its installer from the release notes instead.",

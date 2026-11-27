@@ -8,13 +8,21 @@ OpenBook runs as a small web server. You start it on a computer (your own, or a 
 | --- | --- | --- |
 | One person on one Windows computer | **OpenBook Desktop**: download the installer from the [releases page](https://github.com/TronMach/openbook/releases) | `Documents\OpenBook\openbook.db`, a single file |
 | One person on another computer | From source with .NET, or the Docker image with SQLite | `openbook.db`, a single file |
-| A team sharing the books | Docker Compose with PostgreSQL, on a server | A PostgreSQL database |
+| A team in one office, with a Windows computer that stays on | **OpenBook Server for Windows**: the same installer | `C:\ProgramData\OpenBook\openbook.db`, a single file |
+| A team working over the internet, or with a Linux server | Docker Compose with PostgreSQL, on a server | A PostgreSQL database |
 
 You can start with the single file and move to a server later.
 
-### OpenBook Desktop on Windows
+### On Windows
 
-Download `OpenBook-Setup-<version>.exe` from the [releases page](https://github.com/TronMach/openbook/releases) and run it. It installs for your Windows user and needs no administrator rights.
+Download `OpenBook-Setup-<version>.exe` from the [releases page](https://github.com/TronMach/openbook/releases) and run it. It asks **Who will use OpenBook?**
+
+- **Just me, on this computer** installs OpenBook Desktop. It needs no administrator.
+- **Several people on our network** installs OpenBook Server for Windows, which needs an administrator. This computer keeps the books and stays on; everyone else opens OpenBook in their browser, with nothing to install. If you already keep a company with OpenBook Desktop on this computer, the installer offers to bring it along. Its last page gives the address for the other computers, such as `http://office-pc:5190`, and opens OpenBook to set up your company. Then invite people under **Settings → Users and invitations**.
+
+Whoever looks after the computer will find more in `docs/admin/windows-server.md`: backups to another place, updates, and what to do when another computer can't open the address.
+
+#### Before you run the installer
 
 OpenBook doesn't have a code signing certificate yet, so Windows can't tell who made the installer and may show **Windows protected your PC** with an unknown publisher. Check the file first:
 
@@ -58,13 +66,13 @@ The repository's `docker-compose.yml` starts OpenBook and PostgreSQL 17 together
 docker compose up -d
 ```
 
-Before you do, change both `change-me` passwords in `docker-compose.yml` to the same new password: OpenBook won't start with the sample one. Then `docker compose logs openbook` shows a **setup code**, which the setup page asks for, so only whoever runs the server can set up the company. Open `http://localhost:8080` (or the server's address). For anything beyond your own office network, put an HTTPS reverse proxy such as Caddy, nginx or Traefik in front of it.
+Before you do, change both `change-me` passwords in `docker-compose.yml` to the same new password: OpenBook won't start with the sample one. Then `docker compose logs openbook` shows a **setup code**, which the setup page asks for, so only whoever runs the server can set up the company. Open `http://localhost:8080` on the server. Other computers reach it through an HTTPS reverse proxy, such as Caddy, nginx or Traefik, on the server.
 
 > In-app backups (see [People, backups and safety](08-users-and-backups.md)) work with the single company file. With PostgreSQL, back up the database with `pg_dump`.
 
 ## Set up your company
 
-The first time you open OpenBook it shows **Set up your company**. On OpenBook Server it first asks for the **Setup code** from the server's log (see above); OpenBook Desktop doesn't. Then fill in three parts:
+The first time you open OpenBook it shows **Set up your company**. On OpenBook Server it first asks for the **Setup code**; OpenBook Desktop doesn't. With Docker it's in the server's log (see above). On Windows the installer opens the page with the code filled in; afterwards it's in `C:\ProgramData\OpenBook\setup-code.txt` on the server, which an administrator can open. Then fill in three parts:
 
 **Moving from QuickBooks?** Before filling anything in, choose your export under **Export from**, pick the file and select **Read the file**. OpenBook fills in the company details it finds (name, legal name, address, phone, email, fiscal year, currency, and the legal structure from QuickBooks Desktop's tax form) and says what the file holds. QuickBooks Desktop qbXML files with a company query, QuickBooks Online files with CompanyInfo and GnuCash books carry these details; IIF and CSV exports don't, so type them in. The button then reads **Create company and import**: the company is created and everything in the file is imported with it, or, if any row has a problem, nothing is created and the problems are listed. See [Moving in](24-moving-in.md#importing-the-history) for what to export.
 
@@ -122,5 +130,7 @@ With two-factor sign-in, signing in takes your password and a 6-digit code from 
 ## Upgrading
 
 OpenBook Desktop looks for new versions by itself and offers to install them from its tray icon and **Settings → System**, backing up first.
+
+OpenBook Server for Windows looks too, and links to the new installer on **Settings → System**: run it on the server computer and choose **Several people on our network** again.
 
 Otherwise, stop OpenBook, get the new version, and start it again. It updates the company file or database on start-up. Take a backup first; it's one click on the **Backup** page.

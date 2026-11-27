@@ -52,6 +52,14 @@ public static class ApiVersions
         ("/api/assets/loans", typeof(Domain.Assets.Loan)),
         ("/api/channels/payouts", typeof(Domain.Channels.ChannelPayout)),
         ("/api/channels/orders", typeof(Domain.Channels.ChannelOrderBatch)),
+        ("/api/settlements", typeof(Domain.Settlements.Settlement)),
+        ("/api/settlements/carriers", typeof(Domain.Settlements.Carrier)),
+        ("/api/dispatch/owners", typeof(Domain.Settlements.OwnerOperator)),
+        ("/api/dispatch/trucks", typeof(Domain.Settlements.Truck)),
+        ("/api/dispatch/charges", typeof(Domain.Settlements.OwnerCharge)),
+        ("/api/dispatch/settlements", typeof(Domain.Settlements.OwnerSettlement)),
+        ("/api/dispatch/interest", typeof(Domain.Settlements.ReserveInterestRun)),
+        ("/api/dispatch/loads", typeof(Domain.Settlements.Load)),
     ];
 
     public static string Tag(int version) => $"\"v{version}\"";

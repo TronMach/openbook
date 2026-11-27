@@ -127,6 +127,12 @@ public static class AccessRules
         ("/api/projects/time/reprice", UserRole.ViewOnly, UserRole.Accountant),
         ("/time/people", UserRole.ViewOnly, UserRole.Accountant),
         ("/sales/channels/connections", UserRole.Accountant, UserRole.Accountant),
+        // Carriers and what their codes stand for decide the accounts; entering and posting settlements is standard.
+        ("/settlements/carriers", UserRole.ViewOnly, UserRole.Accountant),
+        ("/api/settlements/carriers", UserRole.ViewOnly, UserRole.Accountant),
+        // An owner-operator's accounts and reserves decide where its settlements post; trucks, charges and runs are standard.
+        ("/dispatch/owners", UserRole.ViewOnly, UserRole.Accountant),
+        ("/api/dispatch/owners", UserRole.ViewOnly, UserRole.Accountant),
         ("/api/channels/connections", UserRole.Accountant, UserRole.Accountant),
         ("/reports/schedules", UserRole.Accountant, UserRole.Accountant),
         ("/accountant", UserRole.Accountant, UserRole.Accountant),
@@ -225,6 +231,8 @@ public static class AccessRules
         ("/settings/custom-fields", "data"),
         ("/api/settings/custom-fields", "data"),
         ("/sales/channels", "channels"),
+        ("/settlements", "settlements"),
+        ("/dispatch", "settlements"),
         ("/sales", "sales"),
         ("/customers", "sales"),
         ("/items", "sales"),

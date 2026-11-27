@@ -1,0 +1,96 @@
+@page "/dispatch/charges/{Id:guid}"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject OwnerService OwnerService
+@inject AccountService AccountService
+
+<PageTitle>@L["Charge"] · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_charge is null)
+    {
+        <div class="card"><p>@L["That charge doesn't exist."] <a href="/dispatch/charges">@L["Charges and advances"]</a></p></div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@OwnerChargeKinds.Label(_charge.Kind) · @_owner?.Name</h1>
+            <ActionLink Class="button secondary" Href="@($"/dispatch/charges?owner={_charge.OwnerId}")">@L["Charges and advances"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_charge.Id}")">@L["History"]</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <div class="card">
+            <dl class="facts">
+                <dt>@L["Owner-operator"]</dt><dd><a href="/dispatch/owners/@_charge.OwnerId">@_owner?.Name</a></dd>
+                <dt>@L["Date"]</dt><dd>@Labels.Date(_charge.Date)</dd>
+                <dt>@L["Amount"]</dt><dd>@Labels.Amount(_charge.Amount)</dd>
+                <dt>@L["Taken back"]</dt><dd>@Labels.Amount(_charge.Recovered)</dd>
+                <dt>@L["Still open"]</dt><dd>@(_charge.IsVoided ? L["Voided"] : Labels.Amount(_charge.Balance))</dd>
+                @if (_charge.Description is { } description)
+                {
+                    <dt>@L["Description"]</dt><dd>@description</dd>
+                }
+                @if (_charge.Reference is { } reference)
+                {
+                    <dt>@L["Reference"]</dt><dd>@reference</dd>
+                }
+                @if (_truck is not null)
+                {
+                    <dt>@L["Truck"]</dt><dd><a href="/dispatch/trucks/@_truck.Id">@_truck.Unit</a></dd>
+                }
+                @if (_charge.Gallons is { } gallons)
+                {
+                    <dt>@L["Gallons"]</dt><dd>@gallons.ToString("#,##0.###")</dd>
+                }
+                <dt>@L["Paid from"]</dt>
+                <dd>@(_charge.PaidFromAccountId is { } from && _chart.Find(from) is not null ? _chart.FullName(from) : _charge.FromSettlementId is not null ? L["Left by a settlement"] : L["Already in the books"])</dd>
+                @if (_charge.Counted1099)
+                {
+                    <dt>@L["1099"]</dt><dd>@L["Already counted on the owner's 1099"]</dd>
+                }
+                @if (_charge.JournalEntryId is { } entryId)
+                {
+                    <dt>@L["Journal entry"]</dt><dd><a href="/journal/@entryId">@L["Open"]</a></dd>
+                }
+            </dl>
+            @if (!_charge.IsVoided && _charge.Recovered == 0m && _charge.FromSettlementId is null)
+            {
+                <PostForm Action="@($"/dispatch/charges/{_charge.Id}/void")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="void-reason">@L["Why it's voided"]</label>
+                        <input id="void-reason" name="reason" maxlength="200" />
+                    </div>
+                    <div class="actions"><button type="submit" class="secondary" data-confirm="@L["Void this charge? Its entry is reversed."]">@L["Void"]</button></div>
+                </PostForm>
+            }
+        </div>
+
+        <Notes EntityType="owner_charge" EntityId="_charge.Id" />
+        <Attachments EntityType="owner_charge" EntityId="_charge.Id" />
+    }
+</div>
+
+@code {
+    private OwnerCharge? _charge;
+    private OwnerView? _owner;
+    private Truck? _truck;
+    private ChartOfAccounts _chart = new([]);
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _charge = await OwnerService.GetChargeAsync(Id);
+        if (_charge is null)
+            return;
+        _owner = await OwnerService.GetOwnerAsync(_charge.OwnerId);
+        _truck = _charge.TruckId is { } truck ? await OwnerService.GetTruckAsync(truck) : null;
+        _chart = await AccountService.GetChartAsync();
+    }
+}

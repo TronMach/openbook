@@ -63,6 +63,117 @@ public sealed class FormFlowTests(BrowserApp app)
     }
 
     [BrowserFact]
+    public async Task A_carrier_settlement_is_pasted_given_accounts_and_posted()
+    {
+        var tag = Tag();
+        var bank = await NewAccount($"Truck bank {tag}", AccountType.Bank);
+        await NewAccount($"Freight {tag}", AccountType.Income);
+        await NewAccount($"Truck lease {tag}", AccountType.Expense);
+        await app.InScope(sp => sp.GetRequiredService<OpenBook.Application.Settlements.SettlementService>().CreateCarrierAsync(
+            new OpenBook.Domain.Settlements.CarrierDetails($"Lines {tag}", bank.Id)));
+
+        await using var page = await app.SignedInAsync();
+        var p = page.Page;
+        await p.GotoAsync("/settlements/new");
+        // A click before the circuit is up reaches only the page: a second line shows the server is listening.
+        var deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (true)
+        {
+            await p.GetByRole(AriaRole.Button, new() { Name = "Add line" }).ClickAsync();
+            try
+            {
+                await Assertions.Expect(p.Locator("input[aria-label='Code']").Nth(1)).ToBeVisibleAsync(new() { Timeout = 1000 });
+                break;
+            }
+            catch (PlaywrightException) when (DateTime.UtcNow < deadline)
+            {
+            }
+        }
+
+        await p.Locator("#carrier").SelectOptionAsync(new SelectOptionValue { Label = $"Lines {tag}" });
+        await p.Locator("#number").FillAsync($"S-{tag}");
+        await p.Locator("#net").FillAsync("600");
+        await p.Locator("#paste").FillAsync("Section,Code,Description,Amount,Loaded miles\nRevenue,RV,Trip revenue,\"1,000.00\",500\nDeductions,ZL,Monthly lease,400.00,\n");
+        await p.Locator("#paste").PressAsync("Tab");
+        await p.GetByRole(AriaRole.Button, new() { Name = "Add these lines" }).ClickAsync();
+        await Assertions.Expect(p.GetByText("Lines added: 2.")).ToBeVisibleAsync(new() { Timeout = Slow });
+        await p.GetByRole(AriaRole.Button, new() { Name = "Save settlement" }).ClickAsync();
+        await p.WaitForURLAsync(new Regex("/settlements/[0-9a-f-]{36}$"), new() { Timeout = Slow });
+        var id = Guid.Parse(p.Url[^36..]);
+
+        // The codes get accounts on the settlement's own page, and then it posts.
+        var post = p.GetByRole(AriaRole.Button, new() { Name = "Post settlement" });
+        await Assertions.Expect(post).ToBeDisabledAsync();
+        await app.InScope(async sp =>
+        {
+            var service = sp.GetRequiredService<OpenBook.Application.Settlements.SettlementService>();
+            var settlement = (await service.GetAsync(id))!;
+            var chart = await sp.GetRequiredService<AccountService>().GetChartAsync();
+            return await service.SetCodesAsync(settlement.CarrierId,
+            [
+                new(OpenBook.Domain.Settlements.SettlementSection.Revenue, "RV", chart.FindByFullName($"Freight {tag}")!.Id),
+                new(OpenBook.Domain.Settlements.SettlementSection.Deduction, "ZL", chart.FindByFullName($"Truck lease {tag}")!.Id),
+            ]);
+        });
+        await p.ReloadAsync();
+        await post.ClickAsync();
+        await Assertions.Expect(p.GetByRole(AriaRole.Button, new() { Name = "Void the entry" })).ToBeVisibleAsync(new() { Timeout = Slow });
+        var posted = await Db(db => db.Settlements.AsNoTracking().SingleAsync(s => s.Id == id));
+        Assert.Equal((OpenBook.Domain.Settlements.SettlementStatus.Posted, 500m, 600m), (posted.Status, posted.LoadedMiles, posted.NetPaid));
+        await page.AssertCleanAsync();
+    }
+
+    [BrowserFact]
+    public async Task A_statements_chosen_pages_are_read_on_this_computer()
+    {
+        var tag = Tag();
+        var bank = await NewAccount($"Statement bank {tag}", AccountType.Bank);
+        await app.InScope(sp => sp.GetRequiredService<OpenBook.Application.Settlements.SettlementService>().CreateCarrierAsync(
+            new OpenBook.Domain.Settlements.CarrierDetails($"Reader {tag}", bank.Id)));
+
+        await using var page = await app.SignedInAsync();
+        var p = page.Page;
+        await p.GotoAsync("/settlements/new/statement");
+        var first = p.GetByLabel("Page 1");
+        // A file given before the circuit is up is given again, until the pages show.
+        var deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (true)
+        {
+            await p.Locator("#file").SetInputFilesAsync(new FilePayload { Name = "week.pdf", MimeType = "application/pdf", Buffer = FakeStatementPages.Pdf(SettlementCaptureTests.Statement, "PAY STUB", null) });
+            try
+            {
+                await Assertions.Expect(first).ToBeVisibleAsync(new() { Timeout = 2000 });
+                break;
+            }
+            catch (PlaywrightException) when (DateTime.UtcNow < deadline)
+            {
+            }
+        }
+
+        await p.Locator("#carrier").SelectOptionAsync(new SelectOptionValue { Label = $"Reader {tag}" });
+        var read = p.GetByRole(AriaRole.Button, new() { Name = "Read it on this computer", Exact = true });
+        await Assertions.Expect(read).ToBeDisabledAsync();
+        await first.CheckAsync();
+        await Assertions.Expect(p.GetByText("Pages chosen: 1", new() { Exact = true })).ToBeVisibleAsync(new() { Timeout = Slow });
+        await read.ClickAsync();
+        await p.WaitForURLAsync(new Regex("/settlements/[0-9a-f-]{36}$"), new() { Timeout = Slow });
+        var id = Guid.Parse(p.Url[^36..]);
+        var settlement = await Db(db => db.Settlements.AsNoTracking().AsSplitQuery().SingleAsync(s => s.Id == id));
+        Assert.Equal((11, 1406.95m, "text"), (settlement.Lines.Count, settlement.NetPaid, settlement.ReadMethod));
+        await Assertions.Expect(p.GetByText("Read from the PDF's own text.", new() { Exact = false })).ToBeVisibleAsync();
+
+        // The banner follows how it was read: a scan keeps its warning (a string parameter given without @ once showed every read as text).
+        await Db(async db =>
+        {
+            (await db.Settlements.SingleAsync(s => s.Id == id)).SetReading(OpenBook.Domain.Settlements.SettlementReadMethods.Ocr, null);
+            return await db.SaveChangesAsync();
+        });
+        await p.ReloadAsync();
+        await Assertions.Expect(p.GetByText("Read from a scan by OCR on this computer.")).ToBeVisibleAsync();
+        await page.AssertCleanAsync();
+    }
+
+    [BrowserFact]
     public async Task A_bill_is_entered_with_a_category_line()
     {
         var tag = Tag();
@@ -300,6 +411,68 @@ public sealed class FormFlowTests(BrowserApp app)
         await Assertions.Expect(bringBack).ToBeVisibleAsync(new() { Timeout = Slow });
         await ClickUntilAsync(bringBack, p.Locator("input[aria-label='Debit']").First, new Regex("^42(\\.00)?$"));
         await Assertions.Expect(p.Locator("input[aria-label='Account']").First).ToHaveValueAsync($"Supplies {tag}");
+        await page.AssertCleanAsync();
+    }
+
+    [BrowserFact]
+    public async Task An_invoice_left_at_its_suggested_number_takes_the_next_one_when_its_gone_and_a_typed_one_is_refused()
+    {
+        var tag = Tag();
+        var (customer, _) = await InvoiceAsync(tag, 60m);
+        var item = (await Db(db => db.Items.AsNoTracking().SingleAsync(i => i.Name == $"Work {tag}"))).Id;
+
+        await using var page = await app.SignedInAsync();
+        var p = page.Page;
+        await p.GotoAsync($"/sales/invoices/new?customer={customer}&item={item}");
+        var number = p.Locator("#number");
+        var save = p.GetByRole(AriaRole.Button, new() { Name = "Save invoice" });
+        await Assertions.Expect(save).ToBeEnabledAsync(new() { Timeout = Slow });
+        var memo = p.Locator("#memo");
+        await memo.FillAsync($"Left as suggested {tag}");
+        await memo.PressAsync("Tab");
+        var suggested = await number.InputValueAsync();
+
+        // Someone else saves with that number first.
+        var theirs = await app.InScope(sp => sp.GetRequiredService<InvoiceService>().CreateAsync(new CreateInvoiceCommand(customer,
+            OpenBook.Application.CompanyTime.Today, [new SalesLineDraft(item, null, 1m, 60m)], Number: suggested)));
+        var deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (!Regex.IsMatch(p.Url, "/sales/invoices/[0-9a-f-]{36}$") && DateTime.UtcNow < deadline)
+        {
+            // The first click may come before the circuit is up.
+            try
+            {
+                await save.ClickAsync(new() { Timeout = 1000 });
+            }
+            catch (TimeoutException)
+            {
+                // Saving, or gone with the page.
+            }
+
+            await p.WaitForTimeoutAsync(1000);
+        }
+
+        await p.WaitForURLAsync(new Regex("/sales/invoices/[0-9a-f-]{36}$"), new() { Timeout = Slow });
+        var id = Guid.Parse(p.Url[^36..]);
+        var saved = await Db(db => db.Invoices.AsNoTracking().SingleAsync(i => i.Id == id));
+        Assert.Equal(SalesAccounts.NextNumber([theirs.Number]), saved.Number);
+
+        // A number typed in is the person's own choice.
+        await p.GotoAsync($"/sales/invoices/new?customer={customer}&item={item}");
+        await Assertions.Expect(save).ToBeEnabledAsync(new() { Timeout = Slow });
+        // The server greys the button out without a number: then the typing reaches it.
+        deadline = DateTime.UtcNow.AddMilliseconds(Slow);
+        while (await save.IsEnabledAsync() && DateTime.UtcNow < deadline)
+        {
+            await number.FillAsync(theirs.Number);
+            await number.FillAsync(string.Empty);
+            await number.PressAsync("Tab");
+            await p.WaitForTimeoutAsync(500);
+        }
+
+        await FillUntilAsync(number, theirs.Number, save);
+        await save.ClickAsync();
+        await Assertions.Expect(p.Locator(".alert.error")).ToContainTextAsync($"Invoice number {theirs.Number} is already used.", new() { Timeout = Slow });
+        Assert.Equal(3, await Db(db => db.Invoices.CountAsync(i => i.CustomerId == customer)));
         await page.AssertCleanAsync();
     }
 

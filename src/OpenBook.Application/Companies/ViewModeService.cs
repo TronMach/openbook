@@ -8,7 +8,9 @@ namespace OpenBook.Application.Companies;
 
 /// <summary>What the screens need to know about the person's view: theirs, else the company's default.</summary>
 /// <param name="Icons">Whether the menus show each area's picture beside its name (the default).</param>
-public sealed record ViewState(ViewMode Mode, Edition Edition, bool OwnChoice, MenuStyle Menu = MenuStyle.Bar, bool Icons = true);
+/// <param name="Settlements">Whether the menus list carrier settlements (<see cref="Company.UsesSettlements"/>).</param>
+/// <param name="Dispatch">Whether the menus list dispatch and owner-operator settlements (<see cref="Company.PaysOwnerOperators"/>).</param>
+public sealed record ViewState(ViewMode Mode, Edition Edition, bool OwnChoice, MenuStyle Menu = MenuStyle.Bar, bool Icons = true, bool Settlements = false, bool Dispatch = false);
 
 /// <summary>Which view a person sees, and switching it. A preference only: nothing is audited and no rule depends on it.</summary>
 public sealed class ViewModeService(ICompanyStore store, ICurrentUser user)
@@ -20,7 +22,7 @@ public sealed class ViewModeService(ICompanyStore store, ICurrentUser user)
             return new ViewState(ViewMode.Full, Edition.General, false);
         var own = await store.GetViewPreferenceAsync(user.Actor, ct);
         return new ViewState(own?.Mode ?? company.DefaultViewMode, company.Edition, own?.Mode is not null, own?.Menu ?? MenuStyle.Bar,
-            own?.HideIcons != true);
+            own?.HideIcons != true, company.UsesSettlements, company.PaysOwnerOperators);
     }
 
     /// <summary>Remembers the current person's view.</summary>

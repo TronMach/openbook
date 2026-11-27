@@ -1,0 +1,26 @@
+Number,Account,Type,Description,Tax line
+1410,Tire Reserve,Other Current Asset,What the carrier holds toward tires; yours until it's spent,
+1420,Emergency Fund,Other Current Asset,What the carrier holds for emergencies; yours until it's spent,
+1430,Performance Bond,Other Current Asset,The carrier's bond; given back when the contract ends,
+2300,Due to Carrier,Other Current Liability,Balances carried from one settlement to the next,
+2310,Carrier Advances,Other Current Liability,Repairs and advances the carrier paid for that you pay back each week,
+4200,Freight Revenue,Income,Your share of what loads pay,c.1
+4210,Fuel Surcharge,Income,,c.1
+4220,Accessorial Pay,Income,"Tarps, detention, stops and other extras",c.1
+4230,Toll Reimbursements,Income,,c.1
+4240,Training Pay,Income,,c.1
+6910,Fuel,Expense,Diesel less discounts,c.9
+6911,Diesel Exhaust Fluid,Expense,,c.9
+6912,Fuel Tax,Expense,State fuel tax charged by miles,c.23
+6920,Truck Rent,Expense,Truck and APU lease payments,c.20a
+6921,Mileage Charges,Expense,Charged by the mile on a leased truck,c.20a
+6930,Truck Repairs,Expense,,c.21
+6931,Tires,Expense,,c.21
+6940,Tolls and Scales,Expense,,c.9
+6950,Truck Insurance,Expense,"Occupational accident, cargo, physical damage",c.15
+6951,Workers' Compensation,Expense,,c.15
+6960,Highway Use Tax,Expense,,c.23
+6961,Licenses and Permits,Expense,,c.23
+6970,Driver Wages,Expense,A second driver's pay,c.26
+6971,Payroll Taxes,Expense,,c.23
+6980,Carrier Fees,Expense,Statement and payroll fees the carrier charges,c.10

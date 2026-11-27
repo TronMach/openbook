@@ -116,17 +116,17 @@
     private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
     // What's typed so far, kept in the tab in case the connection goes.
     internal sealed record Draft(Guid? CustomerId, string? Number, DateOnly Date, DateOnly DueDate, string? Memo, Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId,
-        List<SalesLineModel> Lines, List<Guid> Billable, List<Guid> Time, List<Guid> Trips, Guid? SalesRepId = null);
+        List<SalesLineModel> Lines, List<Guid> Billable, List<Guid> Time, List<Guid> Trips, Guid? SalesRepId = null, string? SuggestedNumber = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => _customerId is null && _lines.All(l => l.IsBlank) ? null
-        : new Draft(_customerId, _number, _date, _dueDate, _memo, _taxCodeId, _locationId, _warehouseId, _lines, [.. _chosenBillable], [.. _chosenTime], [.. _chosenTrips], _salesRepId);
+        : new Draft(_customerId, _number, _date, _dueDate, _memo, _taxCodeId, _locationId, _warehouseId, _lines, [.. _chosenBillable], [.. _chosenTime], [.. _chosenTrips], _salesRepId, _suggestedNumber);
 
     private async Task RestoreAsync(Draft draft)
     {
         await SetCustomerAsync(_customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null);
-        (_number, _date, _dueDate, _memo, _locationId, _warehouseId) = (draft.Number, draft.Date, draft.DueDate, draft.Memo, draft.LocationId, draft.WarehouseId);
+        (_number, _suggestedNumber, _date, _dueDate, _memo, _locationId, _warehouseId) = (draft.Number, draft.SuggestedNumber, draft.Date, draft.DueDate, draft.Memo, draft.LocationId, draft.WarehouseId);
         _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
         _salesRepId = _reps.Any(w => w.Id == draft.SalesRepId) ? draft.SalesRepId : null;
         _lines = draft.Lines.Count > 0 ? draft.Lines : [new()];
@@ -141,6 +141,7 @@
     private Customer? _customer;
     private Guid? _customerId;
     private string? _number;
+    private string? _suggestedNumber;
     private DateOnly _date = CompanyTime.Today;
     private DateOnly _dueDate = CompanyTime.Today;
     private string? _memo;
@@ -260,6 +261,7 @@
             (IReadOnlyList<Customer>)(await sp.GetRequiredService<CustomerService>().ListRecordsAsync()).Select(s => s.Customer).ToList(),
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<InvoiceService>().SuggestNumberAsync()));
+        _suggestedNumber = _number;
         if (Copy is { } copyId && await Ops.RunAsync(sp => sp.GetRequiredService<InvoiceService>().GetAsync(copyId)) is { } source)
         {
             // "Copy": the same customer, lines and settings, dated today with the next number.
@@ -332,7 +334,8 @@
         {
             var command = new CreateInvoiceCommand(_customer!.Id, _date, SalesLineModel.Drafts(_lines), _dueDate, _number, _memo, TaxCodeId: _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId,
                 BillableExpenseIds: [.. _chosenBillable], TimeEntryIds: [.. _chosenTime], MileageTripIds: [.. _chosenTrips], TaxAmount: TypedTaxAmount, SalesRepId: _salesRepId ?? Guid.Empty);
-            var invoice = await Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command), _closingPassword);
+            var invoice = await SuggestedNumber.SaveAsync(_number, _suggestedNumber,
+                number => Ops.RunAsync<InvoiceService, Invoice>(s => s.CreateAsync(command with { Number = number }), _closingPassword));
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/invoices/{invoice.Id}");
         }

@@ -69,6 +69,7 @@ public sealed class SalesReceiptService(
     Banking.IBankingStore bank,
     ILedgerStore ledger,
     SalesReps salesReps,
+    IUnitOfWork unitOfWork,
     IClock clock,
     ICurrentUser user)
 {
@@ -86,6 +87,8 @@ public sealed class SalesReceiptService(
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Lines);
 
+        // Until it's saved: two receipts made at the same moment mustn't draw the same number.
+        await using var turn = await unitOfWork.BeginTurnAsync(ct);
         Customer? customer = null;
         if (command.CustomerId is { } customerId)
         {
@@ -95,9 +98,8 @@ public sealed class SalesReceiptService(
         }
 
         var deposit = await salesAccounts.GetDepositAccountAsync(command.DepositAccountId, ct);
-        var number = command.Number?.Trim() is { Length: > 0 } given ? given : await SuggestNumberAsync(ct);
-        if ((await store.ListReceiptNumbersAsync(ct)).Contains(number, StringComparer.OrdinalIgnoreCase))
-            throw new DomainException("receipt.number_taken", $"Sales receipt number {number} is already used.");
+        var number = SalesAccounts.TakeNumber(command.Number?.Trim() is { Length: > 0 } given ? given : null, await store.ListReceiptNumbersAsync(ct), n => n,
+            n => new DomainException("receipt.number_taken", $"Sales receipt number {n} is already used."));
 
         var built = await lineBuilder.BuildAsync(command.Lines, customer, command.TaxCodeId, command.Date, command.TaxAmount, ct);
         var (lines, taxCodeId, exemption) = built;
@@ -122,6 +124,7 @@ public sealed class SalesReceiptService(
         store.Add(Audit(AuditAction.Created, receipt, before: null));
         await customFields.StampAsync(EntityType, receipt.Id, customer?.Id, receipt.Lines.Select(l => (l.LineNumber, l.ItemId)), ct);
         await store.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return receipt;
     }
 

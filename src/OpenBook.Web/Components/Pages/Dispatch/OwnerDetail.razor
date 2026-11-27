@@ -1,0 +1,329 @@
+@page "/dispatch/owners/{Id:guid}"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject OwnerService OwnerService
+@inject AccountService AccountService
+
+<PageTitle>@(_owner?.Name ?? L["Owner-operator"]) · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_owner is null)
+    {
+        <div class="card"><p>@L["That owner-operator doesn't exist."] <a href="/dispatch/owners">@L["Owner-operators"]</a></p></div>
+    }
+    else
+    {
+        var owner = _owner.Owner;
+        <div class="toolbar">
+            <h1>@_owner.Name</h1>
+            <ActionLink Class="button" Href="@($"/dispatch/charges?owner={owner.Id}#new")">@L["Add a charge or advance"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/vendors/{owner.VendorId}")">@L["Vendor record"]</ActionLink>
+            <ActionLink Class="button secondary" Href="/dispatch/owners">@L["Owner-operators"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={owner.Id}")">@L["History"]</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+
+        <div class="card">
+            <h2>@L["Accounts"]</h2>
+            <PostForm Action="@($"/dispatch/owners/{owner.Id}")" data-enhance="false">
+                <AntiforgeryToken />
+                <SettingsVersion TRecord="OwnerOperator" Id="owner.Id" />
+                <input type="hidden" name="vendorId" value="@owner.VendorId" />
+                <OwnerAccountFields Owner="owner" Chart="_chart" />
+                <label class="check">
+                    <input type="checkbox" name="active" value="true" checked="@owner.IsActive" />
+                    <span>@L["Active: charges and settlements can be made"]</span>
+                </label>
+                <p class="hint">@L["Changes apply to settlements made from now on; those made keep their bills."]</p>
+                <div class="actions"><button type="submit">@L["Save"]</button></div>
+            </PostForm>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2 id="pay">@L["Pay for loads"]</h2>
+            <p class="muted">@L["How the owner is paid for each load its trucks deliver. The weekly run works it out from the load board; a load split between trucks pays each its share. Leave it as typed to enter pay by hand in each run."]</p>
+            <PostForm Action="@($"/dispatch/owners/{owner.Id}/pay")" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="pay-basis">@L["Paid"]</label>
+                        <select id="pay-basis" name="basis">
+                            <option value="@PayBasis.Typed" selected="@(owner.PayBasis == PayBasis.Typed)">@L["As typed into each run"]</option>
+                            <option value="@PayBasis.PercentOfLinehaul" selected="@(owner.PayBasis == PayBasis.PercentOfLinehaul)">@L["A percent of linehaul"]</option>
+                            <option value="@PayBasis.PerMile" selected="@(owner.PayBasis == PayBasis.PerMile)">@L["By the mile"]</option>
+                            <option value="@PayBasis.Flat" selected="@(owner.PayBasis == PayBasis.Flat)">@L["A flat amount a load"]</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="pay-rate">@L["Percent, per mile or per load"]</label>
+                        <input id="pay-rate" name="rate" inputmode="decimal" value="@(owner.PayBasis == PayBasis.Typed ? "" : owner.PayRate.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" />
+                    </div>
+                    <label class="check">
+                        <input type="checkbox" name="emptyMiles" value="true" checked="@owner.PayEmptyMiles" />
+                        <span>@L["By the mile counts empty miles too"]</span>
+                    </label>
+                </div>
+                <p class="hint">@L["The owner's share of the customer's other charges, in percent; blank passes none of it. Tolls are paid as a reimbursement, the rest as earnings."]</p>
+                <div class="row">
+                    @foreach (var charge in Enum.GetValues<LoadCharge>().Where(c => c != LoadCharge.Linehaul))
+                    {
+                        <div class="field">
+                            <label for="pass-@charge">@LoadCharges.Label(charge) %</label>
+                            <input id="pass-@charge" name="pass:@charge" inputmode="decimal" value="@(owner.PassThroughOf(charge)?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))" />
+                        </div>
+                    }
+                </div>
+                <div class="actions"><button type="submit" class="secondary">@L["Save the pay"]</button></div>
+            </PostForm>
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2 id="reserves">@L["Reserves"]</h2>
+            <p class="muted">@L["Money held back from each settlement toward the owner's own costs (maintenance, plates, a bond). It stays theirs: you owe it to them until it's released."]</p>
+            @if (_balances.Count > 0)
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr><th>@L["Reserve"]</th><th>@L["Added"]</th><th class="num">@L["Target"]</th><th class="num">@L["Yearly interest"]</th><th class="num">@L["Balance"]</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var b in _balances)
+                            {
+                                <tr class="@(b.Reserve.IsActive ? "" : "muted")">
+                                    <td>@b.Reserve.Name@(b.Reserve.IsActive ? "" : L[" (stopped)"])</td>
+                                    <td>@DispatchLabels.Method(b.Reserve.Method): @DispatchLabels.Rate(b.Reserve)</td>
+                                    <td class="num">@(b.Reserve.Target is { } t ? Labels.Amount(t) : "")</td>
+                                    <td class="num">@(b.Reserve.InterestPercent is { } i ? $"{i:0.##}%" : "")</td>
+                                    <td class="num">@Labels.Amount(b.Balance)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @foreach (var reserve in owner.Reserves.Cast<OwnerReserve?>().Append(null))
+            {
+                var key = reserve?.Number ?? 0;
+                <details open="@(owner.Reserves.Count == 0 && reserve is null)">
+                    <summary>@(reserve is null ? L["Add a reserve"] : L["Change {0}", reserve.Name])</summary>
+                    <PostForm Action="@($"/dispatch/owners/{owner.Id}/reserves")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="number" value="@key" />
+                        <div class="row">
+                            <div class="field">
+                                <label for="reserve-name-@key">@L["Name"]</label>
+                                <input id="reserve-name-@key" name="name" maxlength="60" required value="@reserve?.Name" />
+                            </div>
+                            <div class="field">
+                                <label for="reserve-method-@key">@L["Added"]</label>
+                                <select id="reserve-method-@key" name="method">
+                                    @foreach (var m in Enum.GetValues<ReserveMethod>())
+                                    {
+                                        <option value="@m" selected="@(m == reserve?.Method)">@DispatchLabels.Method(m)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="reserve-rate-@key">@L["Amount, per mile or percent"]</label>
+                                <input id="reserve-rate-@key" name="rate" inputmode="decimal" required value="@reserve?.Rate.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                            <div class="field">
+                                <label for="reserve-target-@key">@L["Up to"] <span class="muted">@L["(optional)"]</span></label>
+                                <input id="reserve-target-@key" name="target" inputmode="decimal" value="@reserve?.Target?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="reserve-opening-@key">@L["Already held before OpenBook"]</label>
+                                <input id="reserve-opening-@key" name="opening" inputmode="decimal" value="@((reserve?.Opening ?? 0m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" />
+                                <span class="hint">@L["Its money should be in the reserve account already, from an opening balance or journal entry."]</span>
+                            </div>
+                            <div class="field">
+                                <label for="reserve-interest-@key">@L["Yearly interest %"] <span class="muted">@L["(optional)"]</span></label>
+                                <input id="reserve-interest-@key" name="interest" inputmode="decimal" value="@reserve?.InterestPercent?.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                            @if (reserve is not null)
+                            {
+                                <label class="check">
+                                    <input type="checkbox" name="active" value="true" checked="@reserve.IsActive" />
+                                    <span>@L["Still added to"]</span>
+                                </label>
+                            }
+                        </div>
+                        <div class="actions"><button type="submit" class="secondary">@(reserve is null ? L["Add the reserve"] : L["Save the reserve"])</button></div>
+                    </PostForm>
+                </details>
+            }
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2 id="deductions">@L["Regular deductions"]</h2>
+            <p class="muted">@L["Taken from each settlement by agreement, after backup withholding and before open charges: insurance, a truck payment, a fee. One with a total stops once it has taken it all."]</p>
+            @if (owner.Deductions.Count > 0)
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead>
+                            <tr><th>@L["Order"]</th><th>@L["Deduction"]</th><th>@L["Each settlement"]</th><th>@L["Goes to"]</th><th class="num">@L["Taken so far"]</th><th class="num">@L["Up to"]</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in owner.Deductions)
+                            {
+                                <tr class="@(d.IsActive ? "" : "muted")">
+                                    <td>@d.Priority</td>
+                                    <td>@d.Name@(d.IsActive ? "" : L[" (stopped)"])</td>
+                                    <td>@(d.Method == DeductionMethod.PerMile ? $"{d.Rate:0.00##} a mile" : Labels.Amount(d.Rate))</td>
+                                    <td>@(_chart.Find(d.AccountId) is null ? "" : _chart.FullName(d.AccountId))</td>
+                                    <td class="num">@Labels.Amount(_taken.GetValueOrDefault(d.Number))</td>
+                                    <td class="num">@(d.UpTo is { } up ? Labels.Amount(up) : "")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @foreach (var deduction in owner.Deductions.Cast<OwnerDeduction?>().Append(null))
+            {
+                var key = deduction?.Number ?? 0;
+                <details open="@(owner.Deductions.Count == 0 && deduction is null)">
+                    <summary>@(deduction is null ? L["Add a deduction"] : L["Change {0}", deduction.Name])</summary>
+                    <PostForm Action="@($"/dispatch/owners/{owner.Id}/deductions")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="number" value="@key" />
+                        <div class="row">
+                            <div class="field">
+                                <label for="deduction-name-@key">@L["Name"]</label>
+                                <input id="deduction-name-@key" name="name" maxlength="60" required value="@deduction?.Name" />
+                            </div>
+                            <div class="field">
+                                <label for="deduction-account-@key">@L["Goes to"]</label>
+                                <DispatchAccountSelect Id="@($"deduction-account-{key}")" Name="accountId" Chart="_chart" Fits="DispatchLabels.TakesDeductions" Value="deduction?.AccountId" Required="true" />
+                            </div>
+                            <div class="field">
+                                <label for="deduction-method-@key">@L["Worked out"]</label>
+                                <select id="deduction-method-@key" name="method">
+                                    <option value="@DeductionMethod.Fixed" selected="@(deduction?.Method == DeductionMethod.Fixed)">@L["Fixed each settlement"]</option>
+                                    <option value="@DeductionMethod.PerMile" selected="@(deduction?.Method == DeductionMethod.PerMile)">@L["Per mile"]</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="deduction-rate-@key">@L["Amount, or per mile"]</label>
+                                <input id="deduction-rate-@key" name="rate" inputmode="decimal" required value="@deduction?.Rate.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="field">
+                                <label for="deduction-upto-@key">@L["Stops after taking"] <span class="muted">@L["(optional)"]</span></label>
+                                <input id="deduction-upto-@key" name="upTo" inputmode="decimal" value="@deduction?.UpTo?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" />
+                                <span class="hint">@L["A balance being paid off, or a target to reach."]</span>
+                            </div>
+                            <div class="field">
+                                <label for="deduction-priority-@key">@L["Order"]</label>
+                                <input id="deduction-priority-@key" name="priority" inputmode="numeric" value="@(deduction?.Priority ?? 10)" />
+                                <span class="hint">@L["Lower is taken first when the pay doesn't cover them all."]</span>
+                            </div>
+                            <div class="field">
+                                <label for="deduction-from-@key">@L["From"] <span class="muted">@L["(optional)"]</span></label>
+                                <input id="deduction-from-@key" name="startsOn" type="date" value="@deduction?.StartsOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                            <div class="field">
+                                <label for="deduction-to-@key">@L["Until"] <span class="muted">@L["(optional)"]</span></label>
+                                <input id="deduction-to-@key" name="endsOn" type="date" value="@deduction?.EndsOn?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+                            </div>
+                        </div>
+                        <label class="check">
+                            <input type="checkbox" name="carry" value="true" checked="@(deduction?.CarryShort ?? true)" />
+                            <span>@L["What a settlement can't take is left as a charge for the next one"]</span>
+                        </label>
+                        @if (deduction is not null)
+                        {
+                            <label class="check">
+                                <input type="checkbox" name="active" value="true" checked="@deduction.IsActive" />
+                                <span>@L["Still taken"]</span>
+                            </label>
+                        }
+                        <div class="actions"><button type="submit" class="secondary">@(deduction is null ? L["Add the deduction"] : L["Save the deduction"])</button></div>
+                    </PostForm>
+                </details>
+            }
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2 id="charges">@L["Open charges and advances"]</h2>
+            @if (_charges.Count == 0)
+            {
+                <p>@L["Nothing open: the owner owes you nothing that's waiting for a settlement."]</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>@L["Date"]</th><th>@L["Kind"]</th><th>@L["Description"]</th><th class="num">@L["Amount"]</th><th class="num">@L["Still open"]</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _charges)
+                            {
+                                <tr>
+                                    <td><a href="/dispatch/charges/@c.Id">@Labels.Date(c.Date)</a></td>
+                                    <td>@OwnerChargeKinds.Label(c.Kind)</td>
+                                    <td>@c.Description</td>
+                                    <td class="num">@Labels.Amount(c.Amount)</td>
+                                    <td class="num">@Labels.Amount(c.Balance)</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot><tr><td colspan="4">@L["Total open"]</td><td class="num">@Labels.Amount(_charges.Sum(c => c.Balance))</td></tr></tfoot>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["Trucks"]</h2>
+            @if (_trucks.Count == 0)
+            {
+                <p>@L["No trucks yet."] <ActionLink Href="/dispatch/trucks#new">@L["Add a truck"]</ActionLink></p>
+            }
+            else
+            {
+                <ul>
+                    @foreach (var t in _trucks)
+                    {
+                        <li><a href="/dispatch/trucks/@t.Id">@t.Unit</a> @t.Make</li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <Notes EntityType="owner_operator" EntityId="owner.Id" />
+        <Attachments EntityType="owner_operator" EntityId="owner.Id" />
+    }
+</div>
+
+@code {
+    private OwnerView? _owner;
+    private ChartOfAccounts _chart = new([]);
+    private IReadOnlyList<ReserveBalance> _balances = [];
+    private IReadOnlyList<OwnerCharge> _charges = [];
+    private IReadOnlyList<Truck> _trucks = [];
+    private IReadOnlyDictionary<int, decimal> _taken = new Dictionary<int, decimal>();
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _owner = await OwnerService.GetOwnerAsync(Id);
+        if (_owner is null)
+            return;
+        _chart = await AccountService.GetChartAsync();
+        _balances = await OwnerService.ReserveBalancesAsync(Id);
+        _taken = await OwnerService.DeductionsTakenAsync(Id);
+        _charges = await OwnerService.ListChargesAsync(Id, openOnly: true);
+        _trucks = [.. (await OwnerService.ListTrucksAsync(includeInactive: true)).Where(t => t.OwnerId == Id)];
+    }
+}

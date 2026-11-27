@@ -1,0 +1,132 @@
+@page "/dispatch/settlements/{Id:guid}"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject OwnerSettlementService SettlementService
+@inject AccountService AccountService
+
+<PageTitle>@L["Owner settlement {0}", _view?.Settlement.Number ?? 0] · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_view is null)
+    {
+        <div class="card"><p>@L["That settlement doesn't exist."] <a href="/dispatch/settlements">@L["Owner settlements"]</a></p></div>
+    }
+    else
+    {
+        var s = _view.Settlement;
+        <div class="toolbar">
+            <h1>@L["Settlement {0}", s.Number] · @_view.OwnerName</h1>
+            <a class="button secondary" href="/dispatch/settlements/@s.Id/pdf" target="_blank" rel="noopener">@L["Statement PDF"]</a>
+            @if (s.Stands)
+            {
+                <ActionLink Class="button secondary" Href="@($"/dispatch/settlements/{s.Id}/email")">@L["Email"]</ActionLink>
+            }
+            @if (_view.Bill is { } bill)
+            {
+                <ActionLink Class="button secondary" Href="@($"/purchases/bills/{bill.Id}")">@L["Its bill"]</ActionLink>
+            }
+            <ActionLink Class="button secondary" Href="/dispatch/settlements">@L["Owner settlements"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={s.Id}")">@L["History"]</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        @if (!s.Stands)
+        {
+            <div class="alert notice" role="status">@L["Voided"]@(s.VoidReason is { } why ? $": {why}" : "")</div>
+        }
+
+        <div class="card">
+            <dl class="facts">
+                <dt>@L["Owner-operator"]</dt><dd><a href="/dispatch/owners/@s.OwnerId">@_view.OwnerName</a></dd>
+                <dt>@L["Date"]</dt><dd>@Labels.Date(s.Date)</dd>
+                <dt>@L["Period"]</dt><dd>@(s.PeriodStart is { } from ? $"{Labels.Date(from)} – " : L["Through "])@Labels.Date(s.PeriodEnd)</dd>
+                @if (s.LoadedMiles + s.EmptyMiles > 0m)
+                {
+                    <dt>@L["Miles"]</dt><dd>@L["{0} loaded, {1} empty", s.LoadedMiles.ToString("#,##0.#"), s.EmptyMiles.ToString("#,##0.#")]</dd>
+                }
+                <dt>@L["Counts on the 1099"]</dt><dd>@Labels.Amount(s.ReportableGross)</dd>
+                @if (s.Memo is { } memo)
+                {
+                    <dt>@L["Memo"]</dt><dd>@memo</dd>
+                }
+                @if (s.JournalEntryId is { } entryId)
+                {
+                    <dt>@L["Journal entry"]</dt><dd><a href="/journal/@entryId">@L["Open"]</a></dd>
+                }
+            </dl>
+
+            <div class="table-wrap">
+                <table class="data" style="margin-top: 1rem">
+                    <thead><tr><th>@L["Line"]</th><th>@L["Description"]</th><th>@L["Load"]</th><th>@L["Account"]</th><th class="num">@L["Miles"]</th><th class="num">@L["Amount"]</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in s.Lines)
+                        {
+                            <tr>
+                                <td>@OwnerLineKinds.Label(l.Kind)</td>
+                                <td>
+                                    @if (l.ChargeId is { } charge)
+                                    {
+                                        <a href="/dispatch/charges/@charge">@l.Description</a>
+                                    }
+                                    else
+                                    {
+                                        @l.Description
+                                    }
+                                </td>
+                                <td>@l.Load</td>
+                                <td>@(_chart.Find(l.AccountId) is null ? "" : _chart.FullName(l.AccountId))</td>
+                                <td class="num">@(l.Miles > 0m ? l.Miles.ToString("#,##0.#") : "")</td>
+                                <td class="num">@Labels.Amount(l.Amount)</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><td colspan="5">@L["Net"]</td><td class="num">@Labels.Amount(s.Net)</td></tr></tfoot>
+                </table>
+            </div>
+            <p class="hint">@L["Money taken out is shown with a minus."]</p>
+        </div>
+
+        @if (s.Stands)
+        {
+            <div class="card" style="margin-top: 1.5rem">
+                <h2>@L["Void"]</h2>
+                @if (_view.IsLatest)
+                {
+                    <p class="muted">@L["Voids its bill (once nothing is paid on it) on the same date. What it took back of charges is open again, and its reserves are as before it."]</p>
+                    <PostForm Action="@($"/dispatch/settlements/{s.Id}/void")" data-enhance="false">
+                        <AntiforgeryToken />
+                        <div class="field">
+                            <label for="void-reason">@L["Why it's voided"]</label>
+                            <input id="void-reason" name="reason" maxlength="200" />
+                        </div>
+                        <div class="actions"><button type="submit" class="secondary" data-confirm="@L["Void this settlement and its bill?"]">@L["Void"]</button></div>
+                    </PostForm>
+                }
+                else
+                {
+                    <p>@L["Only the owner's latest settlement can be voided: each one starts from what the one before took and left. Void the later ones first."]</p>
+                }
+            </div>
+        }
+
+        <Notes EntityType="owner_settlement" EntityId="s.Id" />
+        <Attachments EntityType="owner_settlement" EntityId="s.Id" />
+    }
+</div>
+
+@code {
+    private OwnerSettlementView? _view;
+    private ChartOfAccounts _chart = new([]);
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _view = await SettlementService.GetAsync(Id);
+        if (_view is not null)
+            _chart = await AccountService.GetChartAsync();
+    }
+}

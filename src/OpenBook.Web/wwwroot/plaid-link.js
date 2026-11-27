@@ -1,6 +1,7 @@
-// Plaid Link on the bank connections page. A form with data-plaid-link (the address that hands out link tokens) opens
+// Plaid Link on the bank connections pages. A form with data-plaid-link (the address that hands out link tokens) opens
 // Plaid's own window instead of posting: the person picks a bank and signs in to it there, and Link hands back a one-time
-// public token, which the form then posts with the bank's name. Plaid's script is loaded only when it's needed.
+// public token, which the form then posts with the bank's name. A form without a publicToken field is signing in to a
+// connected bank again (Link's update mode): it just posts once Link is done. Plaid's script is loaded only when needed.
 (() => {
     const source = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
     let loading = null;
@@ -17,7 +18,8 @@
         const form = e.target;
         if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-plaid-link')) return;
         const field = name => form.elements.namedItem(name);
-        if (field('publicToken').value) return;
+        const publicToken = field('publicToken');
+        if (publicToken && publicToken.value) return;
         e.preventDefault();
         const button = form.querySelector('button[type=submit]');
         const error = form.querySelector('[data-plaid-error]');
@@ -35,12 +37,16 @@
             await load();
             window.Plaid.create({
                 token: data.linkToken,
-                onSuccess: (publicToken, metadata) => {
-                    field('publicToken').value = publicToken;
-                    field('name').value = (metadata && metadata.institution && metadata.institution.name) || '';
+                onSuccess: (token, metadata) => {
+                    if (publicToken) {
+                        publicToken.value = token;
+                        const name = field('name');
+                        if (name) name.value = (metadata && metadata.institution && metadata.institution.name) || '';
+                    }
                     form.submit();
                 },
-                onExit: problem => done(problem ? (problem.display_message || problem.error_message || 'Plaid closed before the bank was connected.') : ''),
+                onExit: problem => done(problem ? (problem.display_message || problem.error_message
+                    || (publicToken ? 'Plaid closed before the bank was connected.' : 'Plaid closed before you signed in to the bank.')) : ''),
             }).open();
         } catch (problem) {
             done(problem instanceof Error ? problem.message : String(problem));

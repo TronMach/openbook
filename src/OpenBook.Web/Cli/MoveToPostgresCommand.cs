@@ -30,7 +30,7 @@ public static class MoveToPostgresCommand
 
         var from = Option(args, "--from") is { } file
             ? $"Data Source={Path.GetFullPath(file)}"
-            : DatabaseProviders.Parse(configuration["OpenBook:Database"], connectionString) == DatabaseProvider.Sqlite || installation.IsDesktop ? connectionString : null;
+            : DatabaseProviders.Parse(configuration["OpenBook:Database"], connectionString) == DatabaseProvider.Sqlite || installation.CompanyFile is not null ? connectionString : null;
         if (from is null)
         {
             Console.Error.WriteLine("This OpenBook already uses PostgreSQL. Give the company file to move with --from.");
@@ -81,7 +81,7 @@ public static class MoveToPostgresCommand
         ? DataProtectionProvider.Create("OpenBook")
         : DataProtectionProvider.Create(new DirectoryInfo(keysFolder), b => b.SetApplicationName("OpenBook")));
 
-    private static string? Option(string[] args, string name)
+    internal static string? Option(string[] args, string name)
     {
         var at = Array.FindIndex(args, a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
         return at >= 0 && at + 1 < args.Length ? args[at + 1] : null;

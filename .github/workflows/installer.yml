@@ -1,0 +1,70 @@
+# Builds the Windows installer and installs OpenBook Server from it on the runner, which is thrown away afterwards: the
+# service, its folder's permissions, the firewall rule, the setup page, a backup, an update, a crash, uninstalling, and
+# bringing a Desktop company in (tools/test-server-install.ps1). Nothing is published. Runs when what it checks changes.
+name: Installer
+
+on:
+  push:
+    branches: [master]
+    paths: &paths
+      - '.github/workflows/installer.yml'
+      - 'packaging/windows/**'
+      - 'tools/package-desktop.ps1'
+      - 'tools/test-server-install.ps1'
+      - 'src/OpenBook.Desktop/**'
+      - 'src/OpenBook.Web/Program.cs'
+      - 'src/OpenBook.Web/OpenBook.Web.csproj'
+      - 'src/OpenBook.Web/Hosting/**'
+      - 'src/OpenBook.Web/Cli/**'
+      - 'src/OpenBook.Web/Security/SetupCode.cs'
+      - 'src/OpenBook.Web/Components/Pages/Setup.razor'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  server:
+    name: Install OpenBook Server
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Package
+        shell: pwsh
+        run: ./tools/package-desktop.ps1 -Version 99.0.0
+
+      # Windows PowerShell, as someone at the computer would have.
+      - name: Install, update and uninstall it
+        shell: powershell
+        run: ./tools/test-server-install.ps1 -Installer artifacts/desktop/OpenBook-Setup-99.0.0.exe -Logs "$env:RUNNER_TEMP/install-logs"
+
+      - name: OpenBook's own log
+        if: failure()
+        shell: powershell
+        run: |
+          Get-ChildItem "$env:ProgramData\OpenBook\logs" -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName -Tail 80 }
+          Get-WinEvent -LogName System -MaxEvents 200 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'OpenBook' } | Select-Object -First 10 TimeCreated, Message | Format-List
+          Get-WinEvent -LogName Application -MaxEvents 200 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'OpenBook' } | Select-Object -First 5 TimeCreated, Message | Format-List
+
+      - name: Keep the installer's logs of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: install-logs
+          path: ${{ runner.temp }}/install-logs
+          retention-days: 14

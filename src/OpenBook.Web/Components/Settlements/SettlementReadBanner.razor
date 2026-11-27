@@ -1,0 +1,31 @@
+@using OpenBook.Domain.Settlements
+@* How a settlement's lines were read, for as long as it waits; a scan keeps its warning until it's posted. *@
+
+@if (Method == SettlementReadMethods.Ocr)
+{
+    <div class="alert @(Settlement.Status == SettlementStatus.Waiting ? "error" : "notice")" role="@(Settlement.Status == SettlementStatus.Waiting ? "alert" : "status")">
+        <strong>@L["Read from a scan by OCR on this computer."]</strong>
+        @if (Settlement.CheckedBy is { } by && Settlement.CheckedAt is { } at)
+        {
+            @L["Checked against the statement by {0} on {1}.", by, at.InCompanyTime().ToString("g")]
+        }
+        else
+        {
+            @L["Expect mistakes: an 8 for a 3, a lost decimal point or minus sign, a line missing. Check every line against the statement. Lines adding up isn't proof, since two mistakes can cancel."]
+        }
+        @Settlement.ReadNote
+    </div>
+}
+else if (Settlement.Status == SettlementStatus.Waiting)
+{
+    <div class="alert notice" role="status">
+        @(Method == SettlementReadMethods.Claude ? L["Read by Claude from the pages you chose. Check it against the statement before posting."] : L["Read from the PDF's own text. Check it against the statement before posting."])
+        @Settlement.ReadNote
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Settlement Settlement { get; set; } = default!;
+
+    [Parameter, EditorRequired] public string Method { get; set; } = string.Empty;
+}

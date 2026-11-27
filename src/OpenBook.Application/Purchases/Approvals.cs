@@ -75,7 +75,8 @@ public sealed class BillApprovalService(IPurchasesStore store, ICompanyStore com
     });
 }
 
-public sealed record VendorBankAccountCommand(string RoutingNumber, string AccountNumber, BankAccountKind Kind);
+/// <param name="Personal">A person's own account (an owner-operator's), paid by PPD instead of CCD; null keeps it as it is.</param>
+public sealed record VendorBankAccountCommand(string RoutingNumber, string AccountNumber, BankAccountKind Kind, bool? Personal = null);
 
 public sealed record AchSettingsCommand(
     string DestinationRouting, string DestinationName, string OriginId, string OriginName, string CompanyId, string CompanyName, string? EntryDescription = null);
@@ -112,6 +113,8 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
         }
         else
             existing.Update(command.RoutingNumber, number, secrets.Protect(number), command.Kind, clock.UtcNow);
+        if (command.Personal is { } personal)
+            existing.SetPersonal(personal);
 
         // The vendor's history shows the change, never the full account number.
         store.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, "vendor", vendor.Id, before, Describe(existing)));
@@ -267,7 +270,8 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
             c.BankAccount.Kind,
             c.Payment.NetPaid,
             c.Vendor.AccountNumber ?? c.Vendor.Id.ToString("N")[..15],
-            c.Vendor.CompanyName ?? c.Vendor.DisplayName)).ToList();
+            c.Vendor.CompanyName ?? c.Vendor.DisplayName,
+            c.BankAccount.Personal)).ToList();
 
         var now = clock.UtcNow;
         var today = CompanyTime.TodayAt(now, CompanyTime.Zone);
@@ -306,7 +310,7 @@ public sealed class AchService(IPurchasesStore store, Accounts.AccountService ac
 
     private static string Describe(VendorBankAccount a) => JsonSerializer.Serialize(new
     {
-        BankAccount = $"{a.Kind} ending {a.AccountLast4}",
+        BankAccount = $"{a.Kind}{(a.Personal ? " (personal)" : "")} ending {a.AccountLast4}",
         a.RoutingNumber,
     });
 }

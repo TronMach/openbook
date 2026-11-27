@@ -47,11 +47,12 @@ public sealed record BillResponse(
     IReadOnlyList<BillLineDraft> Lines,
     BillApproval Approval = BillApproval.NotRequired,
     string? HoldReason = null,
-    Guid? PurchaseOrderId = null)
+    Guid? PurchaseOrderId = null,
+    Guid? OwnerSettlementId = null)
 {
     public static BillResponse From(Bill b) => new(
         b.Id, b.VendorId, b.Reference, b.Date, b.DueDate, b.Memo, b.Total, b.AmountPaid, b.Balance, b.Status, b.JournalEntryId,
-        b.Lines.Select(l => l.ToDraft()).ToList(), b.Approval, b.HoldReason, b.PurchaseOrderId);
+        b.Lines.Select(l => l.ToDraft()).ToList(), b.Approval, b.HoldReason, b.PurchaseOrderId, b.OwnerSettlementId);
 }
 
 public sealed record PurchaseOrderResponse(
@@ -204,12 +205,12 @@ internal static class PurchasesApi
         // A vendor's bank details as the page shows them: the account number only as its last four.
         purchases.MapGet("/ach/vendors/{vendorId:guid}", async (Guid vendorId, AchService s, CancellationToken ct) =>
             await s.GetVendorBankAccountAsync(vendorId, ct) is { } b
-                ? Results.Ok(new { b.VendorId, b.RoutingNumber, Account = b.Masked, b.AccountLast4, b.Kind, b.UpdatedAt })
+                ? Results.Ok(new { b.VendorId, b.RoutingNumber, Account = b.Masked, b.AccountLast4, b.Kind, b.Personal, b.UpdatedAt })
                 : Results.NotFound());
         purchases.MapPut("/ach/vendors/{vendorId:guid}", async (Guid vendorId, VendorBankAccountCommand r, AchService s, CancellationToken ct) =>
         {
             var account = await s.SetVendorBankAccountAsync(vendorId, r, ct);
-            return new { account.VendorId, account.RoutingNumber, account.AccountLast4, account.Kind };
+            return new { account.VendorId, account.RoutingNumber, account.AccountLast4, account.Kind, account.Personal };
         });
         purchases.MapDelete("/ach/vendors/{vendorId:guid}", async (Guid vendorId, AchService s, CancellationToken ct) =>
         {

@@ -1,6 +1,6 @@
 # Threat model
 
-For admins deciding how to run OpenBook, and for security reviewers. It says what OpenBook protects, from whom, what it does about each threat, what it leaves to you, and what it can't protect against. How to report a problem: [SECURITY.md](../../SECURITY.md). Running it: [the server guide](server.md) and [the desktop guide](desktop.md).
+For admins deciding how to run OpenBook, and for security reviewers. It says what OpenBook protects, from whom, what it does about each threat, what it leaves to you, and what it can't protect against. How to report a problem: [SECURITY.md](../../SECURITY.md). Running it: [the server guide](server.md), [the Windows server guide](windows-server.md) and [the desktop guide](desktop.md).
 
 ## What OpenBook protects
 
@@ -40,6 +40,12 @@ What OpenBook does:
 - **The database password**: a server won't start with the sample `change-me` from `docker-compose.yml` (`SamplePasswords`).
 
 Left to you: HTTPS from a reverse proxy, with nothing but the proxy able to reach port 8080 (OpenBook trusts `X-Forwarded-*` from whoever sends them when forwarded headers are on); a firewall; requiring two-factor sign-in for admins and accountants; setting `AllowedHosts` to the server's own name; setting up the company as soon as a new server starts, and keeping its log, which holds the setup code until then, from others.
+
+### Someone on the office network (Server for Windows)
+
+What OpenBook does: everything above. The service runs as `NT SERVICE\OpenBook`, an account with no rights beyond its folder, and only administrators, Windows and that account can open `C:\ProgramData\OpenBook` (the books, backups, keys, settings and the setup code). The installer refuses a folder there that someone who isn't an administrator made, since add-ins left in it would run as the service. The firewall rule covers private and domain networks, never public ones. Updates are installed by an administrator with the installer, not by the service.
+
+Left to you: it speaks **plain HTTP** unless you give it a certificate ([HTTPS](windows-server.md#https)), so someone able to listen on the network can read passwords and the books. Keep strangers off that network, or use HTTPS. Never forward its port from the internet.
 
 ### A customer, or whoever has their link
 
@@ -95,7 +101,7 @@ What OpenBook does:
 - **SQLCipher** can encrypt the SQLite company file (`encrypt-database`, key `OpenBook:EncryptionKey`); backups made afterwards use the same key, and restore accepts only backups with it.
 - Offline capture drafts on a phone are encrypted in the browser's storage with a non-extractable key. That keeps them out of the browser's files as plain text; anyone who can use that browser can use the key too. A revoked device wipes its drafts the next time it checks.
 
-Left to you: the Data Protection keys folder is **not encrypted** (Desktop `%LOCALAPPDATA%\OpenBook\keys`, Docker `/data/keys`) so it can move with the company; anyone with the keys and a database or backup can read every protected secret, so keep the keys as private as the backups. Use disk encryption (BitLocker, LUKS): a SQLCipher key kept in an environment variable on the same disk protects nothing if the disk is taken. If the keys or the SQLCipher key may have been copied, `rekey-secrets` and `rekey-database` replace them ([server guide](server.md#if-the-keys-may-have-been-copied)); backups made before stay readable with the old ones. OpenTelemetry is off unless an endpoint is set; when on, paths go out with ids and tokens replaced by `{id}` and query values redacted, and calls to other services with their server only ([server guide](server.md#alerts-and-monitoring)). Keep backups somewhere else: Desktop's daily backups go to `Documents\OpenBook\Backups` on the same disk, and a Documents folder synced to OneDrive or similar takes the company file and backups there. Backups made before encrypting stay unencrypted.
+Left to you: the Data Protection keys folder is **not encrypted** (Desktop `%LOCALAPPDATA%\OpenBook\keys`, Server for Windows `C:\ProgramData\OpenBook\keys`, Docker `/data/keys`) so it can move with the company; anyone with the keys and a database or backup can read every protected secret, so keep the keys as private as the backups. Use disk encryption (BitLocker, LUKS): a SQLCipher key kept in an environment variable on the same disk protects nothing if the disk is taken. If the keys or the SQLCipher key may have been copied, `rekey-secrets` and `rekey-database` replace them ([server guide](server.md#if-the-keys-may-have-been-copied)); backups made before stay readable with the old ones. OpenTelemetry is off unless an endpoint is set; when on, paths go out with ids and tokens replaced by `{id}` and query values redacted, and calls to other services with their server only ([server guide](server.md#alerts-and-monitoring)). Keep backups somewhere else: Desktop's daily backups go to `Documents\OpenBook\Backups` on the same disk, and a Documents folder synced to OneDrive or similar takes the company file and backups there. Backups made before encrypting stay unencrypted.
 
 ### Someone with the server or the database
 

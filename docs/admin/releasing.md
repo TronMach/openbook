@@ -78,7 +78,7 @@ git push origin v1.2.0
 
 Each release also carries `OpenBook-<version>.cdx.json`, the package list (a CycloneDX 1.5 software bill of materials) that `tools/make-sbom.ps1` writes from the published files: every NuGet package in the installer with its version and licence, the .NET runtime it was published with, and the fonts for printed forms. Organisations that review software before installing it often ask for one. To make one by hand after packaging: `powershell -File tools/make-sbom.ps1 -Version 1.2.0`.
 
-4. After the release, make its restore drill sample and commit it: `powershell -File tools/make-release-samples.ps1` builds every release tag that has no sample yet (from a worktree under `artifacts`), runs that release's own `make-demo`, and gzips the company file into `tests/OpenBook.Integration.Tests/Samples/Releases`. From then on `ReleaseSampleTests` restores it through each new version's restore and moves it to PostgreSQL, and the books check, the audit chain and the trial balance must all pass. A change that can't bring an older company forward fails there, before anyone's restore does.
+4. After the release, make its restore drill sample and commit it through a pull request (master requires the test checks, so it can't be pushed straight to master): `powershell -File tools/make-release-samples.ps1` builds every release tag that has no sample yet (from a worktree under `artifacts`), runs that release's own `make-demo`, and gzips the company file into `tests/OpenBook.Integration.Tests/Samples/Releases`. From then on `ReleaseSampleTests` restores it through each new version's restore and moves it to PostgreSQL, and the books check, the audit chain and the trial balance must all pass. A change that can't bring an older company forward fails there, before anyone's restore does.
 
 Versions are three numbers, `major.minor.patch`. Installed copies offer a release only when its version is higher than theirs.
 
@@ -91,7 +91,8 @@ dotnet run --project src/OpenBook.ReleaseTool -- verify --manifest latest.json -
 ## What installed copies do
 
 - **OpenBook Desktop**, installed from the setup, checks a minute after starting and then once a day. It downloads a newer release into `%LOCALAPPDATA%\OpenBook\updates` and checks it. It then offers **Install** in the tray menu and on **Settings → System → Updates**. Installing backs up the books first (as Quit does), runs the installer silently, and starts OpenBook again with the same folders.
-- **OpenBook Server** doesn't check unless `OpenBook:Updates:Check` is `true`, and then only shows what's available; update it by getting the new source, then `docker compose build --pull` and `docker compose up -d`.
+- **OpenBook Server for Windows** checks as Desktop does, but downloads and installs nothing: **Settings → System → Updates** links to the installer, which an administrator runs on the server computer ([windows-server.md](windows-server.md#updates)). The update file is the same; silent runs without `/ALLUSERS` stay Desktop updates.
+- **OpenBook Server** with Docker doesn't check unless `OpenBook:Updates:Check` is `true`, and then only shows what's available; update it by getting the new source, then `docker compose build --pull` and `docker compose up -d`.
 - A copy run from source never checks unless told to.
 
 Settings:

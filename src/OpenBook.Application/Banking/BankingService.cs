@@ -175,12 +175,22 @@ public sealed class BankingService(
 
     public async Task<BankTransaction> RecordAsync(RecordBankTransactionCommand command, CancellationToken ct = default)
     {
+        await using var turn = await engine.TurnAsync(ct);
         var transaction = await StageAsync(command, importBatchId: null, ct);
         await bank.SaveChangesAsync(ct);
+        await turn.CommitAsync(ct);
         return transaction;
     }
 
     public async Task<BankTransaction> TransferAsync(TransferCommand command, CancellationToken ct = default)
+    {
+        await using var turn = await engine.TurnAsync(ct);
+        var transfer = await TransferInTurnAsync(command, ct);
+        await turn.CommitAsync(ct);
+        return transfer;
+    }
+
+    private async Task<BankTransaction> TransferInTurnAsync(TransferCommand command, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(command);
 

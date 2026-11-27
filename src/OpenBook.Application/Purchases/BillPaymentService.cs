@@ -65,6 +65,14 @@ public sealed class BillPaymentService(
     /// <param name="importBatchId">For a payment recorded from a bank line, the line's import.</param>
     internal async Task<IReadOnlyList<BillPayment>> PayAsync(PayBillsCommand command, Guid? importBatchId, CancellationToken ct)
     {
+        await using var turn = await engine.TurnAsync(ct);
+        var payments = await PayInTurnAsync(command, importBatchId, ct);
+        await turn.CommitAsync(ct);
+        return payments;
+    }
+
+    private async Task<IReadOnlyList<BillPayment>> PayInTurnAsync(PayBillsCommand command, Guid? importBatchId, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(command.Applications);
 

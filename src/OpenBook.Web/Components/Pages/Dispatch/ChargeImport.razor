@@ -1,0 +1,78 @@
+@page "/dispatch/charges/import"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Dispatch
+@inject AccountService AccountService
+
+<PageTitle>@L["Import fuel and tolls"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Import fuel and tolls"]</h1>
+        <HelpLink Chapter="34-dispatch-and-owner-operators" />
+        <ActionLink Class="button secondary" Href="/dispatch/charges">@L["Charges and advances"]</ActionLink>
+    </div>
+    <p class="muted">@L["A fuel card's or toll account's export, as a CSV file. Each row for an owner-operator's truck becomes a charge to them, taken back by their settlements. Rows for your own trucks, trucks OpenBook doesn't know, credits and rows already entered are left out."]</p>
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Imported is { } imported)
+    {
+        <div class="alert notice" role="status">
+            @L["Charges made: {0}, for {1}. Rows left out: {2}.", imported, Labels.Amount(Total ?? 0m), Left ?? 0]
+            @if (Note is not null)
+            {
+                <span> @Note</span>
+            }
+            <a href="/dispatch/charges">@L["See the open charges"]</a>
+        </div>
+    }
+
+    <div class="card">
+        <PostForm Action="/dispatch/charges/import" enctype="multipart/form-data" data-enhance="false">
+            <AntiforgeryToken />
+            <div class="row">
+                <div class="field">
+                    <label for="import-file">@L["File"]</label>
+                    <input id="import-file" name="file" type="file" accept=".csv,.txt,text/csv" required />
+                    <span class="hint">@L["It needs columns for the date, the truck's unit number (or plate or tag) and the amount; gallons, location and a reference are kept when it has them."]</span>
+                </div>
+                <div class="field">
+                    <label for="import-kind">@L["What's in it"]</label>
+                    <select id="import-kind" name="kind">
+                        <option value="@OwnerChargeKind.Fuel">@L["Fuel"]</option>
+                        <option value="@OwnerChargeKind.Toll">@L["Tolls"]</option>
+                        <option value="@OwnerChargeKind.Repair">@L["Repairs"]</option>
+                        <option value="@OwnerChargeKind.Other">@L["Other charges"]</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="import-paid-from">@L["Paid from"]</label>
+                    <select id="import-paid-from" name="paidFrom" required data-search>
+                        <option value="">@L["Choose…"]</option>
+                        <option value="books">@L["Already in the books (on the owner receivable account)"]</option>
+                        @foreach (var a in _chart.Ordered(includeInactive: false).Select(x => x.Account).Where(DispatchLabels.PaysCharges))
+                        {
+                            <option value="@a.Id">@_chart.FullName(a.Id)</option>
+                        }
+                    </select>
+                    <span class="hint">@L["The fuel card's or toll account's own account, usually a credit card or other current liability."]</span>
+                </div>
+            </div>
+            <div class="actions"><button type="submit">@L["Import"]</button></div>
+        </PostForm>
+    </div>
+</div>
+
+@code {
+    private ChartOfAccounts _chart = new([]);
+
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Imported { get; set; }
+    [SupplyParameterFromQuery] private int? Left { get; set; }
+    [SupplyParameterFromQuery] private decimal? Total { get; set; }
+    [SupplyParameterFromQuery] private string? Note { get; set; }
+
+    protected override async Task OnInitializedAsync() => _chart = await AccountService.GetChartAsync();
+}

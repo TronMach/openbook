@@ -251,6 +251,39 @@ internal static class Seeds
         "113-1\t2026-03-02T10:00:00+00:00\tShipped\tBlue mug\tMUG-1\t2\t80.00\t6.80\t5.00\tWA\n" +
         "113-2\t2026-03-02T11:00:00+00:00\tCancelled\tBlue mug\tMUG-1\t1\t40.00\t0\t0\tOR\n";
 
+    public const string Settlement =
+        "Settlement,Pay date,Net paid,Section,Code,Date,Load,Dispatch,Description,Amount,Loaded miles,Empty miles,Gallons\n" +
+        "W10,2026-03-06,450.00,Revenue,RV,0302,L1,01,Trip revenue,\"1,000.00\",500,20.5,\n" +
+        "W10,,,Deductions,UF,03/04/2026,L1,01,Fuel 100.5 gals,600.00,,,100.500\n" +
+        "W10,,,Deductions,UD,,,,Fuel discount,50.00-,,,\n" +
+        "W11,2026-03-13,-30.00,Other,BF,1103,,,Balance forward,(30.00),,,\n";
+
+    /// <summary>A fuel card's export with a title line above the header; made up.</summary>
+    public const string FuelCard =
+        "Fleet fuel card, transactions\n" +
+        "Transaction Date,Unit,Card,Location,Gallons,Total Amount,Transaction #\n" +
+        "03/02/2026 06:12,101,****1234,\"Truck stop, Town A\",120.512,\"$457.95\",T1001\n" +
+        "03/04/2026,101,****1234,Truck stop B,98.000,372.40,T1002\n" +
+        "03/05/2026,900,****9999,Truck stop C,50,190.00,T1003\n" +
+        "03/05/2026,101,****1234,Truck stop B,,-12.00,T1004\n";
+
+    /// <summary>A toll account's export by plate; made up.</summary>
+    public const string Tolls =
+        "Posted Date;Tag;Plaza;Amount\n" +
+        "2026-03-03;ABC 1234;Plaza 7;18.50\n" +
+        "2026-03-04;ABC1234;Plaza 9;7.25\n";
+
+    public const string OcrWords =
+        "level\tpage\tblock\tpar\tline\tword\tleft\ttop\twidth\theight\tconf\ttext\n" +
+        "5\t1\t1\t1\t1\t1\t300\t10\t80\t16\t96\tREVENUE\n5\t1\t1\t1\t1\t2\t390\t10\t80\t16\t96\tSECTION\n" +
+        "5\t1\t1\t1\t2\t1\t40\t40\t60\t16\t95\tDATE\n5\t1\t1\t1\t2\t2\t120\t40\t60\t16\t95\tLOADED\n5\t1\t1\t1\t2\t3\t640\t40\t60\t16\t95\tOWNER\n" +
+        "5\t1\t1\t1\t3\t1\t10\t70\t20\t16\t91.2\tRV\n5\t1\t1\t1\t3\t2\t40\t70\t70\t16\t88\t88000O6\n5\t1\t1\t1\t3\t3\t120\t70\t40\t16\t90\tO713\n" +
+        "5\t1\t1\t1\t3\t4\t170\t70\t40\t16\t90\tTRIP\n5\t1\t1\t1\t3\t5\t620\t70\t80\t16\t70\t1,2S4.56\n5\t1\t1\t1\t3\t6\t704\t70\t8\t16\t70\t-\n" +
+        "5\t1\t1\t1\t4\t1\t300\t100\t60\t16\t96\tTOTAL\n5\t1\t1\t1\t4\t2\t640\t100\t60\t16\t96\t1,234.56\n";
+
+    public const string SettlementAnswer =
+        """{"number":"A1","pay_date":"2026-03-13","period_start":null,"period_end":null,"net_paid":905.00,"carried_forward":-1.5,"totals":{"revenue":1000.00,"reimbursement":null,"deduction":90.00,"wage":null},"lines":[{"section":"revenue","code":"RV","date":"2026-03-09","load":"1","dispatch":"01","description":"Trip","amount":1000.00,"loaded_miles":500,"empty_miles":20.5,"gallons":null},{"section":"deduction","code":"UD","date":null,"load":null,"dispatch":null,"description":"Discount","amount":-10.00,"loaded_miles":null,"empty_miles":null,"gallons":3.25}]}""";
+
     public const string EtsyOrders =
         "Sale Date,Item Name,Quantity,Price,Discount Amount,Order Shipping,Order Sales Tax,Ship State,Order ID,SKU\n" +
         "03/02/26,Blue mug,1,40.00,0,6.00,3.20,NY,900,MUG-1\n" +

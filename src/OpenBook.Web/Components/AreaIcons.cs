@@ -24,6 +24,7 @@ public static class AreaIcons
     public const string Ledger = "M6 3.5h12.5v17H6A1.5 1.5 0 0 1 4.5 19V5A1.5 1.5 0 0 1 6 3.5ZM8.5 3.5v17M11.5 8h4.5M11.5 11.5h4.5";
     public const string Pencil = "M4 20.5h7M6 15l9.5-9.5a2.1 2.1 0 0 1 3 3L9 18l-4 1 1-4ZM14 7l3 3";
     public const string Cart = "M3 4h2.5l2.2 11h10.6L20.5 7.5H6.5M9.5 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM17 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z";
+    public const string Truck = "M2.5 6h11v10h-11V6ZM13.5 9.5h4l4 3.5v3h-8V9.5ZM7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z";
     public const string Gear = "M10.6 5.3 10.7 3.1 13.3 3.1 13.4 5.3 15.8 6.2 17.4 4.8 19.2 6.6 17.8 8.2 18.7 10.6 20.9 10.7 20.9 13.3 18.7 13.4 17.8 15.8 19.2 17.4 17.4 19.2 15.8 17.8 13.4 18.7 13.3 20.9 10.7 20.9 10.6 18.7 8.2 17.8 6.6 19.2 4.8 17.4 6.2 15.8 5.3 13.4 3.1 13.3 3.1 10.7 5.3 10.6 6.2 8.2 4.8 6.6 6.6 4.8 8.2 6.2ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z";
 
     /// <summary>The picture of an area of the menu (an entry of <see cref="Editions.Menu"/>, or <c>/settings</c>).</summary>
@@ -38,6 +39,8 @@ public static class AreaIcons
         "/projects" => Clipboard,
         "/time" => Clock,
         "/nonprofit" => Gift,
+        "/settlements" => Truck,
+        "/dispatch" => Truck,
         "/accounts" => Ledger,
         "/journal" => Pencil,
         "/reports" => Chart,

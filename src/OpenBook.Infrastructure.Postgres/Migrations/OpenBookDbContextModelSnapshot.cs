@@ -506,6 +506,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<bool>("NeedsSignIn")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ProtectedAccess")
                         .IsRequired()
                         .HasMaxLength(4000)
@@ -1592,6 +1595,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<bool>("PaysOwnerOperators")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Phone")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -1628,6 +1634,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<bool>("UseAccountNumbers")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("UsesSettlements")
                         .HasColumnType("boolean");
 
                     b.Property<int>("Version")
@@ -4956,6 +4965,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<Guid?>("OwnerSettlementId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("PayableAccountId")
                         .HasColumnType("uuid");
 
@@ -5505,6 +5517,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("Personal")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("ProtectedAccountNumber")
                         .IsRequired()
@@ -8277,6 +8292,503 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasIndex("Kind", "ParentId", "Name");
 
                     b.ToTable("Segments", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.Carrier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DepositAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DueAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid?>("VendorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepositAccountId");
+
+                    b.HasIndex("DueAccountId");
+
+                    b.HasIndex("VendorId");
+
+                    b.ToTable("Carriers", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.Load", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Commodity")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long?>("Miles")
+                        .HasColumnType("bigint")
+                        .HasColumnName("MilesTenThousandths");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("Weight")
+                        .HasColumnType("bigint")
+                        .HasColumnName("WeightTenThousandths");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.ToTable("Loads", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.OwnerCharge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Amount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("AmountMinor");
+
+                    b.Property<bool>("Counted1099")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("FromSettlementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("Gallons")
+                        .HasColumnType("bigint")
+                        .HasColumnName("GallonsTenThousandths");
+
+                    b.Property<string>("ImportHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsVoided")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PaidFromAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Recovered")
+                        .HasColumnType("bigint")
+                        .HasColumnName("RecoveredMinor");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<Guid?>("TruckId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("PaidFromAccountId");
+
+                    b.HasIndex("TruckId");
+
+                    b.HasIndex("OwnerId", "Date");
+
+                    b.ToTable("OwnerCharges", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.OwnerOperator", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("PayAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PayBasis")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("PayEmptyMiles")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("PayRate")
+                        .HasColumnType("bigint")
+                        .HasColumnName("PayRateTenThousandths");
+
+                    b.Property<Guid>("ReceivableAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReserveAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayAccountId");
+
+                    b.HasIndex("ReceivableAccountId");
+
+                    b.HasIndex("ReserveAccountId");
+
+                    b.HasIndex("VendorId")
+                        .IsUnique();
+
+                    b.ToTable("OwnerOperators", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.OwnerSettlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("PeriodEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BillId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
+
+                    b.HasIndex("OwnerId", "Number");
+
+                    b.ToTable("OwnerSettlements", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.ReserveInterestRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ExpenseAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsVoided")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("ExpenseAccountId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.ToTable("ReserveInterestRuns", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.Settlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("CarriedForward")
+                        .HasColumnType("bigint")
+                        .HasColumnName("CarriedForwardMinor");
+
+                    b.Property<Guid>("CarrierId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CheckedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("FileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Memo")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long>("NetPaid")
+                        .HasColumnType("bigint")
+                        .HasColumnName("NetPaidMinor");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateOnly?>("PeriodEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ReadMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ReadNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("CarrierId", "Number")
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 'Dismissed'");
+
+                    b.ToTable("Settlements", (string)null);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.Truck", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClassId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Make")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Plate")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Vin")
+                        .HasMaxLength(17)
+                        .HasColumnType("character varying(17)");
+
+                    b.Property<int?>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("Trucks", (string)null);
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookDelivery", b =>
@@ -13593,6 +14105,825 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.HasOne("OpenBook.Domain.Segments.Segment", null)
                         .WithMany()
                         .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.Carrier", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("DepositAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("DueAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.CarrierCode", "Codes", b1 =>
+                        {
+                            b1.Property<Guid>("CarrierId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Section")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Code")
+                                .HasMaxLength(40)
+                                .HasColumnType("character varying(40)");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Charge")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Name")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.HasKey("CarrierId", "Section", "Code");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("CarrierCodes", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("CarrierId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.CarrierShare", "Shares", b1 =>
+                        {
+                            b1.Property<Guid>("CarrierId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Charge")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<long>("Percent")
+                                .HasColumnType("bigint")
+                                .HasColumnName("PercentTenThousandths");
+
+                            b1.HasKey("CarrierId", "Charge");
+
+                            b1.ToTable("CarrierShares", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("CarrierId");
+                        });
+
+                    b.Navigation("Codes");
+
+                    b.Navigation("Shares");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.Load", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Sales.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.Dispatch", "Dispatches", b1 =>
+                        {
+                            b1.Property<Guid>("LoadId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Number")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("Driver")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<long?>("EmptyMiles")
+                                .HasColumnType("bigint")
+                                .HasColumnName("EmptyMilesTenThousandths");
+
+                            b1.Property<long?>("LoadedMiles")
+                                .HasColumnType("bigint")
+                                .HasColumnName("LoadedMilesTenThousandths");
+
+                            b1.Property<long>("SharePercent")
+                                .HasColumnType("bigint")
+                                .HasColumnName("ShareTenThousandths");
+
+                            b1.Property<Guid>("TruckId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("LoadId", "Number");
+
+                            b1.HasIndex("TruckId");
+
+                            b1.ToTable("Dispatches", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("LoadId");
+
+                            b1.HasOne("OpenBook.Domain.Settlements.Truck", null)
+                                .WithMany()
+                                .HasForeignKey("TruckId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.LoadChargeLine", "Charges", b1 =>
+                        {
+                            b1.Property<Guid>("LoadId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<string>("Charge")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Description")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<Guid?>("ItemId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Quantity")
+                                .HasColumnType("bigint")
+                                .HasColumnName("QuantityTenThousandths");
+
+                            b1.Property<long>("Rate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("RateTenThousandths");
+
+                            b1.HasKey("LoadId", "LineNumber");
+
+                            b1.HasIndex("ItemId");
+
+                            b1.ToTable("LoadCharges", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Sales.Item", null)
+                                .WithMany()
+                                .HasForeignKey("ItemId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("LoadId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.LoadStop", "Stops", b1 =>
+                        {
+                            b1.Property<Guid>("LoadId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Sequence")
+                                .HasColumnType("integer");
+
+                            b1.Property<DateTimeOffset?>("AppointmentFrom")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<DateTimeOffset?>("AppointmentTo")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<DateTimeOffset?>("Arrived")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<DateTimeOffset?>("Departed")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Place")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<string>("Reference")
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)");
+
+                            b1.HasKey("LoadId", "Sequence");
+
+                            b1.ToTable("LoadStops", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("LoadId");
+                        });
+
+                    b.Navigation("Charges");
+
+                    b.Navigation("Dispatches");
+
+                    b.Navigation("Stops");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.OwnerCharge", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Settlements.OwnerOperator", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("PaidFromAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Settlements.Truck", null)
+                        .WithMany()
+                        .HasForeignKey("TruckId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.OwnerOperator", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("PayAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ReceivableAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ReserveAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Purchases.Vendor", null)
+                        .WithMany()
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.OwnerDeduction", "Deductions", b1 =>
+                        {
+                            b1.Property<Guid>("OwnerId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Number")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("CarryShort")
+                                .HasColumnType("boolean");
+
+                            b1.Property<DateOnly?>("EndsOn")
+                                .HasColumnType("date");
+
+                            b1.Property<bool>("IsActive")
+                                .HasColumnType("boolean");
+
+                            b1.Property<string>("Method")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)");
+
+                            b1.Property<int>("Priority")
+                                .HasColumnType("integer");
+
+                            b1.Property<long>("Rate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("RateTenThousandths");
+
+                            b1.Property<DateOnly?>("StartsOn")
+                                .HasColumnType("date");
+
+                            b1.Property<long?>("UpTo")
+                                .HasColumnType("bigint")
+                                .HasColumnName("UpToMinor");
+
+                            b1.HasKey("OwnerId", "Number");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("OwnerDeductions", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("OwnerId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.OwnerPassThrough", "PassThroughs", b1 =>
+                        {
+                            b1.Property<Guid>("OwnerId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Charge")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<long>("Percent")
+                                .HasColumnType("bigint")
+                                .HasColumnName("PercentTenThousandths");
+
+                            b1.HasKey("OwnerId", "Charge");
+
+                            b1.ToTable("OwnerPassThroughs", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("OwnerId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.OwnerReserve", "Reserves", b1 =>
+                        {
+                            b1.Property<Guid>("OwnerId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("Number")
+                                .HasColumnType("integer");
+
+                            b1.Property<long?>("InterestPercent")
+                                .HasColumnType("bigint")
+                                .HasColumnName("InterestTenThousandths");
+
+                            b1.Property<bool>("IsActive")
+                                .HasColumnType("boolean");
+
+                            b1.Property<string>("Method")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(60)
+                                .HasColumnType("character varying(60)");
+
+                            b1.Property<long>("Opening")
+                                .HasColumnType("bigint")
+                                .HasColumnName("OpeningMinor");
+
+                            b1.Property<long>("Rate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("RateTenThousandths");
+
+                            b1.Property<long?>("Target")
+                                .HasColumnType("bigint")
+                                .HasColumnName("TargetMinor");
+
+                            b1.HasKey("OwnerId", "Number");
+
+                            b1.ToTable("OwnerReserves", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("OwnerId");
+                        });
+
+                    b.Navigation("Deductions");
+
+                    b.Navigation("PassThroughs");
+
+                    b.Navigation("Reserves");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.OwnerSettlement", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Purchases.Bill", null)
+                        .WithMany()
+                        .HasForeignKey("BillId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OpenBook.Domain.Settlements.OwnerOperator", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.OwnerSettlementLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid?>("ChargeId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int?>("DeductionNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("Description")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<int?>("DispatchNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<long?>("EmptyMiles")
+                                .HasColumnType("bigint")
+                                .HasColumnName("EmptyMilesTenThousandths");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Load")
+                                .HasMaxLength(40)
+                                .HasColumnType("character varying(40)");
+
+                            b1.Property<Guid?>("LoadId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long?>("LoadedMiles")
+                                .HasColumnType("bigint")
+                                .HasColumnName("LoadedMilesTenThousandths");
+
+                            b1.Property<long?>("Quantity")
+                                .HasColumnType("bigint")
+                                .HasColumnName("QuantityTenThousandths");
+
+                            b1.Property<long?>("Rate")
+                                .HasColumnType("bigint")
+                                .HasColumnName("RateTenThousandths");
+
+                            b1.Property<bool>("Reportable")
+                                .HasColumnType("boolean");
+
+                            b1.Property<int?>("ReserveNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid?>("TruckId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("SettlementId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.HasIndex("ChargeId");
+
+                            b1.ToTable("OwnerSettlementLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
+
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.ReserveInterestRun", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Accounts.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.ReserveInterestLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("RunId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<long>("Balance")
+                                .HasColumnType("bigint")
+                                .HasColumnName("BalanceMinor");
+
+                            b1.Property<Guid>("OwnerId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("ReserveNumber")
+                                .HasColumnType("integer");
+
+                            b1.HasKey("RunId", "LineNumber");
+
+                            b1.HasIndex("OwnerId");
+
+                            b1.ToTable("ReserveInterestLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Settlements.OwnerOperator", null)
+                                .WithMany()
+                                .HasForeignKey("OwnerId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("RunId");
+                        });
+
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.Settlement", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Settlements.Carrier", null)
+                        .WithMany()
+                        .HasForeignKey("CarrierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpenBook.Domain.Ledger.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.SettlementBilled", "Billed", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<string>("Charge")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Load")
+                                .IsRequired()
+                                .HasMaxLength(40)
+                                .HasColumnType("character varying(40)");
+
+                            b1.Property<long?>("Miles")
+                                .HasColumnType("bigint")
+                                .HasColumnName("MilesTenThousandths");
+
+                            b1.HasKey("SettlementId", "LineNumber");
+
+                            b1.ToTable("SettlementBilled", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.SettlementDeposit", "Deposits", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.HasKey("SettlementId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("SettlementDeposits", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.SettlementLine", "Lines", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid?>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.Property<Guid?>("ClassId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Code")
+                                .IsRequired()
+                                .HasMaxLength(40)
+                                .HasColumnType("character varying(40)");
+
+                            b1.Property<DateOnly?>("Date")
+                                .HasColumnType("date");
+
+                            b1.Property<string>("Description")
+                                .HasMaxLength(300)
+                                .HasColumnType("character varying(300)");
+
+                            b1.Property<string>("Dispatch")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<string>("Doubt")
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)");
+
+                            b1.Property<bool>("DoubtCleared")
+                                .HasColumnType("boolean");
+
+                            b1.Property<long?>("EmptyMiles")
+                                .HasColumnType("bigint")
+                                .HasColumnName("EmptyMilesTenThousandths");
+
+                            b1.Property<long?>("Gallons")
+                                .HasColumnType("bigint")
+                                .HasColumnName("GallonsTenThousandths");
+
+                            b1.Property<string>("Load")
+                                .HasMaxLength(40)
+                                .HasColumnType("character varying(40)");
+
+                            b1.Property<long?>("LoadedMiles")
+                                .HasColumnType("bigint")
+                                .HasColumnName("LoadedMilesTenThousandths");
+
+                            b1.Property<Guid?>("PostedAccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("PostedClassId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Section")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.HasKey("SettlementId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.HasIndex("PostedAccountId");
+
+                            b1.ToTable("SettlementLines", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("PostedAccountId")
+                                .OnDelete(DeleteBehavior.Restrict);
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.SettlementStatedBalance", "StatedBalances", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("LineNumber")
+                                .HasColumnType("integer");
+
+                            b1.Property<Guid>("AccountId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.HasKey("SettlementId", "LineNumber");
+
+                            b1.HasIndex("AccountId");
+
+                            b1.ToTable("SettlementStatedBalances", (string)null);
+
+                            b1.HasOne("OpenBook.Domain.Accounts.Account", null)
+                                .WithMany()
+                                .HasForeignKey("AccountId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .IsRequired();
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
+
+                    b.OwnsMany("OpenBook.Domain.Settlements.SettlementStatedTotal", "StatedTotals", b1 =>
+                        {
+                            b1.Property<Guid>("SettlementId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Section")
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)");
+
+                            b1.Property<long>("Amount")
+                                .HasColumnType("bigint")
+                                .HasColumnName("AmountMinor");
+
+                            b1.HasKey("SettlementId", "Section");
+
+                            b1.ToTable("SettlementStatedTotals", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("SettlementId");
+                        });
+
+                    b.Navigation("Billed");
+
+                    b.Navigation("Deposits");
+
+                    b.Navigation("Lines");
+
+                    b.Navigation("StatedBalances");
+
+                    b.Navigation("StatedTotals");
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.Truck", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Settlements.OwnerOperator", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

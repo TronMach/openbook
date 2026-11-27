@@ -20,7 +20,9 @@ public sealed record UpdateCompanySettingsCommand(
     ViewMode? DefaultViewMode = null,
     bool? AllowSellingShort = null,
     string? Region = null,
-    string? TaxId = null);
+    string? TaxId = null,
+    bool? UsesSettlements = null,
+    bool? PaysOwnerOperators = null);
 
 /// <summary>Company details and book settings, edited after setup. Home currency is fixed.</summary>
 public sealed class CompanySettingsService(ICompanyStore store, IClock clock, ICurrentUser user)
@@ -38,8 +40,18 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
         company.SetFiscalYearStartMonth(command.FiscalYearStartMonth);
         company.SetAccountNumbering(command.UseAccountNumbers);
         company.SetDefaultReportBasis(command.DefaultReportBasis);
+        if (command.UsesSettlements is { } settlements)
+            company.SetUsesSettlements(settlements);
+        if (command.PaysOwnerOperators is { } owners)
+            company.SetPaysOwnerOperators(owners);
         if (command.Edition is { } edition)
+        {
+            // Choosing the trucking edition brings its settlements into the menus; they can be taken out again.
+            if (edition == Edition.Trucking && company.Edition != Edition.Trucking)
+                company.SetUsesSettlements(true);
             company.SetEdition(edition);
+        }
+
         if (command.DefaultViewMode is { } view)
             company.SetDefaultViewMode(view);
         if (command.AllowSellingShort is { } sellShort)
@@ -79,5 +91,7 @@ public sealed class CompanySettingsService(ICompanyStore store, IClock clock, IC
         c.Region,
         DefaultViewMode = c.DefaultViewMode.ToString(),
         c.AllowSellingShort,
+        c.UsesSettlements,
+        c.PaysOwnerOperators,
     });
 }

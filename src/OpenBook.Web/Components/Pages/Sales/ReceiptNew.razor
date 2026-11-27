@@ -82,18 +82,18 @@
     private decimal? TypedTaxAmount => _taxCodeId is { } typedCode && typedCode != Guid.Empty ? _taxAmount : null;
     // What's typed so far, kept in the tab in case the connection goes.
     internal sealed record Draft(Guid? CustomerId, Guid DepositAccountId, string? Number, DateOnly Date, string? Reference, PaymentMethod? Method, string? Memo,
-        Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines, Guid? SalesRepId = null);
+        Guid? TaxCodeId, Guid? LocationId, Guid? WarehouseId, List<SalesLineModel> Lines, Guid? SalesRepId = null, string? SuggestedNumber = null);
 
     private FormDraft<Draft>? _draft;
 
     private Draft? TakeDraft() => _lines.All(l => l.IsBlank) ? null
-        : new Draft(_customerId, _depositAccountId, _number, _date, _reference, _method, _memo, _taxCodeId, _locationId, _warehouseId, _lines, _salesRepId);
+        : new Draft(_customerId, _depositAccountId, _number, _date, _reference, _method, _memo, _taxCodeId, _locationId, _warehouseId, _lines, _salesRepId, _suggestedNumber);
 
     private async Task RestoreAsync(Draft draft)
     {
         _customerId = _customers.Any(c => c.Id == draft.CustomerId) ? draft.CustomerId : null;
         _depositAccountId = _depositAccounts.Any(a => a.Id == draft.DepositAccountId) ? draft.DepositAccountId : _depositAccountId;
-        (_number, _date, _reference, _method, _memo, _locationId, _warehouseId) = (draft.Number, draft.Date, draft.Reference, draft.Method, draft.Memo, draft.LocationId, draft.WarehouseId);
+        (_number, _suggestedNumber, _date, _reference, _method, _memo, _locationId, _warehouseId) = (draft.Number, draft.SuggestedNumber, draft.Date, draft.Reference, draft.Method, draft.Memo, draft.LocationId, draft.WarehouseId);
         _taxCodeId = _taxCodes.Any(c => c.Code.Id == draft.TaxCodeId) ? draft.TaxCodeId : null;
         await DefaultSalesRepAsync();
         _salesRepId = _reps.Any(w => w.Id == draft.SalesRepId) ? draft.SalesRepId : null;
@@ -108,6 +108,7 @@
     private Guid? _customerId;
     private Guid _depositAccountId;
     private string? _number;
+    private string? _suggestedNumber;
     private DateOnly _date = CompanyTime.Today;
     private string? _reference;
     private PaymentMethod? _method;
@@ -187,6 +188,7 @@
             await sp.GetRequiredService<ItemService>().ListAsync(),
             await sp.GetRequiredService<AccountService>().GetChartAsync(),
             await sp.GetRequiredService<SalesReceiptService>().SuggestNumberAsync()));
+        _suggestedNumber = _number;
         _depositAccounts = _chart.Ordered(includeInactive: false).Select(x => x.Account)
             .Where(a => a.Type is AccountType.Bank or AccountType.OtherCurrentAsset)
             .OrderBy(a => a.Type != AccountType.Bank)
@@ -242,7 +244,8 @@
         try
         {
             var command = new CreateSalesReceiptCommand(_customerId, _date, _depositAccountId, SalesLineModel.Drafts(_lines), _number, _reference, _memo, _taxCodeId ?? Guid.Empty, LocationId: _locationId, WarehouseId: _warehouseId, Method: _method, TaxAmount: TypedTaxAmount, SalesRepId: _salesRepId ?? Guid.Empty);
-            var receipt = await Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command), _closingPassword);
+            var receipt = await SuggestedNumber.SaveAsync(_number, _suggestedNumber,
+                number => Ops.RunAsync<SalesReceiptService, SalesReceipt>(s => s.CreateAsync(command with { Number = number }), _closingPassword));
             await _draft!.ClearAsync();
             Navigation.NavigateTo($"/sales/receipts/{receipt.Id}");
         }

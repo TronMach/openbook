@@ -30,6 +30,8 @@
         ("/sales/payments/new", L["Receive Payments"]),
         ("/sales/credit-memos/new", L["Create Credit Memos"]),
         Edition == Edition.ECommerce ? ("/sales/channels", L["Sales Channels and Payouts"]) : default,
+        Settlements ? ("/settlements", L["Carrier Settlements"]) : default,
+        Dispatch ? ("/dispatch", L["Dispatch"]) : default,
         ("/sales", L["All Sales"]))
     @Menu(L["Vendors"],
         ("/vendors/center", L["Vendor Center"]),
@@ -76,6 +78,13 @@
 
     [Parameter]
     public Edition Edition { get; set; }
+
+    /// <summary>Whether the company is paid by carrier settlements.</summary>
+    [Parameter]
+    public bool Settlements { get; set; }
+
+    [Parameter]
+    public bool Dispatch { get; set; }
 
     [Parameter, EditorRequired]
     public string ReturnUrl { get; set; } = "/";

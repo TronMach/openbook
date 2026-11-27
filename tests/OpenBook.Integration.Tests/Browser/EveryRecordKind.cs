@@ -5,6 +5,8 @@ using OpenBook.Application.Accounts;
 using OpenBook.Application.Assets;
 using OpenBook.Application.Banking;
 using OpenBook.Application.Channels;
+using OpenBook.Application.Settlements;
+using OpenBook.Domain.Settlements;
 using OpenBook.Application.Companies;
 using OpenBook.Application.CustomFields;
 using OpenBook.Application.Documents;
@@ -160,6 +162,47 @@ internal static class EveryRecordKind
         var posted = await In<ChannelOrderService, ChannelOrderBatch>(s => s.PostAsync(batch.Id));
         var lineNumber = posted.Lines.Single().LineNumber;
         await Do<ChannelOrderService>(s => s.ReturnAsync(posted.Id, new DateOnly(2026, 3, 9), [(lineNumber, 1m)], "Broken", new HashSet<int> { lineNumber }));
+
+        // Trucking: a carrier, a settlement posted, one waiting with a code that has no account, and one dismissed.
+        await In<ChartTemplates, ChartImportResult>(s => s.AddTruckingAsync());
+        chart = await In<AccountService, ChartOfAccounts>(s => s.GetChartAsync());
+        var carrier = await In<SettlementService, Carrier>(s => s.CreateCarrierAsync(new CarrierDetails("Every Kind Freight", checking, vendor.Id, Unit: "12")));
+        await Do<SettlementService>(s => s.SetCodesAsync(carrier.Id, [new(SettlementSection.Revenue, "RV", Account("Freight Revenue"), "Trip revenue", Charge: LoadCharge.Linehaul)]));
+        await Do<SettlementService>(s => s.SetSharesAsync(carrier.Id, [(LoadCharge.Linehaul, 72m)]));
+        SettlementDetails Statement(string number, string code) => new(number, d, 850m,
+            [new(SettlementSection.Revenue, code, 1000m, d, "L1", "01", "Trip revenue", LoadedMiles: 500m, EmptyMiles: 40m), new(SettlementSection.Deduction, "UF", -150m, d, "L1", null, "Fuel", Account("Fuel"), Gallons: 40m)]);
+        var settlement = await In<SettlementService, Settlement>(s => s.CreateAsync(carrier.Id, Statement("W1", "RV") with { Billed = [new("L1", LoadCharge.Linehaul, 1400m, 541m)] }));
+        await Do<SettlementService>(s => s.PostAsync(settlement.Id));
+        await Do<SettlementService>(s => s.CreateAsync(carrier.Id, Statement("W2", "NEW")));
+        var dismissed = await In<SettlementService, Settlement>(s => s.CreateAsync(carrier.Id, Statement("W3", "RV")));
+        await Do<SettlementService>(s => s.SetDismissedAsync(dismissed.Id, true));
+        // One read from a scan, with a line it wasn't sure of, waiting for someone to check it.
+        await Do<ISettlementStore>(async store =>
+        {
+            var scan = Settlement.Create(carrier.Id, Statement("W4", "RV") with { NetPaid = 0m, Lines = [new(SettlementSection.Revenue, "RV", 1000m, d, "L1", Doubt: SettlementTextParser.GuessedAmount)] }, DateTimeOffset.UtcNow, "owner");
+            scan.SetReading(SettlementReadMethods.Ocr, "Made for the accessibility checks.");
+            store.Add(scan);
+            await store.SaveChangesAsync(default);
+        });
+
+        // A carrier's side: an owner-operator with a reserve, their truck, and an advance waiting to be taken back.
+        var hauler = await In<VendorService, Vendor>(s => s.CreateAsync(new VendorDetails("Pat Hauling")));
+        var owner = await In<OwnerService, OwnerOperator>(s => s.CreateOwnerAsync(new OwnerDetails(hauler.Id)));
+        await Do<OwnerService>(s => s.SetReserveAsync(owner.Id, 0, new OwnerReserveDraft("Maintenance", ReserveMethod.PerMile, 0.05m, 5000m, InterestPercent: 4m)));
+        await Do<OwnerService>(s => s.SetDeductionAsync(owner.Id, 0, new OwnerDeductionDraft("Insurance", income, DeductionMethod.Fixed, 40m)));
+        var truck = await In<OwnerService, Truck>(s => s.CreateTruckAsync(new TruckDetails("T-12", owner.Id, Make: "Kenworth")));
+        await Do<OwnerService>(s => s.CreateChargeAsync(new OwnerChargeDetails(owner.Id, d, OwnerChargeKind.Advance, 300m, checking, "Advance", TruckId: truck.Id)));
+        await Do<OwnerService>(s => s.CreateChargeAsync(new OwnerChargeDetails(owner.Id, d, OwnerChargeKind.Fuel, 120m, checking, "Fuel", TruckId: truck.Id)));
+        await Do<OwnerSettlementService>(s => s.RunAsync(new OwnerRunCommand(d, [new OwnerRunEntry(owner.Id, [new OwnerPayDraft(OwnerLineKind.Earning, "Load 7", 1400m, "7", truck.Id, 600m, 40m)])], d)));
+        await Do<OwnerService>(s => s.PostInterestAsync(new DateOnly(d.Year, d.Month, 1).AddMonths(1).AddDays(-1)));
+        var shipper = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Kind Grain Co")));
+        var at = new DateTimeOffset(d.ToDateTime(new TimeOnly(15, 0)), TimeSpan.Zero);
+        var load = await In<LoadService, Load>(s => s.CreateAsync(new LoadDetails(shipper.Id, "PO-1",
+            [new(StopKind.Pickup, "Elevator", at), new(StopKind.Delivery, "Mill", at.AddDays(1))], [new(LoadCharge.Linehaul, 500m, 2m, "Linehaul")], [new(truck.Id, "Pat", 500m, 30m)], 500m)));
+        await Do<LoadService>(s => s.RecordStopAsync(load.Id, 1, at, at.AddHours(4)));
+        await Do<LoadService>(s => s.RecordStopAsync(load.Id, 2, at.AddDays(1), at.AddDays(1).AddHours(1)));
+        await Do<OwnerService>(s => s.SetPayAsync(owner.Id, PayBasis.PercentOfLinehaul, 72m, false, [(LoadCharge.FuelSurcharge, 100m)]));
+        await Do<LoadService>(s => s.CreateAsync(new LoadDetails(shipper.Id, null, [new(StopKind.Pickup, "Dock 4"), new(StopKind.Delivery, "Store 12")], [])));
 
         // Nonprofit: a gift, a pledge, a grant, a release of restricted money.
         var donor = await In<CustomerService, Customer>(s => s.CreateAsync(new CustomerDetails("Pat Donor", Email: "pat@donor.test")));

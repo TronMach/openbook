@@ -38,6 +38,7 @@ public static class Editions
         Edition.ProfessionalServices => "Professional services",
         Edition.ECommerce => "E-commerce",
         Edition.Nonprofit => "Nonprofit",
+        Edition.Trucking => "Trucking",
         _ => "General",
     };
 
@@ -46,14 +47,32 @@ public static class Editions
         Edition.ProfessionalServices => "Consultants, agencies, accountants and other firms that bill for their time: projects, time and rates lead.",
         Edition.ECommerce => "Online shops and marketplace sellers: sales, stock and purchasing lead.",
         Edition.Nonprofit => "Charities and other nonprofits: gifts, donors, restrictions and the nonprofit statements lead.",
+        Edition.Trucking => "Owner-operators paid by a carrier: settlements, loads and costs per mile lead.",
         _ => "Every area in the menu, in the usual order.",
     };
 
     /// <summary>The main menu's links, in order (paths; the layout knows each one's label).</summary>
-    public static IReadOnlyList<string> Menu(Edition edition) => edition switch
+    /// <param name="settlements">Whether the company is paid by carrier settlements, which any edition's menu then has.</param>
+    /// <param name="dispatch">Whether the company pays owner-operators and dispatches loads, which any edition's menu then has.</param>
+    public static IReadOnlyList<string> Menu(Edition edition, bool settlements = false, bool dispatch = false)
+    {
+        var menu = Usual(edition);
+        if (settlements)
+        {
+            // First after Home in the trucking edition, where settlements are the sales; after Sales elsewhere.
+            var after = edition == Edition.Trucking ? "/" : "/sales";
+            menu = [.. menu.SelectMany(href => href == after ? [href, "/settlements"] : (IEnumerable<string>)[href])];
+        }
+
+        // A carrier's loads come before its sales: they're what's invoiced.
+        return dispatch ? [.. menu.SelectMany(href => href == "/sales" ? ["/dispatch", href] : (IEnumerable<string>)[href])] : menu;
+    }
+
+    private static IReadOnlyList<string> Usual(Edition edition) => edition switch
     {
         Edition.ProfessionalServices => ["/", "/projects", "/time", "/customers", "/sales", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
         Edition.ECommerce => ["/", "/sales", "/inventory", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
+        Edition.Trucking => ["/", "/banking", "/purchases", "/sales", "/reports", "/dashboard", "/accounts", "/journal"],
         Edition.Nonprofit => ["/", "/nonprofit", "/customers", "/sales", "/purchases", "/banking", "/reports", "/dashboard", "/accounts", "/journal"],
         _ => ["/", "/accounts", "/banking", "/sales", "/purchases", "/inventory", "/projects", "/journal", "/reports", "/dashboard"],
     };
@@ -64,6 +83,7 @@ public static class Editions
         Edition.ProfessionalServices => ["Projects and time", "Sales and customers"],
         Edition.ECommerce => ["Sales and customers", "Inventory", "Taxes"],
         Edition.Nonprofit => ["Nonprofit", "Financial statements"],
+        Edition.Trucking => ["Trucking", "Financial statements"],
         _ => [],
     };
 
@@ -97,6 +117,15 @@ public static class Editions
             new("/reports/lapsed-donors", "Lapsed donors", "Who gave last year but not yet this year"),
             new("/nonprofit/grants", "Grants", "Awards, budgets, spending and what funders still owe"),
             new("/reports/form-990-expenses", "Form 990 Part IX", "Expenses by 990 line and function"),
+        ],
+        Edition.Trucking =>
+        [
+            new("/settlements", "Settlements", "Each week's statement from the carrier, and what's waiting to be posted"),
+            new("/settlements/new", "Enter a settlement", "Type or paste a statement's lines"),
+            new("/purchases/receipts", "Receipts", "Fuel, scales and repairs you paid for yourself"),
+            new("/banking", "Banking", "Registers, deposits to match and reconciling"),
+            new("/reports/operating-statement", "Operating statement", "What the truck earned and cost, per mile"),
+            new("/reports/settlement-loads", "Loads", "Each load's miles, pay and own charges"),
         ],
         _ => [],
     };

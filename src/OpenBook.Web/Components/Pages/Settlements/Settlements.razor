@@ -1,0 +1,128 @@
+@page "/settlements"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@using OpenBook.Web.Components.Settlements
+@inject SettlementService SettlementService
+
+<PageTitle>@L["Settlements"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Settlements"]</h1>
+        <HelpLink Chapter="33-trucking-settlements" />
+        <ActionLink Class="button" Href="/settlements/new">@L["Enter a settlement"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/settlements/new/statement">@L["Read a statement"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/settlements/carriers">@L["Carriers and codes"]</ActionLink>
+    </div>
+    <p class="muted">
+        @L["For owner-operators a carrier pays by settlement statement. Enter each week's statement with what it paid and what it took out; it waits here until you post it, as one entry. The deposit then matches the line in your bank feed."]
+    </p>
+
+    @if (Error is not null)
+    {
+        <div class="alert error" role="alert">@Error</div>
+    }
+    @if (Imported is { } imported)
+    {
+        <div class="alert notice" role="status">@L["Settlements imported: {0}.", imported]@(Skipped > 0 ? L[" Already entered and left out: {0}.", Skipped] : "") @Note</div>
+    }
+
+    @if (_carriers.Count == 0)
+    {
+        <div class="card">
+            <h2>@L["Start with your carrier"]</h2>
+            <p class="muted">@L["Say who pays you and which bank account the money goes into. After that, each statement's codes are given accounts once and remembered."]</p>
+            <div class="actions"><ActionLink Class="button" Href="/settlements/carriers">@L["Add a carrier"]</ActionLink></div>
+        </div>
+    }
+    else if (_settlements.Count == 0)
+    {
+        <p>@L["No settlements yet."]</p>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>@L["Paid on"]</th><th>@L["Carrier"]</th><th>@L["Number"]</th><th>@L["Status"]</th>
+                        <th class="num">@L["Revenue"]</th><th class="num">@L["Miles"]</th><th class="num">@L["Net paid"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in _settlements.Take(Shown))
+                    {
+                        <tr class="@(s.Status == SettlementStatus.Dismissed ? "muted" : "")">
+                            <td>@Labels.Date(s.Date)</td>
+                            <td>@_carriers.GetValueOrDefault(s.CarrierId)</td>
+                            <td><a href="/settlements/@s.Id">@s.Number</a></td>
+                            <td>@SettlementLabels.Status(s.Status)</td>
+                            <td class="num">@Labels.Amount(s.SectionTotal(SettlementSection.Revenue))</td>
+                            <td class="num">@SettlementLabels.Miles(s.LoadedMiles + s.EmptyMiles)</td>
+                            <td class="num">@Labels.Amount(s.NetPaid)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_settlements.Count > Shown)
+        {
+            <p><a href="/settlements?count=@(Shown + OpenBook.Application.RecentDocuments.PageSize)">@L["Show more"]</a></p>
+        }
+    }
+
+    @if (_active.Count > 0)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2 id="import">@L["Import a CSV file"]</h2>
+            <p class="muted">@L["For a carrier that gives you a file, or a spreadsheet saved as CSV. It needs an amount column; section, code, date, load, description, miles and gallons are read when they're there, and a settlement number column makes a settlement of each. Every one waits here to be checked."]</p>
+            <PostForm Action="/settlements/import" enctype="multipart/form-data" data-enhance="false">
+                <AntiforgeryToken />
+                <div class="row">
+                    <div class="field">
+                        <label for="import-carrier">@L["Carrier"]</label>
+                        <select id="import-carrier" name="carrierId">
+                            @foreach (var c in _active)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="import-date">@L["Paid on, when the file doesn't say"]</label>
+                        <input id="import-date" name="date" type="date" value="@CompanyTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="field">
+                        <label for="import-file">@L["CSV file"]</label>
+                        <input id="import-file" name="file" type="file" accept=".csv,.txt,.tsv" required />
+                    </div>
+                </div>
+                <div class="actions"><button type="submit" class="secondary">@L["Import"]</button></div>
+            </PostForm>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyDictionary<Guid, string> _carriers = new Dictionary<Guid, string>();
+    private IReadOnlyList<Settlement> _settlements = [];
+
+    private IReadOnlyList<Carrier> _active = [];
+
+    [SupplyParameterFromQuery] private int? Count { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private int? Imported { get; set; }
+    [SupplyParameterFromQuery] private int Skipped { get; set; }
+    [SupplyParameterFromQuery] private string? Note { get; set; }
+
+    private int Shown => OpenBook.Application.RecentDocuments.Clamp(Count);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var carriers = await SettlementService.ListCarriersAsync(includeInactive: true);
+        _carriers = carriers.ToDictionary(c => c.Id, c => c.Name);
+        _active = [.. carriers.Where(c => c.IsActive)];
+        // Waiting ones first: they're what there is to do.
+        _settlements = [.. (await SettlementService.ListAsync()).OrderBy(s => s.Status == SettlementStatus.Waiting ? 0 : 1)];
+    }
+}

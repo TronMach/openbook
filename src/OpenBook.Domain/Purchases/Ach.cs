@@ -28,7 +28,13 @@ public sealed class VendorBankAccount
     public string ProtectedAccountNumber { get; private set; }
     public string AccountLast4 { get; private set; }
     public BankAccountKind Kind { get; private set; }
+
+    /// <summary>A person's own account (an owner-operator's, say), paid in a PPD batch; otherwise a business's, in CCD.</summary>
+    public bool Personal { get; private set; }
+
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    public void SetPersonal(bool personal) => Personal = personal;
 
     public string Masked => $"•••• {AccountLast4}";
 
@@ -157,11 +163,13 @@ public sealed class AchBatch
 
 /// <summary>One credit to a vendor in an ACH file.</summary>
 /// <param name="IndividualId">Our reference for the payee (up to 15 characters).</param>
-public sealed record AchEntry(string Routing, string AccountNumber, BankAccountKind Kind, decimal Amount, string IndividualId, string Name);
+/// <param name="Personal">To a person's own account: goes in the PPD batch.</param>
+public sealed record AchEntry(string Routing, string AccountNumber, BankAccountKind Kind, decimal Amount, string IndividualId, string Name, bool Personal = false);
 
 /// <summary>
-/// NACHA files: one CCD batch of credits (service class 220), 94-character records in blocks of ten. Names are
-/// uppercased and cut to ASCII letters, digits and simple punctuation.
+/// NACHA files of credits (service class 220), 94-character records in blocks of ten: a CCD batch for businesses' accounts
+/// and a PPD batch for people's own (owner-operators paid to a personal account), each only when it has entries. Names
+/// are uppercased and cut to ASCII letters, digits and simple punctuation.
 /// </summary>
 public static class Ach
 {
@@ -234,14 +242,46 @@ public static class Ach
         {
             "1" + "01" + (" " + settings.DestinationRouting) + settings.OriginId.PadLeft(10) + createdAt.ToString("yyMMdd", inv) + createdAt.ToString("HHmm", inv)
                 + char.ToUpperInvariant(fileIdModifier) + "094" + "10" + "1" + settings.DestinationName.PadRight(23) + settings.OriginName.PadRight(23) + new string(' ', 8),
-            "5" + "220" + settings.CompanyName.PadRight(16) + new string(' ', 20) + settings.CompanyId.PadRight(10) + "CCD" + settings.EntryDescription.PadRight(10)
-                + new string(' ', 6) + effectiveDate.ToString("yyMMdd", inv) + new string(' ', 3) + "1" + odfi + "0000001",
         };
 
+        long fileHash = 0;
+        long fileCents = 0;
+        var batches = 0;
+        var trace = 0;
+        foreach (var batch in entries.GroupBy(e => e.Personal).OrderBy(g => g.Key))
+        {
+            batches++;
+            var number = batches.ToString("D7", inv);
+            records.Add("5" + "220" + settings.CompanyName.PadRight(16) + new string(' ', 20) + settings.CompanyId.PadRight(10) + (batch.Key ? "PPD" : "CCD")
+                + settings.EntryDescription.PadRight(10) + new string(' ', 6) + effectiveDate.ToString("yyMMdd", inv) + new string(' ', 3) + "1" + odfi + number);
+            var (hash, cents, count) = Entries(records, [.. batch], odfi, ref trace);
+            var batchHash = (hash % 10_000_000_000).ToString("D10", inv);
+            records.Add("8" + "220" + count.ToString("D6", inv) + batchHash + new string('0', 12) + cents.ToString("D12", inv)
+                + settings.CompanyId.PadRight(10) + new string(' ', 19) + new string(' ', 6) + odfi + number);
+            (fileHash, fileCents) = (fileHash + hash, fileCents + cents);
+        }
+
+        var entryHash = (fileHash % 10_000_000_000).ToString("D10", inv);
+        var blocks = (records.Count + 1 + 9) / 10;
+        records.Add("9" + batches.ToString("D6", inv) + blocks.ToString("D6", inv) + entries.Count.ToString("D8", inv) + entryHash + new string('0', 12)
+            + fileCents.ToString("D12", inv) + new string(' ', 39));
+        while (records.Count % 10 != 0)
+            records.Add(new string('9', RecordLength));
+
+        if (records.FirstOrDefault(r => r.Length != RecordLength) is { } wrong)
+            throw new InvalidOperationException($"An ACH record came out {wrong.Length} characters long.");
+        return string.Join("\r\n", records) + "\r\n";
+    }
+
+    /// <summary>A batch's entry records, with its routing hash, total and count; trace numbers run on across batches.</summary>
+    private static (long Hash, long Cents, int Count) Entries(List<string> records, IReadOnlyList<AchEntry> entries, string odfi, ref int trace)
+    {
+        var inv = CultureInfo.InvariantCulture;
         long hash = 0;
         long totalCents = 0;
-        foreach (var (entry, index) in entries.Select((e, i) => (e, i + 1)))
+        foreach (var entry in entries)
         {
+            var index = ++trace;
             // Banks match the name, so a blank one can't go; letters outside these fields don't survive Clean.
             if (Clean(entry.Name).Length == 0)
                 throw new DomainException("ach.name_unreadable", $"\"{entry.Name}\" has no letters an ACH file can carry. Give the vendor a company name in English letters.");
@@ -259,18 +299,7 @@ public static class Ach
                 + odfi + index.ToString("D7", inv));
         }
 
-        var entryHash = (hash % 10_000_000_000).ToString("D10", inv);
-        records.Add("8" + "220" + entries.Count.ToString("D6", inv) + entryHash + new string('0', 12) + totalCents.ToString("D12", inv)
-            + settings.CompanyId.PadRight(10) + new string(' ', 19) + new string(' ', 6) + odfi + "0000001");
-        var blocks = (records.Count + 1 + 9) / 10;
-        records.Add("9" + "000001" + blocks.ToString("D6", inv) + entries.Count.ToString("D8", inv) + entryHash + new string('0', 12)
-            + totalCents.ToString("D12", inv) + new string(' ', 39));
-        while (records.Count % 10 != 0)
-            records.Add(new string('9', RecordLength));
-
-        if (records.FirstOrDefault(r => r.Length != RecordLength) is { } wrong)
-            throw new InvalidOperationException($"An ACH record came out {wrong.Length} characters long.");
-        return string.Join("\r\n", records) + "\r\n";
+        return (hash, totalCents, entries.Count);
     }
 
     private static string Cut(string value, int length) => value.Length <= length ? value : value[..length];

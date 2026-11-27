@@ -21,6 +21,11 @@ public sealed class IdempotencyMiddleware(RequestDelegate next)
 
     private static readonly string[] SecretPaths = ["/api/api-keys", "/api/users/invites", "/api/webhooks", "/api/capture", "/api/sales/portal-links", "/api/banking/connections/plaid/link-token"];
 
+    /// <summary>A connection's Plaid sign-in token (<c>/api/banking/connections/{id}/plaid/link-token</c>), short-lived like the one for connecting.</summary>
+    private static bool IsSignInToken(PathString path) =>
+        path.Value is { } value && value.StartsWith("/api/banking/connections/", StringComparison.OrdinalIgnoreCase)
+        && value.EndsWith("/plaid/link-token", StringComparison.OrdinalIgnoreCase);
+
     public async Task InvokeAsync(HttpContext http, IIdempotencyStore store)
     {
         ArgumentNullException.ThrowIfNull(http);
@@ -28,7 +33,7 @@ public sealed class IdempotencyMiddleware(RequestDelegate next)
         var request = http.Request;
         if (!request.Path.StartsWithSegments("/api") || HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method)
             || !request.Headers.TryGetValue(Header, out var values) || http.User.Identity?.Name is not { } caller
-            || SecretPaths.Any(p => request.Path.StartsWithSegments(p)))
+            || SecretPaths.Any(p => request.Path.StartsWithSegments(p)) || IsSignInToken(request.Path))
         {
             await next(http);
             return;

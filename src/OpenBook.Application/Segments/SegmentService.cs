@@ -40,6 +40,8 @@ public sealed class SegmentService(
     IPurchasesStore purchases,
     IBankingStore banking,
     Nonprofit.INonprofitStore nonprofit,
+    Settlements.ISettlementStore settlements,
+    Settlements.IOwnerStore owners,
     PostingEngine engine,
     IClock clock,
     ICurrentUser user)
@@ -365,10 +367,34 @@ public sealed class SegmentService(
                 return DocumentSegments.ForSales(credit.Lines, credit.SetLocation);
             case SalesReceipt.Source when await sales.GetReceiptAsync(id, ct) is { } receipt:
                 return DocumentSegments.ForSales(receipt.Lines, receipt.SetLocation);
+            // A settlement's bill: its lines are the settlement's, one per account and class, so those lines (and their miles) move too.
+            case Bill.Source when await purchases.GetBillAsync(id, ct) is { OwnerSettlementId: { } settlementId } bill
+                && await owners.GetSettlementAsync(settlementId, ct) is { } ownerSettlement:
+                return new DocumentSegments((line, oldClass, newClass) =>
+                {
+                    if (bill.Lines.FirstOrDefault(l => l.LineNumber == line.LineNumber - 1) is not { } billLine)
+                        return;
+                    billLine.SetClass(newClass);
+                    foreach (var l in ownerSettlement.Lines.Where(l => l.AccountId == billLine.AccountId && l.ClassId == oldClass))
+                        l.Reclassify(newClass);
+                }, bill.SetLocation);
             case Bill.Source when await purchases.GetBillAsync(id, ct) is { } bill:
                 return DocumentSegments.ForBill(bill.Lines, bill.SetLocation);
+            case Domain.Settlements.OwnerSettlement.Source when await owners.GetSettlementAsync(id, ct) is { } zero:
+                return new DocumentSegments((line, oldClass, newClass) =>
+                {
+                    foreach (var l in zero.Lines.Where(l => l.AccountId == line.AccountId && l.ClassId == oldClass))
+                        l.Reclassify(newClass);
+                }, _ => { });
             case VendorCredit.Source when await purchases.GetVendorCreditAsync(id, ct) is { } vendorCredit:
                 return DocumentSegments.ForBill(vendorCredit.Lines, vendorCredit.SetLocation);
+            // Postings are one line per account and class: every settlement line in that group moves, its miles with it.
+            case Domain.Settlements.Settlement.Source when await settlements.GetSettlementAsync(id, ct) is { } settlement:
+                return new DocumentSegments((line, oldClass, newClass) =>
+                {
+                    foreach (var l in settlement.Lines.Where(l => l.PostedAccountId == line.AccountId && l.PostedClassId == oldClass))
+                        l.Reclassify(newClass);
+                }, settlement.SetLocation);
             case Domain.Nonprofit.Donation.Source when await nonprofit.GetDonationAsync(id, ct) is { } gift:
                 return new DocumentSegments((line, _, newClass) =>
                 {

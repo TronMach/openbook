@@ -1,0 +1,53 @@
+@inject OpenBook.Application.Segments.SegmentService Segments
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@* An owner-operator's accounts and class, for the new owner form and the owner's page. *@
+
+<div class="row">
+    <div class="field">
+        <label for="owner-pay">@L["Gross pay goes to"]</label>
+        <DispatchAccountSelect Id="owner-pay" Name="payAccountId" Chart="Chart" Fits="DispatchLabels.IsExpense" Value="Owner?.PayAccountId"
+                               Empty="@(Owner is null ? L["{0} (made when needed)", OwnerService.PayName].Value : null)" Required="Owner is not null" />
+    </div>
+    <div class="field">
+        <label for="owner-receivable">@L["Charges and advances wait in"]</label>
+        <DispatchAccountSelect Id="owner-receivable" Name="receivableAccountId" Chart="Chart" Fits="@(a => a.Type == AccountType.OtherCurrentAsset)" Value="Owner?.ReceivableAccountId"
+                               Empty="@(Owner is null ? L["{0} (made when needed)", OwnerService.ReceivableName].Value : null)" Required="Owner is not null" />
+    </div>
+    <div class="field">
+        <label for="owner-reserve">@L["Reserves are owed in"]</label>
+        <DispatchAccountSelect Id="owner-reserve" Name="reserveAccountId" Chart="Chart" Fits="@(a => a.Type == AccountType.OtherCurrentLiability)" Value="Owner?.ReserveAccountId"
+                               Empty="@(Owner is null ? L["{0} (made when needed)", OwnerService.ReserveName].Value : null)" Required="Owner is not null" />
+    </div>
+</div>
+<div class="row">
+    @if (_classes.Count > 0)
+    {
+        <div class="field">
+            <label for="owner-class">@L["Class"] <span class="muted">@L["(optional)"]</span></label>
+            <select id="owner-class" name="classId">
+                <option value="">@L["None"]</option>
+                @foreach (var c in _classes)
+                {
+                    <option value="@c.Segment.Id" selected="@(c.Segment.Id == Owner?.ClassId)">@c.FullName</option>
+                }
+            </select>
+            <span class="hint">@L["For lines without a truck; a truck's own class comes first."]</span>
+        </div>
+    }
+    <div class="field">
+        <label for="owner-memo">@L["Notes"] <span class="muted">@L["(optional)"]</span></label>
+        <input id="owner-memo" name="memo" maxlength="1000" value="@Owner?.Memo" />
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<OpenBook.Application.Segments.SegmentChoice> _classes = [];
+
+    [Parameter] public OwnerOperator? Owner { get; set; }
+
+    [Parameter, EditorRequired] public ChartOfAccounts Chart { get; set; } = new([]);
+
+    protected override async Task OnInitializedAsync() =>
+        _classes = [.. (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class)).Where(c => c.Segment.IsActive || c.Segment.Id == Owner?.ClassId)];
+}
