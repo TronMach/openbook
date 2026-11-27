@@ -71,6 +71,31 @@ public static class BankingEndpoints
             }
         }).RequireAuthorization();
 
+        // Signing in to a connected bank again (Plaid Link's update mode): the token first, JSON back for the script...
+        app.MapPost("/banking/connections/{id:guid}/plaid/sign-in-token", async (Guid id, IFormCollection _, BankConnectionService connections,
+            OpenBook.Application.Companies.CompanySettingsService company, CancellationToken ct) =>
+        {
+            try
+            {
+                var token = await connections.PlaidSignInTokenAsync(id, (await company.GetAsync(ct)).Id, ct);
+                return Results.Json(new { linkToken = token });
+            }
+            catch (DomainException ex)
+            {
+                return Results.Json(new { error = ex.Message }, statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).RequireAuthorization();
+
+        // ...then, once Link says the bank's signed in to, the script posts the form here, and the connection syncs.
+        app.MapPost("/banking/connections/{id:guid}/plaid/signed-in", async (Guid id, IFormCollection _, BankConnectionService connections, CancellationToken ct) =>
+            await Back($"/banking/connections/{id}", async () =>
+            {
+                var result = await connections.SignedInAgainAsync(id, CompanyTime.Zone, ct);
+                return result.Succeeded
+                    ? FormattableString.Invariant($"done=signedin&queued={result.Queued}&added={result.AutoAdded}&skipped={result.Skipped}")
+                    : $"error={Uri.EscapeDataString(result.Error!)}";
+            })).RequireAuthorization();
+
         app.MapPost("/settings/plaid", async (IFormCollection form, IRecordVersions versions, PlaidSettingsService plaid, CancellationToken ct) =>
             await Back("/settings/plaid", async () =>
             {

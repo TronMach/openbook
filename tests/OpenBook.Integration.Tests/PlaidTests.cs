@@ -147,6 +147,45 @@ public sealed class PlaidTests : BankingFixture
     }
 
     [Fact]
+    public async Task Signing_in_to_the_bank_again_keeps_the_connection_and_syncs()
+    {
+        var connection = await Connected();
+        await Connections(s => s.LinkAsync(connection.Id, "acc-chk", Checking.Id, null));
+        Db.Plaid.FailWith = "ITEM_LOGIN_REQUIRED";
+        await Connections(s => s.SyncAsync(connection.Id, Utc));
+        var asking = (await Connections(s => s.GetAsync(connection.Id)))!;
+        Assert.Equal((true, true), (asking.LastSyncFailed, asking.NeedsSignIn));
+        Assert.Contains("Sign in to the bank again", asking.LastError, StringComparison.Ordinal);
+
+        // Link opens in update mode: the same login, no products.
+        var company = Guid.NewGuid();
+        Assert.Equal(FakePlaid.LinkToken, await Connections(s => s.PlaidSignInTokenAsync(connection.Id, company)));
+        var (path, body) = Db.Plaid.Requests[^1];
+        Assert.Equal(("link/token/create", FakePlaid.AccessToken, company.ToString("N")), (path, (string?)body["access_token"], (string?)body["user"]!["client_user_id"]));
+        Assert.Null(body["products"]);
+
+        // The person signs in at the bank in Link's window; then the connection syncs as before.
+        Db.Plaid.FailWith = null;
+        var result = await Connections(s => s.SignedInAgainAsync(connection.Id, Utc));
+        Assert.True(result.Succeeded);
+        var signedIn = (await Connections(s => s.GetAsync(connection.Id)))!;
+        Assert.Equal((false, false, "protected:" + FakePlaid.AccessToken, Checking.Id),
+            (signedIn.LastSyncFailed, signedIn.NeedsSignIn, signedIn.ProtectedAccess, signedIn.Accounts.Single(a => a.RemoteId == "acc-chk").AccountId));
+        Assert.Equal(2, (await Feed(Checking)).Count);
+        Assert.Contains(await Db.InDb(db => db.AuditRecords.Where(r => r.EntityId == connection.Id).Select(r => r.After).ToListAsync()),
+            a => a!.Contains("SignedInAgain", StringComparison.Ordinal));
+
+        // A failure that isn't about signing in doesn't ask for one.
+        Db.Plaid.FailWith = "PRODUCT_NOT_READY";
+        await Connections(s => s.SyncAsync(connection.Id, Utc));
+        Assert.False((await Connections(s => s.GetAsync(connection.Id)))!.NeedsSignIn);
+
+        Assert.Null(await Connections(s => s.DisconnectAsync(connection.Id)));
+        Assert.Equal("connection.disconnected", await Refused(() => Connections(s => s.PlaidSignInTokenAsync(connection.Id, company))));
+        Assert.Equal("connection.disconnected", await Refused(() => Connections(s => s.SignedInAgainAsync(connection.Id, Utc))));
+    }
+
+    [Fact]
     public async Task Disconnecting_removes_the_bank_at_plaid_and_warns_when_it_cant()
     {
         var connection = await Connected();

@@ -39,18 +39,27 @@ public sealed class PlaidClient(IPlaidKeys keys, PlaidTransport transport) : IBa
 
     public BankConnectionProvider Provider => BankConnectionProvider.Plaid;
 
-    public async Task<string> CreateLinkTokenAsync(string clientUserId, CancellationToken ct)
+    public async Task<string> CreateLinkTokenAsync(string clientUserId, string? accessToken, CancellationToken ct)
     {
-        var json = await PostAsync("link/token/create", new Dictionary<string, object?>
+        var body = new Dictionary<string, object?>
         {
             ["client_name"] = "OpenBook",
             ["user"] = new Dictionary<string, object?> { ["client_user_id"] = clientUserId },
-            ["products"] = Products,
-            ["transactions"] = new Dictionary<string, object?> { ["days_requested"] = Plaid.DaysRequested },
             ["country_codes"] = Countries,
             ["language"] = "en",
-        }, ct);
-        return Plaid.LinkToken(json);
+        };
+        if (accessToken is null)
+        {
+            body["products"] = Products;
+            body["transactions"] = new Dictionary<string, object?> { ["days_requested"] = Plaid.DaysRequested };
+        }
+        else
+        {
+            // Update mode: the existing login, which already has its products (Plaid's docs leave them out here).
+            body["access_token"] = accessToken;
+        }
+
+        return Plaid.LinkToken(await PostAsync("link/token/create", body, ct));
     }
 
     public async Task<string> ConnectAsync(string setupToken, CancellationToken ct)

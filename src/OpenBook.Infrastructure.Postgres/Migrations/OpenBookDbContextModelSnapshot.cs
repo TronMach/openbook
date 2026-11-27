@@ -506,6 +506,9 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<bool>("NeedsSignIn")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ProtectedAccess")
                         .IsRequired()
                         .HasMaxLength(4000)

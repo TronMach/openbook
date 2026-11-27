@@ -141,12 +141,12 @@ public sealed record FeedDocumentRequest(FeedDocumentKind Kind, Guid DocumentId)
 
 public sealed record BankConnectionResponse(
     Guid Id, BankConnectionProvider Provider, string Name, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset? LastSyncAt,
-    DateTimeOffset? LastSuccessAt, bool LastSyncFailed, string? LastError, IReadOnlyList<BankConnectionAccountResponse> Accounts)
+    DateTimeOffset? LastSuccessAt, bool LastSyncFailed, string? LastError, IReadOnlyList<BankConnectionAccountResponse> Accounts, bool NeedsSignIn = false)
 {
     /// <summary>Never includes the access credential.</summary>
     public static BankConnectionResponse From(BankConnection c) => new(
         c.Id, c.Provider, c.Name, c.IsActive, c.CreatedAt, c.LastSyncAt, c.LastSuccessAt, c.LastSyncFailed, c.LastError,
-        c.Accounts.Select(a => new BankConnectionAccountResponse(a.RemoteId, a.Name, a.Institution, a.Currency, a.Balance, a.BalanceDate, a.AccountId, a.ImportFrom, a.FetchedThrough)).ToList());
+        c.Accounts.Select(a => new BankConnectionAccountResponse(a.RemoteId, a.Name, a.Institution, a.Currency, a.Balance, a.BalanceDate, a.AccountId, a.ImportFrom, a.FetchedThrough)).ToList(), c.NeedsSignIn);
 }
 
 public sealed record BankConnectionAccountResponse(
@@ -176,6 +176,11 @@ internal static class BankingProApi
         // Plaid: the token Plaid Link opens with, then the public token Link hands back.
         banking.MapPost("/connections/plaid/link-token", async (BankConnectionService s, OpenBook.Application.Companies.CompanySettingsService company, CancellationToken ct) =>
             new PlaidLinkTokenResponse(await s.PlaidLinkTokenAsync((await company.GetAsync(ct)).Id, ct)));
+        // Signing in to a connected Plaid bank again: Link opens with this token (update mode); once it's done, signed-in syncs.
+        banking.MapPost("/connections/{id:guid}/plaid/link-token", async (Guid id, BankConnectionService s, OpenBook.Application.Companies.CompanySettingsService company, CancellationToken ct) =>
+            new PlaidLinkTokenResponse(await s.PlaidSignInTokenAsync(id, (await company.GetAsync(ct)).Id, ct)));
+        banking.MapPost("/connections/{id:guid}/plaid/signed-in", async (Guid id, BankConnectionService s, CancellationToken ct) =>
+            await s.SignedInAgainAsync(id, CompanyTime.Zone, ct));
         banking.MapPost("/connections/plaid", async (PlaidConnectRequest r, BankConnectionService s, CancellationToken ct) =>
         {
             var connection = await s.ConnectAsync(BankConnectionProvider.Plaid, r.PublicToken, r.Name, CompanyTime.Zone, ct);
