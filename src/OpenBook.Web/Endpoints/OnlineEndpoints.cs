@@ -307,6 +307,34 @@ public static class OnlineEndpoints
             }
         }).RequireAuthorization();
 
+        // A receipt typed in from paper and recorded at once. Fields as for recording one, and file (a photo of it, optional).
+        app.MapPost("/purchases/receipts/new", async (IFormCollection form, ReceiptService receipts, ClosedPeriodOverride closing, CancellationToken ct) =>
+        {
+            closing.Password = form["ClosingPassword"].ToString() is { Length: > 0 } p ? p : null;
+            var file = form.Files.GetFile("file") is { Length: > 0 } f ? f : null;
+            try
+            {
+                await using var photo = file?.OpenReadStream();
+                var spend = await receipts.EnterAsync(new RecordReceiptCommand(
+                    Guid.TryParse(form["accountId"], out var account) ? account : throw new DomainException("receipt.account_required", "Choose the account it was paid from."),
+                    Guid.TryParse(form["categoryId"], out var category) && category != Guid.Empty ? category : null,
+                    DateOnly.TryParseExact(form["date"], "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date
+                        : throw new DomainException("receipt.date_required", "Enter the date on the receipt."),
+                    FormNumbers.Amount(form["amount"]) ?? 0m,
+                    Guid.TryParse(form["vendorId"], out var vendor) && vendor != Guid.Empty ? vendor : null,
+                    form["payee"].ToString().Trim() is { Length: > 0 } payee ? payee : null,
+                    form["memo"].ToString().Trim() is { Length: > 0 } memo ? memo : null), file?.FileName, photo, ct);
+                return Results.Redirect($"/banking/transactions/{spend.Id}");
+            }
+            catch (DomainException ex)
+            {
+                var password = ClosedPeriod.NeedsPassword(ex) ? "&password=true" : "";
+                var message = file is null ? ex.Message : $"{ex.Message} Choose the photo again.";
+                return Results.Redirect($"/purchases/receipts/new?error={Uri.EscapeDataString(message)}{password}&"
+                    + SettlementEndpoints.Query(form, "accountId", "categoryId", "date", "amount", "vendorId", "payee", "memo"));
+            }
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(DocumentEndpoints.MaxUploadBytes));
+
         app.MapPost("/purchases/receipts/{id:guid}/dismiss", async (IFormCollection _, Guid id, ReceiptService receipts, CancellationToken ct) =>
             await Back($"/purchases/receipts/{id}", "", async () =>
             {

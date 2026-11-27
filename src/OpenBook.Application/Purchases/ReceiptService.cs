@@ -42,21 +42,12 @@ public sealed class ReceiptService(
     /// <summary>Saves the file on a new capture, then reads it. A file that can't be read is still kept, with no fields filled in.</summary>
     public async Task<ReceiptCapture> UploadAsync(string fileName, Stream content, CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(content);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[81920];
-        int read;
-        while ((read = await content.ReadAsync(chunk, ct)) > 0 && buffer.Length <= Domain.Attachments.Attachment.MaxBytes)
-            buffer.Write(chunk, 0, read);
-        // Checks the name, type and size before anything is saved.
-        Domain.Attachments.Attachment.Create(EntityType, Guid.Empty, fileName, buffer.Length, clock.UtcNow, user.Actor);
-
+        using var buffer = await CheckedFileAsync(fileName, content, ct);
         var capture = ReceiptCapture.Create(fileName, clock.UtcNow, user.Actor);
-        capture.SetFileHash(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length))));
+        capture.SetFileHash(Hash(buffer));
         store.Add(capture);
         store.Add(Audit(AuditAction.Created, capture, null));
         await store.SaveChangesAsync(ct);
-        buffer.Position = 0;
         var file = await attachments.AddAsync(EntityType, capture.Id, fileName, buffer, ct);
 
         var bytes = await attachments.GetContentAsync(file.Id, ct) ?? [];
@@ -67,6 +58,32 @@ public sealed class ReceiptService(
         capture.Read(text, fields, vendor?.Id);
         await store.SaveChangesAsync(ct);
         return capture;
+    }
+
+    /// <summary>
+    /// A receipt typed in from paper, recorded as an expense at once, with a photo of it attached when one is given.
+    /// It's listed with the uploaded ones (as typed in), so every receipt has one place.
+    /// </summary>
+    public async Task<BankTransaction> EnterAsync(RecordReceiptCommand command, string? fileName = null, Stream? content = null, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var name = string.IsNullOrWhiteSpace(fileName) ? "receipt" : fileName;
+        using var buffer = content is null ? null : await CheckedFileAsync(name, content, ct);
+        await using var transaction = await unit.BeginAsync(ct);
+        var capture = buffer is null ? ReceiptCapture.Typed(clock.UtcNow, user.Actor) : ReceiptCapture.Create(name, clock.UtcNow, user.Actor);
+        if (buffer is not null)
+            capture.SetFileHash(Hash(buffer));
+        var vendor = command.VendorId is { } vendorId ? await store.GetVendorAsync(vendorId, ct) ?? throw new EntityNotFoundException("vendor", vendorId) : null;
+        capture.Read(null, new ReceiptFields(vendor?.DisplayName ?? command.Payee, command.Date, command.Amount, null), vendor?.Id);
+        store.Add(capture);
+        store.Add(Audit(AuditAction.Created, capture, null));
+        await store.SaveChangesAsync(ct);
+        if (buffer is not null)
+            await attachments.AddAsync(EntityType, capture.Id, name, buffer, ct);
+
+        var spend = await RecordSpendAsync(capture, command, ct);
+        await transaction.CommitAsync(ct);
+        return spend;
     }
 
     /// <summary>Other receipts with the same file: the same receipt uploaded twice.</summary>
@@ -83,6 +100,34 @@ public sealed class ReceiptService(
         var capture = await store.GetReceiptAsync(id, ct) ?? throw new EntityNotFoundException(EntityType, id);
         if (capture.Status != ReceiptStatus.New)
             throw new DomainException("receipt.done", "This receipt has already been dealt with.");
+
+        // All or nothing: the receipt's version stops a second press, and a failure leaves no expense behind.
+        await using var transaction = await unit.BeginAsync(ct);
+        var spend = await RecordSpendAsync(capture, command, ct);
+        await transaction.CommitAsync(ct);
+        return spend;
+    }
+
+    /// <summary>
+    /// Marks a waiting receipt as recorded by an expense made elsewhere (a trucking receipt), copying its files onto the
+    /// expense, without saving: the caller saves it with the expense, in its transaction.
+    /// </summary>
+    public async Task RecordedByAsync(ReceiptCapture capture, Guid spendId, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(capture);
+        if (capture.Status != ReceiptStatus.New)
+            throw new DomainException("receipt.done", "This receipt has already been dealt with.");
+        foreach (var file in await attachments.ListAsync(EntityType, capture.Id, ct))
+            if (await attachments.GetContentAsync(file.Id, ct) is { } bytes)
+                await attachments.AddAsync("bank_transaction", spendId, file.FileName, new MemoryStream(bytes), ct);
+
+        var before = Snapshot(capture);
+        capture.Recorded(spendId);
+        store.Add(Audit(AuditAction.Updated, capture, before));
+    }
+
+    private async Task<BankTransaction> RecordSpendAsync(ReceiptCapture capture, RecordReceiptCommand command, CancellationToken ct)
+    {
         Money.EnsureCents(command.Amount);
         if (command.Amount <= 0m)
             throw new DomainException("receipt.amount_not_positive", "Enter the amount paid.");
@@ -90,23 +135,31 @@ public sealed class ReceiptService(
         var category = command.CategoryId ?? vendor?.DefaultExpenseAccountId
             ?? throw new DomainException("receipt.category_required", "Choose what the expense was for.");
 
-        // All or nothing: the receipt's version stops a second press, and a failure leaves no expense behind.
-        await using var transaction = await unit.BeginAsync(ct);
         var spend = await banking.RecordAsync(new RecordBankTransactionCommand(
             BankTransactionKind.Spend, command.AccountId, command.Date, [new BankSplit(category, command.Amount, command.Memo)],
             Payee: command.Payee ?? vendor?.DisplayName ?? capture.VendorName, Memo: command.Memo, VendorId: vendor?.Id), ct);
-
-        foreach (var file in await attachments.ListAsync(EntityType, capture.Id, ct))
-            if (await attachments.GetContentAsync(file.Id, ct) is { } bytes)
-                await attachments.AddAsync("bank_transaction", spend.Id, file.FileName, new MemoryStream(bytes), ct);
-
-        var before = Snapshot(capture);
-        capture.Recorded(spend.Id);
-        store.Add(Audit(AuditAction.Updated, capture, before));
+        await RecordedByAsync(capture, spend.Id, ct);
         await store.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
         return spend;
     }
+
+    /// <summary>The file, read into memory once its name, type and size have been checked like an attachment's.</summary>
+    public async Task<MemoryStream> CheckedFileAsync(string fileName, Stream content, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await content.ReadAsync(chunk, ct)) > 0 && buffer.Length <= Domain.Attachments.Attachment.MaxBytes)
+            buffer.Write(chunk, 0, read);
+        // Checks the name, type and size before anything is saved.
+        Domain.Attachments.Attachment.Create(EntityType, Guid.Empty, fileName, buffer.Length, clock.UtcNow, user.Actor);
+        buffer.Position = 0;
+        return buffer;
+    }
+
+    private static string Hash(MemoryStream buffer) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)));
 
     public async Task<ReceiptCapture> DismissAsync(Guid id, CancellationToken ct = default)
     {

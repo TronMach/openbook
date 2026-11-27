@@ -2,6 +2,7 @@
 @inject ReceiptService ReceiptService
 @inject AccountService AccountService
 @inject VendorService VendorService
+@inject CompanySettingsService Settings
 
 <PageTitle>Receipt · OpenBook</PageTitle>
 
@@ -13,7 +14,7 @@
 
 <div class="wide">
     <div class="toolbar">
-        <h1>Receipt: @_receipt.FileName</h1>
+        <h1>@(_receipt.FileName.Length == 0 ? L["Receipt typed in"] : $"Receipt: {_receipt.FileName}")</h1>
         <ActionLink Class="button secondary" Href="/purchases/receipts">Receipts</ActionLink>
         <ActionLink Class="button secondary" Href="@($"/audit?entityId={_receipt.Id}")">History</ActionLink>
     </div>
@@ -45,6 +46,13 @@
     }
     else
     {
+        @if (_trucking)
+        {
+            <div class="alert notice" role="status">
+                @L["Fuel, scales, a lumper or a repair on the road? A trucking receipt keeps the gallons, the state and the truck as well."]
+                <ActionLink Href="@($"/settlements/receipts/new?receipt={_receipt.Id}")">@L["Record it as a trucking receipt"]</ActionLink>
+            </div>
+        }
         <div class="card">
             <h2>Record as an expense</h2>
             @if (_receipt.Text is null)
@@ -137,6 +145,7 @@
     private List<Account> _payFrom = [];
     private List<Account> _categories = [];
     private IReadOnlyList<Vendor> _vendors = [];
+    private bool _trucking;
 
     [Parameter] public Guid Id { get; set; }
     [SupplyParameterFromQuery] private string? Error { get; set; }
@@ -153,5 +162,6 @@
         _payFrom = accounts.Where(a => a.Type is AccountType.Bank or AccountType.CreditCard).ToList();
         _categories = accounts.Where(a => a.Type.ClassOf() is AccountClass.Expense || a.Type is AccountType.CostOfGoodsSold or AccountType.OtherCurrentAsset or AccountType.FixedAsset).ToList();
         _vendors = (await VendorService.ListRecordsAsync()).ToList();
+        _trucking = (await Settings.GetAsync()).UsesSettlements;
     }
 }

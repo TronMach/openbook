@@ -40,6 +40,7 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
     public DbSet<OpenBook.Domain.Settlements.OwnerOperator> OwnerOperators => Set<OpenBook.Domain.Settlements.OwnerOperator>();
     public DbSet<OpenBook.Domain.Settlements.Truck> Trucks => Set<OpenBook.Domain.Settlements.Truck>();
     public DbSet<OpenBook.Domain.Settlements.OwnerCharge> OwnerCharges => Set<OpenBook.Domain.Settlements.OwnerCharge>();
+    public DbSet<OpenBook.Domain.Settlements.TruckReceipt> TruckReceipts => Set<OpenBook.Domain.Settlements.TruckReceipt>();
     public DbSet<OpenBook.Domain.Settlements.OwnerSettlement> OwnerSettlements => Set<OpenBook.Domain.Settlements.OwnerSettlement>();
     public DbSet<OpenBook.Domain.Settlements.ReserveInterestRun> ReserveInterestRuns => Set<OpenBook.Domain.Settlements.ReserveInterestRun>();
     public DbSet<OpenBook.Domain.Settlements.Load> Loads => Set<OpenBook.Domain.Settlements.Load>();
@@ -1600,6 +1601,21 @@ public sealed class OpenBookDbContext(DbContextOptions<OpenBookDbContext> option
             b.Property(t => t.Plate).HasMaxLength(20);
             b.Property(t => t.Make).HasMaxLength(60);
             b.HasOne<OpenBook.Domain.Settlements.OwnerOperator>().WithMany().HasForeignKey(t => t.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Never changed once made (the expense is changed or voided instead), so not Versioned.
+        modelBuilder.Entity<OpenBook.Domain.Settlements.TruckReceipt>(b =>
+        {
+            b.ToTable("TruckReceipts");
+            b.HasKey(r => r.Id);
+            b.HasIndex(r => r.BankTransactionId).IsUnique();
+            b.Property(r => r.Kind).HasConversion<string>().HasMaxLength(20);
+            b.Property(r => r.Gallons).HasColumnName("GallonsTenThousandths").HasConversion(NullableTenThousandths);
+            b.Property(r => r.Jurisdiction).HasMaxLength(2);
+            b.Property(r => r.City).HasMaxLength(60);
+            b.Property(r => r.Number).HasMaxLength(40);
+            b.Property(r => r.CreatedBy).HasMaxLength(100);
+            b.HasOne<BankTransaction>().WithMany().HasForeignKey(r => r.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<OpenBook.Domain.Settlements.OwnerCharge>(b =>

@@ -1,0 +1,104 @@
+@page "/settlements/receipts/{Id:guid}"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject TruckReceiptService Receipts
+@inject AccountService AccountService
+@inject OpenBook.Application.Segments.SegmentService Segments
+
+<PageTitle>@L["Trucking receipt"] · OpenBook</PageTitle>
+
+<div class="wide">
+    @if (_receipt is null)
+    {
+        <div class="card"><p>@L["That receipt doesn't exist."] <a href="/settlements/receipts">@L["Trucking receipts"]</a></p></div>
+    }
+    else
+    {
+        <div class="toolbar">
+            <h1>@TruckReceiptKinds.Label(_receipt.Receipt.Kind) · @Labels.Date(_receipt.Date)</h1>
+            <ActionLink Class="button secondary" Href="/settlements/receipts">@L["Trucking receipts"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/settlements/receipts/new?copy={_receipt.Receipt.Id}")">@L["Copy"]</ActionLink>
+            <ActionLink Class="button secondary" Href="@($"/audit?entityId={_receipt.Receipt.Id}")">@L["History"]</ActionLink>
+        </div>
+        @if (Error is not null)
+        {
+            <div class="alert error" role="alert">@Error</div>
+        }
+        @if (_receipt.IsVoided)
+        {
+            <div class="alert notice" role="status">@L["Voided: its expense was reversed on the same date. To correct a receipt, copy it, fix what was wrong and save the copy."]</div>
+        }
+
+        <div class="card">
+            <dl class="facts">
+                <dt>@L["Amount paid"]</dt><dd>@Labels.Amount(_receipt.Amount)</dd>
+                @if (_receipt.Receipt.Gallons is { } gallons)
+                {
+                    <dt>@L["Gallons"]</dt><dd>@gallons.ToString("#,##0.###")</dd>
+                    <dt>@L["Per gallon"]</dt><dd>@_receipt.PricePerGallon?.ToString("#,##0.000")</dd>
+                }
+                @if (_receipt.Spend.Payee is { } payee)
+                {
+                    <dt>@L["Bought at"]</dt><dd>@payee</dd>
+                }
+                @if (_receipt.Receipt.City is not null || _receipt.Receipt.Jurisdiction is not null)
+                {
+                    <dt>@L["Where"]</dt>
+                    <dd>@string.Join(", ", new[] { _receipt.Receipt.City, _receipt.Receipt.Jurisdiction is { } j ? Jurisdictions.Name(j) : null }.Where(s => s is not null))</dd>
+                }
+                @if (_receipt.Receipt.Number is { } number)
+                {
+                    <dt>@L["Receipt number"]</dt><dd>@number</dd>
+                }
+                <dt>@L["Paid from"]</dt><dd><a href="/banking/@_receipt.Spend.AccountId">@_chart.FullName(_receipt.Spend.AccountId)</a></dd>
+                @if (_receipt.AccountId is { } account)
+                {
+                    <dt>@L["Account"]</dt><dd>@_chart.FullName(account)</dd>
+                }
+                @if (_receipt.ClassId is { } c && _classes.GetValueOrDefault(c) is { } truck)
+                {
+                    <dt>@L["Truck (class)"]</dt><dd>@truck</dd>
+                }
+                @if (_receipt.Spend.Memo is { } memo)
+                {
+                    <dt>@L["Memo"]</dt><dd>@memo</dd>
+                }
+                <dt>@L["Expense"]</dt><dd><a href="/banking/transactions/@_receipt.Spend.Id">@L["Open it in Banking"]</a></dd>
+            </dl>
+            <p class="hint">@L["The amount, date, account and truck are the expense's: change them there. What it was for, the gallons and where it was bought stay with the receipt."]</p>
+            @if (!_receipt.IsVoided)
+            {
+                <PostForm Action="@($"/settlements/receipts/{_receipt.Receipt.Id}/void")" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="field">
+                        <label for="void-reason">@L["Why it's voided"]</label>
+                        <input id="void-reason" name="reason" maxlength="200" />
+                    </div>
+                    <ClosedPeriodPassword Visible="Password" Interactive="false" />
+                    <div class="actions"><button type="submit" class="secondary" data-confirm="@L["Void this receipt? Its expense is reversed."]">@L["Void"]</button></div>
+                </PostForm>
+            }
+        </div>
+
+        <Attachments EntityType="bank_transaction" EntityId="_receipt.Spend.Id" />
+    }
+</div>
+
+@code {
+    private TruckReceiptView? _receipt;
+    private ChartOfAccounts _chart = new([]);
+    private Dictionary<Guid, string> _classes = [];
+
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private bool Password { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _receipt = await Receipts.GetAsync(Id);
+        if (_receipt is null)
+            return;
+        _chart = await AccountService.GetChartAsync();
+        _classes = (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class)).ToDictionary(c => c.Segment.Id, c => c.FullName);
+    }
+}

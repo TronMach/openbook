@@ -1,0 +1,149 @@
+@page "/settlements/receipts"
+@using OpenBook.Application.Settlements
+@using OpenBook.Domain.Settlements
+@inject TruckReceiptService Receipts
+@inject OpenBook.Application.Segments.SegmentService Segments
+
+<PageTitle>@L["Trucking receipts"] · OpenBook</PageTitle>
+
+<div class="wide">
+    <div class="toolbar">
+        <h1>@L["Trucking receipts"]</h1>
+        <HelpLink Chapter="33-trucking-settlements" />
+        <ActionLink Class="button" Href="/settlements/receipts/new">@L["Enter a receipt"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/purchases/receipts">@L["Upload photos"]</ActionLink>
+        <ActionLink Class="button secondary" Href="/settlements">@L["Settlements"]</ActionLink>
+    </div>
+    <p class="muted">@L["Fuel, scales, lumpers, repairs and the rest you paid for yourself on the road, typed in from the paper receipt. Each is recorded as an expense from the account you paid with, on the truck's class; fuel keeps its gallons and the state it was bought in, for your fuel tax return."]</p>
+
+    <form method="get" action="/settlements/receipts" class="filters" role="search" aria-label="@L["Choose the period"]">
+        <div class="field">
+            <label for="receipts-from">@L["From"]</label>
+            <input id="receipts-from" name="from" type="date" value="@_from.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+        </div>
+        <div class="field">
+            <label for="receipts-to">@L["To"]</label>
+            <input id="receipts-to" name="to" type="date" value="@_to.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)" />
+        </div>
+        <button type="submit" class="secondary">@L["Show"]</button>
+        <a href="@QuarterLink(-1)">@L["Last quarter"]</a>
+        <a href="@QuarterLink(0)">@L["This quarter"]</a>
+    </form>
+
+    @if (_receipts.Count == 0)
+    {
+        <div class="card">
+            <p>@L["No receipts in this period."]</p>
+            <ActionLink Class="button" Href="/settlements/receipts/new">@L["Enter a receipt"]</ActionLink>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>@L["Date"]</th><th>@L["Kind"]</th><th>@L["Bought at"]</th><th>@L["Truck"]</th>
+                        <th class="num">@L["Gallons"]</th><th class="num">@L["Amount"]</th><th class="num">@L["Per gallon"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _receipts)
+                    {
+                        <tr class="@(r.IsVoided ? "muted" : null)">
+                            <td><a href="/settlements/receipts/@r.Receipt.Id">@Labels.Date(r.Date)</a></td>
+                            <td>@L[TruckReceiptKinds.Label(r.Receipt.Kind)]@(r.IsVoided ? L[" (voided)"] : "")</td>
+                            <td>@Where(r)</td>
+                            <td>@(r.ClassId is { } c ? _classes.GetValueOrDefault(c) : "")</td>
+                            <td class="num">@r.Receipt.Gallons?.ToString("#,##0.###")</td>
+                            <td class="num">@Labels.Amount(r.Amount)</td>
+                            <td class="num">@r.PricePerGallon?.ToString("#,##0.000")</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4">@L["Total"]</td>
+                        <td class="num">@_receipts.Where(r => !r.IsVoided).Sum(r => r.Receipt.Gallons ?? 0m).ToString("#,##0.###")</td>
+                        <td class="num">@Labels.Amount(_receipts.Where(r => !r.IsVoided).Sum(r => r.Amount))</td>
+                        <td><span class="visually-hidden">@L["Per gallon"]</span></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+
+    @if (_fuel.Count > 0)
+    {
+        <div class="card" style="margin-top: 1.5rem">
+            <h2>@L["Fuel by state"]</h2>
+            <p class="muted">@L["Gallons bought in each state or province in this period, from the fuel receipts that stand. A fuel tax (IFTA) return also needs the miles driven in each one, which OpenBook doesn't keep."]</p>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>@L["State or province"]</th><th class="num">@L["Receipts"]</th><th class="num">@L["Gallons"]</th><th class="num">@L["Amount"]</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _fuel)
+                        {
+                            <tr>
+                                <td>@(f.Jurisdiction.Length == 0 ? L["None given"] : $"{Jurisdictions.Name(f.Jurisdiction)} ({f.Jurisdiction})")</td>
+                                <td class="num">@f.Receipts</td>
+                                <td class="num">@f.Gallons.ToString("#,##0.###")</td>
+                                <td class="num">@Labels.Amount(f.Amount)</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td>@L["Total"]</td>
+                            <td class="num">@_fuel.Sum(f => f.Receipts)</td>
+                            <td class="num">@_fuel.Sum(f => f.Gallons).ToString("#,##0.###")</td>
+                            <td class="num">@Labels.Amount(_fuel.Sum(f => f.Amount))</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<TruckReceiptView> _receipts = [];
+    private IReadOnlyList<FuelByJurisdiction> _fuel = [];
+    private Dictionary<Guid, string> _classes = [];
+    private DateOnly _from;
+    private DateOnly _to;
+
+    [SupplyParameterFromQuery] private DateOnly? From { get; set; }
+    [SupplyParameterFromQuery] private DateOnly? To { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (start, end) = Quarter(CompanyTime.Today, 0);
+        _from = From ?? start;
+        _to = To ?? end;
+        if (_to < _from)
+            (_from, _to) = (_to, _from);
+        _receipts = await Receipts.ListAsync(_from, _to);
+        _fuel = await Receipts.FuelByJurisdictionAsync(_from, _to);
+        _classes = (await Segments.ListAsync(OpenBook.Domain.Segments.SegmentKind.Class)).ToDictionary(c => c.Segment.Id, c => c.FullName);
+    }
+
+    private static string Where(TruckReceiptView r)
+    {
+        var place = r.Receipt.City is { } city && r.Receipt.Jurisdiction is { } j ? $"{city}, {j}" : r.Receipt.City ?? r.Receipt.Jurisdiction;
+        return string.Join(" · ", new[] { r.Spend.Payee, place }.Where(s => !string.IsNullOrWhiteSpace(s)));
+    }
+
+    /// <summary>The calendar quarter <paramref name="offset"/> quarters from the one <paramref name="day"/> is in: fuel tax returns go by them.</summary>
+    private static (DateOnly Start, DateOnly End) Quarter(DateOnly day, int offset)
+    {
+        var start = new DateOnly(day.Year, (day.Month - 1) / 3 * 3 + 1, 1).AddMonths(3 * offset);
+        return (start, start.AddMonths(3).AddDays(-1));
+    }
+
+    private static string QuarterLink(int offset)
+    {
+        var (start, end) = Quarter(CompanyTime.Today, offset);
+        return FormattableString.Invariant($"/settlements/receipts?from={start:yyyy-MM-dd}&to={end:yyyy-MM-dd}");
+    }
+}

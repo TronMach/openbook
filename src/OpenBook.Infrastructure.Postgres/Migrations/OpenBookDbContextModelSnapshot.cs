@@ -8791,6 +8791,51 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                     b.ToTable("Trucks", (string)null);
                 });
 
+            modelBuilder.Entity("OpenBook.Domain.Settlements.TruckReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BankTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long?>("Gallons")
+                        .HasColumnType("bigint")
+                        .HasColumnName("GallonsTenThousandths");
+
+                    b.Property<string>("Jurisdiction")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankTransactionId")
+                        .IsUnique();
+
+                    b.ToTable("TruckReceipts", (string)null);
+                });
+
             modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookDelivery", b =>
                 {
                     b.Property<Guid>("Id")
@@ -14925,6 +14970,15 @@ namespace OpenBook.Infrastructure.Postgres.Migrations
                         .WithMany()
                         .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OpenBook.Domain.Settlements.TruckReceipt", b =>
+                {
+                    b.HasOne("OpenBook.Domain.Banking.BankTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("BankTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OpenBook.Domain.Webhooks.WebhookDelivery", b =>

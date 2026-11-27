@@ -278,7 +278,7 @@ The accounting words and OpenBook's own names used in this guide and on the page
 
 **Rate card**: hourly bill rates for particular clients, people, roles or services; the most specific matching line wins. See [Projects and time](18-projects-and-time.md).
 
-**Receipt capture**: **Purchases → Receipts**: upload receipt photos or PDFs, OpenBook reads them, and you record each as an expense. See [Document inbox](16-document-inbox.md).
+**Receipt capture**: **Purchases → Receipts**: upload receipt photos or PDFs, OpenBook reads them, and you record each as an expense; or type in a paper one. See [Document inbox](16-document-inbox.md).
 
 **Received Not Billed**: the account holding goods received into stock from a purchase order until the vendor's bill clears it. See [Purchase orders](15-purchase-orders.md).
 
@@ -351,6 +351,8 @@ The accounting words and OpenBook's own names used in this guide and on the page
 **To do**: the home page list of what's waiting: overdue invoices, deposits, bills, bank lines, figures that don't agree. See [Finding your way around](02-finding-your-way.md).
 
 **Transfer**: moving money between your own accounts, or paying a card from the bank; it isn't income or an expense. See [Banking](06-banking.md).
+
+**Trucking receipt**: fuel, scales, a lumper or a repair an owner-operator paid on the road, typed in under **Settlements → Receipts** and recorded as an expense on the truck's class; fuel keeps its gallons and state. See [Trucking settlements](33-trucking-settlements.md).
 
 **Trial balance**: every account's balance in debit and credit columns, which always come to the same total. See [Reports](07-reports.md).
 
