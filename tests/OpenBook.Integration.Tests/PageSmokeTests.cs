@@ -95,9 +95,14 @@ public sealed partial class PageSmokeTests : IAsyncLifetime
     public async Task A_page_that_does_not_exist_answers_at_once_every_time()
     {
         var browser = await SetUpAsync(_app);
+        // The app's first missing page costs about 2.5 s once (the rest take milliseconds), and many times that when a full
+        // run holds the processors (2026-11-27: past 20 s on PostgreSQL), so the first gets longer. A page that never
+        // answers, which this test is for, still fails it.
+        var first = true;
         foreach (var path in new[] { "/no/such/page", "/no/such/page", "/api/customers/01a00000-0000-7000-8000-000000000001", "/no/such/page" })
         {
-            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(first ? 120 : 20));
+            first = false;
             var response = await browser.GetAsync(path, patience.Token);
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
             var page = await response.Content.ReadAsStringAsync(patience.Token);

@@ -227,7 +227,9 @@ public sealed partial class WindowsServerTests : IAsyncLifetime
             await sp.GetRequiredService<ScheduledBackupService>().SetUpDefaultAsync(install.BackupFolder!);
             return (await sp.GetRequiredService<ScheduledBackupService>().RunNowAsync()).Succeeded;
         }));
-        Assert.Single(Directory.GetFiles(install.BackupFolder!, ScheduledBackupService.NamePrefix + "*"));
+        // The backup job may have made one too: on this install it sets up the daily backup itself within a minute of the
+        // company being made, and a schedule never run is due at once (a slow run once put both in the folder).
+        Assert.NotEmpty(Directory.GetFiles(install.BackupFolder!, ScheduledBackupService.NamePrefix + "*"));
         var updates = app.Services.GetRequiredService<UpdateService>();
         Assert.False(updates.Enabled);
         updates.SetEnabled(true);
