@@ -152,7 +152,7 @@ public sealed class DocumentNumberTests : IAsyncLifetime
             s => s.CreateAsync(new SavePurchaseOrderCommand(_vendor, Mar1, [new PurchaseOrderLineDraft(_widget, null, null, 1m, 5m)])), o => o.Number);
         Kind<GiftService, Domain.Nonprofit.Donation>("gift", s => s.RecordAsync(new RecordGiftCommand(_customer, Mar1, 20m, _bank, IncomeAccountId: _income)), d => d.Number);
         Kind<GiftService, Domain.Nonprofit.Pledge>("pledge", s => s.PledgeAsync(new PledgeCommand(_customer, Mar1, 20m, _income)), p => p.Number);
-        // Other saves take entry numbers meanwhile, trying again when theirs is taken; the documents never have to.
+        // Journal entries take entry numbers meanwhile, in turns of their own (2026-11-27; they used to try again).
         for (var n = 0; n < Each; n++)
             creates.Add(PostEntryAsync);
 
@@ -161,6 +161,45 @@ public sealed class DocumentNumberTests : IAsyncLifetime
         foreach (var sequence in numbers.GroupBy(n => n.Sequence))
             Assert.Equal(sequence.Key == "invoice" ? 2 * Each : Each, sequence.Select(n => n.Number).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(8 * Each, numbers.Count);
+        await AssertBooksAsync();
+    }
+
+    [Fact]
+    public async Task Payments_bills_bank_entries_deposits_and_journal_entries_saved_at_once_all_save_the_first_time()
+    {
+        const int Each = 6;
+        var undeposited = (await In<AccountService, Account>(s => s.CreateAsync(new CreateAccountCommand("Undeposited Funds", AccountType.OtherCurrentAsset)))).Id;
+        var savings = (await In<AccountService, Account>(s => s.CreateAsync(new CreateAccountCommand("Savings", AccountType.Bank)))).Id;
+        var supplies = (await In<AccountService, Account>(s => s.CreateAsync(new CreateAccountCommand("Supplies", AccountType.Expense)))).Id;
+        List<Guid> invoices = [], bills = [], waiting = [];
+        for (var n = 0; n < Each; n++)
+        {
+            invoices.Add((await In<InvoiceService, Invoice>(s => s.CreateAsync(new CreateInvoiceCommand(_customer, Mar1, [Work()])))).Id);
+            bills.Add((await In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_vendor, Mar1, [new BillLineDraft(supplies, 40m)])))).Id);
+            waiting.Add((await In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_customer, Mar1, undeposited, [], Amount: 25m)))).Id);
+        }
+
+        // Each kind of save that posts an entry, all at once, and none tried again: each has to save the first time.
+        var saves = new List<Func<Task>>();
+        for (var n = 0; n < Each; n++)
+        {
+            var i = n;
+            saves.Add(() => In<PaymentService, CustomerPayment>(s => s.ReceiveAsync(new ReceivePaymentCommand(_customer, Mar1, _bank, [new ApplyToInvoice(invoices[i], 100m)]))));
+            saves.Add(() => In<BillService, Bill>(s => s.CreateAsync(new CreateBillCommand(_vendor, Mar1, [new BillLineDraft(supplies, 10m)]))));
+            saves.Add(() => In<BillPaymentService, IReadOnlyList<BillPayment>>(s => s.PayAsync(new PayBillsCommand(Mar1, _bank, [new ApplyToBill(bills[i], 40m)]))));
+            saves.Add(() => In<Application.Banking.BankingService, Domain.Banking.BankTransaction>(s => s.RecordAsync(new Application.Banking.RecordBankTransactionCommand(
+                Domain.Banking.BankTransactionKind.Spend, _bank, Mar1, [new Domain.Banking.BankSplit(supplies, 5m)]))));
+            saves.Add(() => In<Application.Banking.BankingService, Domain.Banking.BankTransaction>(s => s.TransferAsync(new Application.Banking.TransferCommand(_bank, savings, Mar1, 1m))));
+            saves.Add(() => In<DepositService, BankDeposit>(s => s.DepositAsync(new MakeDepositCommand(_bank, Mar1, [(DepositedKind.Payment, waiting[i])]))));
+            saves.Add(() => In<PostingEngine, JournalEntry>(e => e.PostAsync(new PostJournalEntryCommand(Mar1,
+                [new JournalLineDraft(_bank, 1m, 0m), new JournalLineDraft(_income, 0m, 1m)]))));
+        }
+
+        await Task.WhenAll(saves.OrderBy(_ => Guid.NewGuid()).Select(save => Task.Run(save)));
+
+        var numbers = await Db(db => db.JournalEntries.IgnoreQueryFilters().AsNoTracking().Select(e => e.Number).ToListAsync());
+        Assert.Equal(numbers.Count, numbers.Distinct().Count());
+        Assert.Equal(0m, (await In<InvoiceService, Invoice?>(s => s.GetAsync(invoices[^1])))!.Balance);
         await AssertBooksAsync();
     }
 
@@ -228,21 +267,9 @@ public sealed class DocumentNumberTests : IAsyncLifetime
     }
 
     /// <summary>A journal entry, tried again as the API and the pages do when its number is taken, until it's saved.</summary>
-    private async Task PostEntryAsync()
-    {
-        while (true)
-        {
-            try
-            {
-                await In<PostingEngine, JournalEntry>(e => e.PostAsync(new PostJournalEntryCommand(Mar1,
-                    [new JournalLineDraft(_bank, 1m, 0m), new JournalLineDraft(_income, 0m, 1m)])));
-                return;
-            }
-            catch (ConcurrencyConflictException)
-            {
-            }
-        }
-    }
+    private Task PostEntryAsync() =>
+        In<PostingEngine, JournalEntry>(e => e.PostAsync(new PostJournalEntryCommand(Mar1,
+            [new JournalLineDraft(_bank, 1m, 0m), new JournalLineDraft(_income, 0m, 1m)])));
 
     private async Task AssertBooksAsync()
     {
