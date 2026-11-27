@@ -1,0 +1,96 @@
+---
+// The homepage's "Is the download safe?": why Windows warns, what VirusTotal found, and how to check your own copy.
+// The README ("Checking the download") and the guide's chapter 1 say the same; change them together. Once releases are
+// code-signed, the first part goes (docs/admin/releasing.md, "Code signing").
+import { inRepo, releases, repo } from '../lib/links';
+import { latestInstaller } from '../lib/release';
+
+const installer = await latestInstaller();
+const scan = installer?.scan;
+const day = scan?.scanned.toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' });
+const command = `Get-FileHash "$HOME\\Downloads\\${installer?.file ?? 'OpenBook-Setup-<version>.exe'}"`;
+---
+
+<section class="home-section" aria-labelledby="download-check">
+	<div class="home-section-head">
+		<h2 id="download-check">Is the download safe?</h2>
+		<p>Windows will warn you about the installer. Here is why, and how to check it yourself before you run it.</p>
+	</div>
+	<div class="checks">
+		<div>
+			<h3>Not code-signed yet</h3>
+			<p>
+				OpenBook doesn't have a code signing certificate yet, so Windows can't tell who made the installer. It may
+				show <b>Windows protected your PC</b> and an unknown publisher. The project is applying to{' '}
+				<a href="https://signpath.org">SignPath Foundation</a>, which signs open-source software for free.
+			</p>
+			<p>
+				Once you've checked the file, choose <b>More info</b>, then <b>Run anyway</b>.
+			</p>
+		</div>
+		<div>
+			<h3>Virus scan</h3>
+			{
+				installer && scan ? (
+					<>
+						<p class="check-result">
+							<b>
+								{scan.flagged === 0 ? 'None' : scan.flagged} of {scan.engines} antivirus engines
+							</b>{' '}
+							on VirusTotal flagged OpenBook {installer.version}, on {day}.
+						</p>
+						{scan.flagged > 0 && (
+							<p>
+								The report names each engine and what it said. New installers without a certificate are sometimes
+								flagged by mistake, but read it before deciding.
+							</p>
+						)}
+						<p>
+							<a href={scan.report}>See the full VirusTotal report</a>
+						</p>
+					</>
+				) : (
+					<p>
+						This release's scan isn't published yet. You can drop the installer on{' '}
+						<a href="https://www.virustotal.com/gui/home/upload">VirusTotal</a>, which checks it with about 70
+						antivirus engines.
+					</p>
+				)
+			}
+			<p class="home-small">
+				A scan finds known threats. It can't prove that any program is safe.
+			</p>
+		</div>
+		<div>
+			<h3>Built in the open</h3>
+			<p>
+				Each installer is built on GitHub by the <a href={inRepo('.github/workflows/release.yml')}>release workflow</a>,
+				from the <a href={repo}>source code</a> anyone can read, after the tests pass. Download it only from{' '}
+				<a href={releases}>the project's releases</a>. Later updates are checked against OpenBook's own release key
+				before they're installed.
+			</p>
+		</div>
+	</div>
+	<div class="check-hash">
+		<h3>Check your copy</h3>
+		<p>
+			In PowerShell, this prints the SHA-256 of the file you downloaded. Capitals aside, it should match{' '}
+			{installer ? (
+				<>
+					the one for <a href={installer.page}>OpenBook {installer.version}</a>:
+				</>
+			) : (
+				<>
+					the one beside the file on <a href={releases}>the release page</a>:
+				</>
+			)}
+		</p>
+		<pre class="home-code" tabindex="0" role="region" aria-label="PowerShell command"><code>{command}</code></pre>
+		{installer && (
+			<p class="check-sum">
+				<span class="check-label">{installer.file}, SHA-256</span>
+				<code>{installer.sha256}</code>
+			</p>
+		)}
+	</div>
+</section>

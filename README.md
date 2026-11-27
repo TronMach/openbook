@@ -11,9 +11,17 @@ Moving in from QuickBooks Desktop or Online, GnuCash, Xero, Wave or FreshBooks i
 
 ## Getting it
 
-- **Windows:** download `OpenBook-Setup-<version>.exe` from [Releases](https://github.com/TronMach/openbook/releases) and run it. Choose **Just me** (it installs for your Windows user, without administrator rights) or **Several people on our network** ([OpenBook Server for Windows](docs/admin/windows-server.md)). The installer isn't code-signed yet, so Windows may warn before it runs (**More info → Run anyway**).
+- **Windows:** download `OpenBook-Setup-<version>.exe` from [Releases](https://github.com/TronMach/openbook/releases) and run it. Choose **Just me** (it installs for your Windows user, without administrator rights) or **Several people on our network** ([OpenBook Server for Windows](docs/admin/windows-server.md)). The installer isn't code-signed yet, so Windows may warn before it runs: [check the download](#checking-the-download), then **More info → Run anyway**.
 - **Docker:** `docker compose up -d` with the included `docker-compose.yml` (change its passwords first). See [docs/admin/server.md](docs/admin/server.md).
 - **From source:** install the [.NET 10 SDK](https://dotnet.microsoft.com/download), then `dotnet run --project src/OpenBook.Web` and open the address it prints.
+
+## Checking the download
+
+OpenBook doesn't have a code signing certificate yet, so Windows can't tell who made the installer and may show **Windows protected your PC** with an unknown publisher. Before you run it:
+
+- **Read its virus scan.** Releases link a report from [VirusTotal](https://www.virustotal.com), which checks the installer with about 70 antivirus engines, in their notes. A scan finds known threats; it can't prove that any program is safe. New installers without a certificate are sometimes flagged by mistake, so if an engine flagged it, read the report before deciding. If the notes have no scan, you can send the file to VirusTotal yourself.
+- **Compare its SHA-256.** In PowerShell, `Get-FileHash "$HOME\Downloads\OpenBook-Setup-<version>.exe"` prints the hash of your copy. Capitals aside, it should match the one beside the file on the [release page](https://github.com/TronMach/openbook/releases).
+- **Get it only from this project's [Releases](https://github.com/TronMach/openbook/releases).** Each installer is built on GitHub by the [Release workflow](.github/workflows/release.yml) from this source code, after the tests pass. Later updates are checked against OpenBook's own release key before they're installed.
 
 ## Documentation
 

@@ -2,7 +2,8 @@
 # puts both on the GitHub release, where installed copies look for updates, with the package list (SBOM). Run it by
 # pushing a tag like v1.2.0, or by hand with a version (and "publish" unticked to only build and sign, as a trial).
 # Needs the OPENBOOK_UPDATE_KEY secret (the private release key, PEM). Code-signs the installer through SignPath once the
-# SIGNPATH_* variables and the SIGNPATH_API_TOKEN secret are set. See docs/admin/releasing.md.
+# SIGNPATH_* variables and the SIGNPATH_API_TOKEN secret are set. Then scans the installer with VirusTotal
+# (virustotal.yml). See docs/admin/releasing.md.
 name: Release
 
 on:
@@ -26,6 +27,8 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -161,3 +164,17 @@ jobs:
             "artifacts/desktop/OpenBook-$version.cdx.json" `
             --title "OpenBook $version" --notes $notes --generate-notes --target '${{ github.sha }}'
           if ($LASTEXITCODE -ne 0) { throw 'Creating the release failed.' }
+
+  # After the release is out, so a slow or refused scan never holds it up.
+  scan:
+    name: Virus scan
+    needs: release
+    if: github.event_name == 'push' || inputs.publish
+    uses: ./.github/workflows/virustotal.yml
+    permissions:
+      contents: write
+      actions: write
+    with:
+      tag: v${{ needs.release.outputs.version }}
+    secrets:
+      VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}

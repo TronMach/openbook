@@ -30,9 +30,25 @@ gh variable set SIGNPATH_ORGANIZATION_ID --repo TronMach/openbook --body "<organ
 `SIGNPATH_PROJECT_SLUG` (default `openbook`) and `SIGNPATH_SIGNING_POLICY` (default `release-signing`) need setting only when SignPath's names differ. `SIGNPATH_TEST_POLICY` signs trial runs (publish unticked) with that policy; without it, trial runs stay unsigned.
 
 5. Try it with a trial run of the workflow, then check the installer on the run (**Properties → Digital Signatures**).
-6. Change the README's code signing policy: replace its first paragraph with "Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)." Remove the "isn't code-signed yet" sentences from the README, this page, `docs/admin/desktop.md` and `docs/admin/threat-model.md`.
+6. Change the README's code signing policy: replace its first paragraph with "Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)." Remove the "isn't code-signed yet" sentences from the README (**Getting it** and **Checking the download**), this page, `docs/admin/desktop.md`, `docs/admin/threat-model.md`, chapter 1 of the user guide and the website (`Hero.astro`, `DownloadCheck.astro` and the install section of `index.astro`, under `website/src`).
 
 With signing on, each release stops at **Sign the installer** until an approver approves the request on SignPath (the run waits up to an hour; a run that times out can be run again). The workflow checks the signature, puts the signed installer in place of the unsigned one, and only then works out `latest.json`'s hash and size, so installed copies get the file that was signed. The programs inside the installer aren't signed separately. Windows checks the signature of the file people download, and OpenBook checks the installers it downloads itself against `latest.json`.
+
+## Virus scan
+
+After publishing, the release workflow runs the **Virus scan** workflow (`.github/workflows/virustotal.yml`, `tools/virustotal.mjs`). It sends the installer to VirusTotal and waits for the result. Then it puts the result, the report's link and the SHA-256 in the release's notes, attaches `virustotal.json`, and publishes the website again, whose homepage shows the same (**Is the download safe?**). The release is already out by then: a scan that fails turns the run red but holds nothing up.
+
+It needs an API key from a free VirusTotal account (the **API key** page in the account's menu):
+
+```bash
+gh secret set VIRUSTOTAL_API_KEY --repo TronMach/openbook
+```
+
+Without the secret nothing is scanned, and the homepage says the scan isn't published yet. The free key isn't for commercial products, and allows 500 calls a day and 4 a minute, which one scan stays well inside. VirusTotal shares the files it's sent with antivirus companies, so send only what's published.
+
+To scan a release made before this, or scan one again, run **Virus scan** from the Actions tab (a tag, or empty for the latest). A file VirusTotal already has is scanned afresh, not sent again.
+
+When an engine flags the installer, the site and the notes say so. Read the report first. One or two engines naming a generic or machine-learning detection is usually a false positive, as new unsigned installers get: report it to those engines' makers and scan again after they answer. More than that, or a named threat: take the release down until it's understood.
 
 ## The release key
 
@@ -58,7 +74,7 @@ git tag v1.2.0
 git push origin v1.2.0
 ```
 
-3. The **Release** workflow (`.github/workflows/release.yml`) runs the tests, builds the installer with that version, signs `latest.json` and creates the GitHub release with both files and generated notes. You can also run it by hand from the Actions tab with a version; untick **publish** for a trial run, which builds and signs everything and keeps the installer and `latest.json` on the run for a week instead of creating a release.
+3. The **Release** workflow (`.github/workflows/release.yml`) runs the tests, builds the installer with that version, signs `latest.json` and creates the GitHub release with both files and generated notes. Then it scans the installer ([Virus scan](#virus-scan)). You can also run it by hand from the Actions tab with a version; untick **publish** for a trial run, which builds and signs everything and keeps the installer and `latest.json` on the run for a week instead of creating a release.
 
 Each release also carries `OpenBook-<version>.cdx.json`, the package list (a CycloneDX 1.5 software bill of materials) that `tools/make-sbom.ps1` writes from the published files: every NuGet package in the installer with its version and licence, the .NET runtime it was published with, and the fonts for printed forms. Organisations that review software before installing it often ask for one. To make one by hand after packaging: `powershell -File tools/make-sbom.ps1 -Version 1.2.0`.
 

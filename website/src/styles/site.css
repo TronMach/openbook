@@ -313,6 +313,36 @@ figcaption {
 	background: #ffffff;
 }
 
+/* Is the download safe? */
+.checks {
+	display: grid;
+	gap: 1.75rem 2rem;
+}
+.checks h3,
+.check-hash h3 {
+	margin-bottom: 0.5rem;
+}
+.check-result b {
+	color: var(--sl-color-white);
+}
+.check-hash {
+	margin-top: 2rem;
+}
+.check-hash .home-code {
+	margin-top: 0.75rem;
+}
+.check-sum {
+	margin-top: 1rem !important;
+}
+.check-sum code {
+	overflow-wrap: anywhere;
+}
+.check-label {
+	display: block;
+	font-size: 0.9rem;
+	color: var(--sl-color-gray-3);
+}
+
 .home-pair {
 	display: grid;
 	gap: 2.5rem;
@@ -333,6 +363,9 @@ figcaption {
 	.installs,
 	.home-pair {
 		grid-template-columns: 1fr 1fr;
+	}
+	.checks {
+		grid-template-columns: repeat(3, 1fr);
 	}
 	.rules {
 		grid-template-columns: repeat(3, 1fr);
