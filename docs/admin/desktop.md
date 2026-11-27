@@ -1,10 +1,10 @@
 # OpenBook Desktop
 
-OpenBook on one Windows computer, for one business: the same program as [OpenBook Server](server.md), installed differently. (macOS isn't packaged yet.)
+OpenBook on one Windows computer, for one person: the same program as OpenBook Server ([for Windows](windows-server.md), from the same installer, or [with Docker](server.md)), installed differently. (macOS isn't packaged yet.)
 
 ## Installing
 
-Run `OpenBook-Setup-<version>.exe`. It installs for the current Windows user only, without administrator rights, into `%LOCALAPPDATA%\Programs\OpenBook`, and adds **OpenBook** to the Start menu. The installer isn't code-signed yet, so Windows SmartScreen may warn before it runs (**More info → Run anyway**).
+Run `OpenBook-Setup-<version>.exe` and choose **Just me, on this computer**. (**Several people on our network** installs [OpenBook Server for Windows](windows-server.md).) It installs for the current Windows user only, without administrator rights, into `%LOCALAPPDATA%\Programs\OpenBook`, and adds **OpenBook** to the Start menu. The installer isn't code-signed yet, so Windows SmartScreen may warn before it runs (**More info → Run anyway**).
 
 Starting OpenBook runs it in the background and opens it in the browser at `http://localhost:5180` (another port if that one is taken). Starting it again just opens the browser. Only this computer can reach it, and only as `localhost`, `127.0.0.1` or `[::1]`: requests for any other name are refused, so a web page can't reach it by pointing a name of its own at this computer. It keeps running, with an OpenBook icon in the system tray (the notification area by the clock, maybe under its ^ arrow), until you quit it or sign out of Windows. The tray icon's menu has **Open OpenBook** (also a double-click), **Back up now** and **Quit OpenBook**. Quitting there, or with **Settings → System → Quit OpenBook**, first makes a backup to the scheduled backups' destination (named `openbook-scheduled-quit-…`; the last 5 are kept, apart from the daily ones), then stops OpenBook. From the tray, if that backup fails you're asked whether to quit anyway. The tray talks to OpenBook through a named pipe only your Windows user can open; its name is in `running.json`.
 
@@ -42,7 +42,7 @@ The program folder's `openbook.install.json` makes every run of it a desktop one
 - `OpenBook.Web.exe reset-password <username>`: a forgotten password (OpenBook quit first is safest). Add `--restore-admin` to make them an active admin, when nobody else can.
 - `OpenBook.Web.exe encrypt-database` with `OpenBook__EncryptionKey` set: encrypt the company file. Quit OpenBook first (Settings > System > Quit OpenBook) and keep a backup; it refuses while OpenBook is running. `decrypt-database` undoes it. The original stays beside the file as a `.bak` until you delete it.
 - `OpenBook.Web.exe verify-audit`: check that the audit trail is as it was written (it reads only, so OpenBook may be running). Add `--against <backup file>` to check that nothing the backup holds has been rewritten since, or `--fingerprint <position>:<hash>` for a fingerprint noted from the accountant's package. Exit code 3 means it's broken or differs.
-- `OpenBook.Web.exe move-to-postgres …`: move the company to OpenBook Server (see [Moving a desktop company in](server.md#moving-a-desktop-company-in)).
+- `OpenBook.Web.exe move-to-postgres …`: move the company to OpenBook Server with PostgreSQL (see [Moving a desktop company in](server.md#moving-a-desktop-company-in)).
 
 ## Building the installer
 
@@ -52,7 +52,7 @@ On Windows, with the .NET 10 SDK and [Inno Setup 6](https://jrsoftware.org/isinf
 powershell -File tools/package-desktop.ps1 -Version 1.0.0
 ```
 
-It publishes `OpenBook.Web` (the server) and `OpenBook.Desktop` (the launcher: no console window, starts the server, then stays as the tray icon) self-contained for win-x64 into `artifacts/desktop/win-x64`, adds `openbook.install.json`, and compiles `packaging/windows/OpenBook.iss` into `artifacts/desktop/OpenBook-Setup-<version>.exe`. It also builds the QuickBooks Desktop export helper (`tools/package-qb-export.ps1`, below) into its `QuickBooks` folder. `-SkipInstaller` stops after publishing; that folder runs as it is. The icon is made from the app's icon by `python tools/make-icon.py`.
+It publishes `OpenBook.Web` (the server) and `OpenBook.Desktop` (the launcher: no console window, starts the server, then stays as the tray icon) self-contained for win-x64 into `artifacts/desktop/win-x64`, adds `openbook.install.json` (and `openbook.install.server.json`, which the installer puts in its place for several people), and compiles `packaging/windows/OpenBook.iss` into `artifacts/desktop/OpenBook-Setup-<version>.exe`. It also builds the QuickBooks Desktop export helper (`tools/package-qb-export.ps1`, below) into its `QuickBooks` folder. `-SkipInstaller` stops after publishing; that folder runs as it is. The icon is made from the app's icon by `python tools/make-icon.py`.
 
 ## The QuickBooks export helper
 

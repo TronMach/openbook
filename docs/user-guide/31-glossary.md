@@ -224,7 +224,7 @@ The accounting words and OpenBook's own names used in this guide and on the page
 
 **OpenBook Desktop**: the install for one Windows computer: a company file in Documents, a daily backup and a tray icon. See [People and backups](08-users-and-backups.md).
 
-**OpenBook Server**: the install for several people, on a server or in Docker, usually with PostgreSQL. Desktop moves to it in one step. See [People and backups](08-users-and-backups.md).
+**OpenBook Server**: the install for several people, as a Windows service in an office (Server for Windows) or with Docker, usually with PostgreSQL. Desktop moves to it in one step. See [People and backups](08-users-and-backups.md).
 
 **Opening balance equity**: the equity account taking whatever doesn't balance in opening balances; a balance there is normal. See [Chart of accounts](03-chart-of-accounts.md).
 

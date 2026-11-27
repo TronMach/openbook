@@ -6,6 +6,8 @@
 @inject PermissionSetService PermissionSets
 @inject IClock Clock
 @inject NavigationManager Navigation
+@inject OpenBook.Web.Hosting.Installation Install
+@inject IConfiguration Configuration
 
 <PageTitle>Users · OpenBook</PageTitle>
 
@@ -284,7 +286,7 @@
     [SupplyParameterFromForm(Name = "InviteDays")] private int? InviteDays { get; set; }
     [SupplyParameterFromForm(Name = "InviteSend")] private bool InviteSend { get; set; }
 
-    private string LinkBase => $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}{HttpContext.Request.PathBase}";
+    private string LinkBase => OpenBook.Web.Hosting.WindowsServerHost.LinkBase(HttpContext, Install, Configuration);
 
     private static string Status(UserInvite invite, DateTimeOffset now) => invite.Status switch
     {

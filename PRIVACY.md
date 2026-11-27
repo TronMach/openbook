@@ -7,7 +7,8 @@ OpenBook contacts other services only in the cases below. Apart from the update 
 ## Update check
 
 - **OpenBook Desktop** checks for a new version a minute after it starts and then once a day. It downloads `latest.json`, and the new installer when there is one, from the project's releases on GitHub. GitHub sees your computer's IP address and the OpenBook version, which is sent in the request (`OpenBook/x.y.z`). Nothing about your company is sent. Turn it off in **Settings → System → Updates**, or with `OpenBook:Updates:Check` set to `false`.
-- **OpenBook Server** doesn't check unless `OpenBook:Updates:Check` is set to `true`.
+- **OpenBook Server for Windows** checks the same way, but downloads only `latest.json`. Turn it off in the same places.
+- **OpenBook Server** with Docker doesn't check unless `OpenBook:Updates:Check` is set to `true`.
 
 ## Services you connect
 

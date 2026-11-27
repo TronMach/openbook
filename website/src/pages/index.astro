@@ -146,17 +146,20 @@ const areas = [
 				</div>
 				<div class="install">
 					<h3>Server</h3>
-					<p class="install-for">For several people, on your own server.</p>
+					<p class="install-for">For several people, in one office or anywhere.</p>
 					<ul>
-						<li>A Docker image, with PostgreSQL</li>
-						<li>Behind your own HTTPS proxy</li>
+						<li>On a Windows computer that stays on: the same installer</li>
+						<li>Everyone else needs only a browser</li>
+						<li>On Linux or over the internet: Docker, with PostgreSQL</li>
 						<li>Users and roles, two-factor sign-in, single sign-on</li>
 						<li>An API, webhooks and a command-line client</li>
 					</ul>
-					<pre class="home-code"><code>docker compose up -d</code></pre>
+					<p><a class="home-button" href={latestRelease}>Download for Windows</a></p>
 					<p class="home-small">
-						Change the passwords in <code>docker-compose.yml</code> first. The{' '}
-						<a href={inRepo('docs/admin/server.md')}>server admin guide</a> covers the rest.
+						Choose <b>Several people on our network</b>; the{' '}
+						<a href={inRepo('docs/admin/windows-server.md')}>Windows server guide</a> covers the rest. With Docker, change the
+						passwords in <code>docker-compose.yml</code>, then <code>docker compose up -d</code> (
+						<a href={inRepo('docs/admin/server.md')}>server guide</a>).
 					</p>
 				</div>
 			</div>

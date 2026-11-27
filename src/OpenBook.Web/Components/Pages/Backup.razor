@@ -54,6 +54,10 @@ else
     {
         <p class="muted">OpenBook Desktop backs up every day to the Backups folder beside your company file until you change it here. Backups run while OpenBook is running: when the computer was off at the time, the next start makes one.</p>
     }
+    else if (Install.IsWindowsServer)
+    {
+        <p class="muted">@L["OpenBook Server backs up every day to the Backups folder beside the company file until you change it here. That folder is on the same computer as the books, so choose S3-compatible storage instead, or have the folder copied elsewhere. To save to another folder, give the service {0} permission to write there.", "NT SERVICE\\OpenBook"]</p>
+    }
     <p class="muted">
         Backs up automatically to a folder (a network share, an attached drive, or a folder your cloud storage syncs) or to S3-compatible
         storage (Amazon S3, Backblaze B2, Cloudflare R2, Wasabi, MinIO), keeping the newest ones. Times are the company's time zone.
