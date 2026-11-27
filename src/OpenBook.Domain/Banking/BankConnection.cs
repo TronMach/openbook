@@ -48,6 +48,12 @@ public sealed class BankConnection
     /// <summary>Why the last sync failed, or warnings the service sent back (e.g. "re-authenticate with your bank").</summary>
     public string? LastError { get; private set; }
 
+    /// <summary>
+    /// The bank wants the person to sign in to it again (Plaid: <c>ITEM_LOGIN_REQUIRED</c>), so syncs fail until they do.
+    /// Cleared by the next good sync.
+    /// </summary>
+    public bool NeedsSignIn { get; private set; }
+
     public IReadOnlyList<BankConnectionAccount> Accounts => _accounts;
 
     public static BankConnection Create(BankConnectionProvider provider, string name, string protectedAccess, DateTimeOffset now)
@@ -122,13 +128,16 @@ public sealed class BankConnection
         LastSyncAt = now;
         LastSuccessAt = now;
         LastSyncFailed = false;
+        NeedsSignIn = false;
         LastError = Clip(warnings);
     }
 
-    public void SyncFailed(DateTimeOffset now, string error)
+    /// <param name="needsSignIn">The failure was the bank wanting a new sign-in.</param>
+    public void SyncFailed(DateTimeOffset now, string error, bool needsSignIn = false)
     {
         LastSyncAt = now;
         LastSyncFailed = true;
+        NeedsSignIn = needsSignIn;
         LastError = Clip(error) ?? "The sync failed.";
     }
 

@@ -18,7 +18,11 @@ public interface IPlaidKeys
 public interface IPlaidLink
 {
     /// <param name="clientUserId">Plaid's id for whoever connects (OpenBook sends the company's id: one Plaid user per company file).</param>
-    Task<string> CreateLinkTokenAsync(string clientUserId, CancellationToken ct);
+    /// <param name="accessToken">
+    /// A connected bank login's access token, for Link's update mode: the person signs in to that bank again, and the
+    /// login, its accounts and the access token stay as they were. Null connects a new bank.
+    /// </param>
+    Task<string> CreateLinkTokenAsync(string clientUserId, string? accessToken, CancellationToken ct);
 }
 
 /// <summary>
@@ -35,6 +39,9 @@ public static class Plaid
 
     /// <summary>History Link asks the bank for (Plaid's longest): an account's start date can go back this far.</summary>
     public const int DaysRequested = 730;
+
+    /// <summary>The refusal code for a bank that wants the person to sign in to it again.</summary>
+    public const string LoginRequired = "plaid.login_required";
 
     public static Uri BaseUrl(PlaidEnvironment environment) => environment switch
     {
@@ -106,7 +113,7 @@ public static class Plaid
         return code switch
         {
             "ITEM_LOGIN_REQUIRED" or "PENDING_EXPIRATION" or "ITEM_LOCKED" or "INVALID_CREDENTIALS" =>
-                new DomainException("plaid.login_required", "The bank wants you to sign in to it again. Disconnect this connection and connect the bank again."),
+                new DomainException(LoginRequired, "The bank wants you to sign in to it again. On this connection's page, select Sign in to the bank again."),
             "PRODUCT_NOT_READY" =>
                 new DomainException("plaid.not_ready", "Plaid is still gathering this bank's transactions. Try Sync now again in a few minutes."),
             "INVALID_API_KEYS" or "INVALID_CLIENT_ID" or "INVALID_SECRET" =>

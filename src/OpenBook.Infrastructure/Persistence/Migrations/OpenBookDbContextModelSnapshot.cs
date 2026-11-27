@@ -499,6 +499,9 @@ namespace OpenBook.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("NeedsSignIn")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ProtectedAccess")
                         .IsRequired()
                         .HasMaxLength(4000)

@@ -80,7 +80,7 @@ public sealed class BankConnectionService(
         }
         catch (Exception ex) when (IsServiceFailure(ex, ct))
         {
-            connection.SyncFailed(now, Describe(ex));
+            connection.SyncFailed(now, Describe(ex), WantsSignIn(ex));
         }
 
         bank.Add(connection);
@@ -162,12 +162,55 @@ public sealed class BankConnectionService(
             ?? throw new DomainException("connection.provider_unavailable", "Plaid connections aren't available on this server.");
         try
         {
-            return await link.CreateLinkTokenAsync(companyId.ToString("N"), ct);
+            return await link.CreateLinkTokenAsync(companyId.ToString("N"), null, ct);
         }
         catch (Exception ex) when (IsServiceFailure(ex, ct))
         {
             throw new DomainException("connection.failed", $"Couldn't start Plaid: {Describe(ex)}");
         }
+    }
+
+    /// <summary>
+    /// The token Plaid Link opens with to sign in to a connection's bank again (Link's update mode): the same bank login,
+    /// so its accounts, their links and what's been fetched all stay. Any Plaid connection may, not only one that's asked.
+    /// </summary>
+    public async Task<string> PlaidSignInTokenAsync(Guid id, Guid companyId, CancellationToken ct = default)
+    {
+        var connection = await RequiredAsync(id, ct);
+        if (!connection.IsActive)
+            throw new DomainException("connection.disconnected", "This connection is disconnected.");
+        if (connection.Provider != BankConnectionProvider.Plaid)
+            throw new DomainException("connection.not_plaid", "Only a Plaid connection is signed in to again here. For SimpleFIN, sign in to the bank in SimpleFIN Bridge.");
+        var link = clients.OfType<IPlaidLink>().FirstOrDefault()
+            ?? throw new DomainException("connection.provider_unavailable", "Plaid connections aren't available on this server.");
+        var access = protector.Unprotect(connection.ProtectedAccess)
+            ?? throw new DomainException("connection.credential_unreadable",
+                "The saved credential can't be read here (the company file may have moved to another computer). Disconnect and connect again.");
+        try
+        {
+            return await link.CreateLinkTokenAsync(companyId.ToString("N"), access, ct);
+        }
+        catch (Exception ex) when (IsServiceFailure(ex, ct))
+        {
+            throw new DomainException("connection.failed", $"Couldn't start Plaid: {Describe(ex)}");
+        }
+    }
+
+    /// <summary>
+    /// After the bank was signed in to again in Plaid Link: kept in the connection's history, then synced, which clears
+    /// <see cref="BankConnection.NeedsSignIn"/> once the bank answers. The access token doesn't change.
+    /// </summary>
+    public async Task<ConnectionSyncResult> SignedInAgainAsync(Guid id, TimeZoneInfo zone, CancellationToken ct = default)
+    {
+        var connection = await RequiredAsync(id, ct);
+        if (!connection.IsActive)
+            throw new DomainException("connection.disconnected", "This connection is disconnected.");
+        if (connection.Provider != BankConnectionProvider.Plaid)
+            throw new DomainException("connection.not_plaid", "Only a Plaid connection is signed in to again here.");
+        bank.Add(AuditRecord.Create(clock.UtcNow, user.Actor, AuditAction.Updated, EntityType, connection.Id, Snapshot(connection),
+            JsonSerializer.Serialize(new { SignedInAgain = true, connection.Name })));
+        await bank.SaveChangesAsync(ct);
+        return await SyncAsync(id, zone, ct);
     }
 
     /// <summary>Fetches every linked account's new posted lines into its bank feed. A failure is kept on the connection, not thrown.</summary>
@@ -243,7 +286,7 @@ public sealed class BankConnectionService(
             var error = Describe(ex);
             unit.DiscardPending();
             connection = await RequiredAsync(id, ct);
-            connection.SyncFailed(now, error);
+            connection.SyncFailed(now, error, WantsSignIn(ex));
             await bank.SaveChangesAsync(ct);
             return new ConnectionSyncResult(queued, autoAdded, skipped, error);
         }
@@ -308,6 +351,8 @@ public sealed class BankConnectionService(
         BankConnectionProvider.Plaid => "Plaid",
         _ => provider.ToString(),
     };
+
+    private static bool WantsSignIn(Exception ex) => ex is DomainException { Code: Plaid.LoginRequired };
 
     /// <summary>Network trouble, timeouts and odd responses: reported to the user, not crashes.</summary>
     private static bool IsServiceFailure(Exception ex, CancellationToken ct) =>

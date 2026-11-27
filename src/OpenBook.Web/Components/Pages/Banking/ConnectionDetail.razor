@@ -54,6 +54,11 @@
             {
                 <p class="@(_connection.LastSyncFailed ? "out-of-balance" : "muted")">@problem</p>
             }
+            @if (_connection.IsActive && _connection.Provider == BankConnectionProvider.Plaid && _connection.NeedsSignIn)
+            {
+                <p>Until you sign in to the bank again, nothing new comes in. Plaid's window opens; your accounts and what's been fetched stay as they are.</p>
+                @SignInForm("")
+            }
         </div>
 
         <h2>Accounts</h2>
@@ -135,6 +140,11 @@
                     </div>
                     <div class="actions"><button type="submit" class="secondary">Rename</button></div>
                 </PostForm>
+                @if (_connection.Provider == BankConnectionProvider.Plaid && !_connection.NeedsSignIn)
+                {
+                    <p class="muted">Changed your password at the bank, or want Plaid to see an account it doesn't? Sign in to the bank again in Plaid's window; nothing else changes.</p>
+                    @SignInForm("secondary")
+                }
                 <PostForm Action="@($"/banking/connections/{Id}/disconnect")" data-enhance="false">
                     <AntiforgeryToken />
                     <p class="muted">@(_connection.Provider == BankConnectionProvider.Plaid
@@ -160,6 +170,14 @@
     [SupplyParameterFromQuery] private int? Added { get; set; }
     [SupplyParameterFromQuery] private int? Skipped { get; set; }
 
+    /// <summary>Opens Plaid Link in update mode (plaid-link.js), then posts once the bank's signed in to.</summary>
+    private RenderFragment SignInForm(string buttonClass) =>
+        @<PostForm Action="@($"/banking/connections/{Id}/plaid/signed-in")" data-enhance="false" data-plaid-link="@($"/banking/connections/{Id}/plaid/sign-in-token")">
+            <AntiforgeryToken />
+            <div class="alert error" role="alert" data-plaid-error hidden></div>
+            <div class="actions"><button type="submit" class="@buttonClass">Sign in to the bank again</button></div>
+        </PostForm>;
+
     protected override async Task OnParametersSetAsync()
     {
         _connection = await ConnectionService.GetAsync(Id);
@@ -173,6 +191,7 @@
         "synced" => $"Synced: {Queued ?? 0} new line(s) to review{(Added > 0 ? $", {Added} added by bank rules" : "")}{(Skipped > 0 ? $", {Skipped} already fetched" : "")}.",
         "linked" => "Saved. The next sync fetches it.",
         "disconnected" => "Disconnected.",
+        "signedin" => $"Signed in to the bank again. Synced: {Queued ?? 0} new line(s) to review{(Added > 0 ? $", {Added} added by bank rules" : "")}{(Skipped > 0 ? $", {Skipped} already fetched" : "")}.",
         _ => "Saved.",
     };
 }

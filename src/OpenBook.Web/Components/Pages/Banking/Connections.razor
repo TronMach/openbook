@@ -37,6 +37,10 @@
                                 {
                                     <span class="badge">Disconnected</span>
                                 }
+                                else if (c.NeedsSignIn)
+                                {
+                                    <span class="badge warn">Sign in again</span>
+                                }
                                 else if (c.LastSyncFailed)
                                 {
                                     <span class="badge warn">Failed</span>
