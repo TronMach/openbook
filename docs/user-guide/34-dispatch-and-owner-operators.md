@@ -49,6 +49,8 @@ The table shows what each has taken so far.
 
 **Dispatch → Trucks.** Each truck has a **unit number**, and an **owner-operator** unless it's one of yours. A **class** for the truck lets reports by class show what each truck earned and cost. Year, make, VIN and plate are for your records.
 
+For your own trucks, **Dispatch → Fixed costs by truck** adds up what each costs whether it hauls or not (its recurring expenses and bills, loan, depreciation) a week, a month and a mile, by its class. See [Trucking settlements](33-trucking-settlements.md), Reports.
+
 ## Loads and the load board
 
 **Dispatch → Load board** shows every load not yet invoiced, by where it is: **Booked**, **Dispatched**, **In transit** and **Delivered**. **Every load** lists them all, cancelled and invoiced ones too.

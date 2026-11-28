@@ -199,6 +199,7 @@ public static class DependencyInjection
         services.AddScoped<OpenBook.Application.Settlements.OwnerStatements>();
         services.AddScoped<OpenBook.Application.Settlements.IMileageSource, OpenBook.Application.Settlements.OwnerMileage>();
         services.AddScoped<OpenBook.Application.Settlements.SettlementReports>();
+        services.AddScoped<OpenBook.Application.Settlements.FixedCostService>();
         services.AddScoped<OpenBook.Application.Settlements.SettlementCaptureService>();
         services.AddScoped<OpenBook.Application.Settlements.IMileageSource, OpenBook.Application.Settlements.SettlementMileage>();
         services.AddScoped<OpenBook.Application.Nonprofit.NonprofitService>();

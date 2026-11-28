@@ -117,6 +117,13 @@ Under **Reports → Trucking**:
 - **Loads**: each load's miles, pay and own charges (its fuel, its fuel tax), and what was left, per mile. Rent, insurance and reserves belong to no one load and are on a line of their own.
 - **Settlement codes**: what each code came to and where it went. Over a year, compare its revenue with the carrier's 1099.
 - **Reserves and advances**: what went into and out of each, and the balance the statement gave.
+- **Fixed costs by truck** (also under **Settlements**, and **Dispatch** when you pay owner-operators): what each truck costs whether it hauls or not, on a date you choose. It's grouped by class, so put each truck's costs on its class. It gathers:
+    - active **recurring expenses**, **recurring bills** and **recurring journal entries** on the truck's class ([Bank connections, checks, positive pay and petty cash](21-banking-tools.md), [Purchases](05-purchases.md));
+    - **loans** on the class (**Loans**): the interest is the cost, the whole payment is cash. A loan whose payments a recurring expense or bill makes is counted there, not twice;
+    - this month's **depreciation** of fixed assets on the class;
+    - deductions that came to the same amount on a carrier's last two settlements, such as the truck payment or insurance. Fuel and other amounts that change aren't fixed. A carrier with no settlement in five weeks is left out.
+
+  Each cost shows what it is **each time**, **a week** and **a month**, and **cash a month**: what leaves the bank, which counts a loan's principal and money put into reserves but not depreciation. Each truck's total has its **miles a month** (from the last 13 weeks of settlements) and its fixed cost **per mile**: what a load has to pay before it earns anything. Costs on no class are under **Not on a truck**; the last total spreads them over every mile.
 
 ## What it doesn't do
 

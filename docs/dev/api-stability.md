@@ -101,6 +101,7 @@ Contributors: a change to anything under "What's covered" that isn't additive ne
 
 ## Change log
 
+- **2026-11-27**: report `truck-fixed-costs` (`asOf`), fixed costs by truck. Additive.
 - **2026-11-27**: trucking receipts. `GET /api/settlements/receipts?from=&to=`, `GET /api/settlements/receipts/fuel-by-state?from=&to=`, `GET /api/settlements/receipts/{id}`, `POST /api/settlements/receipts` (kind, date, amount, paidFromAccountId; accountId, classId, vendorId, payee, gallons, jurisdiction, city, number, memo, receiptId optional; records a spend), `POST /api/settlements/receipts/{id}/void`. Additive.
 - **2026-11-27**: signing in to a connected Plaid bank again. `POST /api/banking/connections/{id}/plaid/link-token` (returns `{ linkToken }` for Plaid Link's update mode; never replayed by `Idempotency-Key`) and `POST /api/banking/connections/{id}/plaid/signed-in` (syncs; returns the sync result). Connections gain `needsSignIn`. The `plaid.login_required` message now points to the sign-in button instead of disconnecting. Additive.
 - **2026-11-24** (second audit; behaviour changes for cases that were wrong):

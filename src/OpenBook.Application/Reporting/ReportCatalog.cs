@@ -330,6 +330,8 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "Trucking", ReportInputs.Period, DatePreset.ThisFiscalYearToDate),
         new("settlement-balances", "Reserves and advances", "The carrier's reserves and advances: what went in and out, and what the statement says.",
             "Trucking", ReportInputs.Period),
+        new("truck-fixed-costs", "Fixed costs by truck", "What each truck costs a week, a month and a mile before it hauls a load: recurring expenses and bills, loans, depreciation and regular settlement deductions.",
+            "Trucking", ReportInputs.AsOf),
         new("budget-vs-actual", "Budget vs. actual", "Actual income and expenses beside a budget, with what's over or under.",
             "Budgets", ReportInputs.Budget | ReportInputs.Basis),
     ];
@@ -422,6 +424,7 @@ public sealed class ReportCatalog(IServiceProvider services, ICompanyStore compa
             "settlement-loads" => await Get<Settlements.SettlementReports>().LoadsAsync(from, range.To, ct),
             "settlement-codes" => await Get<Settlements.SettlementReports>().CodesAsync(from, range.To, ct),
             "settlement-balances" => await Get<Settlements.SettlementReports>().BalancesAsync(from, range.To, ct),
+            "truck-fixed-costs" => await Get<Settlements.FixedCostService>().TableAsync(asOf, ct),
             "channel-sales" => await Get<Channels.ChannelSalesReport>().TableAsync(from, range.To, ct),
             "statement-of-activities" => await Get<Nonprofit.NonprofitReports>().ActivitiesAsync(from, range.To, basis, Compare(p, definition), segments, ct),
             "statement-of-financial-position" => await Get<Nonprofit.NonprofitReports>().FinancialPositionAsync(asOf, basis, Compare(p, definition), ct),
