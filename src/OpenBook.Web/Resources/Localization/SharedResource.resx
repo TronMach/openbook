@@ -1733,6 +1733,9 @@
   <data name="Fixed assets" xml:space="preserve">
     <value>Fixed assets</value>
   </data>
+  <data name="Fixed costs by truck" xml:space="preserve">
+    <value>Fixed costs by truck</value>
+  </data>
   <data name="Fixed each settlement" xml:space="preserve">
     <value>Fixed each settlement</value>
   </data>

@@ -200,6 +200,7 @@ public static class HelpTopics
         ("/settlements", "33-trucking-settlements"),
         ("/reports/operating-statement", "33-trucking-settlements"),
         ("/reports/settlement", "33-trucking-settlements"),
+        ("/reports/truck-fixed-costs", "33-trucking-settlements"),
         ("/dispatch", "34-dispatch-and-owner-operators"),
         ("/sales/collections", "10-collections"),
         ("/sales/write-offs", "10-collections"),
